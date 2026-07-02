@@ -1273,8 +1273,29 @@ function peoNext(){peoStep=Math.min(2,peoStep+1);page='contract-peo';renderADTPa
 function peoBack(){if(peoStep===0){peoStep=0;page='contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
 var eorStep=0;
 function eorGoStep(s){eorStep=s;page='contract-eor';renderADTPage();}
-function eorNext(){eorStep=Math.min(2,eorStep+1);if(aiAssistedFlow)aiCtPushStepMessage(eorStep);page='contract-eor';renderADTPage();}
-function eorBack(){if(eorStep===0){eorStep=0;page='contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
+function aiCaptureCurrentStep(){
+  if(!aiAssistedFlow)return;
+  const gv=function(id){const el=document.getElementById(id);return el?el.value:undefined;};
+  const merge=function(k,v){if(v!==undefined&&v!=='')aiWizardFormData[k]=v;};
+  if(eorStep===0){
+    merge('fname',gv('peo-fname'));merge('lname',gv('peo-lname'));merge('gender',gv('peo-gender'));
+    merge('email',gv('peo-email'));merge('mobile',gv('peo-mobile'));merge('dob',gv('peo-dob'));
+    merge('address',gv('peo-address'));merge('country',gv('peo-work-country'));
+    const wpEl=document.querySelector('.peo-wp-radio.selected span');
+    if(wpEl)aiWizardFormData.workPermit=wpEl.textContent.indexOf('has work permit')!==-1;
+  }else if(eorStep===1){
+    merge('jobTitle',gv('peo-jobtitle'));merge('skill',gv('peo-skill'));merge('jobDesc',gv('peo-jobdesc'));
+    merge('fromDate',gv('peo-from'));merge('toDate',gv('peo-to'));merge('hours',gv('peo-hours'));merge('pay',gv('peo-pay'));
+    const termEl=document.querySelector('.peo-radio-term.selected span');
+    if(termEl)aiWizardFormData.employmentTerm=termEl.textContent;
+    const typeEl=document.querySelector('.peo-radio-emptype.selected span');
+    if(typeEl)aiWizardFormData.employeeType=typeEl.textContent;
+  }else if(eorStep===2){
+    merge('probation',gv('peo-prob'));merge('notice',gv('peo-notice'));
+  }
+}
+function eorNext(){aiCaptureCurrentStep();eorStep=Math.min(2,eorStep+1);if(aiAssistedFlow)aiCtPushStepMessage(eorStep);page='contract-eor';renderADTPage();}
+function eorBack(){aiCaptureCurrentStep();if(eorStep===0){eorStep=0;page='contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
 function buildEORContractHTML(){return buildContractFormHTML('EOR',eorStep);}
 function buildPEOContractHTML(){return buildContractFormHTML('PEO',peoStep);}
 function peoSelectRadio(groupClass,clickedEl){
@@ -1308,7 +1329,7 @@ function buildContractFormHTML(type,step,splitMode){
   const countries=['Afghanistan','Australia','Austria','Bangladesh','Belgium','Brazil','Canada','China','Denmark','Egypt','Finland','France','Germany','Ghana','Greece','India','Indonesia','Iran','Iraq','Ireland','Italy','Japan','Jordan','Kenya','Malaysia','Mexico','Morocco','Nepal','Netherlands','New Zealand','Nigeria','Norway','Pakistan','Philippines','Poland','Portugal','Qatar','Romania','Russia','Saudi Arabia','Singapore','South Africa','South Korea','Spain','Sri Lanka','Sweden','Switzerland','Thailand','Turkey','Ukraine','United Arab Emirates','United Kingdom','United States','Vietnam'];
   const countryOpts='<option value="">Select Country</option>'+countries.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
   const countryOptsSel=function(sel){return '<option value="">Select Country</option>'+countries.map(function(c){return '<option value="'+c+'"'+(c===sel?' selected':'')+'>'+c+'</option>';}).join('');};
-  const prefill=aiAssistedFlow?(aiContractPrefill||{}):{};
+  const prefill=aiAssistedFlow?Object.assign({},aiContractPrefill||{},aiWizardFormData||{}):{};
   const steps=['Basic Details','Job Details','Other Details'];
 
   // Stepper bar
@@ -1347,18 +1368,18 @@ function buildContractFormHTML(type,step,splitMode){
       +'</div>'
       +'<div style="font-size:13px;font-weight:600;color:#e07b00;margin-bottom:12px">Work Permit</div>'
       +'<div style="display:flex;flex-direction:column;gap:10px">'
-      +'<label class="peo-wp-radio" onclick="peoSelectWorkPermit(this)" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:0">'
-      +'<div class="peo-radio-outer" style="width:16px;height:16px;border-radius:50%;border:2px solid #d1d5db;flex-shrink:0;display:flex;align-items:center;justify-content:center">'
-      +'<div class="peo-radio-inner" style="width:7px;height:7px;border-radius:50%;background:transparent;transition:.15s"></div>'
-      +'</div>'
-      +'<span style="font-size:13px;color:#e07b00;font-weight:500">Yes, Employee has work permit</span>'
-      +'</label>'
-      +'<label class="peo-wp-radio selected" onclick="peoSelectWorkPermit(this)" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:0">'
-      +'<div class="peo-radio-outer" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--orange);flex-shrink:0;display:flex;align-items:center;justify-content:center">'
-      +'<div class="peo-radio-inner" style="width:7px;height:7px;border-radius:50%;background:var(--orange);transition:.15s"></div>'
-      +'</div>'
-      +'<span style="font-size:13px;color:#e07b00;font-weight:500">Employee would like ADT to assist for work visa</span>'
-      +'</label>'
+      +(function(){
+        const hasPermit=prefill.workPermit===true;
+        const wp=function(sel,label){
+          return '<label class="peo-wp-radio'+(sel?' selected':'')+'" onclick="peoSelectWorkPermit(this)" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:0">'
+            +'<div class="peo-radio-outer" style="width:16px;height:16px;border-radius:50%;border:2px solid '+(sel?'var(--orange)':'#d1d5db')+';flex-shrink:0;display:flex;align-items:center;justify-content:center">'
+            +'<div class="peo-radio-inner" style="width:7px;height:7px;border-radius:50%;background:'+(sel?'var(--orange)':'transparent')+';transition:.15s"></div>'
+            +'</div>'
+            +'<span style="font-size:13px;color:#e07b00;font-weight:500">'+label+'</span>'
+            +'</label>';
+        };
+        return wp(hasPermit,'Yes, Employee has work permit')+wp(!hasPermit,'Employee would like ADT to assist for work visa');
+      })()
       +'</div>'
       +'</div></div>'
 
@@ -1373,7 +1394,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<input id="peo-lname" class="ep-form-input" type="text" placeholder="Last Name" value="'+(prefill.lname||'')+'"></div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Gender</label>'
       +'<select id="peo-gender" class="ep-form-select" style="height:42px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer;box-sizing:border-box;width:100%">'
-      +'<option value="">Select</option><option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option>'
+      +['','Male','Female','Non-binary','Prefer not to say'].map(function(g){return '<option'+(g===prefill.gender?' selected':'')+'>'+(g||'Select')+'</option>';}).join('')
       +'</select></div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Email <span class="req">*</span></label>'
       +'<input id="peo-email" class="ep-form-input" type="email" placeholder="email@example.com" value="'+(prefill.email||'')+'"></div>'
@@ -1382,12 +1403,12 @@ function buildContractFormHTML(type,step,splitMode){
       +'<select style="height:42px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer;flex-shrink:0;min-width:80px">'
       +'<option>+91</option><option>+1</option><option>+44</option><option>+49</option><option>+31</option><option>+33</option><option>+61</option><option>+971</option>'
       +'</select>'
-      +'<input id="peo-mobile" class="ep-form-input" type="tel" placeholder="Mobile Number" style="flex:1"></div></div>'
+      +'<input id="peo-mobile" class="ep-form-input" type="tel" placeholder="Mobile Number" style="flex:1" value="'+(prefill.mobile||'')+'"></div></div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Date of Birth <span class="req">*</span></label>'
-      +'<input id="peo-dob" class="ep-form-input" type="date"></div>'
+      +'<input id="peo-dob" class="ep-form-input" type="date" value="'+(prefill.dob||'')+'"></div>'
       +'</div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Address <span class="req">*</span></label>'
-      +'<textarea id="peo-address" class="ep-form-input" rows="3" placeholder="Address" style="resize:vertical;min-height:70px;line-height:1.5"></textarea>'
+      +'<textarea id="peo-address" class="ep-form-input" rows="3" placeholder="Address" style="resize:vertical;min-height:70px;line-height:1.5">'+(prefill.address||'')+'</textarea>'
       +'</div>'
       +'</div></div>';
   }
@@ -1412,7 +1433,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<input id="peo-jobtitle" class="ep-form-input" placeholder="e.g. Software Engineer" value="'+(prefill.jobTitle||'')+'"></div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Primary Skill</label>'
       +'<div style="position:relative">'
-      +'<input id="peo-skill" class="ep-form-input" placeholder="Search or type a skill..." style="padding-right:36px">'
+      +'<input id="peo-skill" class="ep-form-input" placeholder="Search or type a skill..." style="padding-right:36px" value="'+(prefill.skill||'')+'">'
       +'<span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:#9ca3af">'
       +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>'
       +'</span></div></div>'
@@ -1420,7 +1441,7 @@ function buildContractFormHTML(type,step,splitMode){
 
       // Job Description
       +'<div class="ep-form-group" style="margin-bottom:6px"><label class="ep-form-label">Job Description <span class="req">*</span></label>'
-      +'<textarea id="peo-jobdesc" class="ep-form-input" rows="4" placeholder="Enter job description" style="resize:vertical;min-height:90px;line-height:1.5"></textarea></div>'
+      +'<textarea id="peo-jobdesc" class="ep-form-input" rows="4" placeholder="Enter job description" style="resize:vertical;min-height:90px;line-height:1.5">'+(prefill.jobDesc||'')+'</textarea></div>'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
       +'<span style="font-size:11.5px;color:#64748b">Job description will appear on the contract under <em>"Scope of Work / Job Responsibilities"</em></span>'
       +'<span style="font-size:11.5px;color:var(--orange);font-weight:600;flex-shrink:0;margin-left:12px">maximum 100 words</span>'
@@ -1429,8 +1450,8 @@ function buildContractFormHTML(type,step,splitMode){
       // Employment Duration
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Employment Duration</div>'
       +'<div style="display:flex;gap:16px;margin-bottom:6px">'
-      +'<div style="flex:1"><input id="peo-from" class="ep-form-input" type="date" value="'+today+'"></div>'
-      +'<div style="flex:1"><input id="peo-to" class="ep-form-input" type="date"></div>'
+      +'<div style="flex:1"><input id="peo-from" class="ep-form-input" type="date" value="'+(prefill.fromDate||today)+'"></div>'
+      +'<div style="flex:1"><input id="peo-to" class="ep-form-input" type="date" value="'+(prefill.toDate||'')+'"></div>'
       +'</div>'
       +'<div style="display:flex;gap:16px;margin-bottom:20px">'
       +'<div style="flex:1;font-size:11.5px;color:#64748b">Start Date <span class="req">*</span></div>'
@@ -1441,20 +1462,20 @@ function buildContractFormHTML(type,step,splitMode){
       +'<div class="ep-form-grid" style="margin-bottom:20px">'
       +'<div>'
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Employment Term <span class="req">*</span></div>'
-      +radioItem('term','Permanent',true)
-      +radioItem('term','Fixed Term',false)
+      +radioItem('term','Permanent',prefill.employmentTerm?prefill.employmentTerm==='Permanent':true)
+      +radioItem('term','Fixed Term',prefill.employmentTerm==='Fixed Term')
       +'</div>'
       +'<div>'
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Employee Type <span class="req">*</span></div>'
-      +radioItem('emptype','Full Time',true)
-      +radioItem('emptype','Part Time',false)
+      +radioItem('emptype','Full Time',prefill.employeeType?prefill.employeeType==='Full Time':true)
+      +radioItem('emptype','Part Time',prefill.employeeType==='Part Time')
       +'</div>'
       +'</div>'
 
       // Work Schedule
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Work Schedule</div>'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">'
-      +'<input id="peo-hours" class="ep-form-input" type="number" value="20" min="1" style="width:80px;text-align:center">'
+      +'<input id="peo-hours" class="ep-form-input" type="number" value="'+(prefill.hours||20)+'" min="1" style="width:80px;text-align:center">'
       +'<span style="font-size:13px;color:#64748b">Hours</span>'
       +'</div>'
 
@@ -1465,7 +1486,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<div style="display:flex;align-items:center;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-shrink:0">'
       +'<span style="padding:0 10px;height:42px;display:flex;align-items:center;background:#f8fafc;border-right:1px solid var(--border);font-size:11px;font-weight:700;color:#374151">IN</span>'
       +'<span style="padding:0 10px;height:42px;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--navy)">INR</span>'
-      +'<input id="peo-pay" type="number" value="0.00" step="0.01" style="width:100px;height:42px;border:none;border-left:1px solid var(--border);padding:0 10px;font-size:13px;color:var(--navy);font-family:inherit;outline:none">'
+      +'<input id="peo-pay" type="number" value="'+(prefill.pay||'0.00')+'" step="0.01" style="width:100px;height:42px;border:none;border-left:1px solid var(--border);padding:0 10px;font-size:13px;color:var(--navy);font-family:inherit;outline:none">'
       +'</div>'
       +'<span style="font-size:13px;color:#64748b">per</span>'
       +'<select style="height:42px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer">'
@@ -1524,7 +1545,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">Probation Period <span class="req">*</span></div>'
       +'<div style="border-top:1px dashed #e5e7eb;padding-top:14px">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-      +'<input id="peo-prob" class="ep-form-input" type="number" value="3" min="0" style="width:80px;text-align:center">'
+      +'<input id="peo-prob" class="ep-form-input" type="number" value="'+(prefill.probation||3)+'" min="0" style="width:80px;text-align:center">'
       +'<span style="font-size:13px;color:#64748b">months</span>'
       +'</div>'
       +'<div style="font-size:12px;color:#3b82f6;line-height:1.5">You will be invoiced a one time deposit equivalent to the employee\'s Gross Salary of 1 month.</div>'
@@ -1535,7 +1556,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">Notice Period <span class="req">*</span></div>'
       +'<div style="border-top:1px dashed #e5e7eb;padding-top:14px">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-      +'<input id="peo-notice" class="ep-form-input" type="number" value="3" min="0" style="width:80px;text-align:center">'
+      +'<input id="peo-notice" class="ep-form-input" type="number" value="'+(prefill.notice||3)+'" min="0" style="width:80px;text-align:center">'
       +'<span style="font-size:13px;color:#64748b">months</span>'
       +'</div>'
       +'<div style="font-size:12px;color:#3b82f6;line-height:1.5">You will be invoiced a one time deposit equivalent to the employee\'s Gross Salary of 1 month.</div>'
@@ -3803,7 +3824,7 @@ function aiCtUseEmployee(empId){
   const parsed=window._aiCtLastParsed||{};
   const parts=emp.name.split(' ');
   aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||''};
-  aiAssistedFlow=true;
+  aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;
   const promptEl=document.getElementById('ai-ct-prompt');
   aiCtChatMsgs=[
     {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+emp.name)},
@@ -3815,7 +3836,7 @@ function aiCtUseManualEntry(){
   const gv=function(id){const el=document.getElementById(id);return el?el.value:'';};
   const fname=gv('ai-ct-fname'),lname=gv('ai-ct-lname');
   aiContractPrefill={fname:fname,lname:lname,email:'',country:gv('ai-ct-country'),jobTitle:gv('ai-ct-jobtitle')};
-  aiAssistedFlow=true;
+  aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;
   const promptEl=document.getElementById('ai-ct-prompt');
   const fullName=(fname+' '+lname).trim()||'this person';
   aiCtChatMsgs=[
@@ -3857,17 +3878,45 @@ function aiCtPushStepMessage(step){
   if(msgs[step])aiCtChatMsgs.push({role:'bot',text:msgs[step]});
 }
 function genProposalId(){return 'PRO-'+Math.floor(1000+Math.random()*9000);}
+function aiFormatNow(){
+  const d=new Date();const p2=function(n){return String(n).padStart(2,'0');};
+  return {date:d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()),time:p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds())};
+}
+function aiGenCommercial(payAmount){
+  const p=parseFloat(payAmount)||50000;
+  const s=function(mult){return (p*mult/1000000).toFixed(2);};
+  return {adtFee:'549',annualGross:s(12),baseGross:s(1),holidayBonus:s(0.08),month13:s(1),monthlyGrossNet:s(0.7),monthlyInvoice:s(1.2),monthlySalary12:s(0.9),monthlySalary1392:s(1),netPay:s(1.3),socialPremAmt:s(0.26),socialPremPct:'26.02',totalMonthlyGross:s(1)};
+}
 function aiSubmitAssistedContract(type){
-  // Each wizard step re-renders the form from scratch (fields aren't persisted across steps),
-  // so the AI-known values in aiContractPrefill are the reliable source at the final step.
-  const p=aiContractPrefill||{};
-  const fname=p.fname||'',lname=p.lname||'';
+  // Capture whatever is on the final step, then merge with everything gathered across earlier steps
+  // (the wizard re-renders each step from scratch, so aiWizardFormData is the accumulated source of truth).
+  aiCaptureCurrentStep();
+  const p=Object.assign({},aiContractPrefill||{},aiWizardFormData||{});
+  const fullName=((p.fname||'')+' '+(p.lname||'')).trim()||'New Employee';
+  const now=aiFormatNow();
+  const newId=contractsData.reduce(function(m,c){return Math.max(m,c.id);},0)+1;
+  const contractId=String(90000+Math.floor(Math.random()*9999));
+  const from=p.fromDate||now.date;
+  const record={
+    id:newId,contractId:contractId,empName:fullName,empDesig:p.jobTitle||'—',country:p.country||'—',type:type,date:now.date+' '+now.time,status:'Submitted',
+    nationality:p.country||'India',countryOfOp:p.country||'—',workPermit:p.workPermit===true,gender:(p.gender||'').toUpperCase()||'—',
+    email:p.email||'—',contact:p.mobile||'—',dob:p.dob||'—',jobTitle:p.jobTitle||'—',skill:p.skill||'—',
+    empDuration:from+(p.toDate?' – '+p.toDate:''),empType:type,workSchedule:p.hours||'—',payAmount:p.pay||'—',currency:'INR',
+    jobDesc:p.jobDesc||'—',payFrequency:'Monthly',
+    commercial:aiGenCommercial(p.pay),
+    complianceItems:[{item:type+' '+(p.country||'')+' Proposal',note:'Optional',status:'Pending',doc:null}]
+  };
+  contractsData.push(record);
+  ctLogsData[newId]=[{date:now.date,time:now.time,user:'AI Contract Assistant',status:'Submitted',action:'Contract created via AI Contract Assistant for '+fullName+'.'}];
+  ctWorkflowData[newId]=[{title:'Contract Created by AI',user:'AI Contract Assistant',date:now.date,time:now.time,description:'AI compiled the proposal and contract data from the conversation for '+fullName+'.'}];
+  aiCreatedContractId=newId;
   aiProposalDraft={
     proposalId:genProposalId(),
-    name:(fname+' '+lname).trim()||'New Employee',
+    name:fullName,
     country:p.country||'—',
     jobTitle:p.jobTitle||'—',
-    type:type
+    type:type,
+    contractRecordId:newId
   };
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Proposal&hellip;</div><div class="cl-sub">Compiling contract data into a proposal for '+aiProposalDraft.name+'</div></div>';
@@ -3896,6 +3945,14 @@ function aiSendProposalForApproval(){
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Notifying '+aiDealManager.name+'&hellip;</div><div class="cl-sub">Sending proposal '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+' for approval</div></div>';
   notifData.unshift({name:'Proposal sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:(aiProposalDraft&&aiProposalDraft.proposalId)||'',time:'Just now',pending:true});
+  if(aiCreatedContractId){
+    const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
+    if(rec){
+      rec.status='Proposal Sent';
+      const now=aiFormatNow();
+      (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:'Pallavi Parate',status:'Proposal Sent',action:'Proposal sent to '+aiDealManager.name+' ('+aiDealManager.role+') for approval.'});
+    }
+  }
   setTimeout(function(){page='ai-proposal-waiting-approval';renderADTPage();},1400);
 }
 function buildAIProposalWaitingApprovalHTML(){
@@ -4114,7 +4171,16 @@ function aiSimulateApproval(){
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Approving Proposal&hellip;</div><div class="cl-sub">'+aiDealManager.name+' is reviewing '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+'</div></div>';
   setTimeout(function(){
     if(notifData[0]&&notifData[0].pending)notifData[0].pending=false;
+    if(aiCreatedContractId){
+      const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
+      if(rec){
+        rec.status='Proposal Approved';
+        const now=aiFormatNow();
+        (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:aiDealManager.name,status:'Proposal Approved',action:aiDealManager.name+' approved the proposal. Contract generation will continue automatically.'});
+        (ctWorkflowData[aiCreatedContractId]=ctWorkflowData[aiCreatedContractId]||[]).unshift({title:'Proposal Approved',user:aiDealManager.name,date:now.date,time:now.time,description:'Deal Manager approved the AI-generated proposal for '+rec.empName+'.'});
+      }
+    }
     const col2=document.getElementById('adt-content');
-    if(col2)col2.innerHTML='<div class="success-card"><div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div><h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Proposal Approved</h2><p style="font-size:12.5px;color:var(--gray);margin-bottom:24px;max-width:380px;line-height:1.55">'+aiDealManager.name+' approved the proposal. The Contract Generation to Ready for Payroll journey will continue automatically &mdash; contract generation, client signature, onboarding checks, and payroll readiness.</p><button class="btn btn-primary" onclick="page=\'contracts\';renderADTPage()">Back to Contracts</button></div>';
+    if(col2)col2.innerHTML='<div class="success-card"><div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div><h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Proposal Approved</h2><p style="font-size:12.5px;color:var(--gray);margin-bottom:24px;max-width:380px;line-height:1.55">'+aiDealManager.name+' approved the proposal. The Contract Generation to Ready for Payroll journey will continue automatically &mdash; contract generation, client signature, onboarding checks, and payroll readiness.</p><button class="btn btn-primary" onclick="navigatePage(\'contracts\')">View in Contracts</button></div>';
   },1500);
 }
