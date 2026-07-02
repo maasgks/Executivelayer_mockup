@@ -1,6 +1,11 @@
 ﻿function renderPageContent(id){
   const el=document.getElementById(id);
   if(!el)return;
+  if(page==='ai-executive'){el.innerHTML=buildAIExecutiveDashboardHTML();return;}
+  if(page==='ai-journey-detail'){el.innerHTML=buildAIJourneyDetailHTML();return;}
+  if(page==='ai-automate-form'){el.innerHTML=buildAutomateJourneyFormHTML();return;}
+  if(page==='ai-active-automation'){el.innerHTML=buildAIActiveAutomationHTML();return;}
+  if(page==='ai-run-detail'){el.innerHTML=buildAIRunDetailHTML();return;}
   if(page==='cost-calculator'){el.innerHTML=buildCostCalculatorPageHTML();initCostCalcPage();return;}
   if(page==='leave-policies'){el.innerHTML=buildLeavePoliciesHTML();return;}
   if(page==='direct'){el.innerHTML=buildDirectListingHTML();return;}
@@ -12,7 +17,11 @@
   if(page==='leave-policy-add'){el.innerHTML=buildAddLeavePolicyHTML();return;}
   if(page==='leave-add'){el.innerHTML=buildAddLeaveHTML();return;}
   if(page==='contract-type-select'){el.innerHTML=buildContractTypeSelectHTML();return;}
+  if(page==='contract-eor'){el.innerHTML=buildEORContractHTML();return;}
   if(page==='contract-peo'){el.innerHTML=buildPEOContractHTML();return;}
+  if(page==='ai-contract-assistant'){el.innerHTML=buildAIContractAssistantHTML();return;}
+  if(page==='ai-proposal-created'){el.innerHTML=buildAIProposalCreatedHTML();return;}
+  if(page==='ai-proposal-waiting-approval'){el.innerHTML=buildAIProposalWaitingApprovalHTML();return;}
   if(page==='team-add'){el.innerHTML=buildAddTeamHTML();return;}
   if(page==='payments'){el.innerHTML=buildPaymentsHTML();return;}
   if(page==='my-timesheet'){el.innerHTML=buildMyTimesheetHTML();return;}
@@ -32,7 +41,7 @@ function renderADTPage(){
   // Show/hide + button in topbar based on current page
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
-    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity'];
+    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval'];
     const show=!noAddPages.includes(page);
     addBtn.style.display=show?'':'none';
     if(show){

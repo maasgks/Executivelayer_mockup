@@ -955,4 +955,76 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .prof-att-icon{color:#9ca3af;flex-shrink:0;display:flex;align-items:center}
 .prof-att-name{flex:1;font-size:13px;color:var(--navy);font-weight:500}
 .prof-att-upload{background:none;border:none;cursor:pointer;color:#9ca3af;display:flex;align-items:center;padding:4px;border-radius:6px;transition:color .15s,background .15s}
+/* == AI EXECUTIVE MODULE == */
+.ai-exec-page{max-width:1180px;margin:0 auto;width:100%}
+.btn.btn-sm{padding:7px 14px;font-size:12px}
+.status-pill.available{background:#eff6ff;color:#2563eb;border-color:#93c5fd}
+.status-pill.draft{background:#f8fafc;color:#64748b;border-color:#cbd5e1}
+/* Journey cards (dashboard) */
+.ai-journey-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:4px}
+.ai-journey-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px;transition:.2s}
+.ai-journey-card:hover{border-color:#f1c27a;box-shadow:0 4px 14px rgba(15,23,42,.06)}
+.ai-journey-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.ai-journey-name{font-size:14.5px;font-weight:700;color:var(--navy);margin-bottom:5px;line-height:1.35}
+.ai-journey-desc{font-size:12px;color:var(--gray);line-height:1.55}
+.ai-journey-modules{display:flex;flex-wrap:wrap;gap:6px}
+.ai-journey-module-tag{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:6px;background:#f1f3f5;color:var(--gray)}
+.ai-journey-metrics{display:flex;gap:18px;padding:12px 0;border-top:1px solid #f0f1f3;border-bottom:1px solid #f0f1f3}
+.ai-journey-metric-val{font-size:17px;font-weight:700;color:var(--navy)}
+.ai-journey-metric-label{font-size:10.5px;color:var(--gray);font-weight:500;margin-top:1px}
+.ai-journey-coverage-row{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--gray);font-weight:500}
+.ai-journey-actions{display:flex;gap:8px;margin-top:2px}
+/* Actor / type chips */
+.ai-chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;border:1.5px solid;letter-spacing:.1px;white-space:nowrap}
+.ai-chip-ai{background:var(--ol);color:var(--orange);border-color:#f4d4a3}
+.ai-chip-human{background:#eff6ff;color:#2563eb;border-color:#93c5fd}
+.ai-chip-system{background:#f1f5f9;color:#475569;border-color:#cbd5e1}
+.ai-chip-client{background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe}
+.ai-chip-validation{background:#fefce8;color:#a16207;border-color:#fde68a}
+.ai-chip-approval{background:#fef2f2;color:#dc2626;border-color:#fca5a5}
+.ai-chip-exception{background:#fdf2f8;color:#db2777;border-color:#fbcfe8}
+.ai-chip-completed{background:#f0fdf4;color:#16a34a;border-color:#86efac}
+.ai-chip-queued{background:#f8fafc;color:#64748b;border-color:#cbd5e1}
+/* Run detail timeline dot states */
+.ai-timeline-dot.run-done{border-color:#22c55e;color:#16a34a;background:#dcfce7;font-size:13px}
+.ai-timeline-dot.run-current{border-color:#f59e0b;color:#b45309;background:#fef3c7;font-size:13px}
+.ai-timeline-dot.run-exception{border-color:#ef4444;color:#dc2626;background:#fee2e2;font-size:13px}
+.ai-timeline-dot.run-pending{border-color:var(--border);color:#cbd5e1;background:#fff;font-size:13px}
+/* AI vs Human responsibility split */
+.ai-resp-split{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.ai-resp-card.ai-resp-ai{border-top:3px solid var(--orange)}
+.ai-resp-card.ai-resp-human{border-top:3px solid #2563eb}
+.ai-resp-count{font-size:11px;font-weight:600;color:var(--gray);margin-left:8px}
+.ai-resp-item{display:flex;align-items:center;gap:9px;padding:8px 0;font-size:12.5px;color:var(--navy);border-bottom:1px solid #f1f5f9}
+.ai-resp-item:last-child{border-bottom:none}
+.ai-resp-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ai-resp-dot.ai{background:var(--orange)}
+.ai-resp-dot.human{background:#2563eb}
+/* Vertical event timeline (journey detail + run detail) */
+.ai-timeline{position:relative;padding-left:4px}
+.ai-timeline-item{position:relative;padding-left:44px;padding-bottom:20px}
+.ai-timeline-item:last-child{padding-bottom:0}
+.ai-timeline-item::before{content:"";position:absolute;left:14px;top:30px;bottom:0;width:2px;background:var(--border)}
+.ai-timeline-item:last-child::before{display:none}
+.ai-timeline-dot{position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:2px solid var(--border);font-size:11px;font-weight:700;color:var(--gray);flex-shrink:0;z-index:1}
+.ai-timeline-dot.ai{border-color:var(--orange);color:var(--orange);background:var(--ol)}
+.ai-timeline-dot.human{border-color:#2563eb;color:#2563eb;background:#eff6ff}
+.ai-timeline-dot.client{border-color:#7c3aed;color:#7c3aed;background:#f5f3ff}
+.ai-timeline-dot.system{border-color:#475569;color:#475569;background:#f1f5f9}
+.ai-timeline-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:.15s}
+.ai-timeline-card:hover{border-color:var(--orange);box-shadow:0 2px 10px rgba(15,23,42,.05)}
+.ai-timeline-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:5px}
+.ai-timeline-card-title{font-size:13px;font-weight:700;color:var(--navy)}
+.ai-timeline-card-desc{font-size:11.5px;color:var(--gray);line-height:1.5;margin-bottom:9px}
+.ai-timeline-chips{display:flex;flex-wrap:wrap;gap:6px}
+/* Automate Journey — per-event scope rows */
+.ai-scope-table{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.ai-scope-row{display:flex;align-items:center;gap:16px;padding:14px 16px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap}
+.ai-scope-row:last-child{border-bottom:none}
+.ai-scope-row:nth-child(odd){background:#fafbfc}
+.ai-scope-name{flex:1 1 240px;min-width:220px}
+.ai-scope-name-text{font-size:12.5px;font-weight:600;color:var(--navy);margin-bottom:6px}
+.ai-scope-toggle-group{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.ai-scope-toggle-label{font-size:10.5px;font-weight:600;color:var(--gray);white-space:nowrap}
+.ai-scope-exception{flex:0 0 156px}
 .prof-att-upload:hover{color:var(--orange);background:#fff7ed}
