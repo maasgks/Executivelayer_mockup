@@ -1,0 +1,592 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// Shared / cross-cutting
+// ============================================================
+
+model Entity {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  entityCode    String   @unique @map("entity_code")
+  type          String
+  country       String
+  plan          String
+  employeeCount Int      @default(0) @map("employee_count")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  employees     Employee[]
+  paymentOrders PaymentOrder[]
+
+  @@map("entities")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  role      String?
+  initials  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
+enum EmployeeKind {
+  DIRECT
+  GLOBAL
+}
+
+model Employee {
+  id           String       @id @default(cuid())
+  employeeCode String       @unique @map("employee_code")
+  name         String
+  kind         EmployeeKind
+  department   String?
+  branch       String?
+  country      String?
+  jobTitle     String?      @map("job_title")
+  workerType   String?      @map("worker_type")
+  joinDate     String?      @map("join_date")
+  description  String?
+  contact      String?
+  email        String?
+  status       String       @default("Active")
+  entityId     String?      @map("entity_id")
+  entity       Entity?      @relation(fields: [entityId], references: [id])
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  teamMemberships        TeamMember[]
+  leavePolicyAssignments LeavePolicyAssignment[]
+  leaveRequests           LeaveRequest[]
+  timesheetAttendance     TimesheetAttendance[]
+
+  @@map("employees")
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  kind        String
+  title       String?
+  description String?
+  status      String?
+  userName    String?  @map("user_name")
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  @@index([entityType, entityId])
+  @@map("activity_log")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  relatedType String?  @map("related_type")
+  relatedId   String?  @map("related_id")
+  pending     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+model LookupValue {
+  id        String @id @default(cuid())
+  category  String
+  value     String
+  sortOrder Int    @default(0) @map("sort_order")
+
+  @@unique([category, value])
+  @@map("lookup_values")
+}
+
+// ============================================================
+// AI Executive — journeys, steps, automation config, runs
+// ============================================================
+
+model Journey {
+  id               String   @id
+  name             String
+  description      String
+  coveragePct      Int      @map("coverage_pct")
+  humanSteps       Int      @map("human_steps")
+  aiSteps          Int      @map("ai_steps")
+  status           String
+  riskLevel        String   @map("risk_level")
+  connectedModules String[] @map("connected_modules")
+  updatedAt        DateTime @default(now()) @map("updated_at")
+
+  steps             JourneyStep[]
+  automationConfigs AutomationConfig[]
+  runs              AutomationRun[]
+
+  @@map("journeys")
+}
+
+model JourneyStep {
+  id                String  @id @default(cuid())
+  journeyId         String  @map("journey_id")
+  journey           Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  seq               Int
+  name              String
+  chips             String[]
+  source            String?
+  description       String?
+  validation        String?
+  humanIntervention String?  @map("human_intervention")
+  failureHandling   String?  @map("failure_handling")
+  fieldsFetched     String[] @map("fields_fetched")
+
+  scopeEntries AutomationScope[]
+  runSteps     RunStep[]
+
+  @@unique([journeyId, seq])
+  @@map("journey_steps")
+}
+
+model AutomationConfig {
+  id             String   @id @default(cuid())
+  journeyId      String   @map("journey_id")
+  journey        Journey  @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  name           String?
+  entity         String?
+  country        String?
+  employmentType String?  @map("employment_type")
+  effectiveFrom  String?  @map("effective_from")
+  trigger        String?
+  status         String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  scope AutomationScope[]
+
+  @@map("automation_configs")
+}
+
+model AutomationScope {
+  id                String           @id @default(cuid())
+  configId          String           @map("config_id")
+  config            AutomationConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  stepId            String           @map("step_id")
+  step              JourneyStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  aiAutomate        Boolean          @default(false) @map("ai_automate")
+  humanApproval     Boolean          @default(false) @map("human_approval")
+  autoMoveNext      Boolean          @default(false) @map("auto_move_next")
+  exceptionHandling String           @default("stop") @map("exception_handling")
+
+  @@unique([configId, stepId])
+  @@map("automation_scope")
+}
+
+enum RunStatus {
+  ACTIVE
+  WAITING_FOR_APPROVAL
+  EXCEPTION
+  COMPLETED
+}
+
+model AutomationRun {
+  id               String    @id @default(cuid())
+  runCode          String    @unique @map("run_code")
+  journeyId        String    @map("journey_id")
+  journey          Journey   @relation(fields: [journeyId], references: [id])
+  client           String
+  country           String
+  contractType      String    @map("contract_type")
+  currentStepIndex Int       @default(0) @map("current_step_index")
+  status           RunStatus @default(ACTIVE)
+  exceptionNote    String?   @map("exception_note")
+  contractId       String?   @map("contract_id")
+  contract         Contract? @relation(fields: [contractId], references: [id])
+  lastActivityAt   DateTime  @default(now()) @map("last_activity_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  steps        RunStep[]
+  activityLogs RunActivityLog[]
+
+  @@map("automation_runs")
+}
+
+enum RunStepStatus {
+  PENDING
+  CURRENT
+  DONE
+  EXCEPTION
+}
+
+model RunStep {
+  id          String        @id @default(cuid())
+  runId       String        @map("run_id")
+  run         AutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stepId      String        @map("step_id")
+  step        JourneyStep   @relation(fields: [stepId], references: [id])
+  status      RunStepStatus @default(PENDING)
+  startedAt   DateTime?     @map("started_at")
+  completedAt DateTime?     @map("completed_at")
+
+  @@unique([runId, stepId])
+  @@map("run_steps")
+}
+
+model RunActivityLog {
+  id         String        @id @default(cuid())
+  runId      String        @map("run_id")
+  run        AutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  message    String
+  level      String        @default("info")
+  occurredAt DateTime      @default(now()) @map("occurred_at")
+
+  @@map("run_activity_log")
+}
+
+// ============================================================
+// Contracts + AI Contract Assistant
+// ============================================================
+
+model Contract {
+  id                 String   @id @default(cuid())
+  contractCode       String   @unique @map("contract_code")
+  employeeName       String   @map("employee_name")
+  designation        String?
+  country            String
+  type               String
+  status             String   @default("Submitted")
+  nationality        String?
+  countryOfOperation String?  @map("country_of_operation")
+  workPermit         Boolean  @default(false) @map("work_permit")
+  gender             String?
+  email              String?
+  contact            String?
+  dob                String?
+  jobTitle           String?  @map("job_title")
+  skill              String?
+  employmentStart    String?  @map("employment_start")
+  employmentEnd      String?  @map("employment_end")
+  employmentType     String?  @map("employment_type")
+  workSchedule       String?  @map("work_schedule")
+  payAmount          Decimal? @map("pay_amount")
+  currency           String?  @default("INR")
+  jobDescription     String?  @map("job_description")
+  payFrequency       String?  @map("pay_frequency")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  commercial      ContractCommercial?
+  complianceItems ContractComplianceItem[]
+  proposals       Proposal[]
+  runs            AutomationRun[]
+
+  @@map("contracts")
+}
+
+model ContractCommercial {
+  contractId        String   @id @map("contract_id")
+  contract          Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  adtFee            Decimal? @map("adt_fee")
+  annualGross       Decimal? @map("annual_gross")
+  baseGross         Decimal? @map("base_gross")
+  holidayBonus      Decimal? @map("holiday_bonus")
+  month13           Decimal? @map("month_13")
+  monthlyGrossNet   Decimal? @map("monthly_gross_net")
+  monthlyInvoice    Decimal? @map("monthly_invoice")
+  monthlySalary12   Decimal? @map("monthly_salary_12")
+  monthlySalary1392 Decimal? @map("monthly_salary_13_92")
+  netPay            Decimal? @map("net_pay")
+  socialPremAmt     Decimal? @map("social_prem_amt")
+  socialPremPct     Decimal? @map("social_prem_pct")
+  totalMonthlyGross Decimal? @map("total_monthly_gross")
+
+  @@map("contract_commercials")
+}
+
+model ContractComplianceItem {
+  id         String   @id @default(cuid())
+  contractId String   @map("contract_id")
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  item       String
+  note       String?
+  status     String   @default("Pending")
+  documentId String?  @map("document_id")
+
+  @@map("contract_compliance_items")
+}
+
+model Proposal {
+  id           String    @id @default(cuid())
+  proposalCode String    @unique @map("proposal_code")
+  contractId   String?   @map("contract_id")
+  contract     Contract? @relation(fields: [contractId], references: [id])
+  employeeName String    @map("employee_name")
+  country      String?
+  jobTitle     String?   @map("job_title")
+  type         String?
+  status       String    @default("Draft")
+  dealManager  String?   @map("deal_manager")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  sentAt       DateTime? @map("sent_at")
+  approvedAt   DateTime? @map("approved_at")
+
+  @@map("proposals")
+}
+
+// ============================================================
+// Core HR (Phase 2 schema, seeded now, routes come later)
+// ============================================================
+
+model Team {
+  id        String   @id @default(cuid())
+  teamCode  String   @unique @map("team_code")
+  name      String
+  dept      String?
+  country   String?
+  email     String?
+  createdBy String?  @map("created_by")
+  joinDate  String?  @map("join_date")
+  status    String   @default("Active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  members TeamMember[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  teamId     String   @map("team_id")
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  employeeId String?  @map("employee_id")
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  name       String
+  role       String
+  designation String? @map("designation")
+
+  @@map("team_members")
+}
+
+model LeavePolicy {
+  id            String   @id @default(cuid())
+  type          String
+  yearly        Int?
+  monthly       Int?
+  carryForward  Int?     @map("carry_forward")
+  probation     Boolean  @default(false)
+  prorate       Boolean  @default(false)
+  status        String   @default("Active")
+  assignByType  String?  @map("assign_by_type")
+  assignByValue String?  @map("assign_by_value")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  assignments LeavePolicyAssignment[]
+  requests    LeaveRequest[]
+
+  @@map("leave_policies")
+}
+
+model LeavePolicyAssignment {
+  id         String      @id @default(cuid())
+  policyId   String      @map("policy_id")
+  policy     LeavePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  employeeId String      @map("employee_id")
+  employee   Employee    @relation(fields: [employeeId], references: [id])
+
+  @@unique([policyId, employeeId])
+  @@map("leave_policy_assignments")
+}
+
+model LeaveRequest {
+  id           String       @id @default(cuid())
+  leaveCode    String       @unique @map("leave_code")
+  employeeId   String?      @map("employee_id")
+  employee     Employee?    @relation(fields: [employeeId], references: [id])
+  leavePolicyId String?     @map("leave_policy_id")
+  leavePolicy  LeavePolicy? @relation(fields: [leavePolicyId], references: [id])
+  leaveFrom    String       @map("leave_from")
+  leaveTo      String       @map("leave_to")
+  leaveHours   String       @map("leave_hours")
+  description  String?
+  email        String?
+  appliedDate  String?      @map("applied_date")
+  createdBy    String?      @map("created_by")
+  status       String       @default("Pending")
+  subStatus    String?      @map("sub_status")
+
+  @@map("leave_requests")
+}
+
+// ============================================================
+// Finance & Compliance (Phase 2 schema)
+// ============================================================
+
+model PayrollCycle {
+  id            String   @id @default(cuid())
+  cycleName     String   @map("cycle_name")
+  country       String
+  employeeCount Int      @default(0) @map("employee_count")
+  grossPay      Decimal? @map("gross_pay")
+  currency      String?
+  status        String   @default("Active")
+
+  @@map("payroll_cycles")
+}
+
+model PaymentOrder {
+  id             String   @id @default(cuid())
+  orderCode      String   @unique @map("order_code")
+  name           String
+  amountDue      Decimal? @map("amount_due")
+  currency       String?
+  type           String?
+  orderStatus    String?  @map("order_status")
+  invoiceStatus  String   @default("Unpaid") @map("invoice_status")
+  dealId         String?  @map("deal_id")
+  entityId       String?  @map("entity_id")
+  entity         Entity?  @relation(fields: [entityId], references: [id])
+  addedFrom      String?  @map("added_from")
+  createdTime    String?  @map("created_time")
+  jobTitle       String?  @map("job_title")
+  lastUpdated    String?  @map("last_updated")
+  startFrom      String?  @map("start_from")
+  endTo          String?  @map("end_to")
+  workingCountry String?  @map("working_country")
+  orderCategory  String?  @map("order_category")
+
+  employee   PaymentOrderEmployee?
+  attachments PaymentAttachment[]
+
+  @@map("payment_orders")
+}
+
+model PaymentOrderEmployee {
+  orderId   String       @id @map("order_id")
+  order     PaymentOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  empCode   String?      @map("emp_code")
+  name      String?
+  email     String?
+  mobile    String?
+  status    String?
+  createdOn String?      @map("created_on")
+
+  @@map("payment_order_employees")
+}
+
+model PaymentAttachment {
+  id        String       @id @default(cuid())
+  orderId   String       @map("order_id")
+  order     PaymentOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fileName  String       @map("file_name")
+  url       String?
+
+  @@map("payment_attachments")
+}
+
+model ComplianceRate {
+  id             String @id @default(cuid())
+  country        String
+  ruleName       String @map("rule_name")
+  category       String
+  applicableTo   String @map("applicable_to")
+  valueRate      String @map("value_rate")
+  status         String @default("Active")
+
+  @@map("compliance_rates")
+}
+
+model CountryRateRule {
+  id            String   @id @default(cuid())
+  countryCode   String   @map("country_code")
+  label         String
+  kind          String   // 'social' | 'benefit'
+  rate          Decimal?
+  flatAmount    Decimal? @map("flat_amount")
+  minSalary     Decimal? @map("min_salary")
+  maxSalary     Decimal? @map("max_salary")
+  defaultSalary Decimal? @map("default_salary")
+  currency      String?
+
+  @@map("country_rate_rules")
+}
+
+// ============================================================
+// Support & Ops (Phase 2 schema)
+// ============================================================
+
+model Ticket {
+  id           String   @id @default(cuid())
+  ticketCode   String   @unique @map("ticket_code")
+  clientName   String   @map("client_name")
+  title        String
+  category     String?
+  createdAtLabel String? @map("created_at_label")
+  status       String   @default("open")
+  clientEmail  String?  @map("client_email")
+  clientPhone  String?  @map("client_phone")
+  country      String?
+  assignedTo   String?  @map("assigned_to")
+  description  String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  messages    TicketMessage[]
+  chatLinks   ChatTicket[]
+
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String   @map("ticket_id")
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender    String
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("ticket_messages")
+}
+
+model Chat {
+  id           String   @id @default(cuid())
+  chatCode     String   @unique @map("chat_code")
+  clientName   String   @map("client_name")
+  assignedTo   String?  @map("assigned_to")
+  lastActivity String?  @map("last_activity")
+  status       String   @default("active")
+  country      String?
+  clientEmail  String?  @map("client_email")
+  startedAt    String?  @map("started_at")
+
+  linkedTickets ChatTicket[]
+
+  @@map("chats")
+}
+
+model ChatTicket {
+  id       String @id @default(cuid())
+  chatId   String @map("chat_id")
+  chat     Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  ticketId String @map("ticket_id")
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, ticketId])
+  @@map("chat_tickets")
+}
+
+model TimesheetAttendance {
+  id         String   @id @default(cuid())
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  date       String
+  checkIn    String?  @map("check_in")
+  checkOut   String?  @map("check_out")
+  location   String?
+  hours      Decimal?
+  source     String?  @default("Auto")
+  status     String?  @default("present")
+
+  @@unique([employeeId, date])
+  @@map("timesheet_attendance")
+}
