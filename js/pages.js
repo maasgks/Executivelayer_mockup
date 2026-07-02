@@ -1273,7 +1273,7 @@ function peoNext(){peoStep=Math.min(2,peoStep+1);page='contract-peo';renderADTPa
 function peoBack(){if(peoStep===0){peoStep=0;page='contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
 var eorStep=0;
 function eorGoStep(s){eorStep=s;page='contract-eor';renderADTPage();}
-function eorNext(){eorStep=Math.min(2,eorStep+1);page='contract-eor';renderADTPage();}
+function eorNext(){eorStep=Math.min(2,eorStep+1);if(aiAssistedFlow)aiCtPushStepMessage(eorStep);page='contract-eor';renderADTPage();}
 function eorBack(){if(eorStep===0){eorStep=0;page='contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
 function buildEORContractHTML(){return buildContractFormHTML('EOR',eorStep);}
 function buildPEOContractHTML(){return buildContractFormHTML('PEO',peoStep);}
@@ -1303,7 +1303,7 @@ function peoSelectWorkPermit(el){
   var outer=el.querySelector('.peo-radio-outer');
   if(outer){outer.style.borderColor='var(--orange)';}
 }
-function buildContractFormHTML(type,step){
+function buildContractFormHTML(type,step,splitMode){
   const tl=type.toLowerCase();
   const countries=['Afghanistan','Australia','Austria','Bangladesh','Belgium','Brazil','Canada','China','Denmark','Egypt','Finland','France','Germany','Ghana','Greece','India','Indonesia','Iran','Iraq','Ireland','Italy','Japan','Jordan','Kenya','Malaysia','Mexico','Morocco','Nepal','Netherlands','New Zealand','Nigeria','Norway','Pakistan','Philippines','Poland','Portugal','Qatar','Romania','Russia','Saudi Arabia','Singapore','South Africa','South Korea','Spain','Sri Lanka','Sweden','Switzerland','Thailand','Turkey','Ukraine','United Arab Emirates','United Kingdom','United States','Vietnam'];
   const countryOpts='<option value="">Select Country</option>'+countries.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
@@ -1552,9 +1552,10 @@ function buildContractFormHTML(type,step){
     +'<button class="ep-save-btn" style="padding:9px 28px;border-radius:99px" onclick="'+(isLast?finalAction:goNext)+'">'+( isLast?(aiAssistedFlow?'Create Proposal':'Submit Contract'):'Next')+'</button>'
     +'</div>';
 
-  const aiHint=(aiAssistedFlow&&step===0)?'<div class="info-box tip" style="margin-bottom:16px"><div class="ib-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div><div><strong>AI pre-filled this form</strong>Review the details below, then continue through the remaining steps to create the proposal.</div></div>':'';
+  const aiHint=(aiAssistedFlow&&step===0&&!splitMode)?'<div class="info-box tip" style="margin-bottom:16px"><div class="ib-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div><div><strong>AI pre-filled this form</strong>Review the details below, then continue through the remaining steps to create the proposal.</div></div>':'';
+  const pageStyle=splitMode?'width:100%;padding:26px 30px;box-sizing:border-box':'max-width:820px;margin:0 auto';
 
-  return '<div class="ep-page" style="max-width:820px;margin:0 auto">'
+  return '<div class="ep-page" style="'+pageStyle+'">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">'
     +'<button class="ep-back" onclick="'+goBack+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> '+(step===0?'Back to Create Contract':'Back')+'</button>'
     +'<span style="font-size:12px;font-weight:700;color:#64748b;background:#f1f5f9;border:1px solid var(--border);padding:4px 12px;border-radius:6px;letter-spacing:.5px">'+type+'</span>'
@@ -3803,13 +3804,57 @@ function aiCtUseEmployee(empId){
   const parts=emp.name.split(' ');
   aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||''};
   aiAssistedFlow=true;
+  const promptEl=document.getElementById('ai-ct-prompt');
+  aiCtChatMsgs=[
+    {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+emp.name)},
+    {role:'bot',text:'Found <b>'+emp.name+'</b> in ADT &mdash; '+(emp.country||parsed.country||'India')+', '+(emp.jobTitle||'—')+'. I\'ve pre-filled the contract form on the right with their details. Review each step and continue when you\'re ready.'}
+  ];
   eorStep=0;page='contract-eor';renderADTPage();
 }
 function aiCtUseManualEntry(){
   const gv=function(id){const el=document.getElementById(id);return el?el.value:'';};
-  aiContractPrefill={fname:gv('ai-ct-fname'),lname:gv('ai-ct-lname'),email:'',country:gv('ai-ct-country'),jobTitle:gv('ai-ct-jobtitle')};
+  const fname=gv('ai-ct-fname'),lname=gv('ai-ct-lname');
+  aiContractPrefill={fname:fname,lname:lname,email:'',country:gv('ai-ct-country'),jobTitle:gv('ai-ct-jobtitle')};
   aiAssistedFlow=true;
+  const promptEl=document.getElementById('ai-ct-prompt');
+  const fullName=(fname+' '+lname).trim()||'this person';
+  aiCtChatMsgs=[
+    {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+fullName)},
+    {role:'bot',text:'I couldn\'t find <b>'+fullName+'</b> in ADT, so I\'ve started a new contract using the details you gave me. Review each step on the right and fill in anything I\'m missing.'}
+  ];
   eorStep=0;page='contract-eor';renderADTPage();
+}
+function buildAIAssistedContractSplitHTML(type){
+  const step=type==='PEO'?peoStep:eorStep;
+  const formHtml=buildContractFormHTML(type,step,true);
+  return '<div class="ai-ct-split">'
+    +'<div class="ai-ct-split-chat">'
+    +'<div class="chat-area" id="ai-ct-chat"></div>'
+    +'<div class="input-area"><div class="input-row">'
+    +'<input class="input-field" id="ai-ct-chat-input-field" placeholder="Ask AI or add more details..." onkeydown="if(event.key===\'Enter\')aiCtChatSend()">'
+    +'<button class="icon-btn active" onclick="aiCtChatSend()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
+    +'</div></div>'
+    +'</div>'
+    +'<div class="form-col" style="flex:1;background:#f8f9fb">'
+    +'<div class="form-panel" style="margin:14px">'+formHtml+'</div>'
+    +'</div>'
+    +'</div>';
+}
+function initAICtChatPanel(){renderChat('ai-ct-chat',aiCtChatMsgs);}
+function aiCtChatSend(){
+  const inp=document.getElementById('ai-ct-chat-input-field');if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  aiCtChatMsgs.push({role:'user',text:text});
+  inp.value='';
+  renderChat('ai-ct-chat',aiCtChatMsgs);
+  setTimeout(function(){
+    aiCtChatMsgs.push({role:'bot',text:'Got it &mdash; I\'ve noted that. Keep filling in the form on the right, and I\'ll keep helping as you go.'});
+    renderChat('ai-ct-chat',aiCtChatMsgs);
+  },500);
+}
+function aiCtPushStepMessage(step){
+  const msgs={1:'Now let\'s confirm the job details &mdash; title, schedule, and pay.',2:'Almost done &mdash; just leave entitlement, probation, and notice period left.'};
+  if(msgs[step])aiCtChatMsgs.push({role:'bot',text:msgs[step]});
 }
 function genProposalId(){return 'PRO-'+Math.floor(1000+Math.random()*9000);}
 function aiSubmitAssistedContract(type){

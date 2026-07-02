@@ -17,7 +17,7 @@
   if(page==='leave-policy-add'){el.innerHTML=buildAddLeavePolicyHTML();return;}
   if(page==='leave-add'){el.innerHTML=buildAddLeaveHTML();return;}
   if(page==='contract-type-select'){el.innerHTML=buildContractTypeSelectHTML();return;}
-  if(page==='contract-eor'){el.innerHTML=buildEORContractHTML();return;}
+  if(page==='contract-eor'){if(aiAssistedFlow){el.innerHTML=buildAIAssistedContractSplitHTML('EOR');initAICtChatPanel();return;}el.innerHTML=buildEORContractHTML();return;}
   if(page==='contract-peo'){el.innerHTML=buildPEOContractHTML();return;}
   if(page==='ai-contract-assistant'){el.innerHTML=buildAIContractAssistantHTML();return;}
   if(page==='ai-proposal-created'){el.innerHTML=buildAIProposalCreatedHTML();return;}
