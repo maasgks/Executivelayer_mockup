@@ -3479,6 +3479,19 @@ function buildChatsPageHTML(){
 const aiChipClassMap={'AI Automated':'ai-chip-ai','Human Required':'ai-chip-human','System Action':'ai-chip-system','Client Action':'ai-chip-client','Validation Required':'ai-chip-validation','Approval Required':'ai-chip-approval','Exception Possible':'ai-chip-exception'};
 function aiChipClass(label){return aiChipClassMap[label]||'ai-chip-system';}
 function aiChips(list){return (list||[]).map(l=>'<span class="ai-chip '+aiChipClass(l)+'">'+l+'</span>').join('');}
+function aiPrimaryChipLabel(chips){
+  if(!chips||!chips.length)return 'System Action';
+  if(chips.includes('AI Automated'))return 'AI Automated';
+  if(chips.includes('Human Required'))return 'Human Required';
+  if(chips.includes('Approval Required'))return 'Approval Required';
+  if(chips.includes('Client Action'))return 'Client Action';
+  return chips[0];
+}
+function aiChipsCompact(chips){
+  const primary=aiPrimaryChipLabel(chips);
+  const extra=(chips||[]).length-1;
+  return '<span class="ai-chip '+aiChipClass(primary)+'">'+primary+'</span>'+(extra>0?'<span class="ai-chip-more">+'+extra+'</span>':'');
+}
 function aiStatusPillClass(status){return status==='Active'?'active':status==='Draft'?'draft':'available';}
 function aiDrawerRow(label,val){return '<div class="review-row"><div class="rr-label">'+label+'</div><div class="rr-val" style="white-space:normal;font-weight:600">'+val+'</div></div>';}
 
@@ -3487,11 +3500,25 @@ function startAutomateJourney(id){selectedAIJourneyId=id;navigatePage('ai-automa
 
 function buildAIExecutiveDashboardHTML(){
   const cards=aiJourneys.map(j=>{
+<<<<<<< HEAD
     return '<div class="ai-journey-card" onclick="viewAIJourney(\''+j.id+'\')">'
       +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+j.name+'</div></div>'
       +'<hr class="ai-journey-divider">'
       +'<div class="ai-journey-icon-center"><div class="stat-icon">'+j.icon+'</div></div>'
       +'<div class="ai-journey-coverage-row"><span>Automation coverage</span><div class="setup-bar" style="flex:1;margin:0"><div class="setup-fill" style="width:'+j.coverage+'%"></div></div><span style="font-weight:600;color:var(--navy)">'+j.coverage+'%</span></div>'
+=======
+    return '<div class="ai-journey-card">'
+      +'<div class="ai-journey-card-top">'
+      +'<div class="ai-journey-name">'+j.name+'</div>'
+      +'<span class="status-pill '+aiStatusPillClass(j.status)+'">'+j.status+'</span>'
+      +'</div>'
+      +'<div class="ai-journey-desc">'+j.desc+'</div>'
+      +'<div class="ai-journey-progress-block">'
+      +'<div class="ai-journey-progress-top"><span>Automation coverage</span><span class="ai-journey-progress-pct">'+j.coverage+'%</span></div>'
+      +'<div class="ai-journey-progress-bar"><div class="ai-journey-progress-fill" style="width:'+j.coverage+'%"></div></div>'
+      +'</div>'
+      +'<div class="ai-journey-actions"><button class="btn btn-secondary" onclick="viewAIJourney(\''+j.id+'\')">View Journey</button>'+(j.status==='Active'?'<button class="btn btn-primary" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Automation</button>':'<button class="btn btn-primary" onclick="startAutomateJourney(\''+j.id+'\')">Automate Journey</button>')+'</div>'
+>>>>>>> b8df37390d77a02522f1443258e8b4ffa240ac90
       +'</div>';
   }).join('');
   return '<div class="ai-exec-page">'
@@ -3534,7 +3561,7 @@ function buildAIJourneyDetailHTML(){
       +'<div class="ai-timeline-card" onclick="openAIEventDrawer(\''+j.id+'\','+i+')">'
       +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+e.name+'</span></div>'
       +'<div class="ai-timeline-card-desc">'+e.desc+'</div>'
-      +'<div class="ai-timeline-chips">'+aiChips(e.chips)+'</div>'
+      +'<div class="ai-timeline-chips">'+aiChipsCompact(e.chips)+'</div>'
       +'</div></div>';
   }).join('');
   const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'ai-executive\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> All Journeys</button>'
@@ -4022,6 +4049,7 @@ function buildAIActiveAutomationHTML(){
     const counts=aiRunCounts(r,j.id);
     const lastStepName=events.length?events[events.length-1].name:'Completed';
     return '<tr style="cursor:pointer" onclick="viewAIRun(\''+r.runId+'\')">'
+<<<<<<< HEAD
       +'<td style="font-weight:600;color:var(--navy)">'+r.runId+'</td>'
       +'<td>'+r.client+'</td>'
       +'<td>'+r.country+'</td>'
@@ -4029,29 +4057,36 @@ function buildAIActiveAutomationHTML(){
       +'<td>'+(r.status==='Completed'?lastStepName:(step?step.name:'—'))+'</td>'
       +'<td style="color:var(--orange);font-weight:600">'+counts.aiCompleted+'</td>'
       +'<td style="color:#2563eb;font-weight:600">'+counts.humanPending+'</td>'
+=======
+      +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+r.runId+'</div></td>'
+      +'<td><div class="cell-primary">'+r.country+'</div><div class="cell-sub">'+r.contractType+'</div></td>'
+      +'<td>'+(r.status==='Completed'?'Ready for Payroll':(step?step.name:'—'))+'</td>'
+      +'<td><div class="ai-run-progress"><span class="ai-run-progress-ai">'+counts.aiCompleted+' AI</span><span class="ai-run-progress-human">'+counts.humanPending+' pending</span></div></td>'
+>>>>>>> b8df37390d77a02522f1443258e8b4ffa240ac90
       +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
-      +'<td style="color:var(--gray);font-size:12px">'+r.lastActivity+'</td>'
+      +'<td class="cell-sub">'+r.lastActivity+'</td>'
       +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRun(\''+r.runId+'\')">View Run</button></td>'
       +'</tr>';
   }).join('');
   return '<div class="ai-exec-page">'
     +'<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'ai-journey-detail\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back to '+j.name+'</button>'
     +'<p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+' Automation</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Live view of every run this automation has triggered, and where each one currently stands.</p>'
-    +'<div class="stat-grid" style="margin-bottom:24px">'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:14px">Live view of every run this automation has triggered, and where each one currently stands.</p>'
+    +'<div class="ai-run-meta">'
+    +'<div class="ai-run-meta-item"><span class="ai-run-meta-label">Trigger</span><span class="ai-run-meta-val">'+(cfg&&cfg.trigger?cfg.trigger:'Trigger when proposal is approved')+'</span></div>'
+    +'<div class="ai-run-meta-item"><span class="ai-run-meta-label">Entity</span><span class="ai-run-meta-val">'+(cfg&&cfg.entity?cfg.entity:'All ADT Entities')+'</span></div>'
+    +'<div class="ai-run-meta-item"><span class="ai-run-meta-label">Country</span><span class="ai-run-meta-val">'+(cfg&&cfg.country?cfg.country:'Multiple Countries')+'</span></div>'
+    +'<div class="ai-run-meta-item"><span class="ai-run-meta-label">Created by</span><span class="ai-run-meta-val">Pallavi Parate</span></div>'
+    +'</div>'
+    +'<div class="stat-grid" style="margin-bottom:20px">'
     +'<div class="stat-card"><div class="stat-label"><span>Automation Status</span></div><div class="stat-val" style="font-size:16px;color:#16a34a">Active</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Trigger</span></div><div class="stat-val" style="font-size:14px">'+(cfg&&cfg.trigger?cfg.trigger:'Trigger when proposal is approved')+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Entity</span></div><div class="stat-val" style="font-size:14px">'+(cfg&&cfg.entity?cfg.entity:'All ADT Entities')+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Country</span></div><div class="stat-val" style="font-size:14px">'+(cfg&&cfg.country?cfg.country:'Multiple Countries')+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Created By</span></div><div class="stat-val" style="font-size:14px">Pallavi Parate</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Last Run</span></div><div class="stat-val" style="font-size:14px">'+(runs[0]?runs[0].lastActivity:'—')+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Total Runs</span></div><div class="stat-val">'+totalRuns+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Success Rate</span></div><div class="stat-val" style="color:#16a34a">'+successRate+'%</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Exceptions Pending</span></div><div class="stat-val" style="color:'+(exceptions?'#dc2626':'var(--navy)')+'">'+exceptions+'</div></div>'
     +'</div>'
     +'<div class="listing-card">'
-    +'<table class="listing-table"><thead><tr>'
-    +'<th>Run ID</th><th>Client</th><th>Country</th><th>Contract Type</th><th>Current Step</th><th>AI Completed</th><th>Human Pending</th><th>Status</th><th>Last Activity</th><th>Action</th>'
+    +'<table class="listing-table ai-run-table"><thead><tr>'
+    +'<th>Client</th><th>Country &amp; Type</th><th>Current Step</th><th>Progress</th><th>Status</th><th>Last Activity</th><th>Action</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>'
     +'</div></div>';
 }
@@ -4080,7 +4115,7 @@ function buildAIRunDetailHTML(){
       +'<div class="ai-timeline-card" style="cursor:pointer" onclick="openAIEventDrawer(\''+j.id+'\','+i+')">'
       +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+e.name+'</span></div>'
       +(st==='exception'?'<div class="ai-timeline-card-desc" style="color:#dc2626">'+(run.exceptionNote||'This step needs attention.')+'</div>':'<div class="ai-timeline-card-desc">'+e.desc+'</div>')
-      +'<div class="ai-timeline-chips">'+aiChips(e.chips)+'</div>'
+      +'<div class="ai-timeline-chips">'+aiChipsCompact(e.chips)+'</div>'
       +'</div></div>';
   }).join('');
 
