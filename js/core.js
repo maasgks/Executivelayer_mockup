@@ -3,6 +3,8 @@
 let view='adt',mode='agent',page='dashboard',agent='contractor',adtSidebarCollapsed=false,agentSidebarCollapsed=true,notifOpen=false,notifShowUnread=true,agentMsgs=[{role:'bot',text:"Hi John! I'm your ADT Agent. What would you like to do today?"}],formStep=-1,returnToReview=false,cw=360,selectedAIJourneyId='contract-creation',aiEventDrawerIdx=-1;
 let aiContractPrefill=null,aiAssistedFlow=false,aiCtNotFoundOpen=false,aiProposalDraft=null,aiCtChatMsgs=[],aiWizardFormData={},aiCreatedContractId=null;
 const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
+const aiOpsManager={name:'Priya Nair',role:'Ops Manager',initials:'PN'};
+let aiCtAnimatedStage=-1,aiCtPendingEmpType='',aiCtJourneyEmployee=null;
 let selectedAIRunId='RUN-2001';
 const aiAutomationRuns={
   'contract-creation':[
@@ -88,11 +90,11 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -230,7 +232,7 @@ function buildSidebar(id,collapsed,activePg){
     }
     const d=document.createElement('button');
     d.type='button';
-    d.className='sb-item'+(item.id===activePg?' active':'');
+    d.className='sb-item'+(item.id===activePg?' active':'')+(item.id==='ai-executive'?' sb-item-ai':'');
     d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.label+'</span>';
     d.title=item.label;d.onclick=()=>{activeSidebarItem=item.id;navigatePage(item.id);};el.appendChild(d);
   });
@@ -746,7 +748,7 @@ function markApFormDirty(){}
 function cancelAddPolicy(){selectedEmps=new Set();apFilterType='';apFilterValue='';page='leave-policies';renderADTPage();}
 function resetLpFilters(){lpFilterField='';lpFilterStatus='';lpCurrentPage=1;renderADTPage();}
 function lpGoToPage(n){lpCurrentPage=n;renderADTPage();}
-function addListingItem(pg){if(pg==='contracts'){const j=aiJourneys.find(x=>x.id==='contract-creation');aiAssistedFlow=false;aiContractPrefill=null;page=(j&&j.status==='Active')?'ai-contract-assistant':'contract-type-select';renderADTPage();}else if(pg==='teams'){page='team-add';renderADTPage();}else if(pg==='all-leaves'){page='leave-add';renderADTPage();}}
+function addListingItem(pg){if(pg==='contracts'){const j=aiJourneys.find(x=>x.id==='contract-creation');aiAssistedFlow=false;aiContractPrefill=null;aiCtAnimatedStage=-1;aiCtPendingEmpType='';aiCtJourneyEmployee=null;page=(j&&j.status==='Active')?'ai-contract-assistant':'contract-type-select';renderADTPage();}else if(pg==='teams'){page='team-add';renderADTPage();}else if(pg==='all-leaves'){page='leave-add';renderADTPage();}}
 
 // -- DIRECT EMPLOYEE PAGE --
 const directEmpData=[
@@ -862,7 +864,7 @@ const tmWorkflowData={
   6:[{title:'Team Deactivated',user:'Admin',date:'15 Jul 2025',time:'04:00:00 PM',description:'Local Admin team deactivated. Members reassigned.'},{title:'Team Activated',user:'Admin',date:'01 Jun 2025',time:'09:00:00 AM',description:'Local Admin team created for Netherlands entity.'}]
 };
 let tmSelectedId=null,tmTab='basic-details';
-const ctFlow=['Submitted','Quotation Approved','Proposal Sent','Proposal Approved','Contract Sent','Contract Approved'];
+const ctFlow=['Submitted','Quotation Approved','Proposal Sent','Proposal Approved','Contract Sent','Contract Approved','Onboarding','Ready for Payroll'];
 const contractsData=[
   {id:1,contractId:'94135',empName:'TestEmp Antar',empDesig:'Business Analyst',country:'Netherlands',type:'EOR',date:'2026-06-11 15:17:26',status:'Submitted',
    nationality:'India',countryOfOp:'Netherlands',workPermit:false,gender:'MALE',email:'antar@testemp.com',contact:'+91 9999999996',dob:'2010-01-01',jobTitle:'Business Analyst',skill:'JIRA',empDuration:'2026-06-11 – 2026-12-15',empType:'EOR',workSchedule:'7',payAmount:'100000',currency:'INR',jobDesc:'job desc',payFrequency:'Monthly',
@@ -897,9 +899,9 @@ let ctSelectedId=null,ctTab='basic-details';
 
 // -- AI EXECUTIVE MODULE --
 const aiJourneys=[
-  {id:'contract-creation',name:'Contract Creation Journey',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
-  {id:'payroll-creation',name:'Payroll Creation Journey',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip generation.',modules:['Payroll','Timesheet','Payheads','Finance'],coverage:78,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'01 Jul 2026, 3:15 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
-  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
+  {id:'contract-creation',name:'Contract Creation Journey',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Inactive',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
+  {id:'payroll-creation',name:'Payroll Creation Journey',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip generation.',modules:['Payroll','Timesheet','Payheads','Finance'],coverage:78,humanSteps:1,aiSteps:4,status:'Inactive',risk:'Medium',updated:'01 Jul 2026, 3:15 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
+  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Inactive',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
 ];
 
 const aiJourneyEvents={
@@ -926,6 +928,35 @@ const aiJourneyEvents={
     {name:'Ask for Approval if Required',chips:['Human Required','Approval Required'],source:'HR Manager',desc:'If the leave policy or compliance setup deviates from standard, HR reviews and approves before finalizing.',validation:'Manual sign-off is recorded when a deviation is detected.',human:'Required only on deviation — otherwise auto-skipped.',failure:'Rejection routes back to Show Leave Policies for reconfiguration.',next:'Offboarding',fields:['Approver Name','Deviation Reason']},
     {name:'Offboarding',chips:['AI Automated','Offboarding'],source:'AI Offboarding Engine',desc:"AI runs the offboarding checklist — access revocation, final settlement calculation, exit compliance checks — when the employee's exit is triggered.",validation:'All offboarding checklist items are marked complete.',human:'None — fully automated.',failure:'A pending final settlement raises an exception for finance.',next:'Journey Complete — Offboarding',fields:['Exit Date','Final Settlement Amount','Access Revocation Status']}
   ]
+};
+// -- AI Executive: live run flows for activated journeys (Create Contract / Create Employee / Run Payroll) --
+let aiRunFlowJourneyId=null,aiRunFlowStep=-1,aiRunFlowData={};
+const aiRunFlows={
+  'h2r-lifecycle':{
+    entryLabel:'Create Employee',
+    entryDesc:'Tell me who you\'re onboarding — I\'ll create the employee record and walk through country compliance and leave policy setup automatically.',
+    promptPlaceholder:'e.g. Create an employee for Rahul Mehta in India as Product Manager',
+    steps:[
+      {label:'Employee Creation',running:'Creating employee record…',type:'ai'},
+      {label:'Fetch Country Details',running:'Fetching compliance details from the Compliance Hub…',type:'ai'},
+      {label:'Leave Policy Match',running:'Matching the applicable leave policy…',type:'ai'},
+      {label:'Approval Check',running:'Checking for policy deviations…',type:'auto-skip',skipNote:'No deviation detected — step skipped automatically.'},
+      {label:'Employee Onboarded',running:'Finalizing employee profile…',type:'ai'}
+    ]
+  },
+  'payroll-creation':{
+    entryLabel:'Run Payroll',
+    entryDesc:'Tell me who you\'re running payroll for — I\'ll gather their details, capture attendance, calculate salary, and generate the slip automatically.',
+    promptPlaceholder:'e.g. Run payroll for Anika Shah for this month',
+    steps:[
+      {label:'Gathering Employee Details',running:'Fetching employee details…',type:'ai'},
+      {label:'Attendance Capture',running:'Capturing attendance records…',type:'ai'},
+      {label:'Salary Calculation',running:'Calculating gross and net salary…',type:'ai'},
+      {label:'Approval',running:'Waiting for Finance approval…',type:'manual'},
+      {label:'Salary Slip',running:'Generating salary slip…',type:'ai'},
+      {label:'Payment',running:'Processing payment…',type:'payment'}
+    ]
+  }
 };
 const allLeavesData=[
   {id:1,empId:'CLOCLO11755',name:'Shaun J',leaveId:'2014',leaveType:'Casual Leave',leaveFrom:'14-04-2026',leaveTo:'16-04-2026',leaveHours:'Full Day',description:'I need leave',email:'shaun.varghese1805@gmail.com',appliedDate:'14 Apr, 2026 23:40:25',createdBy:'Self',status:'Approved',subStatus:'Paid'},

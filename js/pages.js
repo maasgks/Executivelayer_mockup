@@ -1624,7 +1624,7 @@ function buildContractTypeSelectHTML(){
       'peoStep=0;page=\'contract-peo\';renderADTPage()')
     +card(eorBuild,'EOR','Employer of Record (EOR)',
       "An arrangement between you and a third party for the establishment of a legal relationship between a freelancer and a client that covers the terms and conditions of the freelancer's work.",
-      'startNetherlandsContract()')
+      'eorStep=0;page=\'contract-eor\';renderADTPage()')
     +'</div>'
     +'</div>';
 }
@@ -3492,31 +3492,34 @@ function aiChipsCompact(chips){
   const extra=(chips||[]).length-1;
   return '<span class="ai-chip '+aiChipClass(primary)+'">'+primary+'</span>'+(extra>0?'<span class="ai-chip-more">+'+extra+'</span>':'');
 }
-function aiStatusPillClass(status){return status==='Active'?'active':status==='Draft'?'draft':'available';}
 function aiDrawerRow(label,val){return '<div class="review-row"><div class="rr-label">'+label+'</div><div class="rr-val" style="white-space:normal;font-weight:600">'+val+'</div></div>';}
 
 function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;navigatePage('ai-journey-detail');}
-function startAutomateJourney(id){selectedAIJourneyId=id;navigatePage('ai-automate-form');}
+function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrStart(id);navigatePage('ai-automate-form');}
+function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
 
 function buildAIExecutiveDashboardHTML(){
   const cards=aiJourneys.map(j=>{
-    return '<div class="ai-journey-card">'
+    const isActive=j.status==='Active';
+    const cta=isActive?aiJourneyCTA(j):null;
+    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+'" onclick="viewAIJourney(\''+j.id+'\')">'
+      +(isActive?'<div class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</div>':'')
       +'<div class="ai-journey-card-top">'
       +'<div class="ai-journey-name">'+j.name+'</div>'
-      +'<span class="status-pill '+aiStatusPillClass(j.status)+'">'+j.status+'</span>'
       +'</div>'
       +'<div class="ai-journey-desc">'+j.desc+'</div>'
-      +'<div class="ai-journey-progress-block">'
-      +'<div class="ai-journey-progress-top"><span>Automation coverage</span><span class="ai-journey-progress-pct">'+j.coverage+'%</span></div>'
-      +'<div class="ai-journey-progress-bar"><div class="ai-journey-progress-fill" style="width:'+j.coverage+'%"></div></div>'
-      +'</div>'
-      +'<div class="ai-journey-actions"><button class="btn btn-secondary" onclick="viewAIJourney(\''+j.id+'\')">View Journey</button>'+(j.status==='Active'?'<button class="btn btn-primary" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Automation</button>':'<button class="btn btn-primary" onclick="startAutomateJourney(\''+j.id+'\')">Automate Journey</button>')+'</div>'
+      +(j.status==='Draft'
+        ?'<div class="ai-journey-draft-banner" onclick="event.stopPropagation();startAutomateJourney(\''+j.id+'\')"><span class="ai-journey-draft-banner-text">Draft pending</span><span class="ai-journey-draft-banner-cta">Continue now to automate your journey &rarr;</span></div>'
+        :'')
+      +(cta?'<button class="btn btn-primary ai-journey-cta-btn" onclick="event.stopPropagation();'+cta.action+'">'+cta.label+'</button>':'')
       +'</div>';
   }).join('');
   return '<div class="ai-exec-page">'
-    +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p>'
-    +'<div class="ai-journey-grid">'+cards+'</div>'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
+    +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p></div>'
+    +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>'
+    +'</div>'
+    +'<div class="ai-journey-grid ai-journey-grid-lg">'+cards+'</div>'
     +'</div>';
 }
 
@@ -3527,11 +3530,11 @@ function buildAIResponsibilitySplitHTML(journeyId){
   const item=function(e,cls){return '<div class="ai-resp-item"><span class="ai-resp-dot '+cls+'"></span>'+e.name+'</div>';};
   return '<div class="ai-resp-split">'
     +'<div class="ep-form-card ai-resp-card ai-resp-ai">'
-    +'<div class="ep-form-title" style="border:none;margin-bottom:6px;padding-bottom:0">AI Will Handle <span class="ai-resp-count">'+aiEvents.length+' of '+events.length+' events</span></div>'
+    +'<div class="ep-form-title" style="border:none;margin-bottom:12px;padding-bottom:0">AI Will Handle <span class="ai-resp-count">'+aiEvents.length+' of '+events.length+' events</span></div>'
     +aiEvents.map(function(e){return item(e,'ai');}).join('')
     +'</div>'
     +'<div class="ep-form-card ai-resp-card ai-resp-human">'
-    +'<div class="ep-form-title" style="border:none;margin-bottom:6px;padding-bottom:0">Human Will Handle <span class="ai-resp-count">'+humanEvents.length+' of '+events.length+' events</span></div>'
+    +'<div class="ep-form-title" style="border:none;margin-bottom:12px;padding-bottom:0">Human Will Handle <span class="ai-resp-count">'+humanEvents.length+' of '+events.length+' events</span></div>'
     +humanEvents.map(function(e){return item(e,'human');}).join('')
     +'</div>'
     +'</div>';
@@ -3556,46 +3559,47 @@ function buildAIJourneyDetailHTML(){
       +'<div class="ai-timeline-chips">'+aiChipsCompact(e.chips)+'</div>'
       +'</div></div>';
   }).join('');
-  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'ai-executive\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> All Journeys</button>'
-    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
-    +'<div><p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+'</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:680px">'+j.desc+'</p></div>'
-    +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourney(\''+j.id+'\')">Create your journey</button>'
-    +'</div>'
-    +'<div class="stat-grid" style="margin-bottom:20px">'
+  const statusActionHTML=j.status==='Active'
+    ?'<button class="btn btn-primary btn-sm" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Active Automation</button>'
+    :j.status==='Draft'
+      ?'<div class="ai-draft-pending"><span class="ai-draft-pending-text"><span class="ai-draft-pending-dot"></span>Draft pending &mdash; automation setup isn\'t finished yet.</span><button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Continue Automating Journey</button></div>'
+      :'<button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Automate This Journey</button>';
+  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="navigatePage(\'ai-executive\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> All Journeys</button>'
+    +'<div style="margin-bottom:28px"><p style="font-size:17px;font-weight:700;margin-bottom:6px">'+j.name+'</p><p style="font-size:12.5px;color:var(--gray);margin:0;max-width:680px;line-height:1.6">'+j.desc+'</p></div>'
+    +'<div class="stat-grid" style="margin-bottom:28px">'
     +'<div class="stat-card"><div class="stat-label"><span>Total Events</span></div><div class="stat-val">'+total+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>AI Automated</span></div><div class="stat-val" style="color:var(--orange)">'+j.aiSteps+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Human Required</span></div><div class="stat-val" style="color:#2563eb">'+j.humanSteps+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Risk Level</span></div><div class="stat-val" style="font-size:16px">'+j.risk+'</div></div>'
     +'</div>'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">'
-    +'<div style="font-size:11.5px;color:var(--gray);max-width:520px">Connected Modules: '+j.modules.join(', ')+'<br>Status: '+j.status+' &middot; Last Updated: '+j.updated+'</div>'
-    +(j.status==='Active'
-      ?'<div style="display:flex;align-items:center;gap:14px"><button class="btn btn-primary btn-sm" style="opacity:.6" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Active Automation</button></div>'
-      :'<button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Automate This Journey</button>')
+    +'<div class="ep-form-card" style="margin-bottom:28px;padding:20px 22px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">'
+    +'<div style="font-size:12px;color:var(--gray);line-height:1.8">Connected Modules: <strong style="color:var(--navy);font-weight:600">'+j.modules.join(', ')+'</strong><br>Status: <strong style="color:var(--navy);font-weight:600">'+j.status+'</strong> &middot; Last Updated: '+j.updated+'</div>'
+    +(j.status==='Draft'?'':statusActionHTML)
     +'</div>'
+    +(j.status==='Draft'?'<div style="margin-top:16px">'+statusActionHTML+'</div>':'')
+    +'</div>'
+    +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
     +buildAIResponsibilitySplitHTML(j.id)
+    +'<div class="review-title" style="margin:32px 0 14px">Journey Timeline</div>'
     +'<div class="ai-timeline">'+timeline+'</div>';
-  const sbInner=aiEventDrawerIdx>=0?renderAIEventDrawer():'';
-  return '<div class="ai-exec-page ai-journey-detail-page">'
-    +'<div class="lp-split-wrap"><div class="lp-split-main" style="border:none;background:transparent;overflow:visible">'+mainContent+'</div>'
-    +'<div class="lp-split-sb'+(aiEventDrawerIdx>=0?' open':'')+'" id="ai-event-split-sb"><div class="lp-isb" id="ai-event-isb-inner">'+sbInner+'</div></div>'
-    +'</div></div>';
+  return '<div class="ai-exec-page ai-journey-detail-page">'+mainContent+'</div>';
 }
 
 function openAIEventDrawer(journeyId,idx){
   selectedAIJourneyId=journeyId;aiEventDrawerIdx=idx;
-  const sb=document.getElementById('ai-event-split-sb');if(sb)sb.classList.add('open');
-  const inner=document.getElementById('ai-event-isb-inner');if(inner)inner.innerHTML=renderAIEventDrawer();
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML=renderAIEventDrawer();
+  overlay.style.display='flex';
 }
 function closeAIEventDrawer(){
   aiEventDrawerIdx=-1;
-  const sb=document.getElementById('ai-event-split-sb');if(sb)sb.classList.remove('open');
+  const overlay=document.getElementById('ct-modal-overlay');if(overlay){overlay.style.display='none';overlay.innerHTML='';}
 }
 function renderAIEventDrawer(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);if(!j)return '';
   const e=(aiJourneyEvents[j.id]||[])[aiEventDrawerIdx];if(!e)return '';
-  const tabBar='<div class="lp-isb-tabbar"><div class="lp-isb-tabs" style="padding:0 14px;align-items:center;flex:1"><span style="font-size:13px;font-weight:700;color:var(--navy)">'+e.name+'</span></div>'
-    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeAIEventDrawer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>';
+  const header='<div class="ct-modal-hdr"><span class="ct-modal-title">'+e.name+'</span><button class="ct-modal-close" onclick="closeAIEventDrawer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
   const fieldsRow=e.fields&&e.fields.length?aiDrawerRow('Fields AI will fetch',e.fields.join(', ')):'';
   const body='<div style="margin-bottom:16px">'+aiChips(e.chips)+'</div>'
     +'<div class="review-section"><div class="review-title">Event Description</div><p style="font-size:12.5px;color:var(--navy);line-height:1.6">'+e.desc+'</p></div>'
@@ -3608,7 +3612,7 @@ function renderAIEventDrawer(){
     +aiDrawerRow('Next Step',e.next)
     +aiDrawerRow('Audit Requirement','Every AI action on this event is logged with timestamp, data source, and outcome for compliance audit.')
     +'</div></div>';
-  return tabBar+'<div class="lp-isb-body">'+body+'</div>';
+  return '<div class="ct-modal" style="width:min(600px,92vw)" onclick="event.stopPropagation()">'+header+body+'</div>';
 }
 
 const aiEntityOptions=['ADT Netherlands B.V.','ADT Germany GmbH','ADT India Pvt Ltd','ADT Spain S.L.','ADT UK Ltd'];
@@ -3622,136 +3626,504 @@ const aiTriggerOptions=[
 ];
 const aiValidationChecklist=['Approved proposal required','Active contract template required','Entity mapping required','Client signatory required','Country rules required','Salary/commercial terms required','Payroll data required','Compliance documents required'];
 let aiAutomationConfigs={};
+let aiAutomateStep=0;
+let aiAutomateFormData={};
+let aiAutomateSkipPicker=false;
+let aiAutomateProgress={};
+function aiAutomateVisibleSteps(){return aiAutomateSkipPicker?[1,2,3,4,5,6]:[0,1,2,3,4,5,6];}
+function aiAutomateResumeOrStart(journeyId){
+  selectedAIJourneyId=journeyId;
+  const saved=aiAutomateProgress[journeyId];
+  if(saved){aiAutomateStep=saved.step;aiAutomateFormData=Object.assign({},saved.formData);}
+  else{aiAutomateStep=1;aiAutomateFormData={};}
+}
+function aiAutomateSaveProgress(){
+  aiAutomateCaptureStep();
+  if(!selectedAIJourneyId||aiAutomateStep===0)return;
+  aiAutomateProgress[selectedAIJourneyId]={step:aiAutomateStep,formData:Object.assign({},aiAutomateFormData)};
+  const j=aiJourneys.find(function(x){return x.id===selectedAIJourneyId;});
+  if(j&&j.status!=='Active')j.status='Draft';
+}
+const aiAutomateSteps=[
+  {label:'Select Journey',desc:'Choose which business journey you want to configure AI automation for.'},
+  {label:'Basic Details',desc:'Name this automation and set the entity, country, and employment type it applies to.'},
+  {label:'Trigger',desc:'Choose what starts this journey automatically.'},
+  {label:'Automation Scope',desc:'Decide what AI can handle at each event, and where a human must stay in the loop.'},
+  {label:'Approval Rules',desc:'Assign who signs off on the key actions in this journey.'},
+  {label:'Data Validation',desc:'Choose which checks must pass before AI is allowed to proceed.'},
+  {label:'Review & Activate',desc:'Review your configuration below, then save it as a draft or activate it.'}
+];
 
-let _aiScopeRevertFn=null;
-function aiScopeConfirmToggle(el,labelText){
-  const turningOn=el.checked;
-  const prevChecked=!turningOn;
-  _aiScopeRevertFn=function(){el.checked=prevChecked;closeCtModal();};
+function aiEventIsToggleable(e){return e.chips.includes('AI Automated');}
+function aiScopeDefaults(e){
+  const toggleable=aiEventIsToggleable(e);
+  return {mode:toggleable?'ai':'manual'};
+}
+function aiScopeModeChoose(el,i,mode,eventName){
+  const seg=el.parentElement;
+  const activeBtn=seg.querySelector('.seg-btn.active');
+  const currentMode=activeBtn?activeBtn.getAttribute('data-mode'):null;
+  if(currentMode===mode)return;
   document.getElementById('ct-modal-overlay').innerHTML=
     '<div class="ct-modal" style="width:min(460px,92vw);text-align:center;padding:34px 32px" onclick="event.stopPropagation()">'
     +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" shape-rendering="geometricPrecision"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17.02" x2="12.01" y2="17.02"/></svg></div>'
     +'<div style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:12px">Confirm Change</div>'
-    +'<div style="font-size:13.5px;color:var(--gray);line-height:1.65;margin-bottom:26px">Are you sure you want to turn <strong style="color:var(--navy)">'+(turningOn?'on':'off')+'</strong> <strong style="color:var(--navy)">'+labelText+'</strong> for this event?</div>'
+    +'<div style="font-size:13.5px;color:var(--gray);line-height:1.65;margin-bottom:26px">Set <strong style="color:var(--navy)">'+eventName+'</strong> to run as <strong style="color:var(--navy)">'+(mode==='ai'?'AI Automated':'Manual')+'</strong>?</div>'
     +'<div style="display:flex;justify-content:center;gap:12px">'
-    +'<button class="ep-cancel-btn" onclick="_aiScopeRevertFn()">Cancel</button>'
-    +'<button class="ep-save-btn" onclick="closeCtModal()">Yes, '+(turningOn?'Turn On':'Turn Off')+'</button>'
+    +'<button class="ep-cancel-btn" onclick="closeCtModal()">Cancel</button>'
+    +'<button class="ep-save-btn" onclick="aiScopeModeApply('+i+',\''+mode+'\')">Yes, Confirm</button>'
     +'</div></div>';
   document.getElementById('ct-modal-overlay').style.display='flex';
 }
-function aiScopeDefaults(e){
-  const ai=e.chips.includes('AI Automated');
-  const human=e.chips.includes('Human Required')||e.chips.includes('Approval Required');
-  return {ai:ai,human:human,autoMove:ai&&!human,exception:human?'task':(e.chips.includes('Exception Possible')?'notify':'stop')};
+function aiScopeModeApply(i,mode){
+  const seg=document.getElementById('ai-scope-mode-'+i);
+  if(seg){
+    [].slice.call(seg.querySelectorAll('.seg-btn')).forEach(function(b){b.classList.toggle('active',b.getAttribute('data-mode')===mode);});
+  }
+  closeCtModal();
+}
+
+function aiWizardStepperHTML(current){
+  const visible=aiAutomateVisibleSteps();
+  const posInVisible=visible.indexOf(current);
+  return '<div class="ai-wizard-stepper">'
+    +visible.map(function(idx,pos){
+      const active=pos===posInVisible,done=pos<posInVisible;
+      const circleContent=done?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>':(pos+1);
+      let html='<div class="ai-wizard-step'+(active?' active':'')+(done?' done':'')+'" onclick="aiAutomateGoStep('+idx+')">'
+        +'<div class="ai-wizard-step-circle">'+circleContent+'</div>'
+        +'<span class="ai-wizard-step-label">'+aiAutomateSteps[idx].label+'</span>'
+        +'</div>';
+      if(pos<visible.length-1)html+='<div class="ai-wizard-step-line'+(done?' done':'')+'"></div>';
+      return html;
+    }).join('')
+    +'</div>';
+}
+function aiStepHeaderHTML(i){
+  return '<div class="ai-wizard-step-header"><div class="ai-wizard-step-title">'+aiAutomateSteps[i].label+'</div><div class="ai-wizard-step-subtitle">'+aiAutomateSteps[i].desc+'</div></div>';
+}
+function aiOptsHTML(options,current){
+  return options.map(function(o){return '<option'+(o===current?' selected':'')+'>'+o+'</option>';}).join('');
+}
+
+function aiSelectJourneyCard(el){
+  const grid=el.parentElement;
+  [].slice.call(grid.querySelectorAll('.ai-journey-pick-card')).forEach(function(c){c.classList.remove('selected');});
+  el.classList.add('selected');
+}
+function aiWizardSelectJourneyHTML(){
+  const current=selectedAIJourneyId||aiJourneys[0].id;
+  const cards=aiJourneys.map(function(j){
+    return '<div class="ai-journey-pick-card'+(j.id===current?' selected':'')+'" onclick="aiSelectJourneyCard(this)" data-journey-id="'+j.id+'">'
+      +'<div class="ai-journey-pick-check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+      +'<div class="ai-journey-pick-icon">'+j.icon+'</div>'
+      +'<div class="ai-journey-pick-name">'+j.name+'</div>'
+      +'<div class="ai-journey-pick-desc">'+j.desc+'</div>'
+      +'<div class="ai-journey-pick-meta">'+j.modules.length+' modules &middot; '+j.coverage+'% automation coverage</div>'
+      +'</div>';
+  }).join('');
+  return '<div class="ai-journey-grid" id="ai-journey-pick-grid">'+cards+'</div>';
+}
+function aiWizardBasicDetailsHTML(j){
+  const d=aiAutomateFormData;
+  const name=d.name!==undefined?d.name:(j.name+' Automation');
+  const activeStatus=d.statusActive!==undefined?d.statusActive:(j.status==='Active');
+  return '<div class="ep-form-card ai-wizard-form-card">'
+    +'<div class="ep-form-grid ai-wizard-form-grid">'
+    +'<div class="ep-form-group"><label class="ep-form-label">Automation Name</label><input class="ep-form-input" id="ai-auto-name" value="'+name+'"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Journey Type</label><input class="ep-form-input" value="'+j.name+'" readonly style="background:var(--light);color:var(--gray)"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Entity</label><select class="ep-form-select" id="ai-auto-entity">'+aiOptsHTML(aiEntityOptions,d.entity)+'</select></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Country</label><select class="ep-form-select" id="ai-auto-country">'+aiOptsHTML(aiCountryOptions,d.country)+'</select></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Employment Type</label><select class="ep-form-select" id="ai-auto-emp-type">'+aiOptsHTML(aiEmploymentTypeOptions,d.empType)+'</select></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Effective From Date</label><input class="ep-form-input" type="date" id="ai-auto-effective" value="'+(d.effective||'')+'"></div>'
+    +'<div class="ep-form-group ep-form-full"><label class="ep-form-label">Status</label><div class="segmented" id="ai-auto-status-seg" style="max-width:240px"><button type="button" class="seg-btn'+(!activeStatus?' active':'')+'" onclick="selSeg(this)">Draft</button><button type="button" class="seg-btn'+(activeStatus?' active':'')+'" onclick="selSeg(this)">Active</button></div></div>'
+    +'</div></div>';
+}
+function aiWizardTriggerHTML(){
+  const current=aiAutomateFormData.trigger;
+  const triggerCards=aiTriggerOptions.map(function(t,i){
+    const isSel=current?t.title===current:i===0;
+    return '<label class="choice-card'+(isSel?' selected':'')+'" onclick="selRadio(this)">'
+      +'<input type="radio" name="ai-trigger"'+(isSel?' checked':'')+'>'
+      +'<div class="choice-radio"></div>'
+      +'<div class="choice-body"><div class="choice-title">'+t.title+'</div><div class="choice-desc">'+t.desc+'</div></div>'
+      +'</label>';
+  }).join('');
+  return '<div class="ep-form-card"><div class="choice-grid" id="ai-trigger-grid">'+triggerCards+'</div></div>';
+}
+function aiWizardScopeHTML(events){
+  const saved=aiAutomateFormData.scope;
+  const scopeRows=events.map(function(e,i){
+    const toggleable=aiEventIsToggleable(e);
+    const d=(saved&&saved[i])?saved[i]:aiScopeDefaults(e);
+    const mode=d.mode||(toggleable?'ai':'manual');
+    const nameSafe=e.name.replace(/'/g,"\\'");
+    if(!toggleable){
+      return '<div class="ai-scope-row ai-scope-row-manual">'
+        +'<div class="ai-scope-name"><div class="ai-scope-name-text">'+(i+1)+'. '+e.name+'</div><div class="ai-timeline-chips">'+aiChips(e.chips)+'</div></div>'
+        +'<div class="ai-scope-manual-badge">Manual step &mdash; requires human action</div>'
+        +'</div>';
+    }
+    return '<div class="ai-scope-row">'
+      +'<div class="ai-scope-name"><div class="ai-scope-name-text">'+(i+1)+'. '+e.name+'</div><div class="ai-timeline-chips">'+aiChips(e.chips)+'</div></div>'
+      +'<div class="segmented ai-scope-mode-seg" id="ai-scope-mode-'+i+'">'
+      +'<button type="button" class="seg-btn'+(mode==='ai'?' active':'')+'" data-mode="ai" onclick="aiScopeModeChoose(this,'+i+',\'ai\',\''+nameSafe+'\')">AI</button>'
+      +'<button type="button" class="seg-btn'+(mode==='manual'?' active':'')+'" data-mode="manual" onclick="aiScopeModeChoose(this,'+i+',\'manual\',\''+nameSafe+'\')">Manual</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+  return '<div class="ep-form-card"><div class="ai-scope-table">'+scopeRows+'</div></div>';
+}
+function aiWizardApprovalsHTML(j){
+  const d=aiAutomateFormData.approvals||{};
+  return '<div class="ep-form-card">'
+    +'<div class="ep-form-grid">'
+    +'<div class="ep-form-group"><label class="ep-form-label">Who approves contract data?</label><select class="ep-form-select" id="ai-appr-contract-data">'+aiOptsHTML(['OpenDHI Admin','Payroll Admin','Compliance Officer','Finance Admin'],d.contractData)+'</select></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Who approves sending contract?</label><select class="ep-form-select" id="ai-appr-send-contract">'+aiOptsHTML(['OpenDHI Admin','Sales Manager'],d.sendContract)+'</select></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Who approves document exceptions?</label><select class="ep-form-select" id="ai-appr-doc-exceptions">'+aiOptsHTML(['Compliance Officer','Onboarding Admin'],d.docExceptions)+'</select></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Who confirms Ready for Payroll?</label><select class="ep-form-select" id="ai-appr-ready-payroll">'+aiOptsHTML(['Payroll Admin','Finance Admin'],d.readyPayroll)+'</select></div>'
+    +'<div class="ep-form-group ep-form-full"><label class="ep-form-label">Approval threshold / risk setting</label><select class="ep-form-select" id="ai-appr-risk-threshold" style="max-width:240px">'+aiOptsHTML(['Low','Medium','High'],d.riskThreshold||j.risk)+'</select></div>'
+    +'</div></div>';
+}
+function aiWizardValidationHTML(){
+  const saved=aiAutomateFormData.validation;
+  return '<div class="ep-form-card">'
+    +aiValidationChecklist.map(function(v,i){
+      const checked=saved?!!saved[i]:true;
+      return '<div class="cs-toggle-row"><span class="cs-toggle-label">'+v+'</span><label class="cs-toggle"><input type="checkbox" id="ai-val-'+i+'"'+(checked?' checked':'')+'><span class="cs-toggle-slider"></span></label></div>';
+    }).join('')
+    +'</div>';
+}
+function aiWizardReviewHTML(j,events){
+  const d=aiAutomateFormData;
+  const scope=d.scope||events.map(function(e){return aiScopeDefaults(e);});
+  const aiCount=scope.filter(function(s){return s.mode==='ai';}).length;
+  const humanCount=scope.filter(function(s){return s.mode==='manual';}).length;
+  const approvals=d.approvals||{};
+  const validation=d.validation||aiValidationChecklist.map(function(){return true;});
+  const validationOnCount=validation.filter(Boolean).length;
+  const summaryRows=aiDrawerRow('Automation Name',d.name||(j.name+' Automation'))
+    +aiDrawerRow('Journey',j.name)
+    +aiDrawerRow('Entity',d.entity||aiEntityOptions[0])
+    +aiDrawerRow('Country',d.country||aiCountryOptions[0])
+    +aiDrawerRow('Employment Type',d.empType||aiEmploymentTypeOptions[0])
+    +aiDrawerRow('Trigger',d.trigger||aiTriggerOptions[0].title)
+    +aiDrawerRow('Automation Scope',aiCount+' of '+events.length+' events AI automated, '+humanCount+' need human approval')
+    +aiDrawerRow('Approvals',(approvals.contractData||'—')+' &middot; '+(approvals.sendContract||'—')+' &middot; '+(approvals.docExceptions||'—')+' &middot; '+(approvals.readyPayroll||'—'))
+    +aiDrawerRow('Data Validation',validationOnCount+' of '+aiValidationChecklist.length+' checks enabled')
+    +aiDrawerRow('Connected Modules',j.modules.join(', '));
+  return '<div class="ep-form-card"><div class="review-grid" style="grid-template-columns:1fr">'+summaryRows+'</div></div>';
 }
 
 function buildAutomateJourneyFormHTML(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
   const events=aiJourneyEvents[j.id]||[];
-
-  const basicDetails='<div class="ep-form-card">'
-    +'<div class="ep-form-title">Basic Details</div>'
-    +'<div class="ep-form-grid">'
-    +'<div class="ep-form-group"><label class="ep-form-label">Automation Name</label><input class="ep-form-input" id="ai-auto-name" value="'+j.name+' Automation"></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Journey Type</label><input class="ep-form-input" value="'+j.name+'" readonly style="background:var(--light);color:var(--gray)"></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Entity</label><select class="ep-form-select" id="ai-auto-entity">'+aiEntityOptions.map(o=>'<option>'+o+'</option>').join('')+'</select></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Country</label><select class="ep-form-select" id="ai-auto-country">'+aiCountryOptions.map(o=>'<option>'+o+'</option>').join('')+'</select></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Employment Type</label><select class="ep-form-select" id="ai-auto-emp-type">'+aiEmploymentTypeOptions.map(o=>'<option>'+o+'</option>').join('')+'</select></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Effective From Date</label><input class="ep-form-input" type="date" id="ai-auto-effective"></div>'
-    +'<div class="ep-form-group ep-form-full"><label class="ep-form-label">Status</label><div class="segmented" style="max-width:240px"><button type="button" class="seg-btn'+(j.status!=='Active'?' active':'')+'" onclick="selSeg(this)">Draft</button><button type="button" class="seg-btn'+(j.status==='Active'?' active':'')+'" onclick="selSeg(this)">Active</button></div></div>'
+  const step=aiAutomateStep;
+  const stepFns=[
+    function(){return aiWizardSelectJourneyHTML();},
+    function(){return aiWizardBasicDetailsHTML(j);},
+    function(){return aiWizardTriggerHTML();},
+    function(){return aiWizardScopeHTML(events);},
+    function(){return aiWizardApprovalsHTML(j);},
+    function(){return aiWizardValidationHTML();},
+    function(){return aiWizardReviewHTML(j,events);}
+  ];
+  const visible=aiAutomateVisibleSteps();
+  const posInVisible=visible.indexOf(step);
+  const isFirst=posInVisible===0;
+  const isLast=posInVisible===visible.length-1;
+  const footer='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:22px 2px 4px;border-top:1px solid var(--border);margin-top:22px">'
+    +'<button class="btn btn-secondary" onclick="'+(isFirst?'cancelAIAutomation()':'aiAutomateBack()')+'">'+(isFirst?'Cancel':'Back')+'</button>'
+    +'<div style="display:flex;gap:10px">'
+    +(isLast
+      ?'<button class="btn btn-secondary" onclick="saveAIAutomation(\'draft\')">Save as Draft</button><button class="btn btn-success" onclick="saveAIAutomation(\'active\')">Activate Automation</button>'
+      :'<button class="btn btn-primary" onclick="aiAutomateNext()">Next</button>')
     +'</div></div>';
-
-  const triggerCards=aiTriggerOptions.map((t,i)=>
-    '<label class="choice-card'+(i===0?' selected':'')+'" onclick="selRadio(this)">'
-    +'<input type="radio" name="ai-trigger"'+(i===0?' checked':'')+'>'
-    +'<div class="choice-radio"></div>'
-    +'<div class="choice-body"><div class="choice-title">'+t.title+'</div><div class="choice-desc">'+t.desc+'</div></div>'
-    +'</label>'
-  ).join('');
-  const triggerBlock='<div class="ep-form-card">'
-    +'<div class="ep-form-title">Trigger Configuration</div>'
-    +'<div class="choice-grid" id="ai-trigger-grid">'+triggerCards+'</div>'
-    +'</div>';
-
-  const scopeRows=events.map((e,i)=>{
-    const d=aiScopeDefaults(e);
-    return '<div class="ai-scope-row">'
-      +'<div class="ai-scope-name"><div class="ai-scope-name-text">'+(i+1)+'. '+e.name+'</div><div class="ai-timeline-chips">'+aiChips(e.chips)+'</div></div>'
-      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-ai-'+i+'" onchange="aiScopeConfirmToggle(this,\'AI Automated\')"'+(d.ai?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">AI Automated</span></div>'
-      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-human-'+i+'" onchange="aiScopeConfirmToggle(this,\'Human Approval\')"'+(d.human?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">Human Approval</span></div>'
-      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-auto-'+i+'" onchange="aiScopeConfirmToggle(this,\'Auto Move Next\')"'+(d.autoMove?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">Auto Move Next</span></div>'
-      +'<div class="ai-scope-exception"><select class="ep-form-select" id="ai-scope-exc-'+i+'">'
-      +'<option value="stop"'+(d.exception==='stop'?' selected':'')+'>Stop Journey</option>'
-      +'<option value="task"'+(d.exception==='task'?' selected':'')+'>Create Task</option>'
-      +'<option value="notify"'+(d.exception==='notify'?' selected':'')+'>Notify Admin</option>'
-      +'</select></div>'
-      +'</div>';
-  }).join('');
-  const scopeBlock='<div class="ep-form-card">'
-    +'<div class="ep-form-title">Automation Scope <span style="font-weight:500;color:var(--gray);font-size:11.5px">&mdash; toggle what AI can do for each event in this journey</span></div>'
-    +'<div class="ai-scope-table">'+scopeRows+'</div>'
-    +'</div>';
-
-  const approvalBlock='<div class="ep-form-card">'
-    +'<div class="ep-form-title">Approval Rules</div>'
-    +'<div class="ep-form-grid">'
-    +'<div class="ep-form-group"><label class="ep-form-label">Who approves contract data?</label><select class="ep-form-select" id="ai-appr-contract-data"><option>OpenDHI Admin</option><option>Payroll Admin</option><option>Compliance Officer</option><option>Finance Admin</option></select></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Who approves sending contract?</label><select class="ep-form-select" id="ai-appr-send-contract"><option>OpenDHI Admin</option><option>Sales Manager</option></select></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Who approves document exceptions?</label><select class="ep-form-select" id="ai-appr-doc-exceptions"><option>Compliance Officer</option><option>Onboarding Admin</option></select></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Who confirms Ready for Payroll?</label><select class="ep-form-select" id="ai-appr-ready-payroll"><option>Payroll Admin</option><option>Finance Admin</option></select></div>'
-    +'<div class="ep-form-group ep-form-full"><label class="ep-form-label">Approval threshold / risk setting</label><select class="ep-form-select" id="ai-appr-risk-threshold" style="max-width:240px"><option'+(j.risk==='Low'?' selected':'')+'>Low</option><option'+(j.risk==='Medium'?' selected':'')+'>Medium</option><option'+(j.risk==='High'?' selected':'')+'>High</option></select></div>'
-    +'</div></div>';
-
-  const validationBlock='<div class="ep-form-card">'
-    +'<div class="ep-form-title">Data Validation Rules</div>'
-    +aiValidationChecklist.map((v,i)=>'<div class="cs-toggle-row"><span class="cs-toggle-label">'+v+'</span><label class="cs-toggle"><input type="checkbox" id="ai-val-'+i+'" checked><span class="cs-toggle-slider"></span></label></div>').join('')
-    +'</div>';
-
-  const modulesBlock='<div class="ep-form-card">'
-    +'<div class="ep-form-title">Connected Modules</div>'
-    +'<div class="ai-journey-modules">'+j.modules.map(m=>'<span class="ai-journey-module-tag">'+m+'</span>').join('')+'</div>'
-    +'</div>';
-
-  const footer='<div style="display:flex;justify-content:flex-end;gap:10px;padding:6px 2px 4px">'
-    +'<button class="btn btn-secondary" onclick="cancelAIAutomation()">Cancel</button>'
-    +'<button class="btn btn-secondary" onclick="saveAIAutomation(\'draft\')">Save as Draft</button>'
-    +'<button class="btn btn-success" onclick="saveAIAutomation(\'active\')">Activate Automation</button>'
-    +'</div>';
 
   return '<div class="ai-exec-page">'
-    +'<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'ai-journey-detail\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back to '+j.name+'</button>'
-    +'<p style="font-size:16px;font-weight:700;margin-bottom:4px">Automate Journey</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Journey selected: <strong style="color:var(--navy)">'+j.name+'</strong></p>'
-    +'<div style="display:flex;flex-direction:column;gap:18px">'
-    +basicDetails+triggerBlock+scopeBlock+approvalBlock+validationBlock+modulesBlock+footer
-    +'</div></div>';
+    +'<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="cancelAIAutomation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+(aiAutomateSkipPicker?'Back to '+j.name:'All Journeys')+'</button>'
+    +'<p style="font-size:17px;font-weight:700;margin-bottom:6px">Create Your Journey</p>'
+    +'<p style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:26px">Configure AI automation for <strong style="color:var(--navy)">'+j.name+'</strong> in a few guided steps.</p>'
+    +aiWizardStepperHTML(step)
+    +aiStepHeaderHTML(step)
+    +'<div class="ai-wizard-step-body">'+stepFns[step]()+'</div>'
+    +footer
+    +'</div>';
 }
 
+function aiAutomateCaptureStep(){
+  const gv=function(id){const el=document.getElementById(id);return el?el.value:undefined;};
+  const gc=function(id){const el=document.getElementById(id);return el?el.checked:undefined;};
+  const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
+  const events=aiJourneyEvents[j.id]||[];
+  if(aiAutomateStep===0){
+    const sel=document.querySelector('#ai-journey-pick-grid .ai-journey-pick-card.selected');
+    if(sel&&sel.getAttribute('data-journey-id'))selectedAIJourneyId=sel.getAttribute('data-journey-id');
+  }else if(aiAutomateStep===1){
+    aiAutomateFormData.name=gv('ai-auto-name');
+    aiAutomateFormData.entity=gv('ai-auto-entity');
+    aiAutomateFormData.country=gv('ai-auto-country');
+    aiAutomateFormData.empType=gv('ai-auto-emp-type');
+    aiAutomateFormData.effective=gv('ai-auto-effective');
+    const seg=document.querySelector('#ai-auto-status-seg .seg-btn.active');
+    aiAutomateFormData.statusActive=!!(seg&&seg.textContent==='Active');
+  }else if(aiAutomateStep===2){
+    const sel=document.querySelector('#ai-trigger-grid .choice-card.selected .choice-title');
+    if(sel)aiAutomateFormData.trigger=sel.textContent;
+  }else if(aiAutomateStep===3){
+    aiAutomateFormData.scope=events.map(function(e,i){
+      if(!aiEventIsToggleable(e))return {mode:'manual'};
+      const seg=document.getElementById('ai-scope-mode-'+i);
+      const activeBtn=seg?seg.querySelector('.seg-btn.active'):null;
+      const mode=(activeBtn&&activeBtn.getAttribute('data-mode'))||'ai';
+      return {mode:mode};
+    });
+  }else if(aiAutomateStep===4){
+    aiAutomateFormData.approvals={
+      contractData:gv('ai-appr-contract-data'),sendContract:gv('ai-appr-send-contract'),
+      docExceptions:gv('ai-appr-doc-exceptions'),readyPayroll:gv('ai-appr-ready-payroll'),
+      riskThreshold:gv('ai-appr-risk-threshold')
+    };
+  }else if(aiAutomateStep===5){
+    aiAutomateFormData.validation=aiValidationChecklist.map(function(v,i){return !!gc('ai-val-'+i);});
+  }
+}
+function aiAutomateNext(){
+  const prevJourneyId=selectedAIJourneyId;
+  aiAutomateCaptureStep();
+  if(aiAutomateStep===0){
+    const pickedId=selectedAIJourneyId||aiJourneys[0].id;
+    selectedAIJourneyId=pickedId;
+    if(pickedId!==prevJourneyId)aiAutomateResumeOrStart(pickedId);
+    else aiAutomateStep=1;
+    navigatePage('ai-automate-form');
+    return;
+  }
+  const visible=aiAutomateVisibleSteps();
+  const pos=visible.indexOf(aiAutomateStep);
+  aiAutomateStep=visible[Math.min(visible.length-1,pos+1)];
+  navigatePage('ai-automate-form');
+}
+function aiAutomateBack(){
+  aiAutomateCaptureStep();
+  const visible=aiAutomateVisibleSteps();
+  const pos=visible.indexOf(aiAutomateStep);
+  aiAutomateStep=visible[Math.max(0,pos-1)];
+  navigatePage('ai-automate-form');
+}
+function aiAutomateGoStep(i){aiAutomateCaptureStep();aiAutomateStep=i;navigatePage('ai-automate-form');}
+
 function saveAIAutomation(mode){
+  aiAutomateCaptureStep();
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);if(!j)return;
   const events=aiJourneyEvents[j.id]||[];
-  const gv=function(id){const el=document.getElementById(id);return el?el.value:'';};
-  const gc=function(id){const el=document.getElementById(id);return !!(el&&el.checked);};
-  const scope=events.map((e,i)=>({
-    name:e.name,
-    aiAutomate:gc('ai-scope-ai-'+i),
-    humanApproval:gc('ai-scope-human-'+i),
-    autoMoveNext:gc('ai-scope-auto-'+i),
-    exceptionHandling:gv('ai-scope-exc-'+i)
-  }));
-  const triggerEl=document.querySelector('#ai-trigger-grid .choice-card.selected .choice-title');
+  const d=aiAutomateFormData;
+  const scope=(d.scope||events.map(function(e){return aiScopeDefaults(e);})).map(function(s,i){
+    return {name:events[i]?events[i].name:'',mode:s.mode};
+  });
   aiAutomationConfigs[j.id]={
-    name:gv('ai-auto-name'),entity:gv('ai-auto-entity'),country:gv('ai-auto-country'),employmentType:gv('ai-auto-emp-type'),
-    effectiveFrom:gv('ai-auto-effective'),trigger:triggerEl?triggerEl.textContent:'',scope:scope,status:mode==='active'?'Active':'Draft'
+    name:d.name||(j.name+' Automation'),entity:d.entity||aiEntityOptions[0],country:d.country||aiCountryOptions[0],employmentType:d.empType||aiEmploymentTypeOptions[0],
+    effectiveFrom:d.effective||'',trigger:d.trigger||aiTriggerOptions[0].title,scope:scope,status:mode==='active'?'Active':'Draft'
   };
   j.status=mode==='active'?'Active':'Draft';
+  if(mode==='active'){delete aiAutomateProgress[j.id];}
+  else{aiAutomateProgress[j.id]={step:aiAutomateStep,formData:Object.assign({},d)};}
+  aiAutomateStep=0;aiAutomateFormData={};aiAutomateSkipPicker=false;
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">'+(mode==='active'?'Activating Automation…':'Saving Draft…')+'</div><div class="cl-sub">'+j.name+'</div></div>';
   setTimeout(function(){navigatePage('ai-executive');},1400);
 }
-function cancelAIAutomation(){navigatePage('ai-journey-detail');}
+function cancelAIAutomation(){
+  aiAutomateSaveProgress();
+  const dest=aiAutomateSkipPicker?'ai-journey-detail':'ai-executive';
+  aiAutomateStep=0;aiAutomateFormData={};aiAutomateSkipPicker=false;
+  navigatePage(dest);
+}
+
+// -- AI Executive: live run flows for activated journeys (Create Employee / Run Payroll) --
+function aiJourneyCTA(j){
+  if(j.id==='contract-creation')return {label:'Create Contract',action:"addListingItem('contracts')"};
+  if(aiRunFlows[j.id])return {label:aiRunFlows[j.id].entryLabel,action:"startAIJourneyRun('"+j.id+"')"};
+  return null;
+}
+function startAIJourneyRun(journeyId){
+  aiRunFlowJourneyId=journeyId;aiRunFlowStep=-1;aiRunFlowData={};
+  navigatePage('ai-journey-run');
+}
+function aiRunFlowExit(){
+  aiRunFlowJourneyId=null;aiRunFlowStep=-1;aiRunFlowData={};
+  navigatePage('ai-executive');
+}
+function aiRunFlowRestart(){aiRunFlowStep=-1;aiRunFlowData={};navigatePage('ai-journey-run');}
+function parseAIRunPrompt(text){
+  const countries=['Netherlands','India','Germany','Spain','United Kingdom','France','Italy'];
+  let country='',raw=text||'';
+  countries.forEach(function(c){if(new RegExp('\\b'+c+'\\b','i').test(raw)){country=c;raw=raw.replace(new RegExp('\\b'+c+'\\b','i'),'');}});
+  const asMatch=raw.match(/\bas\s+(.+)$/i);
+  const role=asMatch?asMatch[1].trim():'';
+  if(asMatch)raw=raw.slice(0,asMatch.index);
+  const name=raw.replace(/\b(create|an|a|for|in|the|please|make|start|new|employee|record|run|payroll|this|month|onboard)\b/gi,'').replace(/[,]/g,' ').replace(/\s+/g,' ').trim();
+  return {name:name,country:country,role:role};
+}
+function aiRunFlowSubmit(){
+  const inp=document.getElementById('ai-run-prompt');if(!inp)return;
+  const parsed=parseAIRunPrompt(inp.value);
+  const emp=findExistingEmployee(parsed.name);
+  aiRunFlowData={
+    name:parsed.name||(emp&&emp.name)||'New Employee',
+    country:parsed.country||(emp&&emp.country)||'India',
+    role:parsed.role||(emp&&emp.jobTitle)||'',
+    employee:emp,
+    amount:38000+Math.floor(Math.random()*22000)
+  };
+  aiRunFlowStep=0;
+  navigatePage('ai-journey-run');
+  aiRunFlowRunCurrentStep();
+}
+function aiRunFlowRunCurrentStep(){
+  const flow=aiRunFlows[aiRunFlowJourneyId];if(!flow)return;
+  const step=flow.steps[aiRunFlowStep];if(!step)return;
+  if(step.type==='ai'||step.type==='auto-skip'){
+    setTimeout(function(){
+      aiRunFlowStep++;
+      navigatePage('ai-journey-run');
+      aiRunFlowRunCurrentStep();
+    },step.type==='auto-skip'?600:1100);
+  }
+}
+function aiRunFlowApprove(){
+  aiRunFlowStep++;
+  navigatePage('ai-journey-run');
+  aiRunFlowRunCurrentStep();
+}
+function aiRunFlowFinish(){
+  aiRunFlowStep++;
+  navigatePage('ai-journey-run');
+}
+function buildAIJourneyRunHTML(){
+  const flow=aiRunFlows[aiRunFlowJourneyId];
+  const j=aiJourneys.find(x=>x.id===aiRunFlowJourneyId)||aiJourneys[0];
+  if(!flow)return '<div class="ai-exec-page">Unknown automation.</div>';
+  if(aiRunFlowStep===-1)return buildAIRunPromptHTML(flow,j);
+  const cur=aiRunFlowStep;
+  const timeline=buildAIRunTimelineHTML(flow,cur);
+  let trailing='';
+  if(cur<flow.steps.length){
+    if(flow.steps[cur].type==='payment')trailing=buildAIRunPaymentPanelHTML(j);
+  }else{
+    trailing=buildAIRunCompletionPanelHTML(flow,j);
+  }
+  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin:14px 0 2px">'+flow.entryLabel+'</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:18px">For <strong style="color:var(--navy)">'+aiRunFlowData.name+'</strong>'+(aiRunFlowData.role?' &middot; '+aiRunFlowData.role:'')+(aiRunFlowData.country?' &middot; '+aiRunFlowData.country:'')+'</div>'
+    +'<div class="ai-timeline">'+timeline+'</div>'
+    +trailing
+    +'</div>';
+}
+function buildAIRunPromptHTML(flow,j){
+  return '<div class="ep-page" style="max-width:560px;margin:30px auto 0">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div style="margin-top:22px">'
+    +'<div class="ai-run-icon-wrap">'+j.icon+'</div>'
+    +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">'+flow.entryLabel+'</div>'
+    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:18px">'+flow.entryDesc+'</div>'
+    +'<div class="input-row" style="margin:0;max-width:480px">'
+    +'<input class="input-field" id="ai-run-prompt" placeholder="'+flow.promptPlaceholder+'" onkeydown="if(event.key===\'Enter\')aiRunFlowSubmit()">'
+    +'<button class="icon-btn active" onclick="aiRunFlowSubmit()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
+    +'</div>'
+    +'</div></div>';
+}
+function buildAIRunTimelineHTML(flow,cur){
+  return flow.steps.map(function(step,i){
+    let dotClass,body;
+    if(i<cur){
+      dotClass='run-done';
+      body='<div class="ai-timeline-card-desc">'+(step.skipNote||'Completed')+'</div>';
+    }else if(i===cur){
+      dotClass='run-current';
+      if(step.type==='manual'){
+        body='<div class="ai-timeline-card-desc">'+step.running+'</div><button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="aiRunFlowApprove()">Approve &amp; Continue</button>';
+      }else if(step.type==='payment'){
+        body='<div class="ai-timeline-card-desc">'+step.running+'</div>';
+      }else{
+        body='<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>'+step.running+'</div>';
+      }
+    }else{
+      dotClass='run-pending';
+      body='<div class="ai-timeline-card-desc" style="color:#cbd5e1">Waiting&hellip;</div>';
+    }
+    return '<div class="ai-timeline-item">'
+      +'<div class="ai-timeline-dot '+dotClass+'">'+(i<cur?'&#10003;':(i+1))+'</div>'
+      +'<div class="ai-timeline-card" style="cursor:default">'
+      +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+step.label+'</span></div>'
+      +body
+      +'</div></div>';
+  }).join('');
+}
+function buildAIRunPaymentPanelHTML(j){
+  const amt=aiRunFlowData.amount||42000;
+  const masked='•••• •••• •••• '+(4000+Math.floor(Math.random()*999));
+  return '<div class="ai-run-payment-panel">'
+    +'<div class="ai-run-card">'
+    +'<div class="ai-run-card-top"><span class="ai-run-card-bank">RBL BANK</span><div class="ai-run-card-chip"></div></div>'
+    +'<div class="ai-run-card-number">'+masked+'</div>'
+    +'<div class="ai-run-card-bottom"><div><div class="ai-run-card-label">Card Holder</div><div class="ai-run-card-name">'+aiRunFlowData.name.toUpperCase()+'</div></div><div class="ai-run-card-visa">VISA</div></div>'
+    +'</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:6px">Disbursing salary to</div>'
+    +'<div style="font-size:24px;font-weight:800;color:var(--navy);margin-bottom:18px">&#8377;'+amt.toLocaleString('en-IN')+'</div>'
+    +'<button class="btn btn-success" onclick="aiRunFlowFinish()">Confirm Payment</button>'
+    +'</div>';
+}
+function buildAIRunCompletionPanelHTML(flow,j){
+  const isPayment=aiRunFlowJourneyId==='payroll-creation';
+  const title=isPayment?'Payment Successful':'Employee Onboarded';
+  const sub=isPayment
+    ?'&#8377;'+(aiRunFlowData.amount||0).toLocaleString('en-IN')+' has been paid to '+aiRunFlowData.name+'.'
+    :aiRunFlowData.name+' has been created and set up for '+(aiRunFlowData.country||'their country')+'.';
+  return '<div class="ep-form-card" style="text-align:center;padding:32px 24px;margin-top:20px">'
+    +'<div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    +'<div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px">'+title+'</div>'
+    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:20px">'+sub+'</div>'
+    +'<div style="display:flex;justify-content:center;gap:10px">'
+    +'<button class="btn btn-secondary" onclick="aiRunFlowExit()">Back to AI Executive</button>'
+    +'<button class="btn btn-primary" onclick="aiRunFlowRestart()">'+(isPayment?'Run Another':'Create Another')+'</button>'
+    +'</div></div>';
+}
 
 // -- AI CONTRACT ASSISTANT (Contracts "+" flow, gated on the contract-creation journey being Active) --
+// -- Contract Creation Journey: persistent animated step bar (bound to aiJourneyEvents['contract-creation']) --
+function aiCtJourneyStage(){
+  if(page==='ai-contract-assistant')return 0;
+  if(page==='ai-employee-created')return 0;
+  if((page==='contract-type-select'||page==='contract-eor'||page==='contract-peo')&&aiAssistedFlow)return 1;
+  if(page==='ai-proposal-created')return 1;
+  if(page==='ai-proposal-waiting-approval')return 2;
+  if(page==='ai-contract-document')return 3;
+  if(page==='ai-contract-waiting-approval')return 4;
+  if(page==='ai-onboarding-run')return 5;
+  if(page==='ai-journey-complete')return 6;
+  return -1;
+}
+function isAIContractWizardPage(pg){
+  return pg==='ai-contract-assistant'||pg==='ai-employee-created'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete';
+}
+function buildAIContractJourneyBarHTML(stage){
+  const events=aiJourneyEvents['contract-creation'];
+  const animateThisRender=stage>aiCtAnimatedStage;
+  if(animateThisRender)aiCtAnimatedStage=stage;
+  return '<div class="aicj-bar">'+events.map(function(e,i){
+    const state=i<stage?'done':i===stage?'current':'pending';
+    let html='<div class="aicj-dot '+state+'"></div>';
+    if(i<events.length-1){
+      const filled=i<stage;
+      const grow=filled&&i===stage-1&&animateThisRender;
+      html+='<div class="aicj-line'+(filled?' filled':'')+(grow?' grow':'')+'"><div class="aicj-line-fill"></div></div>';
+    }
+    return html;
+  }).join('')+'</div>';
+}
+function aiCtLoaderTarget(){return document.getElementById('aicj-inner')||document.getElementById('adt-content');}
 function parseAIContractPrompt(text){
   const countries=['Netherlands','India','Germany','Spain','United Kingdom','France','Italy'];
   const empTypes=['EOR','PEO','Contractor'];
@@ -3770,30 +4142,46 @@ function findExistingEmployee(name){
     || null;
 }
 function buildAIContractAssistantHTML(){
-  return '<div class="ep-page" style="max-width:960px;margin:0 auto">'
+  return '<div class="ep-page" style="max-width:620px;margin:0 auto">'
     +'<button class="ep-back" onclick="page=\'contracts\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to Contracts</button>'
-    +'<div style="display:flex;align-items:flex-start;gap:28px;margin-top:20px;flex-wrap:wrap">'
-    +'<div style="flex:1 1 340px;min-width:300px">'
-    +'<div class="we-icon" style="margin:0 0 14px"><svg width="22" height="22" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div>'
+    +'<div class="ep-form-card" style="margin-top:20px;text-align:center;padding:38px 36px">'
+    +'<div class="we-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div>'
     +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">AI Contract Assistant</div>'
-    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:18px">The Contract Creation journey is automated. Tell me who you\'re creating a contract for &mdash; I\'ll check ADT records and pre-fill the form for you.</div>'
-    +'<div class="input-row" style="margin:0 0 10px;max-width:420px">'
+    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin:0 auto 22px;max-width:440px">The Contract Creation journey is automated. Tell me who you\'re creating a contract for &mdash; I\'ll check ADT records and pre-fill the form for you.</div>'
+    +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:18px">'
+    +'<button class="btn btn-secondary" onclick="aiCtSimulateExisting()">Simulate: Existing Employee</button>'
+    +'<button class="btn btn-secondary" onclick="aiCtSimulateNew()">Simulate: New Employee</button>'
+    +'</div>'
+    +'<div class="input-row" style="margin:0 auto 10px;max-width:440px">'
     +'<input class="input-field" id="ai-ct-prompt" placeholder="e.g. Create an EOR contract for Anika Shah in Netherlands" oninput="aiCtLiveParse()" onkeydown="if(event.key===\'Enter\')aiCtSubmitPrompt()">'
     +'<button class="icon-btn active" onclick="aiCtSubmitPrompt()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
     +'</div>'
     +'<button class="add-link" onclick="page=\'contract-type-select\';renderADTPage()">Skip &mdash; create manually</button>'
     +'</div>'
-    +'<div style="flex:1 1 420px;min-width:320px" id="ai-ct-result"></div>'
-    +'</div></div>';
+    +'<div id="ai-ct-result" style="margin-top:20px"></div>'
+    +'</div>';
+}
+function aiCtRunSearch(parsed,label){
+  aiCtNotFoundOpen=false;
+  const res=document.getElementById('ai-ct-result');if(!res)return;
+  res.innerHTML='<div class="ep-form-card" style="display:flex;align-items:center;gap:12px"><div class="cl-spinner" style="width:22px;height:22px;border-width:2.5px"></div><span style="font-size:13px;color:var(--navy);font-weight:500">Searching ADT employee records for &ldquo;'+label+'&rdquo;&hellip;</span></div>';
+  setTimeout(function(){aiCtShowResult(parsed);},1000);
 }
 function aiCtSubmitPrompt(){
   const inp=document.getElementById('ai-ct-prompt');if(!inp)return;
   const raw=inp.value;
   const parsed=parseAIContractPrompt(raw);
-  aiCtNotFoundOpen=false;
-  const res=document.getElementById('ai-ct-result');if(!res)return;
-  res.innerHTML='<div class="ep-form-card" style="display:flex;align-items:center;gap:12px"><div class="cl-spinner" style="width:22px;height:22px;border-width:2.5px"></div><span style="font-size:13px;color:var(--navy);font-weight:500">Searching ADT employee records for &ldquo;'+(parsed.name||raw)+'&rdquo;&hellip;</span></div>';
-  setTimeout(function(){aiCtShowResult(parsed);},1000);
+  aiCtRunSearch(parsed,parsed.name||raw);
+}
+function aiCtSimulateExisting(){
+  const inp=document.getElementById('ai-ct-prompt');
+  if(inp)inp.value='Create an EOR contract for Anika Shah in Mumbai';
+  aiCtRunSearch({name:'Anika Shah',country:'',empType:'EOR'},'Anika Shah');
+}
+function aiCtSimulateNew(){
+  const inp=document.getElementById('ai-ct-prompt');
+  if(inp)inp.value='Create a contract for Rohan Verma';
+  aiCtRunSearch({name:'Rohan Verma',country:'Germany',empType:'EOR',jobTitle:'Operations Analyst'},'Rohan Verma');
 }
 function aiCtShowResult(parsed){
   const res=document.getElementById('ai-ct-result');if(!res)return;
@@ -3801,43 +4189,87 @@ function aiCtShowResult(parsed){
   const emp=findExistingEmployee(parsed.name);
   if(emp){
     aiCtNotFoundOpen=false;
-    const initials=emp.name.split(' ').map(function(n){return n[0];}).slice(0,2).join('');
-    res.innerHTML='<div class="ep-form-card">'
-      +'<div style="font-size:11.5px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">&#10003; Match found in ADT</div>'
-      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
-      +'<div class="user-avatar-sm" style="width:40px;height:40px;font-size:14px">'+initials+'</div>'
-      +'<div><div style="font-size:14px;font-weight:700;color:var(--navy)">'+emp.name+'</div><div style="font-size:12px;color:var(--gray)">'+(emp.jobTitle||'—')+' &middot; '+(emp.dept||'—')+'</div></div>'
-      +'</div>'
-      +'<div class="review-grid">'
-      +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(emp.country||parsed.country||'India')+'</div></div>'
-      +'<div class="review-row"><div class="rr-label">Email</div><div class="rr-val">'+(emp.email||'—')+'</div></div>'
-      +'<div class="review-row"><div class="rr-label">Status</div><div class="rr-val">'+(emp.status||'—')+'</div></div>'
-      +'<div class="review-row"><div class="rr-label">Employee ID</div><div class="rr-val">'+(emp.empId||'—')+'</div></div>'
-      +'</div>'
-      +'<div style="display:flex;gap:10px;margin-top:18px">'
-      +'<button class="btn btn-primary" onclick="aiCtUseEmployee(\''+emp.empId+'\')">Use this employee &amp; continue</button>'
-      +'<button class="btn btn-secondary" onclick="document.getElementById(\'ai-ct-result\').innerHTML=\'\'">Not the right person? Search again</button>'
-      +'</div></div>';
+    res.innerHTML='<div class="ep-form-card" style="display:flex;align-items:center;gap:10px"><div style="width:22px;height:22px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div><span style="font-size:13px;font-weight:700;color:#16a34a">Found the employee</span></div>';
+    setTimeout(function(){aiCtRenderMatchCard(emp,parsed);},600);
   }else{
     aiCtNotFoundOpen=true;
     res.innerHTML=aiCtNotFoundPanel(parsed);
   }
 }
+function aiCtMockSalary(emp){
+  let seed=0;
+  (emp.empId||emp.name||'x').split('').forEach(function(ch){seed+=ch.charCodeAt(0);});
+  return (45000+(seed%40)*1000).toLocaleString('en-IN');
+}
+function aiCtRenderMatchCard(emp,parsed){
+  const res=document.getElementById('ai-ct-result');if(!res)return;
+  const initials=emp.name.split(' ').map(function(n){return n[0];}).slice(0,2).join('');
+  res.innerHTML='<div class="ep-form-card">'
+    +'<div style="font-size:11.5px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">&#10003; Match found in ADT</div>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
+    +'<div class="user-avatar-sm" style="width:40px;height:40px;font-size:14px">'+initials+'</div>'
+    +'<div><div style="font-size:14px;font-weight:700;color:var(--navy)">'+emp.name+'</div><div style="font-size:12px;color:var(--gray)">'+(emp.jobTitle||'—')+' &middot; '+(emp.dept||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(emp.country||parsed.country||'India')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Employee ID</div><div class="rr-val">'+(emp.empId||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Email</div><div class="rr-val">'+(emp.email||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Status</div><div class="rr-val">'+(emp.status||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Monthly Salary</div><div class="rr-val">'+aiCtMockSalary(emp)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Department</div><div class="rr-val">'+(emp.dept||'—')+'</div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px">'
+    +'<button class="btn btn-primary" onclick="aiCtUseEmployee(\''+emp.empId+'\')">Use this employee &amp; continue</button>'
+    +'<button class="btn btn-secondary" onclick="document.getElementById(\'ai-ct-result\').innerHTML=\'\'">Not the right person? Search again</button>'
+    +'</div></div>';
+}
 function aiCtNotFoundPanel(parsed){
-  const countryOpts=['','Netherlands','India','Germany','Spain','United Kingdom','France','Italy'].map(function(c){return '<option'+(c===parsed.country?' selected':'')+'>'+(c||'Select Country')+'</option>';}).join('');
-  const empTypeOpts=['','EOR','PEO','Contractor'].map(function(t){return '<option'+(t===parsed.empType?' selected':'')+'>'+(t||'Select Type')+'</option>';}).join('');
+  const countryOpts=['','Netherlands','India','Germany','Spain','United Kingdom','France','Italy'].map(function(c){return '<option value="'+c+'">'+(c||'Select Country')+'</option>';}).join('');
+  const empTypeOpts=['','EOR','PEO','Contractor'].map(function(t){return '<option value="'+t+'">'+(t||'Select Type')+'</option>';}).join('');
   return '<div class="ep-form-card">'
     +'<div style="font-size:11.5px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">No existing employee found</div>'
-    +'<div style="font-size:12px;color:var(--gray);margin-bottom:16px">I couldn\'t find &ldquo;'+(parsed.name||'this person')+'&rdquo; in ADT. Enter their details below &mdash; keep typing in the prompt and I\'ll keep filling in what I can.</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:14px">I couldn\'t find &ldquo;'+(parsed.name||'this person')+'&rdquo; in ADT. Enter their details below, or let AI fill the form in for you.</div>'
+    +'<button type="button" class="btn btn-secondary" id="ai-ct-autofill-btn" style="margin-bottom:16px" onclick="aiCtSimulateFill()">&#10024; Simulate Auto-Fill</button>'
     +'<div class="ep-form-grid" style="margin-bottom:16px">'
-    +'<div class="ep-form-group"><label class="ep-form-label">First Name</label><input class="ep-form-input" id="ai-ct-fname" value="'+(parsed.name?parsed.name.split(' ')[0]:'')+'"></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Last Name</label><input class="ep-form-input" id="ai-ct-lname" value="'+(parsed.name?parsed.name.split(' ').slice(1).join(' '):'')+'"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">First Name</label><input class="ep-form-input" id="ai-ct-fname"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Last Name</label><input class="ep-form-input" id="ai-ct-lname"></div>'
     +'<div class="ep-form-group"><label class="ep-form-label">Country</label><select class="ep-form-select" id="ai-ct-country">'+countryOpts+'</select></div>'
     +'<div class="ep-form-group"><label class="ep-form-label">Employment Type</label><select class="ep-form-select" id="ai-ct-emptype">'+empTypeOpts+'</select></div>'
     +'<div class="ep-form-group ep-form-full"><label class="ep-form-label">Job Title</label><input class="ep-form-input" id="ai-ct-jobtitle" placeholder="e.g. Software Engineer"></div>'
     +'</div>'
     +'<button class="btn btn-primary" onclick="aiCtUseManualEntry()">Continue to Contract Form</button>'
     +'</div>';
+}
+function aiCtSimulateFill(){
+  const btn=document.getElementById('ai-ct-autofill-btn');
+  if(btn){btn.disabled=true;btn.textContent='AI is filling in the details…';}
+  const parsed=window._aiCtLastParsed||{};
+  const nameParts=(parsed.name||'Rohan Verma').split(' ');
+  const fills=[
+    {id:'ai-ct-fname',value:nameParts[0]||'Rohan'},
+    {id:'ai-ct-lname',value:nameParts.slice(1).join(' ')||'Verma'},
+    {id:'ai-ct-country',value:parsed.country||'Germany'},
+    {id:'ai-ct-emptype',value:parsed.empType||'EOR'},
+    {id:'ai-ct-jobtitle',value:parsed.jobTitle||'Operations Analyst'}
+  ];
+  let i=0;
+  function next(){
+    if(i>=fills.length){
+      if(btn)btn.textContent='✓ Details Filled';
+      setTimeout(function(){aiCtUseManualEntry();},700);
+      return;
+    }
+    const f=fills[i];
+    const el=document.getElementById(f.id);
+    if(el){
+      el.value=f.value;
+      el.classList.add('ai-ct-field-fill');
+      setTimeout(function(){el.classList.remove('ai-ct-field-fill');},400);
+    }
+    i++;
+    setTimeout(next,500);
+  }
+  next();
 }
 function aiCtLiveParse(){
   if(!aiCtNotFoundOpen)return;
@@ -3849,6 +4281,12 @@ function aiCtLiveParse(){
   if(co&&parsed.country)co.value=parsed.country;
   if(et&&parsed.empType)et.value=parsed.empType;
 }
+function aiCtRouteToContractType(empType){
+  if(empType==='PEO'){peoStep=0;page='contract-peo';}
+  else if(empType==='EOR'){eorStep=0;page='contract-eor';}
+  else{page='contract-type-select';}
+  renderADTPage();
+}
 function aiCtUseEmployee(empId){
   const emp=directEmpData.concat(globalEmpData).find(function(e){return String(e.empId)===String(empId);});
   if(!emp)return;
@@ -3856,25 +4294,56 @@ function aiCtUseEmployee(empId){
   const parts=emp.name.split(' ');
   aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||''};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;
+  aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||'';
   const promptEl=document.getElementById('ai-ct-prompt');
   aiCtChatMsgs=[
     {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+emp.name)},
     {role:'bot',text:'Found <b>'+emp.name+'</b> in ADT &mdash; '+(emp.country||parsed.country||'India')+', '+(emp.jobTitle||'—')+'. I\'ve pre-filled the contract form on the right with their details. Review each step and continue when you\'re ready.'}
   ];
-  eorStep=0;page='contract-eor';renderADTPage();
+  aiCtRouteToContractType(aiCtPendingEmpType);
 }
 function aiCtUseManualEntry(){
   const gv=function(id){const el=document.getElementById(id);return el?el.value:'';};
-  const fname=gv('ai-ct-fname'),lname=gv('ai-ct-lname');
-  aiContractPrefill={fname:fname,lname:lname,email:'',country:gv('ai-ct-country'),jobTitle:gv('ai-ct-jobtitle')};
+  const fname=gv('ai-ct-fname'),lname=gv('ai-ct-lname'),country=gv('ai-ct-country'),empType=gv('ai-ct-emptype'),jobTitle=gv('ai-ct-jobtitle');
+  const fullName=(fname+' '+lname).trim()||'New Employee';
+  const isGlobal=!!country;
+  const arr=isGlobal?globalEmpData:directEmpData;
+  const newId=arr.reduce(function(m,e){return Math.max(m,e.id);},0)+1;
+  const empId=(isGlobal?'GEP':'EMP')+String(newId).padStart(3,'0');
+  const now=aiFormatNow();
+  const rec=Object.assign({id:newId,name:fullName,empId:empId,dept:'—',jobTitle:jobTitle||'—',joinDate:now.date,desc:'Created via AI Contract Assistant',contact:'—',email:'—',status:'Active'},
+    isGlobal?{country:country,workerType:empType||'EOR'}:{branch:'—'});
+  arr.push(rec);
+  aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||'';
+  aiContractPrefill={fname:fname,lname:lname,email:'',country:country,jobTitle:jobTitle};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;
   const promptEl=document.getElementById('ai-ct-prompt');
-  const fullName=(fname+' '+lname).trim()||'this person';
   aiCtChatMsgs=[
     {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+fullName)},
-    {role:'bot',text:'I couldn\'t find <b>'+fullName+'</b> in ADT, so I\'ve started a new contract using the details you gave me. Review each step on the right and fill in anything I\'m missing.'}
+    {role:'bot',text:'I couldn\'t find <b>'+fullName+'</b> in ADT, so I created a new employee record ('+empId+') and started a new contract using the details you gave me.'}
   ];
-  eorStep=0;page='contract-eor';renderADTPage();
+  page='ai-employee-created';renderADTPage();
+}
+function aiCtContinueAfterEmployeeCreated(){
+  aiCtRouteToContractType(aiCtPendingEmpType);
+}
+function buildAIEmployeeCreatedHTML(){
+  const rec=aiCtJourneyEmployee||{};
+  return '<div class="ep-page" style="max-width:560px;margin:20px auto 0">'
+    +'<div class="success-card">'
+    +'<div class="success-check" style="width:64px;height:64px;margin-bottom:18px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="26" height="26"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Employee Created</h2>'
+    +'<p style="font-size:12.5px;color:var(--gray);margin-bottom:20px;max-width:380px;line-height:1.55">AI created a new ADT employee record. You can now continue to build the contract proposal for them.</p>'
+    +'<div class="review-section" style="text-align:left;width:100%;max-width:380px;margin-bottom:20px">'
+    +'<div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Name</div><div class="rr-val">'+(rec.name||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Employee ID</div><div class="rr-val">'+(rec.empId||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(rec.country||'India')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Job Title</div><div class="rr-val">'+(rec.jobTitle||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Status</div><div class="rr-val">'+(rec.status||'Active')+'</div></div>'
+    +'</div></div>'
+    +'<button class="btn btn-success" onclick="aiCtContinueAfterEmployeeCreated()">Continue to Contract Details</button>'
+    +'</div></div>';
 }
 function buildAIAssistedContractSplitHTML(type){
   const step=type==='PEO'?peoStep:eorStep;
@@ -3949,7 +4418,7 @@ function aiSubmitAssistedContract(type){
     type:type,
     contractRecordId:newId
   };
-  const col=document.getElementById('adt-content');
+  const col=aiCtLoaderTarget();
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Proposal&hellip;</div><div class="cl-sub">Compiling contract data into a proposal for '+aiProposalDraft.name+'</div></div>';
   setTimeout(function(){page='ai-proposal-created';renderADTPage();},1400);
 }
@@ -3973,7 +4442,7 @@ function buildAIProposalCreatedHTML(){
     +'</div></div>';
 }
 function aiSendProposalForApproval(){
-  const col=document.getElementById('adt-content');
+  const col=aiCtLoaderTarget();
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Notifying '+aiDealManager.name+'&hellip;</div><div class="cl-sub">Sending proposal '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+' for approval</div></div>';
   notifData.unshift({name:'Proposal sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:(aiProposalDraft&&aiProposalDraft.proposalId)||'',time:'Just now',pending:true});
   if(aiCreatedContractId){
@@ -3986,24 +4455,187 @@ function aiSendProposalForApproval(){
   }
   setTimeout(function(){page='ai-proposal-waiting-approval';renderADTPage();},1400);
 }
-function buildAIProposalWaitingApprovalHTML(){
-  const d=aiProposalDraft||{};
-  return '<div class="ep-page" style="max-width:640px;margin:40px auto;text-align:center">'
+function buildAIWaitingApprovalHTML(opts){
+  return '<div class="ep-page" style="max-width:640px;margin:20px auto 0;text-align:center">'
     +'<div class="ep-form-card" style="padding:40px 32px">'
     +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">'
     +'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
     +'</div>'
     +'<div class="success-meta" style="background:#fef3c7;color:#b45309;margin:0 auto 14px">&#9203; Pending Approval</div>'
     +'<h2 style="font-size:19px;font-weight:700;margin-bottom:8px">Waiting for Approval</h2>'
-    +'<p style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:20px">We\'ve notified <strong style="color:var(--navy)">'+aiDealManager.name+'</strong> (Deal Manager) to review proposal <strong>'+d.proposalId+'</strong> for <strong>'+d.name+'</strong>. Once approved, this journey will automatically continue to contract generation.</p>'
+    +'<p style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:20px">'+opts.description+'</p>'
     +'<div class="ai-timeline" style="text-align:left;max-width:360px;margin:0 auto 24px">'
-    +'<div class="ai-timeline-item"><div class="ai-timeline-dot ai">1</div><div class="ai-timeline-card" style="cursor:default"><div class="ai-timeline-card-title">Proposal Created</div><div class="ai-timeline-chips"><span class="ai-chip ai-chip-ai">AI Automated</span></div></div></div>'
-    +'<div class="ai-timeline-item"><div class="ai-timeline-dot human">2</div><div class="ai-timeline-card" style="cursor:default"><div class="ai-timeline-card-title">Waiting for '+aiDealManager.name+'\'s Approval</div><div class="ai-timeline-chips"><span class="ai-chip ai-chip-human">Human Required</span><span class="ai-chip ai-chip-approval">Approval Required</span></div></div></div>'
-    +'<div class="ai-timeline-item"><div class="ai-timeline-dot system">3</div><div class="ai-timeline-card" style="cursor:default;opacity:.55"><div class="ai-timeline-card-title">Contract Generation (pending)</div><div class="ai-timeline-chips"><span class="ai-chip ai-chip-system">System Action</span></div></div></div>'
+    +opts.timelineItems.map(function(it,i){
+      const chips=it.chips.map(function(c){return '<span class="ai-chip '+c.cls+'">'+c.label+'</span>';}).join('');
+      return '<div class="ai-timeline-item"><div class="ai-timeline-dot '+it.dotClass+'">'+(i+1)+'</div><div class="ai-timeline-card" style="cursor:default'+(it.pending?';opacity:.55':'')+'"><div class="ai-timeline-card-title">'+it.label+'</div><div class="ai-timeline-chips">'+chips+'</div></div></div>';
+    }).join('')
     +'</div>'
     +'<div style="display:flex;gap:10px;justify-content:center">'
     +'<button class="btn btn-secondary" onclick="page=\'contracts\';renderADTPage()">Back to Contracts</button>'
-    +'<button class="btn btn-success" onclick="aiSimulateApproval()">Simulate: '+aiDealManager.name+' Approves</button>'
+    +'<button class="btn btn-success" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>'
+    +'</div>'
+    +'</div></div>';
+}
+function buildAIProposalWaitingApprovalHTML(){
+  const d=aiProposalDraft||{};
+  return buildAIWaitingApprovalHTML({
+    description:'We\'ve notified <strong style="color:var(--navy)">'+aiDealManager.name+'</strong> (Deal Manager) to review proposal <strong>'+d.proposalId+'</strong> for <strong>'+d.name+'</strong>. Once approved, this journey will automatically continue to contract generation.',
+    timelineItems:[
+      {label:'Proposal Created',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Waiting for '+aiDealManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
+      {label:'Contract Generation (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
+    ],
+    onApprove:'aiSimulateApproval()',
+    approveLabel:'Simulate: '+aiDealManager.name+' Approves'
+  });
+}
+function buildAIContractWaitingApprovalHTML(){
+  const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
+  return buildAIWaitingApprovalHTML({
+    description:'We\'ve notified <strong style="color:var(--navy)">'+aiOpsManager.name+'</strong> (Ops Manager) to review contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+(rec.empName||'')+'</strong>. Once approved, this journey will automatically continue to onboarding.',
+    timelineItems:[
+      {label:'Contract Generated',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Waiting for '+aiOpsManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
+      {label:'Onboarding (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
+    ],
+    onApprove:'aiSimulateContractApproval()',
+    approveLabel:'Simulate: '+aiOpsManager.name+' Approves'
+  });
+}
+function aiSimulateContractApproval(){
+  const col=aiCtLoaderTarget();
+  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Approving Contract&hellip;</div><div class="cl-sub">'+aiOpsManager.name+' is reviewing the signed contract</div></div>';
+  setTimeout(function(){
+    if(notifData[0]&&notifData[0].pending)notifData[0].pending=false;
+    if(aiCreatedContractId){
+      const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
+      if(rec){
+        rec.status='Contract Approved';
+        const now=aiFormatNow();
+        (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:aiOpsManager.name,status:'Contract Approved',action:aiOpsManager.name+' approved the signed contract.'});
+        (ctWorkflowData[aiCreatedContractId]=ctWorkflowData[aiCreatedContractId]||[]).unshift({title:'Contract Approved',user:aiOpsManager.name,date:now.date,time:now.time,description:'Ops Manager approved the contract for '+rec.empName+'.'});
+      }
+    }
+    page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
+  },1500);
+}
+function buildAIContractDocumentHTML(){
+  const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
+  const d=aiProposalDraft||{};
+  const now=aiFormatNow();
+  const entity='ADT '+(rec.country||d.country||'Netherlands')+(rec.type==='PEO'?' PEO Services B.V.':' EOR Services B.V.');
+  return '<div style="padding:8px 0 24px">'
+    +'<div class="adt-doc-page">'
+    +'<div class="adt-doc-header">'
+    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Global Employment Platform</div></div>'
+    +'<div><div class="adt-doc-title">EMPLOYMENT AGREEMENT</div><div class="adt-doc-meta">Contract No. '+(rec.contractId||'—')+'<br>Issued '+now.date+'</div></div>'
+    +'</div>'
+    +'<div class="adt-doc-section">'
+    +'<div class="adt-doc-section-title">Parties</div>'
+    +'<div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employer</div><div class="rr-val">'+entity+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(rec.empName||d.name||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country of Employment</div><div class="rr-val">'+(rec.country||d.country||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Contract Type</div><div class="rr-val">'+(rec.type||d.type||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section">'
+    +'<div class="adt-doc-section-title">Position &amp; Compensation</div>'
+    +'<div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Job Title</div><div class="rr-val">'+(rec.jobTitle||d.jobTitle||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Employment Term</div><div class="rr-val">'+(rec.empDuration||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Monthly Gross Pay</div><div class="rr-val">'+(rec.payAmount?rec.payAmount+' '+(rec.currency||''):'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Pay Frequency</div><div class="rr-val">'+(rec.payFrequency||'Monthly')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section">'
+    +'<div class="adt-doc-section-title">Terms</div>'
+    +'<p class="adt-doc-clause">This Employment Agreement ("Agreement") is entered into between '+entity+' ("Employer") and '+(rec.empName||d.name||'the Employee')+' ("Employee"), effective as of the date of countersignature below.</p>'
+    +'<p class="adt-doc-clause">The Employee shall perform the duties of '+(rec.jobTitle||d.jobTitle||'the assigned role')+' in accordance with local labor law and the Employer\'s policies, and shall be compensated as set out above, payable in arrears on a '+(rec.payFrequency||'Monthly').toLowerCase()+' basis.</p>'
+    +'<p class="adt-doc-clause">This Agreement is governed by the employment laws of '+(rec.country||d.country||'the country of employment')+'. Either party may terminate this Agreement in accordance with the statutory notice period applicable in that jurisdiction.</p>'
+    +'</div>'
+    +'<div class="adt-doc-sig-row">'
+    +'<div class="adt-doc-sig-block">For and on behalf of '+entity+'<div class="adt-doc-sig-label">Authorized Signatory &middot; '+now.date+'</div></div>'
+    +'<div class="adt-doc-sig-block">'+(rec.empName||d.name||'Employee')+'<div class="adt-doc-sig-label">Employee Signature &middot; Pending</div></div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="text-align:center;margin-top:22px">'
+    +'<button class="btn btn-success" onclick="aiSendContractForApproval()">Send Contract for Approval</button>'
+    +'</div>'
+    +'</div>';
+}
+function aiSendContractForApproval(){
+  const col=aiCtLoaderTarget();
+  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Sending for Signature&hellip;</div><div class="cl-sub">Routing the contract to '+aiOpsManager.name+' for approval</div></div>';
+  if(aiCreatedContractId){
+    const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
+    if(rec){
+      rec.status='Contract Sent';
+      const now=aiFormatNow();
+      (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:'AI Contract Assistant',status:'Contract Sent',action:'Contract generated and sent to '+aiOpsManager.name+' ('+aiOpsManager.role+') for approval.'});
+    }
+  }
+  notifData.unshift({name:'Contract sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:aiCreatedContractId||'',time:'Just now',pending:true});
+  setTimeout(function(){page='ai-contract-waiting-approval';renderADTPage();},1400);
+}
+let aiCtOnboardingStep=-1;
+const aiCtOnboardingSteps=[
+  {label:'Documents',running:'Collecting onboarding documents…',type:'ai'},
+  {label:'Compliance Checks',running:'Running compliance checks…',type:'ai'},
+  {label:'System Access Provisioning',running:'Provisioning system access…',type:'ai'}
+];
+function aiCtStartOnboarding(){
+  aiCtOnboardingStep=0;
+  if(aiCreatedContractId){
+    const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
+    if(rec)rec.status='Onboarding';
+  }
+  aiCtRunOnboardingStep();
+}
+function aiCtRunOnboardingStep(){
+  const step=aiCtOnboardingSteps[aiCtOnboardingStep];
+  if(!step){
+    if(aiCreatedContractId){
+      const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
+      if(rec)rec.status='Ready for Payroll';
+    }
+    page='ai-journey-complete';renderADTPage();
+    return;
+  }
+  setTimeout(function(){
+    aiCtOnboardingStep++;
+    navigatePage('ai-onboarding-run');
+    aiCtRunOnboardingStep();
+  },900);
+}
+function buildAIOnboardingRunHTML(){
+  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<div class="ai-timeline">'+buildAIRunTimelineHTML({steps:aiCtOnboardingSteps},aiCtOnboardingStep)+'</div>'
+    +'</div>';
+}
+function buildAIJourneyCompleteHTML(){
+  const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
+  const emp=aiCtJourneyEmployee||{};
+  const empRows=aiDrawerRow('Name',emp.name||rec.empName||'—')
+    +aiDrawerRow('Employee ID',emp.empId||'—')
+    +aiDrawerRow('Country',emp.country||rec.country||'—')
+    +aiDrawerRow('Job Title',emp.jobTitle||rec.jobTitle||'—')
+    +aiDrawerRow('Status',emp.status||'Active');
+  const contractRows=aiDrawerRow('Contract No.',rec.contractId||'—')
+    +aiDrawerRow('Contract Type',rec.type||'—')
+    +aiDrawerRow('Proposal ID',(aiProposalDraft&&aiProposalDraft.proposalId)||'—')
+    +aiDrawerRow('Monthly Pay',rec.payAmount?rec.payAmount+' '+(rec.currency||''):'—')
+    +aiDrawerRow('Status',rec.status||'Ready for Payroll');
+  return '<div class="ep-page" style="max-width:640px;margin:20px auto 0">'
+    +'<div class="success-card">'
+    +'<div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Contract Creation Journey Complete</h2>'
+    +'<p style="font-size:12.5px;color:var(--gray);margin-bottom:22px;max-width:420px;line-height:1.55">'+(emp.name||rec.empName||'The employee')+' has been onboarded and is ready for payroll. Here\'s a summary of everything AI put together.</p>'
+    +'<div style="text-align:left;width:100%;max-width:460px">'
+    +'<div class="review-section"><div class="review-title">Employee Details</div><div class="review-grid" style="grid-template-columns:1fr">'+empRows+'</div></div>'
+    +'<div class="review-section"><div class="review-title">Contract Details</div><div class="review-grid" style="grid-template-columns:1fr">'+contractRows+'</div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:6px">'
+    +'<button class="btn btn-secondary" onclick="navigatePage(\'contracts\')">View in Contracts</button>'
+    +'<button class="btn btn-primary" onclick="addListingItem(\'contracts\')">Start Another</button>'
     +'</div>'
     +'</div></div>';
 }
@@ -4156,11 +4788,7 @@ function buildAIRunDetailHTML(){
     +'<div><div class="ai-timeline" style="margin-bottom:20px">'+timeline+'</div>'+backendPanel+'</div>'
     +'<div>'+actionPanel+'</div>'
     +'</div>';
-  const sbInner=aiEventDrawerIdx>=0?renderAIEventDrawer():'';
-  return '<div class="ai-exec-page" style="max-width:1180px">'
-    +'<div class="lp-split-wrap"><div class="lp-split-main" style="border:none;background:transparent;overflow:visible">'+mainContent+'</div>'
-    +'<div class="lp-split-sb'+(aiEventDrawerIdx>=0?' open':'')+'" id="ai-event-split-sb"><div class="lp-isb" id="ai-event-isb-inner">'+sbInner+'</div></div>'
-    +'</div></div>';
+  return '<div class="ai-exec-page" style="max-width:1180px">'+mainContent+'</div>';
 }
 
 function aiAdvanceRunPastAutoSteps(run,journeyId){
@@ -4198,7 +4826,7 @@ function aiResolveException(runId,journeyId){
 }
 
 function aiSimulateApproval(){
-  const col=document.getElementById('adt-content');
+  const col=aiCtLoaderTarget();
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Approving Proposal&hellip;</div><div class="cl-sub">'+aiDealManager.name+' is reviewing '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+'</div></div>';
   setTimeout(function(){
     if(notifData[0]&&notifData[0].pending)notifData[0].pending=false;
@@ -4211,7 +4839,6 @@ function aiSimulateApproval(){
         (ctWorkflowData[aiCreatedContractId]=ctWorkflowData[aiCreatedContractId]||[]).unshift({title:'Proposal Approved',user:aiDealManager.name,date:now.date,time:now.time,description:'Deal Manager approved the AI-generated proposal for '+rec.empName+'.'});
       }
     }
-    const col2=document.getElementById('adt-content');
-    if(col2)col2.innerHTML='<div class="success-card"><div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div><h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Proposal Approved</h2><p style="font-size:12.5px;color:var(--gray);margin-bottom:24px;max-width:380px;line-height:1.55">'+aiDealManager.name+' approved the proposal. The Contract Generation to Ready for Payroll journey will continue automatically &mdash; contract generation, client signature, onboarding checks, and payroll readiness.</p><button class="btn btn-primary" onclick="navigatePage(\'contracts\')">View in Contracts</button></div>';
+    page='ai-contract-document';renderADTPage();
   },1500);
 }
