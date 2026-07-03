@@ -3500,13 +3500,6 @@ function startAutomateJourney(id){selectedAIJourneyId=id;navigatePage('ai-automa
 
 function buildAIExecutiveDashboardHTML(){
   const cards=aiJourneys.map(j=>{
-<<<<<<< HEAD
-    return '<div class="ai-journey-card" onclick="viewAIJourney(\''+j.id+'\')">'
-      +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+j.name+'</div></div>'
-      +'<hr class="ai-journey-divider">'
-      +'<div class="ai-journey-icon-center"><div class="stat-icon">'+j.icon+'</div></div>'
-      +'<div class="ai-journey-coverage-row"><span>Automation coverage</span><div class="setup-bar" style="flex:1;margin:0"><div class="setup-fill" style="width:'+j.coverage+'%"></div></div><span style="font-weight:600;color:var(--navy)">'+j.coverage+'%</span></div>'
-=======
     return '<div class="ai-journey-card">'
       +'<div class="ai-journey-card-top">'
       +'<div class="ai-journey-name">'+j.name+'</div>'
@@ -3518,7 +3511,6 @@ function buildAIExecutiveDashboardHTML(){
       +'<div class="ai-journey-progress-bar"><div class="ai-journey-progress-fill" style="width:'+j.coverage+'%"></div></div>'
       +'</div>'
       +'<div class="ai-journey-actions"><button class="btn btn-secondary" onclick="viewAIJourney(\''+j.id+'\')">View Journey</button>'+(j.status==='Active'?'<button class="btn btn-primary" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Automation</button>':'<button class="btn btn-primary" onclick="startAutomateJourney(\''+j.id+'\')">Automate Journey</button>')+'</div>'
->>>>>>> b8df37390d77a02522f1443258e8b4ffa240ac90
       +'</div>';
   }).join('');
   return '<div class="ai-exec-page">'
@@ -4049,20 +4041,10 @@ function buildAIActiveAutomationHTML(){
     const counts=aiRunCounts(r,j.id);
     const lastStepName=events.length?events[events.length-1].name:'Completed';
     return '<tr style="cursor:pointer" onclick="viewAIRun(\''+r.runId+'\')">'
-<<<<<<< HEAD
-      +'<td style="font-weight:600;color:var(--navy)">'+r.runId+'</td>'
-      +'<td>'+r.client+'</td>'
-      +'<td>'+r.country+'</td>'
-      +'<td>'+r.contractType+'</td>'
-      +'<td>'+(r.status==='Completed'?lastStepName:(step?step.name:'—'))+'</td>'
-      +'<td style="color:var(--orange);font-weight:600">'+counts.aiCompleted+'</td>'
-      +'<td style="color:#2563eb;font-weight:600">'+counts.humanPending+'</td>'
-=======
       +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+r.runId+'</div></td>'
       +'<td><div class="cell-primary">'+r.country+'</div><div class="cell-sub">'+r.contractType+'</div></td>'
       +'<td>'+(r.status==='Completed'?'Ready for Payroll':(step?step.name:'—'))+'</td>'
       +'<td><div class="ai-run-progress"><span class="ai-run-progress-ai">'+counts.aiCompleted+' AI</span><span class="ai-run-progress-human">'+counts.humanPending+' pending</span></div></td>'
->>>>>>> b8df37390d77a02522f1443258e8b4ffa240ac90
       +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
       +'<td class="cell-sub">'+r.lastActivity+'</td>'
       +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRun(\''+r.runId+'\')">View Run</button></td>'
