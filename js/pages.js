@@ -3487,17 +3487,11 @@ function startAutomateJourney(id){selectedAIJourneyId=id;navigatePage('ai-automa
 
 function buildAIExecutiveDashboardHTML(){
   const cards=aiJourneys.map(j=>{
-    const totalSteps=j.humanSteps+j.aiSteps;
-    return '<div class="ai-journey-card">'
-      +'<div class="ai-journey-card-top"><div><div class="ai-journey-name">'+j.name+'</div><div class="ai-journey-desc">'+j.desc+'</div></div><span class="status-pill '+aiStatusPillClass(j.status)+'">'+j.status+'</span></div>'
-      +'<div class="ai-journey-modules">'+j.modules.map(m=>'<span class="ai-journey-module-tag">'+m+'</span>').join('')+'</div>'
-      +'<div class="ai-journey-metrics">'
-      +'<div class="ai-journey-metric"><div class="ai-journey-metric-val">'+totalSteps+'</div><div class="ai-journey-metric-label">Total Events</div></div>'
-      +'<div class="ai-journey-metric"><div class="ai-journey-metric-val" style="color:var(--orange)">'+j.aiSteps+'</div><div class="ai-journey-metric-label">AI Automated</div></div>'
-      +'<div class="ai-journey-metric"><div class="ai-journey-metric-val" style="color:#2563eb">'+j.humanSteps+'</div><div class="ai-journey-metric-label">Human Required</div></div>'
-      +'</div>'
+    return '<div class="ai-journey-card" onclick="viewAIJourney(\''+j.id+'\')">'
+      +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+j.name+'</div></div>'
+      +'<hr class="ai-journey-divider">'
+      +'<div class="ai-journey-icon-center"><div class="stat-icon">'+j.icon+'</div></div>'
       +'<div class="ai-journey-coverage-row"><span>Automation coverage</span><div class="setup-bar" style="flex:1;margin:0"><div class="setup-fill" style="width:'+j.coverage+'%"></div></div><span style="font-weight:600;color:var(--navy)">'+j.coverage+'%</span></div>'
-      +'<div class="ai-journey-actions"><button class="btn btn-secondary btn-sm" onclick="viewAIJourney(\''+j.id+'\')">View Journey</button>'+(j.status==='Active'?'<button class="btn btn-primary btn-sm" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Automation</button>':'<button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Automate Journey</button>')+'</div>'
       +'</div>';
   }).join('');
   return '<div class="ai-exec-page">'
@@ -3544,8 +3538,10 @@ function buildAIJourneyDetailHTML(){
       +'</div></div>';
   }).join('');
   const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'ai-executive\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> All Journeys</button>'
-    +'<p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+'</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px;max-width:680px">'+j.desc+'</p>'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
+    +'<div><p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+'</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:680px">'+j.desc+'</p></div>'
+    +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourney(\''+j.id+'\')">Create your journey</button>'
+    +'</div>'
     +'<div class="stat-grid" style="margin-bottom:20px">'
     +'<div class="stat-card"><div class="stat-label"><span>Total Events</span></div><div class="stat-val">'+total+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>AI Automated</span></div><div class="stat-val" style="color:var(--orange)">'+j.aiSteps+'</div></div>'
@@ -3555,8 +3551,8 @@ function buildAIJourneyDetailHTML(){
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">'
     +'<div style="font-size:11.5px;color:var(--gray);max-width:520px">Connected Modules: '+j.modules.join(', ')+'<br>Status: '+j.status+' &middot; Last Updated: '+j.updated+'</div>'
     +(j.status==='Active'
-      ?'<div style="display:flex;align-items:center;gap:14px"><button class="btn btn-primary" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Active Automation</button><button class="add-link" onclick="startAutomateJourney(\''+j.id+'\')">Edit configuration</button></div>'
-      :'<button class="btn btn-primary" onclick="startAutomateJourney(\''+j.id+'\')">Automate This Journey</button>')
+      ?'<div style="display:flex;align-items:center;gap:14px"><button class="btn btn-primary btn-sm" style="opacity:.6" onclick="viewAIActiveAutomation(\''+j.id+'\')">View Active Automation</button></div>'
+      :'<button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Automate This Journey</button>')
     +'</div>'
     +buildAIResponsibilitySplitHTML(j.id)
     +'<div class="ai-timeline">'+timeline+'</div>';
@@ -3608,6 +3604,22 @@ const aiTriggerOptions=[
 const aiValidationChecklist=['Approved proposal required','Active contract template required','Entity mapping required','Client signatory required','Country rules required','Salary/commercial terms required','Payroll data required','Compliance documents required'];
 let aiAutomationConfigs={};
 
+let _aiScopeRevertFn=null;
+function aiScopeConfirmToggle(el,labelText){
+  const turningOn=el.checked;
+  const prevChecked=!turningOn;
+  _aiScopeRevertFn=function(){el.checked=prevChecked;closeCtModal();};
+  document.getElementById('ct-modal-overlay').innerHTML=
+    '<div class="ct-modal" style="width:min(460px,92vw);text-align:center;padding:34px 32px" onclick="event.stopPropagation()">'
+    +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" shape-rendering="geometricPrecision"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17.02" x2="12.01" y2="17.02"/></svg></div>'
+    +'<div style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:12px">Confirm Change</div>'
+    +'<div style="font-size:13.5px;color:var(--gray);line-height:1.65;margin-bottom:26px">Are you sure you want to turn <strong style="color:var(--navy)">'+(turningOn?'on':'off')+'</strong> <strong style="color:var(--navy)">'+labelText+'</strong> for this event?</div>'
+    +'<div style="display:flex;justify-content:center;gap:12px">'
+    +'<button class="ep-cancel-btn" onclick="_aiScopeRevertFn()">Cancel</button>'
+    +'<button class="ep-save-btn" onclick="closeCtModal()">Yes, '+(turningOn?'Turn On':'Turn Off')+'</button>'
+    +'</div></div>';
+  document.getElementById('ct-modal-overlay').style.display='flex';
+}
 function aiScopeDefaults(e){
   const ai=e.chips.includes('AI Automated');
   const human=e.chips.includes('Human Required')||e.chips.includes('Approval Required');
@@ -3646,9 +3658,9 @@ function buildAutomateJourneyFormHTML(){
     const d=aiScopeDefaults(e);
     return '<div class="ai-scope-row">'
       +'<div class="ai-scope-name"><div class="ai-scope-name-text">'+(i+1)+'. '+e.name+'</div><div class="ai-timeline-chips">'+aiChips(e.chips)+'</div></div>'
-      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-ai-'+i+'"'+(d.ai?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">AI Automated</span></div>'
-      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-human-'+i+'"'+(d.human?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">Human Approval</span></div>'
-      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-auto-'+i+'"'+(d.autoMove?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">Auto Move Next</span></div>'
+      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-ai-'+i+'" onchange="aiScopeConfirmToggle(this,\'AI Automated\')"'+(d.ai?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">AI Automated</span></div>'
+      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-human-'+i+'" onchange="aiScopeConfirmToggle(this,\'Human Approval\')"'+(d.human?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">Human Approval</span></div>'
+      +'<div class="ai-scope-toggle-group"><label class="cs-toggle"><input type="checkbox" id="ai-scope-auto-'+i+'" onchange="aiScopeConfirmToggle(this,\'Auto Move Next\')"'+(d.autoMove?' checked':'')+'><span class="cs-toggle-slider"></span></label><span class="ai-scope-toggle-label">Auto Move Next</span></div>'
       +'<div class="ai-scope-exception"><select class="ep-form-select" id="ai-scope-exc-'+i+'">'
       +'<option value="stop"'+(d.exception==='stop'?' selected':'')+'>Stop Journey</option>'
       +'<option value="task"'+(d.exception==='task'?' selected':'')+'>Create Task</option>'
@@ -3720,7 +3732,7 @@ function saveAIAutomation(mode){
 }
 function cancelAIAutomation(){navigatePage('ai-journey-detail');}
 
-// -- AI CONTRACT ASSISTANT (Contracts "+" flow, gated on contract-to-payroll journey being Active) --
+// -- AI CONTRACT ASSISTANT (Contracts "+" flow, gated on the contract-creation journey being Active) --
 function parseAIContractPrompt(text){
   const countries=['Netherlands','India','Germany','Spain','United Kingdom','France','Italy'];
   const empTypes=['EOR','PEO','Contractor'];
@@ -3745,7 +3757,7 @@ function buildAIContractAssistantHTML(){
     +'<div style="flex:1 1 340px;min-width:300px">'
     +'<div class="we-icon" style="margin:0 0 14px"><svg width="22" height="22" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div>'
     +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">AI Contract Assistant</div>'
-    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:18px">The Contract Generation to Ready for Payroll journey is automated. Tell me who you\'re creating a contract for &mdash; I\'ll check ADT records and pre-fill the form for you.</div>'
+    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:18px">The Contract Creation journey is automated. Tell me who you\'re creating a contract for &mdash; I\'ll check ADT records and pre-fill the form for you.</div>'
     +'<div class="input-row" style="margin:0 0 10px;max-width:420px">'
     +'<input class="input-field" id="ai-ct-prompt" placeholder="e.g. Create an EOR contract for Anika Shah in Netherlands" oninput="aiCtLiveParse()" onkeydown="if(event.key===\'Enter\')aiCtSubmitPrompt()">'
     +'<button class="icon-btn active" onclick="aiCtSubmitPrompt()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
@@ -3983,8 +3995,8 @@ function aiRunStepStatus(run,idx){
   if(idx===run.currentStepIdx)return run.status==='Exception'?'exception':'current';
   return 'pending';
 }
-function aiRunCounts(run){
-  const events=aiJourneyEvents['contract-to-payroll']||[];
+function aiRunCounts(run,journeyId){
+  const events=aiJourneyEvents[journeyId||selectedAIJourneyId]||[];
   let aiCompleted=0,humanPending=0;
   events.forEach(function(e,i){
     const st=aiRunStepStatus(run,i);
@@ -4007,13 +4019,14 @@ function buildAIActiveAutomationHTML(){
   const rows=runs.map(function(r){
     const events=aiJourneyEvents[j.id]||[];
     const step=events[Math.min(r.currentStepIdx,events.length-1)];
-    const counts=aiRunCounts(r);
+    const counts=aiRunCounts(r,j.id);
+    const lastStepName=events.length?events[events.length-1].name:'Completed';
     return '<tr style="cursor:pointer" onclick="viewAIRun(\''+r.runId+'\')">'
       +'<td style="font-weight:600;color:var(--navy)">'+r.runId+'</td>'
       +'<td>'+r.client+'</td>'
       +'<td>'+r.country+'</td>'
       +'<td>'+r.contractType+'</td>'
-      +'<td>'+(r.status==='Completed'?'Ready for Payroll':(step?step.name:'—'))+'</td>'
+      +'<td>'+(r.status==='Completed'?lastStepName:(step?step.name:'—'))+'</td>'
       +'<td style="color:var(--orange);font-weight:600">'+counts.aiCompleted+'</td>'
       +'<td style="color:#2563eb;font-weight:600">'+counts.humanPending+'</td>'
       +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
@@ -4089,27 +4102,28 @@ function buildAIRunDetailHTML(){
 
   let actionPanel;
   if(run.status==='Completed'){
+    const lastStepName=events.length?events[events.length-1].name:'Completed';
     actionPanel='<div class="ep-form-card" style="text-align:center;padding:32px 24px">'
       +'<div class="success-check" style="width:52px;height:52px;margin:0 auto 14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="22" height="22"><polyline points="20 6 9 17 4 12"/></svg></div>'
-      +'<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:6px">Ready for Payroll</div>'
-      +'<div style="font-size:12px;color:var(--gray);line-height:1.5">All 14 events completed. '+run.client+' is confirmed ready for the next payroll cycle.</div>'
+      +'<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:6px">'+lastStepName+'</div>'
+      +'<div style="font-size:12px;color:var(--gray);line-height:1.5">All '+events.length+' events completed. '+run.client+' &mdash; '+j.name+' finished successfully.</div>'
       +'</div>';
   }else if(run.status==='Exception'){
     actionPanel='<div class="ep-form-card">'
       +'<div style="font-size:11.5px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Exception &mdash; Action Required</div>'
       +'<div style="font-size:12.5px;color:var(--navy);line-height:1.6;margin-bottom:18px">'+(run.exceptionNote||'This run is blocked and needs review.')+'</div>'
-      +'<button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="aiResolveException(\''+run.runId+'\')">Resolve Exception &amp; Continue</button>'
+      +'<button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="aiResolveException(\''+run.runId+'\',\''+j.id+'\')">Resolve Exception &amp; Continue</button>'
       +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="openAIEventDrawer(\''+j.id+'\','+run.currentStepIdx+')">View Event Details</button>'
       +'</div>';
   }else if(run.status==='Waiting for Approval'){
-    const aiSummary='AI has completed '+aiRunCounts(run).aiCompleted+' events for '+run.client+' &mdash; fetching proposal data, validating entity mapping, selecting the '+run.contractType+' contract template, and pre-filling mandatory fields. '+(currentEvent?currentEvent.name+' is required before the journey can continue.':'Review is required before the journey can continue.');
+    const aiSummary='AI has completed '+aiRunCounts(run,j.id).aiCompleted+' events for '+run.client+' as part of the '+j.name+'. '+(currentEvent?currentEvent.name+' is required before the journey can continue.':'Review is required before the journey can continue.');
     actionPanel='<div class="ep-form-card">'
       +'<div style="font-size:11.5px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Current Action Required</div>'
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">'+(currentEvent?currentEvent.name:'Review pre-filled data')+'</div>'
       +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:18px">'+aiSummary+'</div>'
       +'<button class="btn btn-secondary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="openAIEventDrawer(\''+j.id+'\','+run.currentStepIdx+')">Review Data</button>'
-      +'<button class="btn btn-success" style="width:100%;justify-content:center;margin-bottom:8px" onclick="aiApproveRunStep(\''+run.runId+'\')">Approve and Continue</button>'
-      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="aiRejectRunStep(\''+run.runId+'\')">Reject / Send for Correction</button>'
+      +'<button class="btn btn-success" style="width:100%;justify-content:center;margin-bottom:8px" onclick="aiApproveRunStep(\''+run.runId+'\',\''+j.id+'\')">Approve and Continue</button>'
+      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="aiRejectRunStep(\''+run.runId+'\',\''+j.id+'\')">Reject / Send for Correction</button>'
       +'</div>';
   }else{
     actionPanel='<div class="ep-form-card">'
@@ -4132,8 +4146,8 @@ function buildAIRunDetailHTML(){
     +'</div></div>';
 }
 
-function aiAdvanceRunPastAutoSteps(run){
-  const events=aiJourneyEvents['contract-to-payroll']||[];
+function aiAdvanceRunPastAutoSteps(run,journeyId){
+  const events=aiJourneyEvents[journeyId||selectedAIJourneyId]||[];
   run.currentStepIdx++;
   while(run.currentStepIdx<events.length){
     const ev=events[run.currentStepIdx];
@@ -4144,26 +4158,26 @@ function aiAdvanceRunPastAutoSteps(run){
   if(run.currentStepIdx>=events.length){run.status='Completed';run.currentStepIdx=events.length-1;}
   else{run.status='Waiting for Approval';}
 }
-function aiApproveRunStep(runId){
-  const runs=aiAutomationRuns['contract-to-payroll'];
+function aiApproveRunStep(runId,journeyId){
+  const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Continuing Journey&hellip;</div><div class="cl-sub">Applying approval and running the next automated events for '+run.client+'</div></div>';
-  setTimeout(function(){aiAdvanceRunPastAutoSteps(run);run.lastActivity='Just now';navigatePage('ai-run-detail');},1600);
+  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},1600);
 }
-function aiRejectRunStep(runId){
-  const runs=aiAutomationRuns['contract-to-payroll'];
+function aiRejectRunStep(runId,journeyId){
+  const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Sending Back for Correction&hellip;</div><div class="cl-sub">'+run.client+'</div></div>';
   setTimeout(function(){run.lastActivity='Just now';navigatePage('ai-run-detail');},1200);
 }
-function aiResolveException(runId){
-  const runs=aiAutomationRuns['contract-to-payroll'];
+function aiResolveException(runId,journeyId){
+  const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Re-validating&hellip;</div><div class="cl-sub">Re-checking data for '+run.client+' after correction</div></div>';
-  setTimeout(function(){aiAdvanceRunPastAutoSteps(run);run.lastActivity='Just now';navigatePage('ai-run-detail');},1600);
+  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},1600);
 }
 
 function aiSimulateApproval(){
