@@ -24,6 +24,16 @@ function renderPageContent(id){
     }
     return;
   }
+  if(page==='cfg-overview'){el.innerHTML=buildCfgOverviewHTML();return;}
+  if(page==='cfg-systems'){el.innerHTML=buildCfgSystemsHTML();return;}
+  if(page==='cfg-system-detail'){el.innerHTML=buildCfgSystemDetailHTML();return;}
+  if(page==='cfg-system-add'){el.innerHTML=buildCfgSystemAddHTML();return;}
+  if(page==='cfg-data-foundation'){el.innerHTML=buildCfgDataFoundationHTML();return;}
+  if(page==='cfg-model-detail'){el.innerHTML=buildCfgModelDetailHTML();return;}
+  if(page==='cfg-model-add'){el.innerHTML=buildCfgModelAddHTML();return;}
+  if(page==='cfg-context-journey'){el.innerHTML=buildCfgContextJourneyHTML();return;}
+  if(page==='cfg-journey-detail'){el.innerHTML=buildCfgJourneyDetailHTML();return;}
+  if(page==='cfg-agents'){el.innerHTML=buildCfgAgentsHTML();return;}
   if(page==='ai-executive'){el.innerHTML=buildAIExecutiveDashboardHTML();return;}
   if(page==='ai-journey-detail'){el.innerHTML=buildAIJourneyDetailHTML();return;}
   if(page==='ai-automate-form'){el.innerHTML=buildAutomateJourneyFormHTML();return;}
@@ -59,7 +69,7 @@ function renderADTPage(){
   // Show/hide + button in topbar based on current page
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
-    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete'];
+    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents'];
     const show=!noAddPages.includes(page);
     addBtn.style.display=show?'':'none';
     if(show){

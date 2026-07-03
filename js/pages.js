@@ -3615,6 +3615,685 @@ function renderAIEventDrawer(){
   return '<div class="ct-modal" style="width:min(600px,92vw)" onclick="event.stopPropagation()">'+header+body+'</div>';
 }
 
+// ===================== CONFIGURE =====================
+// Full parity with the reference OpenDHI configuration console: Overview,
+// Systems (list + detail w/ APIs), Data models (list + detail w/ mapping,
+// enrichment, rules, test), Context & Journey (list + detail w/ flow +
+// agent/governance assignment drawer), Agents. Self-contained — reads
+// nothing from the AI Executive module and touches no other page.
+
+function cfgKVRow(label,val){return '<div class="review-row"><div class="rr-label">'+label+'</div><div class="rr-val" style="white-space:normal;font-weight:600">'+val+'</div></div>';}
+function cfgPageHead(title,sub){return '<div style="margin-bottom:20px"><p style="font-size:14px;font-weight:600;margin-bottom:4px">'+title+'</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:680px">'+sub+'</p></div>';}
+function cfgBackBtn(pg,label){return '<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="navigatePage(\''+pg+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+label+'</button>';}
+
+// -- Configure: Overview --
+function buildCfgOverviewHTML(){
+  const tiles=[
+    ['cfg-systems','Systems',cfgSystems.length],
+    ['cfg-data-foundation','Data models',cfgModels.length],
+    ['cfg-context-journey','Journeys',cfgJourneys.length],
+    ['cfg-agents','AI agents',cfgAgents.length]
+  ].map(function(t){
+    return '<div class="stat-card" style="cursor:pointer" onclick="navigatePage(\''+t[0]+'\')"><div class="stat-label"><span>'+t[1]+'</span></div><div class="stat-val">'+t[2]+'</div></div>';
+  }).join('');
+  const activity=cfgRecentActivity.map(function(a){
+    return '<div class="tr" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)">'
+      +'<div><div style="font-size:13.5px;font-weight:500;color:var(--navy)">'+a.title+'</div><div style="font-size:12px;color:var(--gray);margin-top:3px">'+a.sub+'</div></div>'
+      +'<div style="font-family:monospace;font-size:11.5px;color:var(--gray);white-space:nowrap">'+a.when+'</div>'
+      +'</div>';
+  }).join('');
+  return '<div class="ai-exec-page">'
+    +cfgPageHead('Overview','Configuration for the sandbox — connect systems, define data models, wire journeys, and manage agents.')
+    +'<div class="stat-grid" style="margin-bottom:20px">'+tiles+'</div>'
+    +'<div class="review-section" style="display:flex;align-items:center;gap:16px;border-color:#86efac;background:#f0fdf4;margin-bottom:24px">'
+    +'<div style="font-family:var(--display,inherit);font-weight:800;font-size:38px;color:#16a34a;line-height:1;flex-shrink:0">0</div>'
+    +'<div><div style="font-size:13px;font-weight:700;color:#15803d">Business records stored</div><div style="font-size:12px;color:#166534;margin-top:4px;line-height:1.6">Configure holds no customer data. Records are fetched on demand through APIs, used, and released — only configuration and audit logs are kept.</div></div>'
+    +'</div>'
+    +'<div class="review-title" style="margin-bottom:12px">Recent activity</div>'
+    +'<div class="ep-form-card" style="padding:0">'+activity+'</div>'
+    +'</div>';
+}
+
+// -- Configure: Systems (list + detail, fully configurable) --
+function cfgSlug(str){
+  const base=String(str).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||'system';
+  let id=base,n=1;
+  while(cfgSystems.some(function(s){return s.id===id;})){n++;id=base+'-'+n;}
+  return id;
+}
+function viewCfgSystem(id){selectedCfgSystemId=id;cfgSystemEditing=false;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
+function buildCfgSystemsHTML(){
+  cfgSystemEditing=false;cfgSystemDraft=null;
+  const total=cfgSystems.length;
+  const connected=cfgSystems.filter(function(s){return s.status==='Connected';}).length;
+  const allOk=total>0&&connected===total;
+  const rows=cfgSystems.length
+    ?cfgSystems.map(function(s){
+      return '<div class="ep-form-card" style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px;padding:16px 20px;cursor:pointer" onclick="viewCfgSystem(\''+s.id+'\')">'
+        +'<div><div style="font-size:13.5px;font-weight:700;color:var(--navy)">'+s.name+'</div><div style="font-size:11.5px;color:var(--gray);margin-top:3px">'+s.type+' &middot; '+s.method+' &middot; '+s.apis+' APIs</div></div>'
+        +'<span class="status-pill '+(s.status==='Connected'?'active':'inactive')+'">'+s.status+'</span>'
+        +'</div>';
+    }).join('')
+    :'<div class="ep-form-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No systems yet — add your first one.</div>';
+  const banner=allOk
+    ?'<div class="review-section" style="display:flex;align-items:center;gap:12px;border-color:#86efac;background:#f0fdf4;margin-bottom:20px">'
+      +'<div style="width:34px;height:34px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#15803d">All systems configured</div><div style="font-size:12px;color:#166534;margin-top:2px">Every system below is connected and ready to use in Data Foundation and Context &amp; Journey.</div></div>'
+      +'</div>'
+    :'<div class="review-section" style="display:flex;align-items:center;gap:12px;border-color:#fed7aa;background:#fff7ed;margin-bottom:20px">'
+      +'<div style="width:34px;height:34px;border-radius:50%;background:#ffedd5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17.02" x2="12.01" y2="17.02"/></svg></div>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#c2410c">'+connected+' of '+total+' systems connected</div><div style="font-size:12px;color:#9a3412;margin-top:2px">Test or configure the rest to bring them online.</div></div>'
+      +'</div>';
+  return '<div class="ai-exec-page">'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">Systems</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:600px">The sources ADT connects to — each exposes its own API. Click a system for connection details.</p></div>'
+    +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="navigatePage(\'cfg-system-add\')">+ Custom System</button>'
+    +'</div>'
+    +banner
+    +rows
+    +'</div>';
+}
+function cfgApiDirBadge(dir){
+  return dir==='rw'
+    ?'<span class="badge" style="background:var(--ol);color:var(--orange)">read + write</span>'
+    :'<span class="badge" style="background:#eff6ff;color:#2563eb">read</span>';
+}
+function startCfgSystemEdit(){cfgSystemEditing=true;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
+function cancelCfgSystemEdit(){cfgSystemEditing=false;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
+function captureCfgSystemDraft(){
+  const g=function(id){const el=document.getElementById(id);return el?el.value:'';};
+  cfgSystemDraft={name:g('cfg-sys-edit-name'),type:g('cfg-sys-edit-type'),method:g('cfg-sys-edit-method'),endpoint:g('cfg-sys-edit-endpoint'),auth:g('cfg-sys-edit-auth'),apis:g('cfg-sys-edit-apis'),status:g('cfg-sys-edit-status')};
+}
+function saveCfgSystemEdit(systemId){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s)return;
+  const name=document.getElementById('cfg-sys-edit-name');
+  if(!name||!name.value.trim()){alert('Please enter a system name.');name&&name.focus();return;}
+  s.name=name.value.trim();
+  const type=document.getElementById('cfg-sys-edit-type');if(type)s.type=type.value.trim()||s.type;
+  const method=document.getElementById('cfg-sys-edit-method');if(method)s.method=method.value.trim()||s.method;
+  const endpoint=document.getElementById('cfg-sys-edit-endpoint');if(endpoint)s.endpoint=endpoint.value.trim()||s.endpoint;
+  const auth=document.getElementById('cfg-sys-edit-auth');if(auth)s.auth=auth.value.trim()||s.auth;
+  const apis=document.getElementById('cfg-sys-edit-apis');if(apis&&apis.value!=='')s.apis=Math.max(0,parseInt(apis.value,10)||0);
+  const status=document.getElementById('cfg-sys-edit-status');if(status)s.status=status.value;
+  s.lastTestResult=null;
+  cfgSystemEditing=false;cfgSystemDraft=null;
+  navigatePage('cfg-system-detail');
+}
+function testCfgSystemConnection(systemId,btnEl){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s)return;
+  if(btnEl){
+    btnEl.disabled=true;
+    btnEl.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border:2px solid rgba(0,0,0,.15);border-top-color:currentColor;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span>Testing connection&hellip;</span>';
+  }
+  setTimeout(function(){
+    const endpointOk=!!(s.endpoint&&s.endpoint.trim()&&s.endpoint.trim()!=='https://'&&/^https?:\/\/.+/.test(s.endpoint.trim()));
+    s.lastTested='Just now';
+    if(endpointOk){s.status='Connected';s.lastTestResult='ok';}
+    else{s.status='Disconnected';s.lastTestResult='fail';}
+    navigatePage('cfg-system-detail');
+  },1100);
+}
+function updateCfgApiDir(systemId,idx,dir){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s||!s.apiList[idx])return;
+  s.apiList[idx].dir=dir;
+}
+function addCfgApiRow(systemId){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s)return;
+  const nameInp=document.getElementById('cfg-newapi-name');
+  const dirSel=document.getElementById('cfg-newapi-dir');
+  const name=nameInp?nameInp.value.trim():'';
+  if(!name){alert('Please enter an API name.');nameInp&&nameInp.focus();return;}
+  captureCfgSystemDraft();
+  s.apiList.push({name:name,dir:dirSel?dirSel.value:'r'});
+  navigatePage('cfg-system-detail');
+}
+function removeCfgApiRow(systemId,idx){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s)return;
+  captureCfgSystemDraft();
+  s.apiList.splice(idx,1);
+  navigatePage('cfg-system-detail');
+}
+function confirmRemoveCfgSystem(systemId){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s)return;
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML='<div class="ct-modal" style="width:min(440px,92vw);text-align:center;padding:32px 30px" onclick="event.stopPropagation()">'
+    +'<div style="width:56px;height:56px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:10px">Remove '+s.name+'?</div>'
+    +'<div style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:22px">This disconnects the system and removes it from Systems. Models and journeys that reference it may need remapping.</div>'
+    +'<div style="display:flex;justify-content:center;gap:10px"><button class="ep-cancel-btn" onclick="closeCtModal()">Cancel</button><button class="ep-save-btn" style="background:#dc2626" onclick="removeCfgSystemConfirmed(\''+s.id+'\')">Remove system</button></div>'
+    +'</div>';
+  overlay.style.display='flex';
+}
+function removeCfgSystemConfirmed(systemId){
+  const idx=cfgSystems.findIndex(function(x){return x.id===systemId;});
+  if(idx>-1)cfgSystems.splice(idx,1);
+  closeCtModal();
+  selectedCfgSystemId=null;
+  navigatePage('cfg-systems');
+}
+function buildCfgSystemDetailHTML(){
+  const s=cfgSystems.find(function(x){return x.id===selectedCfgSystemId;})||cfgSystems[0];
+  const editing=cfgSystemEditing;
+  const d=editing&&cfgSystemDraft?cfgSystemDraft:s;
+  const heading=editing
+    ?'<div class="ep-form-group" style="margin-bottom:8px;max-width:360px"><input class="ep-form-input" id="cfg-sys-edit-name" value="'+attrSafe(d.name)+'" style="font-size:16px;font-weight:700"></div>'
+    :'<p style="font-size:17px;font-weight:700;margin-bottom:6px">'+s.name+'</p><p style="font-size:12.5px;color:var(--gray);margin:0">'+s.type+' &middot; connected via released APIs</p>';
+  const actionBtns=editing?'':'<div style="display:flex;gap:10px;flex-shrink:0"><button class="btn btn-secondary btn-sm" onclick="testCfgSystemConnection(\''+s.id+'\',this)">Test connection</button><button class="btn btn-primary btn-sm" onclick="startCfgSystemEdit()">Edit</button></div>';
+  const connectionBlock=editing
+    ?'<div class="ep-form-card" style="margin-bottom:24px">'
+      +'<div class="ep-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px">'
+      +'<div class="ep-form-group"><label class="ep-form-label">Type</label><input class="ep-form-input" id="cfg-sys-edit-type" value="'+attrSafe(d.type)+'"></div>'
+      +'<div class="ep-form-group"><label class="ep-form-label">Method</label><input class="ep-form-input" id="cfg-sys-edit-method" value="'+attrSafe(d.method)+'"></div>'
+      +'<div class="ep-form-group" style="grid-column:1 / -1"><label class="ep-form-label">Endpoint</label><input class="ep-form-input" id="cfg-sys-edit-endpoint" value="'+attrSafe(d.endpoint)+'"></div>'
+      +'<div class="ep-form-group"><label class="ep-form-label">Authentication</label><input class="ep-form-input" id="cfg-sys-edit-auth" value="'+attrSafe(d.auth)+'"></div>'
+      +'<div class="ep-form-group"><label class="ep-form-label">Total released APIs</label><input class="ep-form-input" type="number" min="0" id="cfg-sys-edit-apis" value="'+attrSafe(d.apis)+'"></div>'
+      +'<div class="ep-form-group"><label class="ep-form-label">Status</label><select class="ep-form-select" id="cfg-sys-edit-status"><option'+(d.status==='Connected'?' selected':'')+'>Connected</option><option'+(d.status==='Disconnected'?' selected':'')+'>Disconnected</option></select></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:10px;margin-top:18px"><button class="ep-cancel-btn" onclick="cancelCfgSystemEdit()">Cancel</button><button class="ep-save-btn" onclick="saveCfgSystemEdit(\''+s.id+'\')">Save changes</button></div>'
+      +'</div>'
+    :'<div class="ep-form-card" style="margin-bottom:24px">'
+      +cfgKVRow('Type',s.type)
+      +cfgKVRow('Method',s.method)
+      +cfgKVRow('Endpoint','<span style="font-family:monospace">'+s.endpoint+'</span>')
+      +cfgKVRow('Authentication',s.auth)
+      +cfgKVRow('Status','<span class="status-pill '+(s.status==='Connected'?'active':'inactive')+'">'+s.status+'</span>')
+      +cfgKVRow('Last tested',s.lastTested+' &middot; '+s.apis+' APIs')
+      +(s.lastTestResult==='fail'?'<div style="margin-top:10px;padding:11px 14px;border-radius:9px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:12px;line-height:1.6">Test failed &mdash; the endpoint looks incomplete or unreachable. Update the endpoint (Edit) and test again.</div>':'')
+      +(s.lastTestResult==='ok'?'<div style="margin-top:10px;padding:11px 14px;border-radius:9px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:12px;line-height:1.6">Connection verified &mdash; the endpoint responded successfully.</div>':'')
+      +'</div>';
+  const apiRows=(s.apiList.length?s.apiList.map(function(a,i){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'
+      +'<div style="font-family:monospace;font-size:12.5px;font-weight:500;color:var(--navy)">'+a.name+'</div>'
+      +(editing
+        ?'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiDir(\''+s.id+'\','+i+',this.value)"><option value="r"'+(a.dir==='r'?' selected':'')+'>read</option><option value="rw"'+(a.dir==='rw'?' selected':'')+'>read + write</option></select><button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgApiRow(\''+s.id+'\','+i+')">Remove</button></div>'
+        :cfgApiDirBadge(a.dir))
+      +'</div>';
+  }).join(''):'<div style="padding:16px;font-size:12.5px;color:var(--gray)">No APIs added yet.</div>');
+  const addApiForm=editing
+    ?'<div style="display:flex;gap:8px;padding:14px 16px;align-items:center;flex-wrap:wrap">'
+      +'<input class="ep-form-input" id="cfg-newapi-name" placeholder="API name, e.g. API_PRODUCT_SRV" style="flex:1;min-width:220px">'
+      +'<select class="ep-form-select" id="cfg-newapi-dir" style="width:auto"><option value="r">read</option><option value="rw">read + write</option></select>'
+      +'<button type="button" class="btn btn-secondary btn-sm" onclick="addCfgApiRow(\''+s.id+'\')">+ Add API</button>'
+      +'</div>'
+    :'';
+  const removeSection=editing?'':'<div style="margin-top:22px"><button type="button" class="ep-cancel-btn" style="color:#dc2626;border-color:#fca5a5" onclick="confirmRemoveCfgSystem(\''+s.id+'\')">Remove system</button></div>';
+  return '<div class="ai-exec-page">'
+    +cfgBackBtn('cfg-systems','Systems')
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap"><div>'+heading+'</div>'+actionBtns+'</div>'
+    +'<div class="review-title" style="margin-bottom:12px">Connection</div>'
+    +connectionBlock
+    +'<div class="review-title" style="margin-bottom:12px">Available APIs'+(editing?'':' &middot; released')+'</div>'
+    +'<div class="ep-form-card" style="padding:0">'+apiRows+addApiForm+'</div>'
+    +removeSection
+    +'</div>';
+}
+function cancelCfgSystemAdd(){navigatePage('cfg-systems');}
+function submitCfgSystemAdd(){
+  const name=document.getElementById('cfg-sys-add-name');
+  if(!name||!name.value.trim()){alert('Please enter a system name.');name&&name.focus();return;}
+  const type=(document.getElementById('cfg-sys-add-type').value||'').trim()||'Custom';
+  const method=(document.getElementById('cfg-sys-add-method').value||'').trim()||'REST';
+  const endpoint=(document.getElementById('cfg-sys-add-endpoint').value||'').trim()||'https://';
+  const auth=(document.getElementById('cfg-sys-add-auth').value||'').trim()||'API Key';
+  const id=cfgSlug(name.value.trim());
+  cfgSystems.push({id:id,name:name.value.trim(),type:type,method:method,endpoint:endpoint,auth:auth,apis:0,lastTested:'Never',status:'Disconnected',apiList:[]});
+  selectedCfgSystemId=id;cfgSystemEditing=false;
+  navigatePage('cfg-system-detail');
+}
+function buildCfgSystemAddHTML(){
+  return '<div class="ai-exec-page">'
+    +cfgBackBtn('cfg-systems','Systems')
+    +'<div style="margin-bottom:20px"><p style="font-size:17px;font-weight:700;margin-bottom:6px">Add Custom System</p><p style="font-size:12.5px;color:var(--gray);margin:0;max-width:560px">Connect a new system so its models and APIs become available to Data Foundation and Context &amp; Journey. You can test the connection and add APIs afterward.</p></div>'
+    +'<div class="ep-form-card">'
+    +'<div class="ep-form-title">Connection details</div>'
+    +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">System name <span class="req">*</span></label><input class="ep-form-input" id="cfg-sys-add-name" placeholder="e.g. Workday, NetSuite, Custom HRIS"></div>'
+    +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">Type</label><input class="ep-form-input" id="cfg-sys-add-type" placeholder="e.g. HRIS, ERP, 3rd-party"></div>'
+    +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">Method</label><input class="ep-form-input" id="cfg-sys-add-method" placeholder="e.g. REST, SOAP, Web Network"></div>'
+    +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">Endpoint</label><input class="ep-form-input" id="cfg-sys-add-endpoint" placeholder="https://"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Authentication</label><input class="ep-form-input" id="cfg-sys-add-auth" placeholder="e.g. OAuth 2.0, API Key"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px"><button class="ep-cancel-btn" onclick="cancelCfgSystemAdd()">Cancel</button><button class="ep-save-btn" onclick="submitCfgSystemAdd()">Add system</button></div>'
+    +'</div>';
+}
+
+// -- Configure: Data models (list + detail, fully configurable) --
+function cfgModelSlug(str){
+  const base=String(str).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||'model';
+  let id=base,n=1;
+  while(cfgModels.some(function(m){return m.id===id;})){n++;id=base+'-'+n;}
+  return id;
+}
+function cfgTypeSelect(id,current){
+  const opts=['string','decimal','number','boolean','date','object'];
+  return '<select class="ep-form-select" style="width:auto" id="'+id+'">'+opts.map(function(o){return '<option'+(o===current?' selected':'')+'>'+o+'</option>';}).join('')+'</select>';
+}
+function viewCfgModel(id){selectedCfgModelId=id;cfgModelEditing=false;cfgModelDraft=null;navigatePage('cfg-model-detail');}
+function buildCfgDataFoundationHTML(){
+  cfgModelEditing=false;cfgModelDraft=null;
+  const cards=cfgModels.length
+    ?cfgModels.map(function(m){
+      return '<div class="ai-journey-card" onclick="viewCfgModel(\''+m.id+'\')">'
+        +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+m.name+'</div></div>'
+        +'<div class="ai-journey-desc">'+m.desc+'</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'
+        +'<span class="badge">'+m.mapped.length+' mapped</span>'
+        +'<span class="badge" style="color:var(--orange);border-color:#f1c27a;background:var(--ol)">'+m.enrichment.length+' enrichment</span>'
+        +'<span class="badge">'+m.source+'</span>'
+        +'</div></div>';
+    }).join('')
+    :'<div class="ep-form-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No models yet — define your first one.</div>';
+  return '<div class="ai-exec-page">'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">Data Foundation</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:600px">Your unified objects — mapped from source systems, plus enrichment held in Data Foundation.</p></div>'
+    +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="navigatePage(\'cfg-model-add\')">+ New Model</button>'
+    +'</div>'
+    +'<div class="ai-journey-grid">'+cards+'</div>'
+    +'</div>';
+}
+function cfgMapRow(unified,source,type){
+  return '<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed var(--border)">'
+    +'<div style="flex:1;font-size:13px;font-weight:600;color:var(--navy)">'+unified+'</div>'
+    +'<div style="color:#cbd5e1">&larr;</div>'
+    +'<div style="flex:1;font-family:monospace;font-size:12px;color:var(--gray)">'+source+'</div>'
+    +'<div style="width:60px;text-align:right;font-size:11px;color:#9ca3af">'+type+'</div>'
+    +'</div>';
+}
+function cfgEnrichRow(e){
+  return '<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed rgba(222,121,9,.25)">'
+    +'<div style="flex:1;font-size:13px;font-weight:600;color:var(--orange)">'+e.name+'</div>'
+    +'<div style="color:#f1c27a">&larr;</div>'
+    +'<div style="flex:1;font-size:12px;color:var(--gray)">added in Data Foundation</div>'
+    +'<div style="width:60px;text-align:right;font-size:11px;color:#9ca3af">'+e.type+'</div>'
+    +'</div>';
+}
+function cfgSampleValueFor(m,fieldName,type){
+  const found=(m.sample||[]).find(function(pair){return pair[0]===fieldName;});
+  if(found)return found[1];
+  const t=(type||'string').toLowerCase();
+  if(t==='decimal'||t==='number')return '42.00';
+  if(t==='boolean')return 'true';
+  if(t==='date')return '2026-01-01';
+  if(t==='object')return '{ ... }';
+  return 'Sample value';
+}
+function startCfgModelEdit(){
+  const m=cfgModels.find(function(x){return x.id===selectedCfgModelId;});if(!m)return;
+  cfgModelDraft={
+    name:m.name,source:m.source,desc:m.desc,
+    makerChecker:m.rules.makerChecker,validation:m.rules.validation,
+    mapped:m.mapped.map(function(r){return r.slice();}),
+    enrichment:m.enrichment.map(function(e){return {name:e.name,type:e.type};})
+  };
+  cfgModelEditing=true;
+  navigatePage('cfg-model-detail');
+}
+function cancelCfgModelEdit(){cfgModelEditing=false;cfgModelDraft=null;navigatePage('cfg-model-detail');}
+function syncCfgModelDraftFromDOM(){
+  if(!cfgModelDraft)return;
+  const g=function(id){const el=document.getElementById(id);return el?el.value:undefined;};
+  const name=g('cfg-model-edit-name');if(name!==undefined)cfgModelDraft.name=name;
+  const source=g('cfg-model-edit-source');if(source!==undefined)cfgModelDraft.source=source;
+  const desc=g('cfg-model-edit-desc');if(desc!==undefined)cfgModelDraft.desc=desc;
+  const mc=document.getElementById('cfg-model-edit-mc');if(mc)cfgModelDraft.makerChecker=mc.checked;
+  const val=g('cfg-model-edit-validation');if(val!==undefined)cfgModelDraft.validation=val;
+  cfgModelDraft.mapped=cfgModelDraft.mapped.map(function(row,i){
+    const u=g('cfg-map-u-'+i),s=g('cfg-map-s-'+i),t=g('cfg-map-t-'+i);
+    return [u!==undefined?u:row[0],s!==undefined?s:row[1],t!==undefined?t:row[2]];
+  });
+  cfgModelDraft.enrichment=cfgModelDraft.enrichment.map(function(e,i){
+    const n=g('cfg-enr-n-'+i),t=g('cfg-enr-t-'+i);
+    return {name:n!==undefined?n:e.name,type:t!==undefined?t:e.type};
+  });
+}
+function addCfgMappedRow(){syncCfgModelDraftFromDOM();cfgModelDraft.mapped.push(['','','string']);navigatePage('cfg-model-detail');}
+function removeCfgMappedRow(idx){syncCfgModelDraftFromDOM();cfgModelDraft.mapped.splice(idx,1);navigatePage('cfg-model-detail');}
+function addCfgEnrichRow(){syncCfgModelDraftFromDOM();cfgModelDraft.enrichment.push({name:'',type:'string'});navigatePage('cfg-model-detail');}
+function removeCfgEnrichRow(idx){syncCfgModelDraftFromDOM();cfgModelDraft.enrichment.splice(idx,1);navigatePage('cfg-model-detail');}
+function saveCfgModelEdit(modelId){
+  const m=cfgModels.find(function(x){return x.id===modelId;});if(!m)return;
+  const nameEl=document.getElementById('cfg-model-edit-name');
+  if(!nameEl||!nameEl.value.trim()){alert('Please enter a model name.');nameEl&&nameEl.focus();return;}
+  m.name=nameEl.value.trim();
+  const sourceEl=document.getElementById('cfg-model-edit-source');if(sourceEl)m.source=sourceEl.value.trim()||m.source;
+  const descEl=document.getElementById('cfg-model-edit-desc');if(descEl)m.desc=descEl.value.trim()||m.desc;
+  const mcEl=document.getElementById('cfg-model-edit-mc');m.rules.makerChecker=mcEl?mcEl.checked:m.rules.makerChecker;
+  const valEl=document.getElementById('cfg-model-edit-validation');if(valEl)m.rules.validation=valEl.value.trim();
+  const mapCount=cfgModelDraft?cfgModelDraft.mapped.length:0;
+  const mapped=[];
+  for(let i=0;i<mapCount;i++){
+    const u=document.getElementById('cfg-map-u-'+i),s=document.getElementById('cfg-map-s-'+i),t=document.getElementById('cfg-map-t-'+i);
+    const uname=u?u.value.trim():'';
+    if(uname)mapped.push([uname,s?s.value.trim():'',t?t.value:'string']);
+  }
+  m.mapped=mapped;
+  const enrCount=cfgModelDraft?cfgModelDraft.enrichment.length:0;
+  const enrichment=[];
+  for(let i=0;i<enrCount;i++){
+    const n=document.getElementById('cfg-enr-n-'+i),t=document.getElementById('cfg-enr-t-'+i);
+    const ename=n?n.value.trim():'';
+    if(ename)enrichment.push({name:ename,type:t?t.value:'string'});
+  }
+  m.enrichment=enrichment;
+  cfgModelEditing=false;cfgModelDraft=null;
+  navigatePage('cfg-model-detail');
+}
+function confirmRemoveCfgModel(modelId){
+  const m=cfgModels.find(function(x){return x.id===modelId;});if(!m)return;
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML='<div class="ct-modal" style="width:min(440px,92vw);text-align:center;padding:32px 30px" onclick="event.stopPropagation()">'
+    +'<div style="width:56px;height:56px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;margin:0 auto 16px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:10px">Remove '+m.name+'?</div>'
+    +'<div style="font-size:13px;color:var(--gray);line-height:1.6;margin-bottom:22px">This removes the model from Data Foundation. Journeys or agents that reference it may need remapping.</div>'
+    +'<div style="display:flex;justify-content:center;gap:10px"><button class="ep-cancel-btn" onclick="closeCtModal()">Cancel</button><button class="ep-save-btn" style="background:#dc2626" onclick="removeCfgModelConfirmed(\''+m.id+'\')">Remove model</button></div>'
+    +'</div>';
+  overlay.style.display='flex';
+}
+function removeCfgModelConfirmed(modelId){
+  const idx=cfgModels.findIndex(function(x){return x.id===modelId;});
+  if(idx>-1)cfgModels.splice(idx,1);
+  closeCtModal();
+  selectedCfgModelId=null;
+  navigatePage('cfg-data-foundation');
+}
+function testCfgModel(modelId,btnEl){
+  const m=cfgModels.find(function(x){return x.id===modelId;});if(!m)return;
+  if(btnEl){
+    btnEl.disabled=true;
+    btnEl.innerHTML='<span style="display:inline-flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin .8s linear infinite;opacity:.9"></span>Fetching&hellip;</span>';
+  }
+  setTimeout(function(){
+    cfgModelTested[modelId]=true;
+    navigatePage('cfg-model-detail');
+  },900);
+}
+function cancelCfgModelAdd(){navigatePage('cfg-data-foundation');}
+function submitCfgModelAdd(){
+  const name=document.getElementById('cfg-model-add-name');
+  if(!name||!name.value.trim()){alert('Please enter a model name.');name&&name.focus();return;}
+  const source=(document.getElementById('cfg-model-add-source').value||'').trim()||'Custom';
+  const desc=(document.getElementById('cfg-model-add-desc').value||'').trim()||'Unified object defined in Data Foundation.';
+  const id=cfgModelSlug(name.value.trim());
+  cfgModels.push({id:id,name:name.value.trim(),source:source,desc:desc,mapped:[],enrichment:[],rules:{makerChecker:false,validation:''},sample:[]});
+  selectedCfgModelId=id;cfgModelEditing=false;cfgModelDraft=null;
+  navigatePage('cfg-model-detail');
+}
+function buildCfgModelAddHTML(){
+  return '<div class="ai-exec-page">'
+    +cfgBackBtn('cfg-data-foundation','Data Foundation')
+    +'<div style="margin-bottom:20px"><p style="font-size:17px;font-weight:700;margin-bottom:6px">New Model</p><p style="font-size:12.5px;color:var(--gray);margin:0;max-width:560px">Define a new unified object. You can add field mappings and enrichment fields afterward, from its detail page.</p></div>'
+    +'<div class="ep-form-card">'
+    +'<div class="ep-form-title">Model details</div>'
+    +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">Model name <span class="req">*</span></label><input class="ep-form-input" id="cfg-model-add-name" placeholder="e.g. Purchase Order, Employee, Invoice"></div>'
+    +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">Source system(s)</label><input class="ep-form-input" id="cfg-model-add-source" placeholder="e.g. SAP, SAP + Infor"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Description</label><input class="ep-form-input" id="cfg-model-add-desc" placeholder="What this object represents"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px"><button class="ep-cancel-btn" onclick="cancelCfgModelAdd()">Cancel</button><button class="ep-save-btn" onclick="submitCfgModelAdd()">Create model</button></div>'
+    +'</div>';
+}
+function buildCfgModelDetailHTML(){
+  const m=cfgModels.find(function(x){return x.id===selectedCfgModelId;})||cfgModels[0];
+  const editing=cfgModelEditing;
+  const dm=editing&&cfgModelDraft?cfgModelDraft:{name:m.name,source:m.source,desc:m.desc,makerChecker:m.rules.makerChecker,validation:m.rules.validation,mapped:m.mapped,enrichment:m.enrichment};
+  const heading=editing
+    ?'<div class="ep-form-card" style="margin-bottom:18px">'
+      +'<div class="ep-form-title">Model details</div>'
+      +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">Model name</label><input class="ep-form-input" id="cfg-model-edit-name" value="'+attrSafe(dm.name)+'"></div>'
+      +'<div class="ep-form-group" style="margin-bottom:14px"><label class="ep-form-label">Source system(s)</label><input class="ep-form-input" id="cfg-model-edit-source" value="'+attrSafe(dm.source)+'"></div>'
+      +'<div class="ep-form-group"><label class="ep-form-label">Description</label><input class="ep-form-input" id="cfg-model-edit-desc" value="'+attrSafe(dm.desc)+'"></div>'
+      +'</div>'
+    :'<div style="margin-bottom:24px"><p style="font-size:17px;font-weight:700;margin-bottom:6px">'+m.name+'</p><p style="font-size:12.5px;color:var(--gray);margin:0">Unified object &middot; source: '+m.source+'</p><p style="font-size:12.5px;color:var(--gray);margin-top:4px">'+m.desc+'</p></div>';
+  const actionBtns=editing?'':'<div style="display:flex;gap:10px;flex-shrink:0"><button class="btn btn-secondary btn-sm" onclick="startCfgModelEdit()">Edit</button></div>';
+  const mapSection=editing
+    ?'<div class="ep-form-card" style="margin-bottom:18px">'
+      +'<div class="ep-form-title">Field mapping &middot; from '+attrSafe(dm.source)+'</div>'
+      +dm.mapped.map(function(f,i){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap">'
+          +'<input class="ep-form-input" style="flex:1;min-width:140px" id="cfg-map-u-'+i+'" value="'+attrSafe(f[0])+'" placeholder="Unified field">'
+          +'<input class="ep-form-input" style="flex:1;min-width:140px;font-family:monospace" id="cfg-map-s-'+i+'" value="'+attrSafe(f[1])+'" placeholder="Source field">'
+          +cfgTypeSelect('cfg-map-t-'+i,f[2])
+          +'<button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgMappedRow('+i+')">Remove</button>'
+          +'</div>';
+      }).join('')
+      +'<button type="button" class="btn btn-secondary btn-sm" style="margin-top:14px" onclick="addCfgMappedRow()">+ Add mapped field</button>'
+      +'</div>'
+    :'<div class="ep-form-card" style="margin-bottom:18px">'
+      +'<div class="ep-form-title">Field mapping &middot; from '+m.source+'</div>'
+      +(m.mapped.length?m.mapped.map(function(f){return cfgMapRow(f[0],f[1],f[2]);}).join(''):'<div style="padding:12px 0;font-size:12.5px;color:var(--gray)">No fields mapped yet.</div>')
+      +'</div>';
+  const enrichSection=editing
+    ?'<div class="ep-form-card" style="margin-bottom:18px;border-color:#f1c27a">'
+      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(222,121,9,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
+      +dm.enrichment.map(function(e,i){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed rgba(222,121,9,.25);flex-wrap:wrap">'
+          +'<input class="ep-form-input" style="flex:1;min-width:160px" id="cfg-enr-n-'+i+'" value="'+attrSafe(e.name)+'" placeholder="Enrichment field name">'
+          +cfgTypeSelect('cfg-enr-t-'+i,e.type)
+          +'<button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgEnrichRow('+i+')">Remove</button>'
+          +'</div>';
+      }).join('')
+      +'<button type="button" class="btn btn-secondary btn-sm" style="margin-top:14px;border:1px dashed #f1c27a;color:var(--orange);background:transparent" onclick="addCfgEnrichRow()">+ Add enrichment field</button>'
+      +'</div>'
+    :'<div class="ep-form-card" style="margin-bottom:18px;border-color:#f1c27a">'
+      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(222,121,9,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
+      +(m.enrichment.length?m.enrichment.map(function(e){return cfgEnrichRow(e);}).join(''):'<div style="padding:12px 0;font-size:12.5px;color:var(--gray)">No enrichment fields yet.</div>')
+      +'</div>';
+  const rulesSection=editing
+    ?'<div class="ep-form-card" style="margin-bottom:18px">'
+      +'<div class="ep-form-title">Rules</div>'
+      +'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">'
+      +'<div style="display:flex;align-items:center;gap:10px"><label class="cs-toggle"><input type="checkbox" id="cfg-model-edit-mc"'+(dm.makerChecker?' checked':'')+'><span class="cs-toggle-slider"></span></label><span style="font-size:13px;color:var(--navy)">Maker-checker &middot; AI drafts, human approves</span></div>'
+      +'<div class="ep-form-group" style="flex:1;min-width:260px"><label class="ep-form-label">Validation rule</label><input class="ep-form-input" id="cfg-model-edit-validation" value="'+attrSafe(dm.validation)+'" placeholder="e.g. Base price must be greater than zero"></div>'
+      +'</div></div>'
+    :'<div class="ep-form-card" style="margin-bottom:18px">'
+      +'<div class="ep-form-title">Rules</div>'
+      +'<div style="display:flex;gap:14px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:220px"><div style="font-size:11px;color:var(--gray);margin-bottom:5px">Maker-checker</div><div style="font-size:13px;font-weight:600;color:'+(m.rules.makerChecker?'#16a34a':'#6b7280')+'">'+(m.rules.makerChecker?'On · AI drafts, human approves':'Off · no review required')+'</div></div>'
+      +'<div style="flex:1;min-width:220px"><div style="font-size:11px;color:var(--gray);margin-bottom:5px">Validation</div><div style="font-size:13px;font-weight:600;color:var(--navy)">'+(m.rules.validation||'&mdash;')+'</div></div>'
+      +'</div></div>';
+  const allFields=m.mapped.map(function(f){return{name:f[0],type:f[2]};}).concat(m.enrichment);
+  const sample=cfgModelTested[m.id]
+    ?(allFields.length
+      ?'<div class="review-section" style="border-color:#93c5fd;background:#eff6ff;margin-top:14px">'
+        +'<div class="review-title" style="color:#1d4ed8">Live sample &middot; fetched from '+m.source+' just now</div>'
+        +'<div class="review-grid" style="grid-template-columns:1fr">'
+        +allFields.map(function(f){return aiDrawerRow(f.name,cfgSampleValueFor(m,f.name,f.type));}).join('')
+        +'</div>'
+        +'<div style="font-size:11px;color:#1d4ed8;margin-top:10px;display:flex;align-items:center;gap:7px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Fetched live &middot; not stored, 0 records kept after this view</div>'
+        +'</div>'
+      :'<div class="review-section" style="margin-top:14px"><div style="font-size:12.5px;color:var(--gray)">No fields mapped yet &mdash; add a field mapping above, then test again.</div></div>')
+    :'';
+  const removeSection=editing?'':'<div style="margin-top:22px"><button type="button" class="ep-cancel-btn" style="color:#dc2626;border-color:#fca5a5" onclick="confirmRemoveCfgModel(\''+m.id+'\')">Remove model</button></div>';
+  const saveCancelBar=editing?'<div style="display:flex;gap:10px;margin-bottom:18px"><button class="ep-cancel-btn" onclick="cancelCfgModelEdit()">Cancel</button><button class="ep-save-btn" onclick="saveCfgModelEdit(\''+m.id+'\')">Save changes</button></div>':'';
+  return '<div class="ai-exec-page">'
+    +cfgBackBtn('cfg-data-foundation','Data Foundation')
+    +(editing
+      ?heading+saveCancelBar
+      :'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px"><div style="flex:1;min-width:0">'+heading+'</div>'+actionBtns+'</div>')
+    +mapSection
+    +enrichSection
+    +rulesSection
+    +'<div class="ep-form-card">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">'
+    +'<div><div style="font-size:13.5px;font-weight:700;color:var(--navy)">Fetch a sample record</div><div style="font-size:12px;color:var(--gray);margin-top:3px;max-width:480px">Pulls one live record through the mapping above &mdash; to prove the wiring, without storing anything.</div></div>'
+    +(editing?'':'<button class="btn btn-primary btn-sm" onclick="testCfgModel(\''+m.id+'\',this)">Run test</button>')
+    +'</div>'
+    +sample
+    +'</div>'
+    +removeSection
+    +'</div>';
+}
+
+// -- Configure: Context & Journey (list + detail + agent/governance drawer) --
+function viewCfgJourney(id){selectedCfgJourneyId=id;navigatePage('cfg-journey-detail');}
+function cfgJourneyStatusPill(status){
+  if(status==='Active')return '<span class="status-pill active">Active</span>';
+  if(status==='Draft')return '<span class="status-pill draft">Draft</span>';
+  return '';
+}
+function buildCfgContextJourneyHTML(){
+  const cards=cfgJourneys.map(function(j){
+    return '<div class="ai-journey-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:24px" onclick="viewCfgJourney(\''+j.id+'\')">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgJourneyStatusPill(j.status)+'</div>'
+      +'<div class="ai-journey-desc" style="white-space:normal;overflow:visible;text-overflow:clip;max-width:640px">'+j.desc+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
+      +'</div>'
+      +'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>'
+      +'</div>';
+  }).join('');
+  return '<div class="ai-exec-page">'
+    +cfgPageHead('Context & Journey','Pick a predefined business journey to see its steps and assign the agent and governance that runs each one.')
+    +'<div style="display:flex;flex-direction:column;gap:16px">'+cards+'</div>'
+    +'</div>';
+}
+function cfgStepTypeTag(type){
+  if(type==='eng')return '<span class="badge" style="color:var(--gray)">Engine</span>';
+  if(type==='rule')return '<span class="badge" style="color:var(--orange);border-color:#f1c27a;background:var(--ol)">'+'Rule</span>';
+  return '<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source</span>';
+}
+function buildCfgJourneyDetailHTML(){
+  const j=cfgJourneys.find(function(x){return x.id===selectedCfgJourneyId;})||cfgJourneys[0];
+  const timeline=j.steps.map(function(st,i){
+    const key=j.id+'__'+i;
+    const assign=cfgStepAssignments[key];
+    const isHuman=st.type==='rule';
+    const assignLabel=isHuman?'Human approval required':(assign?'Agent: '+assign.agent:'No agent assigned yet');
+    return '<div class="ai-timeline-item">'
+      +'<div class="ai-timeline-dot">'+(i+1)+'</div>'
+      +'<div class="ai-timeline-card" onclick="openCfgStepDrawer(\''+j.id+'\','+i+')">'
+      +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+st.name+'</span></div>'
+      +'<div class="ai-timeline-card-desc">'+st.src+'</div>'
+      +'<div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+'<span class="badge" style="margin-left:6px">'+assignLabel+'</span></div>'
+      +'</div></div>';
+  }).join('');
+  return '<div class="ai-exec-page ai-journey-detail-page">'
+    +cfgBackBtn('cfg-context-journey','Context & Journey')
+    +'<div style="margin-bottom:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><p style="font-size:17px;font-weight:700;margin:0">'+j.name+'</p>'+cfgJourneyStatusPill(j.status)+'</div>'
+    +'<p style="font-size:12.5px;color:var(--gray);margin:-14px 0 24px;max-width:680px;line-height:1.6">'+j.desc+'</p>'
+    +'<div class="review-title" style="margin-bottom:14px">Flow &middot; runs top to bottom &middot; click a step to assign an agent</div>'
+    +'<div class="ai-timeline">'+timeline+'</div>'
+    +'<button class="btn btn-secondary btn-sm" style="margin-top:16px;margin-left:44px;border-style:dashed">+ Add step</button>'
+    +'</div>';
+}
+function openCfgStepDrawer(journeyId,idx){
+  cfgDrawerJourneyId=journeyId;cfgDrawerStepIdx=idx;
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML=renderCfgStepDrawer();
+  overlay.style.display='flex';
+}
+function closeCfgStepDrawer(){
+  cfgDrawerJourneyId=null;cfgDrawerStepIdx=-1;
+  const overlay=document.getElementById('ct-modal-overlay');if(overlay){overlay.style.display='none';overlay.innerHTML='';}
+}
+function renderCfgStepDrawer(){
+  const j=cfgJourneys.find(function(x){return x.id===cfgDrawerJourneyId;});if(!j)return '';
+  const st=j.steps[cfgDrawerStepIdx];if(!st)return '';
+  const key=j.id+'__'+cfgDrawerStepIdx;
+  const assign=cfgStepAssignments[key]||{};
+  const isHuman=st.type==='rule';
+  const header='<div class="ct-modal-hdr"><span class="ct-modal-title">'+st.name+'</span><button class="ct-modal-close" onclick="closeCfgStepDrawer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
+  const body='<div class="review-section"><div class="review-title">Step Source</div><p style="font-size:12.5px;color:var(--navy);line-height:1.6">'+st.src+'</p></div>'
+    +(isHuman
+      ?'<div class="review-section" style="border-color:#93c5fd;background:#eff6ff"><div class="review-title" style="color:#1d4ed8">Human approval required</div><p style="font-size:12.5px;color:#1d4ed8;line-height:1.6">This step is governed by a rule and routes to a human for sign-off before the journey continues.</p></div>'
+      :'<div class="review-section">'
+        +'<div class="review-title">Assign agent &amp; governance</div>'
+        +'<div class="ep-form-group" style="margin-bottom:12px"><label class="ep-form-label">Agent</label><select class="ep-form-select" id="cfg-step-agent-sel">'
+        +'<option value="">Unassigned</option>'
+        +cfgAgents.map(function(a){return '<option value="'+a.name+'"'+(assign.agent===a.name?' selected':'')+'>'+a.name+'</option>';}).join('')
+        +'</select></div>'
+        +'<div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin-bottom:14px">Governance: the assigned agent reads this step\'s allowed actions and failure handling from its governance file before it can act.</div>'
+        +'<button class="btn btn-primary btn-sm" onclick="saveCfgStepAssignment(\''+j.id+'\','+cfgDrawerStepIdx+')">Save assignment</button>'
+        +'</div>');
+  return '<div class="ct-modal" style="width:min(600px,92vw)" onclick="event.stopPropagation()">'+header+body+'</div>';
+}
+function saveCfgStepAssignment(journeyId,idx){
+  const sel=document.getElementById('cfg-step-agent-sel');
+  const agent=sel?sel.value:'';
+  const key=journeyId+'__'+idx;
+  if(agent)cfgStepAssignments[key]={agent:agent,governance:'Default governance'};
+  else delete cfgStepAssignments[key];
+  closeCfgStepDrawer();
+  if(page==='cfg-journey-detail')navigatePage('cfg-journey-detail');
+}
+
+// -- Configure: Agents --
+function cfgEscapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function cfgAgentSlug(name){return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');}
+function viewCfgAgentSkill(idx){
+  cfgAgentSkillModalIdx=idx;
+  cfgAgentSkillEditing=false;
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML=renderCfgAgentSkillModal();
+  overlay.style.display='flex';
+}
+function closeCfgAgentSkillModal(){
+  cfgAgentSkillModalIdx=-1;cfgAgentSkillEditing=false;
+  const overlay=document.getElementById('ct-modal-overlay');if(overlay){overlay.style.display='none';overlay.innerHTML='';}
+}
+function refreshCfgAgentSkillModal(){
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML=renderCfgAgentSkillModal();
+}
+function startCfgAgentSkillEdit(){cfgAgentSkillEditing=true;refreshCfgAgentSkillModal();}
+function cancelCfgAgentSkillEdit(){cfgAgentSkillEditing=false;refreshCfgAgentSkillModal();}
+function saveCfgAgentSkillEdit(){
+  const a=cfgAgents[cfgAgentSkillModalIdx];if(!a)return;
+  const ta=document.getElementById('cfg-agent-skill-edit');
+  if(ta)a.skillMd=ta.value;
+  cfgAgentSkillEditing=false;
+  refreshCfgAgentSkillModal();
+}
+function resetCfgAgentSkillToOriginal(){
+  const idx=cfgAgentSkillModalIdx;const a=cfgAgents[idx];if(!a)return;
+  a.skillMd=cfgAgentsOriginalSkill[idx];
+  cfgAgentSkillEditing=false;
+  refreshCfgAgentSkillModal();
+}
+function renderCfgAgentSkillModal(){
+  const idx=cfgAgentSkillModalIdx;
+  const a=cfgAgents[idx];if(!a)return '';
+  const filename=cfgAgentSlug(a.name)+'/skill.md';
+  const modified=a.skillMd!==cfgAgentsOriginalSkill[idx];
+  const header='<div class="ct-modal-hdr"><span class="ct-modal-title" style="font-family:monospace;font-size:12.5px;display:flex;align-items:center;gap:8px">'+filename
+    +(modified?'<span class="badge" style="color:var(--orange);border-color:#f1c27a;background:var(--ol);font-family:var(--body)">modified</span>':'')
+    +'</span><button class="ct-modal-close" onclick="closeCfgAgentSkillModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
+  const content=cfgAgentSkillEditing
+    ?'<textarea id="cfg-agent-skill-edit" style="width:100%;min-height:360px;font-family:monospace;font-size:12px;line-height:1.7;color:var(--navy);background:var(--light);border:1px solid var(--border);border-radius:10px;padding:18px 20px;resize:vertical;box-sizing:border-box">'+cfgEscapeHtml(a.skillMd)+'</textarea>'
+    :'<pre style="white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px;line-height:1.7;color:var(--navy);background:var(--light);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:0">'+cfgEscapeHtml(a.skillMd)+'</pre>';
+  const actions=cfgAgentSkillEditing
+    ?'<div style="display:flex;gap:10px;padding-top:14px;flex-shrink:0"><button class="ep-cancel-btn" onclick="cancelCfgAgentSkillEdit()">Cancel</button><button class="ep-save-btn" onclick="saveCfgAgentSkillEdit()">Save changes</button></div>'
+    :'<div style="display:flex;gap:10px;padding-top:14px;flex-shrink:0"><button class="btn btn-primary btn-sm" onclick="startCfgAgentSkillEdit()">Edit</button>'
+      +(modified?'<button class="btn btn-secondary btn-sm" onclick="resetCfgAgentSkillToOriginal()">Reset to original</button>':'')
+      +'</div>';
+  return '<div class="ct-modal" style="width:min(680px,94vw);max-height:82vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">'
+    +header
+    +'<div style="overflow-y:auto;flex:1;min-height:0">'+content+'</div>'
+    +actions
+    +'</div>';
+}
+function buildCfgAgentsHTML(){
+  const cards=cfgAgents.map(function(a,i){
+    return '<div class="ep-form-card" style="margin-bottom:14px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;gap:11px;min-width:0">'
+      +'<div style="width:34px;height:34px;border-radius:9px;background:var(--ol);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg></div>'
+      +'<div style="min-width:0"><div style="font-size:14.5px;font-weight:700;color:var(--navy)">'+a.name+'</div><div style="font-size:10.5px;color:var(--gray);margin-top:2px">'+a.type+' &middot; <span style="color:#16a34a">active</span></div></div>'
+      +'</div>'
+      +'<button type="button" class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="viewCfgAgentSkill('+i+')">skill.md</button>'
+      +'</div>'
+      +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:12px">'+a.desc+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:7px">'
+      +'<span class="badge">Model &middot; '+a.model+'</span>'
+      +'<span class="badge">Used in &middot; '+a.usedIn+'</span>'
+      +'<span class="badge">Guardrail &middot; '+a.guardrail+'</span>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+  return '<div class="ai-exec-page">'
+    +cfgPageHead('Agents','The agents that read, draft and act — always inside your rules.')
+    +cards
+    +'</div>';
+}
+
 const aiEntityOptions=['ADT Netherlands B.V.','ADT Germany GmbH','ADT India Pvt Ltd','ADT Spain S.L.','ADT UK Ltd'];
 const aiCountryOptions=['Netherlands','India','Germany','Spain','United Kingdom'];
 const aiEmploymentTypeOptions=['EOR','PEO','Contractor'];
@@ -3948,13 +4627,14 @@ function aiJourneyCTA(j){
 }
 function startAIJourneyRun(journeyId){
   aiRunFlowJourneyId=journeyId;aiRunFlowStep=-1;aiRunFlowData={};
+  if(journeyId==='payroll-creation'){aiPayrollData={};aiPayrollAnimatedStage=-1;}
   navigatePage('ai-journey-run');
 }
 function aiRunFlowExit(){
   aiRunFlowJourneyId=null;aiRunFlowStep=-1;aiRunFlowData={};
   navigatePage('ai-executive');
 }
-function aiRunFlowRestart(){aiRunFlowStep=-1;aiRunFlowData={};navigatePage('ai-journey-run');}
+function aiRunFlowRestart(){aiRunFlowStep=-1;aiRunFlowData={};if(aiRunFlowJourneyId==='payroll-creation'){aiPayrollData={};aiPayrollAnimatedStage=-1;}navigatePage('ai-journey-run');}
 function parseAIRunPrompt(text){
   const countries=['Netherlands','India','Germany','Spain','United Kingdom','France','Italy'];
   let country='',raw=text||'';
@@ -3965,8 +4645,15 @@ function parseAIRunPrompt(text){
   const name=raw.replace(/\b(create|an|a|for|in|the|please|make|start|new|employee|record|run|payroll|this|month|onboard)\b/gi,'').replace(/[,]/g,' ').replace(/\s+/g,' ').trim();
   return {name:name,country:country,role:role};
 }
+function findExistingEmployeeByQuery(query){
+  const q=String(query||'').toLowerCase().trim();if(!q)return null;
+  const all=directEmpData.concat(globalEmpData);
+  return all.find(function(e){return String(e.empId||'').toLowerCase()===q;})
+    || findExistingEmployee(q);
+}
 function aiRunFlowSubmit(){
   const inp=document.getElementById('ai-run-prompt');if(!inp)return;
+  if(aiRunFlowJourneyId==='payroll-creation'){aiPayrollRunSearch(inp.value);return;}
   const parsed=parseAIRunPrompt(inp.value);
   const emp=findExistingEmployee(parsed.name);
   aiRunFlowData={
@@ -3983,6 +4670,7 @@ function aiRunFlowSubmit(){
 function aiRunFlowRunCurrentStep(){
   const flow=aiRunFlows[aiRunFlowJourneyId];if(!flow)return;
   const step=flow.steps[aiRunFlowStep];if(!step)return;
+  if(aiRunFlowJourneyId==='payroll-creation'&&step.type==='slip')return;
   if(step.type==='ai'||step.type==='auto-skip'){
     setTimeout(function(){
       aiRunFlowStep++;
@@ -3996,6 +4684,11 @@ function aiRunFlowApprove(){
   navigatePage('ai-journey-run');
   aiRunFlowRunCurrentStep();
 }
+function aiPayrollCreateSlip(){
+  const col=aiCtLoaderTarget();
+  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Salary Slip&hellip;</div><div class="cl-sub">Saving payroll document for '+(aiPayrollData.name||'employee')+'</div></div>';
+  setTimeout(function(){aiRunFlowStep=5;navigatePage('ai-journey-run');},1200);
+}
 function aiRunFlowFinish(){
   aiRunFlowStep++;
   navigatePage('ai-journey-run');
@@ -4004,6 +4697,7 @@ function buildAIJourneyRunHTML(){
   const flow=aiRunFlows[aiRunFlowJourneyId];
   const j=aiJourneys.find(x=>x.id===aiRunFlowJourneyId)||aiJourneys[0];
   if(!flow)return '<div class="ai-exec-page">Unknown automation.</div>';
+  if(aiRunFlowJourneyId==='payroll-creation')return buildAIPayrollJourneyHTML(flow,j);
   if(aiRunFlowStep===-1)return buildAIRunPromptHTML(flow,j);
   const cur=aiRunFlowStep;
   const timeline=buildAIRunTimelineHTML(flow,cur);
@@ -4020,6 +4714,179 @@ function buildAIJourneyRunHTML(){
     +'<div class="ai-timeline">'+timeline+'</div>'
     +trailing
     +'</div>';
+}
+function buildAIPayrollJourneyHTML(flow,j){
+  if(aiRunFlowStep===-1)return buildAIPayrollPromptHTML(flow,j);
+  const stage=Math.max(0,Math.min(aiRunFlowStep,5));
+  return '<div class="aicj-wrap">'
+    +buildAIJourneyBarHTML('payroll-creation',stage,'payroll')
+    +'<div id="aicj-inner">'+buildAIPayrollStageHTML(flow,j)+'</div>'
+    +'</div>';
+}
+function buildAIPayrollPromptHTML(flow,j){
+  return '<div class="aicj-wrap">'
+    +buildAIJourneyBarHTML('payroll-creation',0,'payroll')
+    +'<div id="aicj-inner"><div class="ep-page" style="max-width:620px;margin:0 auto">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div class="ep-form-card" style="margin-top:20px;text-align:center;padding:38px 36px">'
+    +'<div class="we-icon">'+j.icon+'</div>'
+    +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">AI Payroll Assistant</div>'
+    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin:0 auto 22px;max-width:440px">The Payroll Creation journey is automated. Enter the employee name or ID, and I\'ll fetch the employee record before capturing attendance and calculating salary.</div>'
+    +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:18px">'
+    +'<button class="btn btn-secondary" onclick="aiPayrollSimulateExisting()">Simulate: Existing Employee</button>'
+    +'<button class="btn btn-secondary" onclick="aiPayrollSimulateById()">Simulate: Employee ID</button>'
+    +'</div>'
+    +'<div class="input-row" style="margin:0 auto 10px;max-width:440px">'
+    +'<input class="input-field" id="ai-run-prompt" placeholder="'+flow.promptPlaceholder+'" onkeydown="if(event.key===\'Enter\')aiRunFlowSubmit()">'
+    +'<button class="icon-btn active" onclick="aiRunFlowSubmit()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
+    +'</div>'
+    +'</div><div id="ai-payroll-result" style="margin-top:20px"></div>'
+    +'</div></div></div>';
+}
+function aiPayrollSimulateExisting(){
+  const inp=document.getElementById('ai-run-prompt');if(inp)inp.value='Run payroll for Anika Shah for June 2026';
+  aiPayrollRunSearch(inp?inp.value:'Anika Shah');
+}
+function aiPayrollSimulateById(){
+  const inp=document.getElementById('ai-run-prompt');if(inp)inp.value='Run payroll for EMP001';
+  aiPayrollRunSearch(inp?inp.value:'EMP001');
+}
+function aiPayrollRunSearch(text){
+  const parsed=parseAIRunPrompt(text);
+  const query=parsed.name||text;
+  const res=document.getElementById('ai-payroll-result');if(!res)return;
+  res.innerHTML='<div class="ep-form-card" style="display:flex;align-items:center;gap:12px"><div class="cl-spinner" style="width:22px;height:22px;border-width:2.5px"></div><span style="font-size:13px;color:var(--navy);font-weight:500">Searching ADT employee records for &ldquo;'+query+'&rdquo;&hellip;</span></div>';
+  setTimeout(function(){
+    const emp=findExistingEmployeeByQuery(query);
+    if(emp)aiPayrollRenderMatchCard(emp,parsed);
+    else res.innerHTML='<div class="ep-form-card"><div style="font-size:11.5px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">No employee found</div><div style="font-size:12px;color:var(--gray)">Please enter a valid employee name or ID to run payroll.</div></div>';
+  },900);
+}
+function aiPayrollMockBase(emp){
+  const s=parseInt(String(aiCtMockSalary(emp)).replace(/,/g,''),10)||52000;
+  return Math.max(38000,s);
+}
+function aiPayrollBuildData(emp,parsed){
+  const base=aiPayrollMockBase(emp);
+  const daysPresent=22,leaveDays=2,overtimeHours=6,totalDays=24;
+  const attendancePay=Math.round(base*(daysPresent/totalDays));
+  const overtime=Math.round((base/176)*overtimeHours*1.25);
+  const gross=attendancePay+overtime;
+  const pf=Math.round(gross*0.12),pt=200,esi=Math.round(gross*0.0075),tax=Math.round(gross*0.05);
+  const deductions=pf+pt+esi+tax;
+  return {employee:emp,name:emp.name,empId:emp.empId,country:emp.country||parsed.country||'India',role:emp.jobTitle||parsed.role||'Employee',dept:emp.dept||'—',email:emp.email||'—',period:'June 2026',slipId:'PAY-'+Math.floor(10000+Math.random()*89999),base:base,daysPresent:daysPresent,leaveDays:leaveDays,overtimeHours:overtimeHours,totalDays:totalDays,gross:gross,pf:pf,pt:pt,esi:esi,tax:tax,deductions:deductions,net:gross-deductions};
+}
+function aiPayrollRenderMatchCard(emp,parsed){
+  const res=document.getElementById('ai-payroll-result');if(!res)return;
+  const initials=emp.name.split(' ').map(function(n){return n[0];}).slice(0,2).join('');
+  res.innerHTML='<div class="ep-form-card">'
+    +'<div style="font-size:11.5px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px">&#10003; Employee fetched from ADT</div>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
+    +'<div class="user-avatar-sm" style="width:40px;height:40px;font-size:14px">'+initials+'</div>'
+    +'<div><div style="font-size:14px;font-weight:700;color:var(--navy)">'+emp.name+'</div><div style="font-size:12px;color:var(--gray)">'+(emp.jobTitle||'—')+' &middot; '+(emp.dept||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employee ID</div><div class="rr-val">'+(emp.empId||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(emp.country||parsed.country||'India')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Email</div><div class="rr-val">'+(emp.email||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Status</div><div class="rr-val">'+(emp.status||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Pay Period</div><div class="rr-val">June 2026</div></div>'
+    +'<div class="review-row"><div class="rr-label">Monthly Salary</div><div class="rr-val">&#8377; '+aiCtMockSalary(emp)+'</div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:18px">'
+    +'<button class="btn btn-primary" onclick="aiPayrollUseEmployee(\''+emp.empId+'\')">Use this employee &amp; continue</button>'
+    +'<button class="btn btn-secondary" onclick="document.getElementById(\'ai-payroll-result\').innerHTML=\'\'">Search again</button>'
+    +'</div></div>';
+}
+function aiPayrollUseEmployee(empId){
+  const emp=directEmpData.concat(globalEmpData).find(function(e){return String(e.empId)===String(empId);});if(!emp)return;
+  const inp=document.getElementById('ai-run-prompt');
+  const parsed=parseAIRunPrompt(inp?inp.value:emp.name);
+  aiPayrollData=aiPayrollBuildData(emp,parsed);
+  aiRunFlowData=Object.assign({},aiPayrollData,{amount:aiPayrollData.net});
+  aiRunFlowStep=1;
+  navigatePage('ai-journey-run');
+  aiRunFlowRunCurrentStep();
+}
+function buildAIPayrollStageHTML(flow,j){
+  const d=aiPayrollData||{};
+  if(aiRunFlowStep===3)return buildAIPayrollApprovalHTML();
+  if(aiRunFlowStep===4)return buildAIPayrollSlipHTML();
+  if(aiRunFlowStep>=5)return buildAIPayrollCompleteHTML();
+  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin:14px 0 2px">Run Payroll</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:18px">For <strong style="color:var(--navy)">'+(d.name||'Employee')+'</strong> &middot; '+(d.period||'June 2026')+'</div>'
+    +'<div class="ai-timeline">'+buildAIRunTimelineHTML(flow,aiRunFlowStep)+'</div>'
+    +'</div>';
+}
+function buildAIPayrollApprovalHTML(){
+  const d=aiPayrollData||{};
+  return buildAIWaitingApprovalHTML({
+    description:'We\'ve notified <strong style="color:var(--navy)">'+aiPayrollManager.name+'</strong> (Finance Approver) to review the calculated payroll for <strong>'+(d.name||'the employee')+'</strong>. Once approved, this journey will automatically continue to salary slip generation.',
+    timelineItems:[
+      {label:'Attendance Captured',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Salary Calculated',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Waiting for '+aiPayrollManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
+      {label:'Salary Slip Template (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
+    ],
+    onApprove:'aiRunFlowApprove()',
+    approveLabel:'Simulate: '+aiPayrollManager.name+' Approves',
+    backLabel:'Back to AI Executive',
+    backAction:'aiRunFlowExit()'
+  });
+}
+function aiMoney(v){return '&#8377; '+Math.round(v||0).toLocaleString('en-IN');}
+function buildAIPayrollSlipHTML(){
+  const d=aiPayrollData||{};const now=aiFormatNow();
+  return '<div style="padding:8px 0 24px">'
+    +'<div class="adt-doc-page">'
+    +'<div class="adt-doc-header">'
+    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Payroll Services</div></div>'
+    +'<div><div class="adt-doc-title">SALARY SLIP</div><div class="adt-doc-meta">Slip No. '+(d.slipId||'—')+'<br>Pay Period '+(d.period||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Employee Details</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(d.name||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Employee ID</div><div class="rr-val">'+(d.empId||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Department</div><div class="rr-val">'+(d.dept||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Job Title</div><div class="rr-val">'+(d.role||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(d.country||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Issue Date</div><div class="rr-val">'+now.date+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Attendance Capture</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Total Payable Days</div><div class="rr-val">'+(d.totalDays||0)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Days Present</div><div class="rr-val">'+(d.daysPresent||0)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Leave Days</div><div class="rr-val">'+(d.leaveDays||0)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Overtime Hours</div><div class="rr-val">'+(d.overtimeHours||0)+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Salary &amp; Compliance</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Gross Salary</div><div class="rr-val">'+aiMoney(d.gross)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Provident Fund</div><div class="rr-val">'+aiMoney(d.pf)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Professional Tax</div><div class="rr-val">'+aiMoney(d.pt)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">ESI</div><div class="rr-val">'+aiMoney(d.esi)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Income Tax</div><div class="rr-val">'+aiMoney(d.tax)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Net Pay</div><div class="rr-val">'+aiMoney(d.net)+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Approval</div><p class="adt-doc-clause">Payroll calculation approved by '+aiPayrollManager.name+' and generated from attendance, payhead, and compliance inputs.</p></div>'
+    +'</div>'
+    +'<div style="text-align:center;margin-top:22px"><button class="btn btn-success" onclick="aiPayrollCreateSlip()">Create Salary Slip</button></div>'
+    +'</div>';
+}
+function buildAIPayrollCompleteHTML(){
+  const d=aiPayrollData||{};
+  return '<div class="ep-page" style="max-width:640px;margin:20px auto 0">'
+    +'<div class="success-card">'
+    +'<div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Salary Slip Created</h2>'
+    +'<p style="font-size:12.5px;color:var(--gray);margin-bottom:22px;max-width:420px;line-height:1.55">The salary slip for '+(d.name||'the employee')+' has been created and saved for '+(d.period||'the selected pay period')+'.</p>'
+    +'<div style="text-align:left;width:100%;max-width:460px">'
+    +'<div class="review-section"><div class="review-title">Employee Details</div><div class="review-grid" style="grid-template-columns:1fr">'+aiDrawerRow('Name',d.name||'—')+aiDrawerRow('Employee ID',d.empId||'—')+aiDrawerRow('Country',d.country||'—')+aiDrawerRow('Job Title',d.role||'—')+'</div></div>'
+    +'<div class="review-section"><div class="review-title">Salary Slip Details</div><div class="review-grid" style="grid-template-columns:1fr">'+aiDrawerRow('Salary Slip ID',d.slipId||'—')+aiDrawerRow('Pay Period',d.period||'—')+aiDrawerRow('Net Pay',aiMoney(d.net))+aiDrawerRow('Status','Created')+'</div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:6px">'
+    +'<button class="btn btn-secondary" onclick="navigatePage(\'payroll\')">View Payroll</button>'
+    +'<button class="btn btn-primary" onclick="aiRunFlowRestart()">Run Another</button>'
+    +'</div></div></div>';
 }
 function buildAIRunPromptHTML(flow,j){
   return '<div class="ep-page" style="max-width:560px;margin:30px auto 0">'
@@ -4108,10 +4975,12 @@ function aiCtJourneyStage(){
 function isAIContractWizardPage(pg){
   return pg==='ai-contract-assistant'||pg==='ai-employee-created'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete';
 }
-function buildAIContractJourneyBarHTML(stage){
-  const events=aiJourneyEvents['contract-creation'];
-  const animateThisRender=stage>aiCtAnimatedStage;
-  if(animateThisRender)aiCtAnimatedStage=stage;
+function buildAIJourneyBarHTML(journeyId,stage,animationKey){
+  const events=aiJourneyEvents[journeyId]||[];
+  const prev=animationKey==='payroll'?aiPayrollAnimatedStage:aiCtAnimatedStage;
+  const animateThisRender=stage>prev;
+  if(animationKey==='payroll'){if(animateThisRender)aiPayrollAnimatedStage=stage;}
+  else if(animateThisRender){aiCtAnimatedStage=stage;}
   return '<div class="aicj-bar">'+events.map(function(e,i){
     const state=i<stage?'done':i===stage?'current':'pending';
     let html='<div class="aicj-dot '+state+'"></div>';
@@ -4123,6 +4992,7 @@ function buildAIContractJourneyBarHTML(stage){
     return html;
   }).join('')+'</div>';
 }
+function buildAIContractJourneyBarHTML(stage){return buildAIJourneyBarHTML('contract-creation',stage,'contract');}
 function aiCtLoaderTarget(){return document.getElementById('aicj-inner')||document.getElementById('adt-content');}
 function parseAIContractPrompt(text){
   const countries=['Netherlands','India','Germany','Spain','United Kingdom','France','Italy'];
@@ -4456,6 +5326,8 @@ function aiSendProposalForApproval(){
   setTimeout(function(){page='ai-proposal-waiting-approval';renderADTPage();},1400);
 }
 function buildAIWaitingApprovalHTML(opts){
+  const backLabel=opts.backLabel||'Back to Contracts';
+  const backAction=opts.backAction||"page='contracts';renderADTPage()";
   return '<div class="ep-page" style="max-width:640px;margin:20px auto 0;text-align:center">'
     +'<div class="ep-form-card" style="padding:40px 32px">'
     +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">'
@@ -4471,7 +5343,7 @@ function buildAIWaitingApprovalHTML(opts){
     }).join('')
     +'</div>'
     +'<div style="display:flex;gap:10px;justify-content:center">'
-    +'<button class="btn btn-secondary" onclick="page=\'contracts\';renderADTPage()">Back to Contracts</button>'
+    +'<button class="btn btn-secondary" onclick="'+backAction+'">'+backLabel+'</button>'
     +'<button class="btn btn-success" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>'
     +'</div>'
     +'</div></div>';

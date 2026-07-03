@@ -5,6 +5,8 @@ let aiContractPrefill=null,aiAssistedFlow=false,aiCtNotFoundOpen=false,aiProposa
 const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
 const aiOpsManager={name:'Priya Nair',role:'Ops Manager',initials:'PN'};
 let aiCtAnimatedStage=-1,aiCtPendingEmpType='',aiCtJourneyEmployee=null;
+const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'};
+let aiPayrollAnimatedStage=-1,aiPayrollData={};
 let selectedAIRunId='RUN-2001';
 const aiAutomationRuns={
   'contract-creation':[
@@ -28,6 +30,13 @@ let openDropdowns=new Set();
 let activeSidebarItem='dashboard';
 const sidebarItems=[
   {id:'dashboard',label:'Dashboard',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'},
+  {dropdown:'Configure',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',children:[
+    {id:'cfg-overview',label:'Overview',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>'},
+    {id:'cfg-systems',label:'Systems',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg>'},
+    {id:'cfg-data-foundation',label:'Data Foundation',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
+    {id:'cfg-context-journey',label:'Context & Journey',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
+    {id:'cfg-agents',label:'Agents',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'}
+  ]},
   {id:'ai-executive',label:'AI Executive',color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
   {dropdown:'Employee',color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',children:[
     {id:'direct',label:'Direct Employee',color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
@@ -90,11 +99,11 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(pg==='cfg-journey-detail')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -234,7 +243,9 @@ function buildSidebar(id,collapsed,activePg){
     d.type='button';
     d.className='sb-item'+(item.id===activePg?' active':'')+(item.id==='ai-executive'?' sb-item-ai':'');
     d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.label+'</span>';
-    d.title=item.label;d.onclick=()=>{activeSidebarItem=item.id;navigatePage(item.id);};el.appendChild(d);
+    d.title=item.label;
+    d.onclick=item.placeholder?()=>{}:()=>{activeSidebarItem=item.id;navigatePage(item.id);};
+    el.appendChild(d);
   });
 }
 const defaultChildIcon='<svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="4"/><path d="M5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg>';
@@ -900,7 +911,7 @@ let ctSelectedId=null,ctTab='basic-details';
 // -- AI EXECUTIVE MODULE --
 const aiJourneys=[
   {id:'contract-creation',name:'Contract Creation Journey',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Inactive',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
-  {id:'payroll-creation',name:'Payroll Creation Journey',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip generation.',modules:['Payroll','Timesheet','Payheads','Finance'],coverage:78,humanSteps:1,aiSteps:4,status:'Inactive',risk:'Medium',updated:'01 Jul 2026, 3:15 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
+  {id:'payroll-creation',name:'Payroll Creation Journey',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
   {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Inactive',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
 ];
 
@@ -919,7 +930,8 @@ const aiJourneyEvents={
     {name:'Attendance Capture',chips:['AI Automated','Timesheet'],source:'AI Timesheet Sync',desc:'AI pulls attendance and timesheet records for the pay period.',validation:'Attendance days are reconciled against leave records.',human:'None — fully automated.',failure:'Missing attendance data raises an exception.',next:'Salary Calculation',fields:['Days Present','Days on Leave','Overtime Hours']},
     {name:'Salary Calculation',chips:['AI Automated','Calculation'],source:'AI Payroll Engine',desc:'AI calculates gross/net salary using payheads, statutory deductions, and country compliance rates.',validation:'The calculation is cross-checked against compliance rate rules.',human:'None — fully automated.',failure:'A rate mismatch raises an exception for finance review.',next:'Approval',fields:['Gross Pay','Deductions','Net Pay']},
     {name:'Approval',chips:['Human Required','Approval Required'],source:'Finance Approver',desc:'Finance reviews the calculated payroll and approves it for disbursement.',validation:'Manual sign-off is recorded.',human:'Required — Finance approval.',failure:'Rejection routes back to Salary Calculation.',next:'Salary Slip',fields:['Approver Name','Approval Timestamp']},
-    {name:'Salary Slip',chips:['AI Automated','Payslip'],source:'AI Payslip Generator',desc:'AI generates and issues the salary slip to the employee once approved.',validation:'Payslip totals match the approved calculation.',human:'None — fully automated.',failure:'A generation failure raises an exception for retry.',next:'Journey Complete — Salary Slip Issued',fields:['Payslip ID','Net Pay','Issue Date']}
+    {name:'Salary Slip Template',chips:['AI Automated','Payslip'],source:'AI Payslip Generator',desc:'AI creates a salary slip template and populates it with employee, attendance, and salary details.',validation:'Payslip totals match the approved calculation.',human:'None — fully automated.',failure:'A generation failure raises an exception for retry.',next:'Salary Slip Created',fields:['Payslip ID','Net Pay','Issue Date']},
+    {name:'Salary Slip Created',chips:['AI Automated','Payroll'],source:'AI Payroll Archive',desc:'AI marks the salary slip as created and stores it against the employee record.',validation:'The generated salary slip is available in payroll documents.',human:'None — fully automated.',failure:'A storage failure raises an exception for retry.',next:'Journey Complete — Salary Slip Created',fields:['Payslip ID','Employee ID','Created Date']}
   ],
   'h2r-lifecycle':[
     {name:'Employee Creation',chips:['AI Automated','Employee'],source:'AI Prompt Parser',desc:'AI creates the employee record from a prompt with name, role, and country.',validation:'A duplicate check is run against existing employee records.',human:'None — AI assisted.',failure:'A duplicate match raises an exception for manual resolution.',next:'Fetch Country Details (Compliance Hub)',fields:['Employee Name','Role','Country','Employment Type']},
@@ -929,6 +941,418 @@ const aiJourneyEvents={
     {name:'Offboarding',chips:['AI Automated','Offboarding'],source:'AI Offboarding Engine',desc:"AI runs the offboarding checklist — access revocation, final settlement calculation, exit compliance checks — when the employee's exit is triggered.",validation:'All offboarding checklist items are marked complete.',human:'None — fully automated.',failure:'A pending final settlement raises an exception for finance.',next:'Journey Complete — Offboarding',fields:['Exit Date','Final Settlement Amount','Access Revocation Status']}
   ]
 };
+
+// -- Configure: Systems (full parity with reference config console) --
+const cfgSystems=[
+  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',
+    apiList:[
+      {name:'API_PRODUCT_SRV · Product',dir:'rw'},
+      {name:'API_BUSINESS_PARTNER · Supplier',dir:'rw'},
+      {name:'API_PURCHASEORDER_PROCESS',dir:'r'},
+      {name:'API_MATERIAL_DOCUMENT · GR',dir:'r'},
+      {name:'API_SUPPLIERINVOICE',dir:'r'}
+    ]},
+  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',
+    apiList:[
+      {name:'SupplierMaster · Vendor',dir:'rw'},
+      {name:'PurchaseOrder · Read',dir:'r'},
+      {name:'GoodsReceipt · Read',dir:'r'}
+    ]},
+  {id:'portal',name:'Vendor Portal',type:'3rd-party',method:'REST',endpoint:'https://vendors.vyoma.local/api/',auth:'OAuth 2.0',apis:12,lastTested:'2 days ago',status:'Connected',
+    apiList:[
+      {name:'VendorInvite · Onboarding',dir:'rw'},
+      {name:'VendorDocuments · Read',dir:'r'}
+    ]}
+];
+
+// -- Configure: Data models (full parity: Material + Vendor, each with mapping/enrichment/rules/test) --
+const cfgModels=[
+  {id:'material',name:'Material',source:'SAP',desc:'Standard fields from SAP, plus enrichment fields held in Data Foundation.',
+    mapped:[['Material ID','Product','string'],['Description','ProductDescription','string'],['Base unit','BaseUnit','string'],['Base price','NetPriceAmount','decimal']],
+    enrichment:[{name:'Site',type:'string'},{name:'Project code',type:'string'},{name:'Compliance',type:'string'},{name:'Preferred vendor',type:'string'},{name:'Lead time',type:'string'}],
+    rules:{makerChecker:true,validation:'Base price must be greater than zero'},
+    sample:[['Material ID','MAT-100482'],['Description','TMT Steel Grade X'],['Base unit','TON'],['Base price','₹52,000 / T'],['Site','Hyderabad Metro'],['Compliance','IS 1786']]},
+  {id:'vendor',name:'Vendor',source:'SAP + Infor',desc:'Supplier master unified across SAP and Infor.',
+    mapped:[['Vendor ID','SupplierID','string'],['Vendor Name','SupplierName','string'],['Country','Country','string'],['Payment Terms','PaymentTerms','string'],['Rating','VendorRating','decimal'],['Bank Details','BankInfo','object']],
+    enrichment:[{name:'Risk Category',type:'string'},{name:'ESG Score',type:'string'},{name:'Preferred Status',type:'string'}],
+    rules:{makerChecker:true,validation:'Vendor rating ≥ 3.0'},
+    sample:[['Vendor ID','VEN-2044'],['Vendor Name','Bharat Steel Traders'],['Country','India'],['Payment Terms','Net 30'],['Rating','4.2'],['Bank Details','HDFC •••• 2210']]}
+];
+let cfgModelTested={};
+let cfgModelEditing=false;
+let cfgModelDraft=null;
+
+// -- Configure: Context & Journey (ADT's real business journeys — same set as AI Executive) --
+const cfgJourneys=[
+  {id:'contract-creation',name:'Contract Creation Journey',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['7 steps','Deal Desk, Contracts'],
+    steps:[
+      {name:'Create Deal & Employee Record',src:'AI Prompt Parser',type:'src'},
+      {name:'Send Proposal',src:'AI Contract Assistant',type:'src'},
+      {name:'Proposal Approval',src:'Deal Manager',type:'rule'},
+      {name:'Send Contract for Signature',src:'AI + Docuseal',type:'src'},
+      {name:'Contract Approval',src:'Ops Manager',type:'rule'},
+      {name:'Run Onboarding',src:'AI Onboarding Engine',type:'src'},
+      {name:'Check Payroll Readiness',src:'AI Payroll Readiness Check',type:'src'}
+    ]},
+  {id:'payroll-creation',name:'Payroll Creation Journey',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',status:'Active',tags:['6 steps','Payroll, Compliance Hub'],
+    steps:[
+      {name:'Parse Prompt (Name, ID, etc.)',src:'AI Prompt Parser',type:'src'},
+      {name:'Capture Attendance',src:'AI Timesheet Sync',type:'src'},
+      {name:'Calculate Salary',src:'AI Payroll Engine',type:'src'},
+      {name:'Payroll Approval',src:'Finance Approver',type:'rule'},
+      {name:'Generate Salary Slip',src:'AI Payslip Generator',type:'src'},
+      {name:'Finalize Salary Slip',src:'AI Payroll Archive',type:'src'}
+    ]},
+  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',status:'Inactive',tags:['5 steps','Compliance Hub, Leave'],
+    steps:[
+      {name:'Create Employee Record',src:'AI Prompt Parser',type:'src'},
+      {name:'Fetch Country Compliance Details',src:'AI Compliance Hub Sync',type:'src'},
+      {name:'Show Leave Policy',src:'AI Leave Policy Engine',type:'src'},
+      {name:'HR Approval (if Required)',src:'HR Manager',type:'rule'},
+      {name:'Run Offboarding',src:'AI Offboarding Engine',type:'src'}
+    ]}
+];
+
+// -- Configure: Agents — one per AI-driven step across Contract Creation / Payroll Creation / H2R Lifecycle --
+const cfgAgents=[
+  {name:'AI Prompt Parser',type:'Transaction agent',desc:"Parses a natural-language prompt to extract the employee's name, ID, and other key details needed to kick off the journey.",model:'Bharat GPT',usedIn:'Contract Creation, Payroll Creation, H2R Lifecycle',guardrail:'Fully automated',
+    skillMd:`# AI Prompt Parser — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Contract Creation Journey, Payroll Creation Journey, H2R Lifecycle Journey
+Guardrail: Fully automated
+
+## Role
+Parses a natural-language prompt to extract the employee's name, ID, and other key details needed to kick off a journey.
+
+## Context: Contract Creation Journey
+Step: Create Deal & Employee Record
+Fields read: Employee Name, Employee ID, Country, Client, Contract Type
+Validation: Employee name and ID are matched or created against existing records.
+On failure: Ambiguous name matches are flagged for manual employee selection.
+
+## Context: Payroll Creation Journey
+Step: Parse Prompt (Name, ID, etc.)
+Fields read: Employee Name, Employee ID, Pay Period
+Validation: Employee identity is resolved against Employee records.
+On failure: An unresolved employee ID raises an exception for manual lookup.
+
+## Context: H2R Lifecycle Journey
+Step: Create Employee Record
+Fields read: Employee Name, Role, Country, Employment Type
+Validation: A duplicate check is run against existing employee records.
+On failure: A duplicate match raises an exception for manual resolution.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Contract Assistant',type:'Transaction agent',desc:'Drafts commercial terms and compliance items, then prepares the proposal for approval.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Human approves next step',
+    skillMd:`# AI Contract Assistant — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Contract Creation Journey
+Guardrail: Human approves next step
+
+## Role
+Drafts commercial terms and compliance items, then prepares the proposal for approval.
+
+## Step
+Send Proposal
+
+## Fields read
+Billing Rate, Pay Rate, Margin %, Compliance Checklist
+
+## Validation
+Commercial terms are validated against country rate rules.
+
+## On failure
+Missing rate data blocks the send and raises an exception.
+
+## Governance
+The next step, Proposal Approval, is owned by the Deal Manager and must be signed off before the journey continues.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI + Docuseal',type:'Transaction agent',desc:'Generates the contract from the approved proposal and sends it for signature via Docuseal.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Human approves next step',
+    skillMd:`# AI + Docuseal — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Contract Creation Journey
+Guardrail: Human approves next step
+
+## Role
+Generates the contract from the approved proposal and sends it for signature via Docuseal.
+
+## Step
+Send Contract for Signature
+
+## Fields read
+Contract Number, Signatory Email, Docuseal Status
+
+## Validation
+Contract fields are auto-filled from the proposal and the signature request is tracked.
+
+## On failure
+A signature bounce or timeout raises an exception for resend.
+
+## Governance
+The next step, Contract Approval, is owned by the Ops Manager and must be signed off before onboarding begins.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Onboarding Engine',type:'Transaction agent',desc:'Runs the onboarding checklist — documents, compliance checks, and system access provisioning.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Fully automated',
+    skillMd:`# AI Onboarding Engine — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Contract Creation Journey
+Guardrail: Fully automated
+
+## Role
+Runs the onboarding checklist — documents, compliance checks, and system access provisioning.
+
+## Step
+Run Onboarding
+
+## Fields read
+Onboarding Checklist, Document Status, Compliance Status
+
+## Validation
+All onboarding checklist items are marked complete.
+
+## On failure
+A missing document flags an exception for HR follow-up.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Payroll Readiness Check',type:'Transaction agent',desc:'Validates that bank details, tax info, and compensation mapping are complete before the next payroll cycle.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Fully automated',
+    skillMd:`# AI Payroll Readiness Check — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Contract Creation Journey
+Guardrail: Fully automated
+
+## Role
+Validates that bank details, tax info, and compensation mapping are complete before the next payroll cycle.
+
+## Step
+Check Payroll Readiness
+
+## Fields read
+Bank Details, Compensation Mapping, Tax Info
+
+## Validation
+Bank details, tax info, and compensation mapping are all present.
+
+## On failure
+Incomplete payroll data blocks readiness and raises an exception.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Timesheet Sync',type:'Transaction agent',desc:'Pulls attendance and timesheet records for the pay period.',model:'Bharat GPT',usedIn:'Payroll Creation Journey',guardrail:'Fully automated',
+    skillMd:`# AI Timesheet Sync — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Payroll Creation Journey
+Guardrail: Fully automated
+
+## Role
+Pulls attendance and timesheet records for the pay period.
+
+## Step
+Capture Attendance
+
+## Fields read
+Days Present, Days on Leave, Overtime Hours
+
+## Validation
+Attendance days are reconciled against leave records.
+
+## On failure
+Missing attendance data raises an exception.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Payroll Engine',type:'Transaction agent',desc:'Calculates gross/net salary using payheads, statutory deductions, and country compliance rates.',model:'Bharat GPT',usedIn:'Payroll Creation Journey',guardrail:'Human approves next step',
+    skillMd:`# AI Payroll Engine — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Payroll Creation Journey
+Guardrail: Human approves next step
+
+## Role
+Calculates gross/net salary using payheads, statutory deductions, and country compliance rates.
+
+## Step
+Calculate Salary
+
+## Fields read
+Gross Pay, Deductions, Net Pay
+
+## Validation
+The calculation is cross-checked against compliance rate rules.
+
+## On failure
+A rate mismatch raises an exception for finance review.
+
+## Governance
+The next step, Payroll Approval, is owned by the Finance Approver and must be signed off before the salary slip is generated.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Payslip Generator',type:'Transaction agent',desc:'Creates a salary slip template and populates it with employee, attendance, and salary details.',model:'Bharat GPT',usedIn:'Payroll Creation Journey',guardrail:'Fully automated',
+    skillMd:`# AI Payslip Generator — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Payroll Creation Journey
+Guardrail: Fully automated
+
+## Role
+Creates a salary slip template and populates it with employee, attendance, and salary details.
+
+## Step
+Generate Salary Slip
+
+## Fields read
+Payslip ID, Net Pay, Issue Date
+
+## Validation
+Payslip totals match the approved calculation.
+
+## On failure
+A generation failure raises an exception for retry.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Payroll Archive',type:'Transaction agent',desc:'Finalizes the salary slip and stores it against the employee record.',model:'Bharat GPT',usedIn:'Payroll Creation Journey',guardrail:'Fully automated',
+    skillMd:`# AI Payroll Archive — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Payroll Creation Journey
+Guardrail: Fully automated
+
+## Role
+Finalizes the salary slip and stores it against the employee record.
+
+## Step
+Finalize Salary Slip
+
+## Fields read
+Payslip ID, Employee ID, Created Date
+
+## Validation
+The generated salary slip is available in payroll documents.
+
+## On failure
+A storage failure raises an exception for retry.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Compliance Hub Sync',type:'Transaction agent',desc:"Fetches statutory and compliance requirements for the employee's country from the Compliance Hub.",model:'Bharat GPT',usedIn:'H2R Lifecycle Journey',guardrail:'Fully automated',
+    skillMd:`# AI Compliance Hub Sync — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: H2R Lifecycle Journey
+Guardrail: Fully automated
+
+## Role
+Fetches statutory and compliance requirements for the employee's country from the Compliance Hub.
+
+## Step
+Fetch Country Compliance Details
+
+## Fields read
+Country Rate Rules, Statutory Requirements, Tax Bands
+
+## Validation
+Country rate rules and statutory requirements are retrieved.
+
+## On failure
+A missing country config raises an exception for the compliance team.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Leave Policy Engine',type:'Transaction agent',desc:"Matches and displays the applicable leave policy for the employee's country and entity.",model:'Bharat GPT',usedIn:'H2R Lifecycle Journey',guardrail:'Human approves on deviation',
+    skillMd:`# AI Leave Policy Engine — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: H2R Lifecycle Journey
+Guardrail: Human approves on deviation
+
+## Role
+Matches and displays the applicable leave policy for the employee's country and entity.
+
+## Step
+Show Leave Policy
+
+## Fields read
+Leave Policy Name, Leave Types, Annual Entitlement
+
+## Validation
+The leave policy is matched to the employee's country and entity.
+
+## On failure
+No matching policy raises an exception for HR to configure one.
+
+## Governance
+If the matched policy deviates from standard, the next step, HR Approval (if Required), is owned by the HR Manager and must sign off before the journey continues. Otherwise this step is auto-skipped.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  {name:'AI Offboarding Engine',type:'Transaction agent',desc:'Runs the offboarding checklist — access revocation, final settlement, and exit compliance checks.',model:'Bharat GPT',usedIn:'H2R Lifecycle Journey',guardrail:'Fully automated',
+    skillMd:`# AI Offboarding Engine — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: H2R Lifecycle Journey
+Guardrail: Fully automated
+
+## Role
+Runs the offboarding checklist — access revocation, final settlement, and exit compliance checks.
+
+## Step
+Run Offboarding
+
+## Fields read
+Exit Date, Final Settlement Amount, Access Revocation Status
+
+## Validation
+All offboarding checklist items are marked complete.
+
+## On failure
+A pending final settlement raises an exception for finance.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`}
+];
+const cfgAgentsOriginalSkill=cfgAgents.map(function(a){return a.skillMd;});
+let cfgAgentSkillModalIdx=-1;
+let cfgAgentSkillEditing=false;
+
+// -- Configure: Overview recent activity (copied from reference console) --
+const cfgRecentActivity=[
+  {title:'Material model updated',sub:'2 enrichment fields added',when:'12 min ago'},
+  {title:'Procure-to-Pay journey activated',sub:'6 steps · live on sandbox',when:'1 hr ago'},
+  {title:'SAP S/4HANA connection tested',sub:'142 released APIs available',when:'3 hrs ago'},
+  {title:'Infor ERP connected',sub:'via Infor Web Network',when:'yesterday'}
+];
+
+// -- Configure: shared UI state --
+let selectedCfgSystemId=null,selectedCfgModelId=null,selectedCfgJourneyId=null;
+let cfgSystemEditing=false;
+let cfgSystemDraft=null;
+let cfgStepAssignments={};
+let cfgDrawerJourneyId=null,cfgDrawerStepIdx=-1;
+
 // -- AI Executive: live run flows for activated journeys (Create Contract / Create Employee / Run Payroll) --
 let aiRunFlowJourneyId=null,aiRunFlowStep=-1,aiRunFlowData={};
 const aiRunFlows={
@@ -949,12 +1373,12 @@ const aiRunFlows={
     entryDesc:'Tell me who you\'re running payroll for — I\'ll gather their details, capture attendance, calculate salary, and generate the slip automatically.',
     promptPlaceholder:'e.g. Run payroll for Anika Shah for this month',
     steps:[
-      {label:'Gathering Employee Details',running:'Fetching employee details…',type:'ai'},
+      {label:'Employee Fetch',running:'Fetching employee details…',type:'fetch'},
       {label:'Attendance Capture',running:'Capturing attendance records…',type:'ai'},
       {label:'Salary Calculation',running:'Calculating gross and net salary…',type:'ai'},
       {label:'Approval',running:'Waiting for Finance approval…',type:'manual'},
-      {label:'Salary Slip',running:'Generating salary slip…',type:'ai'},
-      {label:'Payment',running:'Processing payment…',type:'payment'}
+      {label:'Salary Slip Template',running:'Generating salary slip template…',type:'slip'},
+      {label:'Salary Slip Created',running:'Creating salary slip…',type:'complete'}
     ]
   }
 };
