@@ -1277,22 +1277,18 @@ function aiCaptureCurrentStep(){
   if(!aiAssistedFlow)return;
   const gv=function(id){const el=document.getElementById(id);return el?el.value:undefined;};
   const merge=function(k,v){if(v!==undefined&&v!=='')aiWizardFormData[k]=v;};
-  if(eorStep===0){
-    merge('fname',gv('peo-fname'));merge('lname',gv('peo-lname'));merge('gender',gv('peo-gender'));
-    merge('email',gv('peo-email'));merge('mobile',gv('peo-mobile'));merge('dob',gv('peo-dob'));
-    merge('address',gv('peo-address'));merge('country',gv('peo-work-country'));
-    const wpEl=document.querySelector('.peo-wp-radio.selected span');
-    if(wpEl)aiWizardFormData.workPermit=wpEl.textContent.indexOf('has work permit')!==-1;
-  }else if(eorStep===1){
-    merge('jobTitle',gv('peo-jobtitle'));merge('skill',gv('peo-skill'));merge('jobDesc',gv('peo-jobdesc'));
-    merge('fromDate',gv('peo-from'));merge('toDate',gv('peo-to'));merge('hours',gv('peo-hours'));merge('pay',gv('peo-pay'));
-    const termEl=document.querySelector('.peo-radio-term.selected span');
-    if(termEl)aiWizardFormData.employmentTerm=termEl.textContent;
-    const typeEl=document.querySelector('.peo-radio-emptype.selected span');
-    if(typeEl)aiWizardFormData.employeeType=typeEl.textContent;
-  }else if(eorStep===2){
-    merge('probation',gv('peo-prob'));merge('notice',gv('peo-notice'));
-  }
+  merge('fname',gv('peo-fname'));merge('lname',gv('peo-lname'));merge('gender',gv('peo-gender'));
+  merge('email',gv('peo-email'));merge('mobile',gv('peo-mobile'));merge('dob',gv('peo-dob'));
+  merge('address',gv('peo-address'));merge('country',gv('peo-work-country'));
+  const wpEl=document.querySelector('.peo-wp-radio.selected span');
+  if(wpEl)aiWizardFormData.workPermit=wpEl.textContent.indexOf('has work permit')!==-1;
+  merge('jobTitle',gv('peo-jobtitle'));merge('skill',gv('peo-skill'));merge('jobDesc',gv('peo-jobdesc'));
+  merge('fromDate',gv('peo-from'));merge('toDate',gv('peo-to'));merge('hours',gv('peo-hours'));merge('pay',gv('peo-pay'));
+  const termEl=document.querySelector('.peo-radio-term.selected span');
+  if(termEl)aiWizardFormData.employmentTerm=termEl.textContent;
+  const typeEl=document.querySelector('.peo-radio-emptype.selected span');
+  if(typeEl)aiWizardFormData.employeeType=typeEl.textContent;
+  merge('probation',gv('peo-prob'));merge('notice',gv('peo-notice'));
 }
 function eorNext(){aiCaptureCurrentStep();eorStep=Math.min(2,eorStep+1);if(aiAssistedFlow)aiCtPushStepMessage(eorStep);page='contract-eor';renderADTPage();}
 function eorBack(){aiCaptureCurrentStep();if(eorStep===0){eorStep=0;page='contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
@@ -1330,10 +1326,12 @@ function buildContractFormHTML(type,step,splitMode){
   const countryOpts='<option value="">Select Country</option>'+countries.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
   const countryOptsSel=function(sel){return '<option value="">Select Country</option>'+countries.map(function(c){return '<option value="'+c+'"'+(c===sel?' selected':'')+'>'+c+'</option>';}).join('');};
   const prefill=aiAssistedFlow?Object.assign({},aiContractPrefill||{},aiWizardFormData||{}):{};
+  const isAssistedReview=aiAssistedFlow&&splitMode;
+  const includeStep=function(s){return isAssistedReview||step===s;};
   const steps=['Basic Details','Job Details','Other Details'];
 
   // Stepper bar
-  const stepper='<div style="display:flex;align-items:center;gap:0;margin-bottom:28px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;padding:20px 30px">'
+  const stepper=isAssistedReview?'':'<div style="display:flex;align-items:center;gap:0;margin-bottom:28px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;padding:20px 30px">'
     +steps.map(function(s,i){
       const active=i===step;
       const done=i<step;
@@ -1354,8 +1352,8 @@ function buildContractFormHTML(type,step,splitMode){
 
   let content='';
 
-  if(step===0){
-    content=
+  if(includeStep(0)){
+    content+=
       // Eligibility card
       '<div class="ep-form-card" style="margin-bottom:16px;padding:0;overflow:visible">'
       +'<div class="ep-form-title" style="padding:18px 24px;margin:0;background:#fafbfc;border-bottom:1px solid var(--border);border-radius:12px 12px 0 0">Eligibility</div>'
@@ -1413,7 +1411,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'</div></div>';
   }
 
-  else if(step===1){
+  if(includeStep(1)){
     const radioItem=function(grpClass,label,checked){
       return '<label class="peo-radio-'+grpClass+(checked?' selected':'')+'" onclick="peoSelectRadio(\'peo-radio-'+grpClass+'\',this)" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px">'
         +'<div class="peo-radio-outer" style="width:16px;height:16px;border-radius:50%;border:2px solid '+(checked?'var(--orange)':'#d1d5db')+';flex-shrink:0;display:flex;align-items:center;justify-content:center">'
@@ -1423,7 +1421,7 @@ function buildContractFormHTML(type,step,splitMode){
         +'</label>';
     };
     const today=new Date().toISOString().split('T')[0];
-    content=
+    content+=
       '<div class="ep-form-card" style="padding:24px">'
       +'<div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:20px">Job Details</div>'
 
@@ -1497,11 +1495,11 @@ function buildContractFormHTML(type,step,splitMode){
       +'</div>';
   }
 
-  else if(step===2){
+  if(includeStep(2)){
     const thS='padding:10px 14px;font-size:12px;font-weight:600;color:#6b7280;border-bottom:1px solid var(--border);text-align:left';
     const tdS='padding:14px;font-size:13px;color:var(--navy);border-bottom:1px solid #f1f5f9;vertical-align:middle';
     const inputNum=function(val){return '<input type="number" value="'+val+'" min="0" style="width:60px;height:34px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;text-align:center;font-family:inherit;outline:none;color:var(--navy)">';};
-    content=
+    content+=
       // Leave Entitlement card
       '<div class="ep-form-card" style="margin-bottom:16px;padding:0;overflow:hidden">'
       +'<div style="padding:18px 20px;border-bottom:1px solid var(--border)">'
@@ -1563,7 +1561,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'</div></div>';
   }
 
-  const isLast=step===2;
+  const isLast=isAssistedReview||step===2;
   const goBack=type==='PEO'?'peoBack()':'eorBack()';
   const goNext=type==='PEO'?'peoNext()':'eorNext()';
   const resetNav=type==='PEO'?'peoStep=0;page=\'contracts\';renderADTPage()':'eorStep=0;page=\'contracts\';renderADTPage()';
@@ -1573,7 +1571,10 @@ function buildContractFormHTML(type,step,splitMode){
     +'<button class="ep-save-btn" style="padding:9px 28px;border-radius:99px" onclick="'+(isLast?finalAction:goNext)+'">'+( isLast?(aiAssistedFlow?'Create Proposal':'Submit Contract'):'Next')+'</button>'
     +'</div>';
 
-  const aiHint=(aiAssistedFlow&&step===0&&!splitMode)?'<div class="info-box tip" style="margin-bottom:16px"><div class="ib-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div><div><strong>AI pre-filled this form</strong>Review the details below, then continue through the remaining steps to create the proposal.</div></div>':'';
+  const aiHint=isAssistedReview?('<div style="margin-bottom:16px">'
+    +'<div class="info-box tip" style="margin-bottom:10px"><div class="ib-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div><div><strong>AI pre-filled every field below</strong>Review the details, edit anything you like, then create the proposal.</div></div>'
+    +aiCtCurrentAgentBadge()
+    +'</div>'):'';
   const pageStyle=splitMode?'width:100%;padding:26px 30px;box-sizing:border-box':'max-width:820px;margin:0 auto';
 
   return '<div class="ep-page" style="'+pageStyle+'">'
@@ -4218,6 +4219,12 @@ function saveCfgStepAssignment(journeyId,idx){
 // -- Configure: Agents --
 function cfgEscapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function cfgAgentSlug(name){return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');}
+function findCfgAgentByName(name){return cfgAgents.find(function(a){return a.name===name;});}
+function viewCfgAgentSkillByName(name){
+  const idx=cfgAgents.findIndex(function(a){return a.name===name;});
+  if(idx===-1)return;
+  viewCfgAgentSkill(idx);
+}
 function viewCfgAgentSkill(idx){
   cfgAgentSkillModalIdx=idx;
   cfgAgentSkillEditing=false;
@@ -4975,15 +4982,38 @@ function aiCtJourneyStage(){
 function isAIContractWizardPage(pg){
   return pg==='ai-contract-assistant'||pg==='ai-employee-created'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete';
 }
+function aiCjShortLabel(name){return (name||'').replace(/\s*\([^)]*\)/g,'').trim();}
+function aiAgentBadgeHTML(sourceName){
+  const agent=findCfgAgentByName(sourceName);
+  if(!agent)return '';
+  return '<span class="aicj-agent-badge" onclick="viewCfgAgentSkillByName(\''+agent.name.replace(/'/g,"\\'")+'\')">&#10024; Handled by '+agent.name+'</span>';
+}
+function aiCtCurrentAgentBadge(){
+  const events=aiJourneyEvents['contract-creation']||[];
+  const current=events[aiCtJourneyStage()];
+  return aiAgentBadgeHTML(current&&current.source);
+}
 function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   const events=aiJourneyEvents[journeyId]||[];
   const prev=animationKey==='payroll'?aiPayrollAnimatedStage:aiCtAnimatedStage;
   const animateThisRender=stage>prev;
   if(animationKey==='payroll'){if(animateThisRender)aiPayrollAnimatedStage=stage;}
   else if(animateThisRender){aiCtAnimatedStage=stage;}
-  return '<div class="aicj-bar">'+events.map(function(e,i){
+  const current=events[stage];
+  const label=current?(
+    '<div class="aicj-label">'
+    +'<span class="aicj-label-step">Step '+(stage+1)+' of '+events.length+'</span>'
+    +'<span class="aicj-label-name">'+current.name+'</span>'
+    +aiChipsCompact(current.chips)
+    +aiAgentBadgeHTML(current.source)
+    +'</div>'
+  ):'';
+  return label+'<div class="aicj-bar">'+events.map(function(e,i){
     const state=i<stage?'done':i===stage?'current':'pending';
-    let html='<div class="aicj-dot '+state+'"></div>';
+    let html='<div class="aicj-step">'
+      +'<div class="aicj-dot '+state+'"></div>'
+      +'<div class="aicj-step-label '+state+'">'+aiCjShortLabel(e.name)+'</div>'
+      +'</div>';
     if(i<events.length-1){
       const filled=i<stage;
       const grow=filled&&i===stage-1&&animateThisRender;
@@ -5012,29 +5042,47 @@ function findExistingEmployee(name){
     || null;
 }
 function buildAIContractAssistantHTML(){
-  return '<div class="ep-page" style="max-width:620px;margin:0 auto">'
+  return '<div class="ep-page" style="max-width:1040px;margin:0 auto">'
     +'<button class="ep-back" onclick="page=\'contracts\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to Contracts</button>'
-    +'<div class="ep-form-card" style="margin-top:20px;text-align:center;padding:38px 36px">'
+    +'<div class="ai-ct-assist-split">'
+    +'<div class="ai-ct-assist-left">'
+    +'<div class="ep-form-card" style="text-align:center;padding:32px 30px">'
     +'<div class="we-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div>'
     +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">AI Contract Assistant</div>'
-    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin:0 auto 22px;max-width:440px">The Contract Creation journey is automated. Tell me who you\'re creating a contract for &mdash; I\'ll check ADT records and pre-fill the form for you.</div>'
+    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin:0 auto 22px">The Contract Creation journey is automated. Tell me who you\'re creating a contract for &mdash; I\'ll check ADT records and pre-fill the form for you.</div>'
     +'<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:18px">'
     +'<button class="btn btn-secondary" onclick="aiCtSimulateExisting()">Simulate: Existing Employee</button>'
     +'<button class="btn btn-secondary" onclick="aiCtSimulateNew()">Simulate: New Employee</button>'
     +'</div>'
-    +'<div class="input-row" style="margin:0 auto 10px;max-width:440px">'
+    +'<div class="input-row" style="margin:0 auto 10px">'
     +'<input class="input-field" id="ai-ct-prompt" placeholder="e.g. Create an EOR contract for Anika Shah in Netherlands" oninput="aiCtLiveParse()" onkeydown="if(event.key===\'Enter\')aiCtSubmitPrompt()">'
     +'<button class="icon-btn active" onclick="aiCtSubmitPrompt()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
     +'</div>'
     +'<button class="add-link" onclick="page=\'contract-type-select\';renderADTPage()">Skip &mdash; create manually</button>'
     +'</div>'
-    +'<div id="ai-ct-result" style="margin-top:20px"></div>'
+    +'</div>'
+    +'<div class="ai-ct-assist-right" id="ai-ct-result">'
+    +'<div class="ai-ct-assist-idle"><div class="ai-ct-assist-idle-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ai-ct-assist-idle-title">Employee lookup will appear here</div><div class="ai-ct-assist-idle-text">Run a simulation or enter a prompt on the left &mdash; matching ADT records or a new-hire form will show up in this panel.</div></div>'
+    +'</div>'
+    +'</div>'
     +'</div>';
 }
 function aiCtRunSearch(parsed,label){
   aiCtNotFoundOpen=false;
   const res=document.getElementById('ai-ct-result');if(!res)return;
-  res.innerHTML='<div class="ep-form-card" style="display:flex;align-items:center;gap:12px"><div class="cl-spinner" style="width:22px;height:22px;border-width:2.5px"></div><span style="font-size:13px;color:var(--navy);font-weight:500">Searching ADT employee records for &ldquo;'+label+'&rdquo;&hellip;</span></div>';
+  res.innerHTML='<div class="ep-form-card">'
+    +'<div style="font-size:11.5px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px">Searching ADT employee records for &ldquo;'+label+'&rdquo;&hellip;</div>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
+    +'<div class="skel-avatar"></div>'
+    +'<div style="flex:1"><div class="skel-line" style="width:45%;margin-bottom:8px"></div><div class="skel-line" style="width:65%"></div></div>'
+    +'</div>'
+    +'<div class="review-grid">'
+    +'<div class="skel-line" style="width:70%"></div>'
+    +'<div class="skel-line" style="width:50%"></div>'
+    +'<div class="skel-line" style="width:65%"></div>'
+    +'<div class="skel-line" style="width:55%"></div>'
+    +'</div>'
+    +'</div>';
   setTimeout(function(){aiCtShowResult(parsed);},1000);
 }
 function aiCtSubmitPrompt(){
@@ -5199,7 +5247,7 @@ function aiCtContinueAfterEmployeeCreated(){
 }
 function buildAIEmployeeCreatedHTML(){
   const rec=aiCtJourneyEmployee||{};
-  return '<div class="ep-page" style="max-width:560px;margin:20px auto 0">'
+  return '<div class="ep-page" style="max-width:680px;margin:20px auto 0">'
     +'<div class="success-card">'
     +'<div class="success-check" style="width:64px;height:64px;margin-bottom:18px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="26" height="26"><polyline points="20 6 9 17 4 12"/></svg></div>'
     +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Employee Created</h2>'
@@ -5292,13 +5340,31 @@ function aiSubmitAssistedContract(type){
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Proposal&hellip;</div><div class="cl-sub">Compiling contract data into a proposal for '+aiProposalDraft.name+'</div></div>';
   setTimeout(function(){page='ai-proposal-created';renderADTPage();},1400);
 }
+let _aiAutoAdvanceTimer=null;
+function aiScheduleAutoAdvance(expectedPage,fn,delay){
+  if(_aiAutoAdvanceTimer)clearTimeout(_aiAutoAdvanceTimer);
+  _aiAutoAdvanceTimer=setTimeout(function(){_aiAutoAdvanceTimer=null;if(page===expectedPage)fn();},delay||1300);
+}
+function showAiToast(title,sub){
+  const stack=document.getElementById('ai-toast-stack');if(!stack)return;
+  const el=document.createElement('div');
+  el.className='ai-toast';
+  el.innerHTML='<div class="ai-toast-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    +'<div><div class="ai-toast-title">'+title+'</div>'+(sub?'<div class="ai-toast-sub">'+sub+'</div>':'')+'</div>';
+  stack.appendChild(el);
+  setTimeout(function(){
+    el.classList.add('ai-toast-out');
+    setTimeout(function(){el.remove();},250);
+  },3200);
+}
 function buildAIProposalCreatedHTML(){
   const d=aiProposalDraft||{};
-  return '<div class="ep-page" style="max-width:640px;margin:40px auto">'
+  return '<div class="ep-page" style="max-width:680px;margin:40px auto">'
     +'<div class="success-card">'
     +'<div class="success-check" style="width:64px;height:64px;margin-bottom:18px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="26" height="26"><polyline points="20 6 9 17 4 12"/></svg></div>'
     +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Proposal Created</h2>'
-    +'<p style="font-size:12.5px;color:var(--gray);margin-bottom:20px;max-width:380px;line-height:1.55">AI compiled the contract details you entered into a proposal, ready to send to the deal manager for approval.</p>'
+    +'<p style="font-size:12.5px;color:var(--gray);margin-bottom:12px;max-width:380px;line-height:1.55">AI compiled the contract details you entered into a proposal, ready to send to the deal manager for approval.</p>'
+    +'<div style="margin-bottom:20px">'+aiCtCurrentAgentBadge()+'</div>'
     +'<div class="review-section" style="text-align:left;width:100%;max-width:420px;margin-bottom:20px">'
     +'<div class="review-grid">'
     +'<div class="review-row"><div class="rr-label">Proposal ID</div><div class="rr-val">'+d.proposalId+'</div></div>'
@@ -5308,13 +5374,14 @@ function buildAIProposalCreatedHTML(){
     +'<div class="review-row"><div class="rr-label">Job Title</div><div class="rr-val">'+d.jobTitle+'</div></div>'
     +'<div class="review-row"><div class="rr-label">Status</div><div class="rr-val">Draft</div></div>'
     +'</div></div>'
-    +'<button class="btn btn-success" onclick="aiSendProposalForApproval()">Send to Deal Manager for Approval</button>'
+    +'<div style="font-size:11.5px;color:var(--gray)">Automatically sending to the Deal Manager for approval<span class="ai-ellipsis"><span>.</span><span>.</span><span>.</span></span></div>'
     +'</div></div>';
 }
 function aiSendProposalForApproval(){
   const col=aiCtLoaderTarget();
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Notifying '+aiDealManager.name+'&hellip;</div><div class="cl-sub">Sending proposal '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+' for approval</div></div>';
   notifData.unshift({name:'Proposal sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:(aiProposalDraft&&aiProposalDraft.proposalId)||'',time:'Just now',pending:true});
+  showAiToast('Proposal sent to '+aiDealManager.name,((aiProposalDraft&&aiProposalDraft.name)||'')+' — '+((aiProposalDraft&&aiProposalDraft.proposalId)||''));
   if(aiCreatedContractId){
     const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
     if(rec){
@@ -5328,7 +5395,7 @@ function aiSendProposalForApproval(){
 function buildAIWaitingApprovalHTML(opts){
   const backLabel=opts.backLabel||'Back to Contracts';
   const backAction=opts.backAction||"page='contracts';renderADTPage()";
-  return '<div class="ep-page" style="max-width:640px;margin:20px auto 0;text-align:center">'
+  return '<div class="ep-page" style="max-width:680px;margin:20px auto 0;text-align:center">'
     +'<div class="ep-form-card" style="padding:40px 32px">'
     +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">'
     +'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
@@ -5386,6 +5453,7 @@ function aiSimulateContractApproval(){
         const now=aiFormatNow();
         (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:aiOpsManager.name,status:'Contract Approved',action:aiOpsManager.name+' approved the signed contract.'});
         (ctWorkflowData[aiCreatedContractId]=ctWorkflowData[aiCreatedContractId]||[]).unshift({title:'Contract Approved',user:aiOpsManager.name,date:now.date,time:now.time,description:'Ops Manager approved the contract for '+rec.empName+'.'});
+        showAiToast(aiOpsManager.name+' approved the contract',rec.empName?'Onboarding for '+rec.empName+' is starting':'Onboarding is starting');
       }
     }
     page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
@@ -5402,6 +5470,7 @@ function buildAIContractDocumentHTML(){
     +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Global Employment Platform</div></div>'
     +'<div><div class="adt-doc-title">EMPLOYMENT AGREEMENT</div><div class="adt-doc-meta">Contract No. '+(rec.contractId||'—')+'<br>Issued '+now.date+'</div></div>'
     +'</div>'
+    +'<div style="margin-bottom:18px">'+aiCtCurrentAgentBadge()+'</div>'
     +'<div class="adt-doc-section">'
     +'<div class="adt-doc-section-title">Parties</div>'
     +'<div class="review-grid">'
@@ -5429,9 +5498,7 @@ function buildAIContractDocumentHTML(){
     +'<div class="adt-doc-sig-block">'+(rec.empName||d.name||'Employee')+'<div class="adt-doc-sig-label">Employee Signature &middot; Pending</div></div>'
     +'</div>'
     +'</div>'
-    +'<div style="text-align:center;margin-top:22px">'
-    +'<button class="btn btn-success" onclick="aiSendContractForApproval()">Send Contract for Approval</button>'
-    +'</div>'
+    +'<div style="text-align:center;margin-top:22px;font-size:11.5px;color:var(--gray)">Automatically sending for signature via Docuseal<span class="ai-ellipsis"><span>.</span><span>.</span><span>.</span></span></div>'
     +'</div>';
 }
 function aiSendContractForApproval(){
@@ -5446,6 +5513,7 @@ function aiSendContractForApproval(){
     }
   }
   notifData.unshift({name:'Contract sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:aiCreatedContractId||'',time:'Just now',pending:true});
+  showAiToast('Contract sent for signature',aiOpsManager.name+' has been notified for approval');
   setTimeout(function(){page='ai-contract-waiting-approval';renderADTPage();},1400);
 }
 let aiCtOnboardingStep=-1;
@@ -5479,7 +5547,7 @@ function aiCtRunOnboardingStep(){
   },900);
 }
 function buildAIOnboardingRunHTML(){
-  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+  return '<div class="ep-page" style="max-width:680px;margin:0 auto">'
     +'<div class="ai-timeline">'+buildAIRunTimelineHTML({steps:aiCtOnboardingSteps},aiCtOnboardingStep)+'</div>'
     +'</div>';
 }
@@ -5496,7 +5564,7 @@ function buildAIJourneyCompleteHTML(){
     +aiDrawerRow('Proposal ID',(aiProposalDraft&&aiProposalDraft.proposalId)||'—')
     +aiDrawerRow('Monthly Pay',rec.payAmount?rec.payAmount+' '+(rec.currency||''):'—')
     +aiDrawerRow('Status',rec.status||'Ready for Payroll');
-  return '<div class="ep-page" style="max-width:640px;margin:20px auto 0">'
+  return '<div class="ep-page" style="max-width:680px;margin:20px auto 0">'
     +'<div class="success-card">'
     +'<div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
     +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Contract Creation Journey Complete</h2>'
@@ -5709,6 +5777,7 @@ function aiSimulateApproval(){
         const now=aiFormatNow();
         (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:aiDealManager.name,status:'Proposal Approved',action:aiDealManager.name+' approved the proposal. Contract generation will continue automatically.'});
         (ctWorkflowData[aiCreatedContractId]=ctWorkflowData[aiCreatedContractId]||[]).unshift({title:'Proposal Approved',user:aiDealManager.name,date:now.date,time:now.time,description:'Deal Manager approved the AI-generated proposal for '+rec.empName+'.'});
+        showAiToast(aiDealManager.name+' approved the proposal','Generating the contract now');
       }
     }
     page='ai-contract-document';renderADTPage();
