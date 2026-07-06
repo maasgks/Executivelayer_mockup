@@ -990,8 +990,15 @@ let cfgModelEditing=false;
 let cfgModelDraft=null;
 
 // -- Configure: Context & Journey (ADT's real business journeys — same set as AI Executive) --
+const cfgJourneyCategories=[
+  {id:'O2C',name:'Order to Cash',desc:"From a customer deal/order through fulfillment, invoicing, and collecting payment."},
+  {id:'P2P',name:'Procure to Pay',desc:'From requisitioning goods/services from a vendor through purchase order, receipt, and paying the invoice.'},
+  {id:'H2R',name:'Hire to Retire',desc:'The full employee lifecycle: hiring, onboarding, payroll, benefits, leave, compliance, through offboarding.'},
+  {id:'F2A',name:'Finance to Accounting',desc:'Financial transactions flowing into the general ledger, reconciliation, close, and reporting.'}
+];
+let cfgJourneyCategoryFilter='';
 const cfgJourneys=[
-  {id:'contract-creation',name:'Contract Creation Journey',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['7 steps','Deal Desk, Contracts'],
+  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['7 steps','Deal Desk, Contracts'],
     steps:[
       {name:'Create Deal & Employee Record',src:'AI Prompt Parser',type:'src'},
       {name:'Send Proposal',src:'AI Contract Assistant',type:'src'},
@@ -1001,7 +1008,7 @@ const cfgJourneys=[
       {name:'Run Onboarding',src:'AI Onboarding Engine',type:'src'},
       {name:'Check Payroll Readiness',src:'AI Payroll Readiness Check',type:'src'}
     ]},
-  {id:'payroll-creation',name:'Payroll Creation Journey',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',status:'Active',tags:['6 steps','Payroll, Compliance Hub'],
+  {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',status:'Active',tags:['6 steps','Payroll, Compliance Hub'],
     steps:[
       {name:'Parse Prompt (Name, ID, etc.)',src:'AI Prompt Parser',type:'src'},
       {name:'Capture Attendance',src:'AI Timesheet Sync',type:'src'},
@@ -1010,7 +1017,7 @@ const cfgJourneys=[
       {name:'Generate Salary Slip',src:'AI Payslip Generator',type:'src'},
       {name:'Finalize Salary Slip',src:'AI Payroll Archive',type:'src'}
     ]},
-  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',status:'Inactive',tags:['5 steps','Compliance Hub, Leave'],
+  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',status:'Inactive',tags:['5 steps','Compliance Hub, Leave'],
     steps:[
       {name:'Create Employee Record',src:'AI Prompt Parser',type:'src'},
       {name:'Fetch Country Compliance Details',src:'AI Compliance Hub Sync',type:'src'},

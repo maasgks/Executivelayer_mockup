@@ -4240,19 +4240,40 @@ function cfgJourneyStatusPill(status){
   if(status==='Draft')return '<span class="status-pill draft">Draft</span>';
   return '';
 }
+const cfgCategoryColors={O2C:'#2563eb',P2P:'#7c3aed',H2R:'#0d9488',F2A:'#d97706'};
+function cfgCategoryBadge(catId){
+  const c=cfgCategoryColors[catId]||'#6b7280';
+  return '<span class="badge" style="background:'+c+'1a;color:'+c+';border:1px solid '+c+'55">'+catId+'</span>';
+}
+function cfgSetJourneyCategoryFilter(cat){
+  cfgJourneyCategoryFilter=cfgJourneyCategoryFilter===cat?'':cat;
+  renderADTPage();
+}
 function buildCfgContextJourneyHTML(){
-  const cards=cfgJourneys.map(function(j){
+  const filteredJourneys=cfgJourneyCategoryFilter?cfgJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):cfgJourneys;
+  const activeCat=cfgJourneyCategoryFilter?cfgJourneyCategories.find(function(c){return c.id===cfgJourneyCategoryFilter;}):null;
+  const catTabs='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'
+    +'<button class="cfg-cat-tab'+(cfgJourneyCategoryFilter===''?' active':'')+'" onclick="cfgSetJourneyCategoryFilter(\'\')">All ('+cfgJourneys.length+')</button>'
+    +cfgJourneyCategories.map(function(c){
+      const count=cfgJourneys.filter(function(j){return j.category===c.id;}).length;
+      return '<button class="cfg-cat-tab'+(cfgJourneyCategoryFilter===c.id?' active':'')+'" style="'+(cfgJourneyCategoryFilter===c.id?'border-color:'+cfgCategoryColors[c.id]+';color:'+cfgCategoryColors[c.id]:'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')" title="'+c.name+'">'+c.id+' ('+count+')</button>';
+    }).join('')
+    +'</div>';
+  const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:-6px 0 16px;max-width:680px;line-height:1.6"><b style="color:var(--navy)">'+activeCat.name+'</b> &mdash; '+activeCat.desc+'</div>':'';
+  const cards=filteredJourneys.length?filteredJourneys.map(function(j){
     return '<div class="ai-journey-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:24px" onclick="viewCfgJourney(\''+j.id+'\')">'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgJourneyStatusPill(j.status)+'</div>'
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+cfgJourneyStatusPill(j.status)+'</div>'
       +'<div class="ai-journey-desc" style="white-space:normal;overflow:visible;text-overflow:clip;max-width:640px">'+j.desc+'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
       +'</div>'
       +'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>'
       +'</div>';
-  }).join('');
+  }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
   return '<div class="ai-exec-page">'
     +cfgPageHead('Context & Journey','Pick a predefined business journey to see its steps and assign the agent and governance that runs each one.')
+    +catTabs
+    +catInfo
     +'<div style="display:flex;flex-direction:column;gap:16px">'+cards+'</div>'
     +'</div>';
 }

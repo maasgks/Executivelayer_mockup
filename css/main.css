@@ -229,6 +229,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:#f1f5f9;color:var(--navy);letter-spacing:.4px}
 .badge.cfg-agent-recommend{background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;cursor:pointer;transition:background .15s}
 .badge.cfg-agent-recommend:hover{background:#ccfbf1}
+.cfg-cat-tab{padding:7px 16px;border:1.5px solid var(--border);border-radius:20px;font-size:12.5px;font-weight:600;color:var(--gray);background:#fff;cursor:pointer;font-family:inherit;transition:.15s}
+.cfg-cat-tab:hover{color:var(--navy);border-color:#cbd5e1}
+.cfg-cat-tab.active{background:#fff7ed;color:var(--orange);border-color:var(--orange)}
 .close-btn{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:18px;border:1px solid var(--border);cursor:pointer;background:var(--card);color:var(--navy);transition:.2s;font-family:inherit;font-size:12px;font-weight:600}
 .close-btn:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
 .close-btn svg{width:14px;height:14px}
