@@ -3530,7 +3530,7 @@ function aiChipsCompact(chips){
 }
 function aiDrawerRow(label,val){return '<div class="review-row"><div class="rr-label">'+label+'</div><div class="rr-val" style="white-space:normal;font-weight:600">'+val+'</div></div>';}
 
-function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;navigatePage('ai-journey-detail');}
+function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;aiRunStatusFilter='';navigatePage('ai-journey-detail');}
 function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrStart(id);navigatePage('ai-automate-form');}
 function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
 
@@ -3664,12 +3664,17 @@ function buildAIJourneyRunSummaryHTML(journeyId){
       +badge
       +'</div>';
   }).join('')+'</div>';
+  const statCard=function(kind,label,val,color,count){
+    const selected=aiRunStatusFilter===kind?' style="border-color:'+(color||'var(--orange)')+';background:'+(color||'#de7909')+'0d"':'';
+    const clickable=count>0?' clickable-stat':'';
+    return '<div class="stat-card'+clickable+'"'+selected+(count>0?' onclick="aiJourneyFilterRunsByStatus(\''+kind+'\')"':'')+'><div class="stat-label"><span>'+label+'</span></div><div class="stat-val" style="color:'+(color||'inherit')+'">'+val+'</div></div>';
+  };
   return '<div class="review-title" style="margin-bottom:14px">Journey Runs</div>'
     +'<div class="stat-grid" style="margin-bottom:20px">'
-    +'<div class="stat-card"><div class="stat-label"><span>Journeys Created</span></div><div class="stat-val">'+runs.length+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Completed</span></div><div class="stat-val" style="color:#16a34a">'+completed+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>In Progress</span></div><div class="stat-val" style="color:#2563eb">'+inProgress+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Needs Attention</span></div><div class="stat-val" style="color:'+(exceptions?'#dc2626':'var(--navy)')+'">'+exceptions+'</div></div>'
+    +statCard('all','Journeys Created',runs.length,null,runs.length)
+    +statCard('completed','Completed',completed,'#16a34a',completed)
+    +statCard('inprogress','In Progress',inProgress,'#2563eb',inProgress)
+    +statCard('exception','Needs Attention',exceptions,exceptions?'#dc2626':'var(--navy)',exceptions)
     +'</div>'
     +'<div class="ep-form-card" style="margin-bottom:16px;padding:18px 22px 20px">'+bar+'</div>'
     +'<div id="aicj-run-drilldown">'+buildAIJourneyRunDrilldownHTML()+'</div>';
@@ -3677,10 +3682,20 @@ function buildAIJourneyRunSummaryHTML(journeyId){
 function buildAIJourneyRunDrilldownHTML(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
   const events=aiJourneyEvents[j.id]||[];
-  const idx=aiJourneyDetailSelectedStage;
-  if(idx<0)return '<div style="font-size:12px;color:var(--gray);padding:4px 2px">Click a stage above to see what\'s pending there.</div>';
-  const runs=(aiAutomationRuns[j.id]||[]).filter(function(r){return r.status!=='Completed'&&r.currentStepIdx===idx;});
-  const stageName=(events[idx]||{}).name||'';
+  const allRuns=aiAutomationRuns[j.id]||[];
+  let runs,title;
+  if(aiRunStatusFilter){
+    if(aiRunStatusFilter==='all'){runs=allRuns;title='All journeys';}
+    else if(aiRunStatusFilter==='completed'){runs=allRuns.filter(function(r){return r.status==='Completed';});title='Completed journeys';}
+    else if(aiRunStatusFilter==='exception'){runs=allRuns.filter(function(r){return r.status==='Exception';});title='Journeys needing attention';}
+    else{runs=allRuns.filter(function(r){return r.status!=='Completed'&&r.status!=='Exception';});title='Journeys in progress';}
+  }else if(aiJourneyDetailSelectedStage>=0){
+    const idx=aiJourneyDetailSelectedStage;
+    runs=allRuns.filter(function(r){return r.status!=='Completed'&&r.currentStepIdx===idx;});
+    title='Pending at &ldquo;'+((events[idx]||{}).name||'')+'&rdquo;';
+  }else{
+    return '<div style="font-size:12px;color:var(--gray);padding:4px 2px">Click a stat card above, or a stage in the bar below, to see the journeys behind it.</div>';
+  }
   const rows=runs.map(function(r){
     return '<tr style="cursor:pointer" onclick="viewAIRun(\''+r.runId+'\')">'
       +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+r.runId+'</div></td>'
@@ -3690,17 +3705,31 @@ function buildAIJourneyRunDrilldownHTML(){
       +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRun(\''+r.runId+'\')">View Run</button></td>'
       +'</tr>';
   }).join('');
-  return '<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:10px">Pending at &ldquo;'+stageName+'&rdquo; &middot; '+runs.length+' '+(runs.length===1?'journey':'journeys')+'</div>'
+  return '<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:10px">'+title+' &middot; '+runs.length+' '+(runs.length===1?'journey':'journeys')+'</div>'
     +'<div class="listing-card">'
     +'<table class="listing-table ai-run-table"><thead><tr>'
     +'<th>Client</th><th>Country &amp; Type</th><th>Status</th><th>Last Activity</th><th>Action</th>'
-    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:20px">No journeys currently at this stage.</td></tr>')+'</tbody></table>'
+    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:20px">No journeys match this filter.</td></tr>')+'</tbody></table>'
     +'</div>';
 }
 function aiJourneyDetailSelectStage(idx){
   aiJourneyDetailSelectedStage=aiJourneyDetailSelectedStage===idx?-1:idx;
+  aiRunStatusFilter='';
   const el=document.getElementById('aicj-run-drilldown');
   if(el)el.innerHTML=buildAIJourneyRunDrilldownHTML();
+}
+function aiJourneyFilterRunsByStatus(kind){
+  const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
+  const allRuns=aiAutomationRuns[j.id]||[];
+  let matches;
+  if(kind==='all')matches=allRuns;
+  else if(kind==='completed')matches=allRuns.filter(function(r){return r.status==='Completed';});
+  else if(kind==='exception')matches=allRuns.filter(function(r){return r.status==='Exception';});
+  else matches=allRuns.filter(function(r){return r.status!=='Completed'&&r.status!=='Exception';});
+  if(matches.length===1){viewAIRun(matches[0].runId);return;}
+  aiJourneyDetailSelectedStage=-1;
+  aiRunStatusFilter=aiRunStatusFilter===kind?'':kind;
+  renderADTPage();
 }
 
 function openAIEventDrawer(journeyId,idx){

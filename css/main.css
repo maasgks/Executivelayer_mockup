@@ -221,6 +221,8 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ss-ico{flex-shrink:0;margin-top:1px}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .stat-card{background:var(--card);border-radius:14px;padding:20px;border:1px solid var(--border)}
+.stat-card.clickable-stat{cursor:pointer;transition:.15s}
+.stat-card.clickable-stat:hover{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(15,23,42,.06)}
 .stat-label{font-size:12px;color:var(--gray);font-weight:500;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start}
 .stat-icon{width:34px;height:34px;border-radius:8px;background:rgba(222,121,9,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .stat-icon svg{width:17px;height:17px;stroke:var(--orange);fill:none}

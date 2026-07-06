@@ -9,6 +9,7 @@ const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'}
 let aiPayrollAnimatedStage=-1,aiPayrollData={};
 let selectedAIRunId='RUN-2001';
 let aiJourneyDetailSelectedStage=-1;
+let aiRunStatusFilter='';
 const aiAutomationRuns={
   'contract-creation':[
     {runId:'RUN-2001',client:'Rashi Singh',country:'Netherlands',contractType:'EOR',currentStepIdx:2,status:'Waiting for Approval',lastActivity:'3 hours ago'},
