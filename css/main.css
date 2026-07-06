@@ -1171,18 +1171,18 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .aicj-line.filled .aicj-line-fill{transform:scaleX(1)}
 .aicj-line.grow .aicj-line-fill{animation:aicj-grow .6s ease forwards}
 @keyframes aicj-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-.aicj-box-row{display:flex;flex-wrap:wrap;gap:12px}
-.aicj-box{flex:1 1 150px;min-width:140px;border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;background:#fff;transition:.15s}
+.aicj-box-row{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch}
+.aicj-box{flex:1 1 190px;min-width:180px;min-height:172px;border:1.5px solid var(--border);border-radius:14px;padding:18px 18px 16px;display:flex;flex-direction:column;gap:10px;background:#fff;transition:.15s;box-sizing:border-box}
 .aicj-box.clickable{cursor:pointer}
 .aicj-box.clickable:hover{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(15,23,42,.06)}
 .aicj-box.selected{border-color:var(--orange);background:#fff7ed}
-.aicj-box-num{width:22px;height:22px;border-radius:50%;background:#f1f5f9;color:var(--navy);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.aicj-box-name{font-size:12px;font-weight:600;color:var(--navy);line-height:1.35}
-.aicj-box-resp{align-self:flex-start;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.2px}
+.aicj-box-num{width:24px;height:24px;border-radius:50%;background:#f1f5f9;color:var(--navy);font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.aicj-box-name{font-size:13px;font-weight:700;color:var(--navy);line-height:1.4}
+.aicj-box-resp{align-self:flex-start;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.2px}
 .aicj-box-resp.ai{background:#f0fdf4;color:#16a34a}
 .aicj-box-resp.human{background:#fff7ed;color:var(--orange)}
 .aicj-box-resp.mixed{background:#eff6ff;color:#2563eb}
-.aicj-box-badge{align-self:flex-start;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;line-height:1.4}
+.aicj-box-badge{align-self:flex-start;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;line-height:1.45;margin-top:auto}
 .aicj-box-badge.pending{background:#dbeafe;color:#2563eb}
 .aicj-box-badge.exception{background:#fee2e2;color:#dc2626}
 .aicj-box-badge.none{background:#f1f5f9;color:var(--gray)}

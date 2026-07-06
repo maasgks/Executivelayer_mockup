@@ -3541,7 +3541,7 @@ function aiStepResponsibility(chips){
   const hasHuman=(chips||[]).includes('Human Required')||(chips||[]).includes('Approval Required');
   if(hasAI&&hasHuman)return{label:'AI + Human',cls:'mixed'};
   if(hasHuman)return{label:'Human Intervention Required',cls:'human'};
-  return{label:'Pure AI',cls:'ai'};
+  return{label:'Agent',cls:'ai'};
 }
 
 function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;aiRunStatusFilter='';navigatePage('ai-journey-detail');}
@@ -3670,8 +3670,10 @@ function buildAIJourneyRunSummaryHTML(journeyId){
     const isHumanStep=resp.cls!=='ai';
     const approverName=aiApproverForSource(e.source);
     const badge=hasBadge
-      ?(isHumanStep&&!isException
-        ?'<div class="aicj-box-badge pending">Human Approval Pending &mdash; '+approverName+'</div>'
+      ?(isHumanStep
+        ?(isException
+          ?'<div class="aicj-box-badge exception">'+c.exceptions+' '+(c.exceptions===1?'Exception':'Exceptions')+' &mdash; '+approverName+'</div>'
+          :'<div class="aicj-box-badge pending">Human Approval Pending &mdash; '+approverName+'</div>')
         :'<div class="aicj-box-badge '+badgeCls+'">'+c.total+' '+(isException?(c.exceptions===1?'Exception':'Exceptions'):'Pending')+'</div>')
       :'<div class="aicj-box-badge none">No runs</div>';
     const selected=aiJourneyDetailSelectedStage===i?' selected':'';
