@@ -3529,6 +3529,20 @@ function aiChipsCompact(chips){
   return '<span class="ai-chip '+aiChipClass(primary)+'">'+primary+'</span>'+(extra>0?'<span class="ai-chip-more">+'+extra+'</span>':'');
 }
 function aiDrawerRow(label,val){return '<div class="review-row"><div class="rr-label">'+label+'</div><div class="rr-val" style="white-space:normal;font-weight:600">'+val+'</div></div>';}
+function aiApproverForSource(source){
+  if(source===aiDealManager.role)return aiDealManager.name;
+  if(source===aiOpsManager.role)return aiOpsManager.name;
+  if(source===aiPayrollManager.role)return aiPayrollManager.name;
+  if(source===aiHrManager.role)return aiHrManager.name;
+  return source;
+}
+function aiStepResponsibility(chips){
+  const hasAI=(chips||[]).includes('AI Automated');
+  const hasHuman=(chips||[]).includes('Human Required')||(chips||[]).includes('Approval Required');
+  if(hasAI&&hasHuman)return{label:'AI + Human',cls:'mixed'};
+  if(hasHuman)return{label:'Human Intervention Required',cls:'human'};
+  return{label:'Pure AI',cls:'ai'};
+}
 
 function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;aiRunStatusFilter='';navigatePage('ai-journey-detail');}
 function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrStart(id);navigatePage('ai-automate-form');}
@@ -3652,13 +3666,19 @@ function buildAIJourneyRunSummaryHTML(journeyId){
     const hasBadge=c.total>0;
     const isException=c.exceptions>0;
     const badgeCls=isException?'exception':'pending';
+    const resp=aiStepResponsibility(e.chips);
+    const isHumanStep=resp.cls!=='ai';
+    const approverName=aiApproverForSource(e.source);
     const badge=hasBadge
-      ?'<div class="aicj-box-badge '+badgeCls+'">'+c.total+' '+(isException?(c.exceptions===1?'Exception':'Exceptions'):'Pending')+'</div>'
+      ?(isHumanStep&&!isException
+        ?'<div class="aicj-box-badge pending">Human Approval Pending &mdash; '+approverName+'</div>'
+        :'<div class="aicj-box-badge '+badgeCls+'">'+c.total+' '+(isException?(c.exceptions===1?'Exception':'Exceptions'):'Pending')+'</div>')
       :'<div class="aicj-box-badge none">No runs</div>';
     const selected=aiJourneyDetailSelectedStage===i?' selected':'';
     return '<div class="aicj-box'+(hasBadge?' clickable':'')+selected+'"'+(hasBadge?' onclick="aiJourneyDetailSelectStage('+i+')"':'')+'>'
       +'<div class="aicj-box-num">'+(i+1)+'</div>'
       +'<div class="aicj-box-name">'+e.name+'</div>'
+      +'<div class="aicj-box-resp '+resp.cls+'">'+resp.label+'</div>'
       +badge
       +'</div>';
   }).join('')+'</div>';

@@ -1178,7 +1178,11 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .aicj-box.selected{border-color:var(--orange);background:#fff7ed}
 .aicj-box-num{width:22px;height:22px;border-radius:50%;background:#f1f5f9;color:var(--navy);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .aicj-box-name{font-size:12px;font-weight:600;color:var(--navy);line-height:1.35}
-.aicj-box-badge{align-self:flex-start;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.aicj-box-resp{align-self:flex-start;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.2px}
+.aicj-box-resp.ai{background:#f0fdf4;color:#16a34a}
+.aicj-box-resp.human{background:#fff7ed;color:var(--orange)}
+.aicj-box-resp.mixed{background:#eff6ff;color:#2563eb}
+.aicj-box-badge{align-self:flex-start;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;line-height:1.4}
 .aicj-box-badge.pending{background:#dbeafe;color:#2563eb}
 .aicj-box-badge.exception{background:#fee2e2;color:#dc2626}
 .aicj-box-badge.none{background:#f1f5f9;color:var(--gray)}

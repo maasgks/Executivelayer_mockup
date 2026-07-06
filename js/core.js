@@ -6,6 +6,7 @@ const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
 const aiOpsManager={name:'Priya Nair',role:'Ops Manager',initials:'PN'};
 let aiCtAnimatedStage=-1,aiCtPendingEmpType='',aiCtJourneyEmployee=null;
 const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'};
+const aiHrManager={name:'Pallavi Parate',role:'HR Manager',initials:'PP'};
 let aiPayrollAnimatedStage=-1,aiPayrollData={};
 let selectedAIRunId='RUN-2001';
 let aiJourneyDetailSelectedStage=-1;
