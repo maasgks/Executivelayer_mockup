@@ -3744,7 +3744,7 @@ function buildCfgSystemsHTML(){
   const rows=cfgSystems.length
     ?cfgSystems.map(function(s){
       return '<div class="ep-form-card" style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px;padding:16px 20px;cursor:pointer" onclick="viewCfgSystem(\''+s.id+'\')">'
-        +'<div><div style="font-size:13.5px;font-weight:700;color:var(--navy)">'+s.name+'</div><div style="font-size:11.5px;color:var(--gray);margin-top:3px">'+s.type+' &middot; '+s.method+' &middot; '+s.apis+' APIs</div></div>'
+        +'<div><div style="font-size:13.5px;font-weight:700;color:var(--navy)">'+s.name+'</div><div style="font-size:11.5px;color:var(--gray);margin-top:3px">'+s.type+' &middot; '+s.method+'</div></div>'
         +'<span class="status-pill '+(s.status==='Connected'?'active':'inactive')+'">'+s.status+'</span>'
         +'</div>';
     }).join('')
