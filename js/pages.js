@@ -3535,13 +3535,28 @@ function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrSt
 function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
 
 function buildAIExecutiveDashboardHTML(){
-  const cards=aiJourneys.map(j=>{
+  const filteredAIJourneys=cfgJourneyCategoryFilter?aiJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):aiJourneys;
+  const activeCat=cfgJourneyCategoryFilter?cfgJourneyCategories.find(function(c){return c.id===cfgJourneyCategoryFilter;}):null;
+  const catBoxes='<div class="cfg-cat-grid" style="margin-bottom:16px">'
+    +cfgJourneyCategories.map(function(c){
+      const count=aiJourneys.filter(function(j){return j.category===c.id;}).length;
+      const col=cfgCategoryColors[c.id];
+      const isActive=cfgJourneyCategoryFilter===c.id;
+      return '<div class="cfg-cat-box'+(isActive?' active':'')+'" style="'+(isActive?'border-color:'+col+';background:'+col+'0d':'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')">'
+        +'<div class="cfg-cat-box-top"><span class="cfg-cat-box-id" style="background:'+col+'1a;color:'+col+'">'+c.id+'</span><span class="cfg-cat-box-count">'+count+' '+(count===1?'journey':'journeys')+'</span></div>'
+        +'<div class="cfg-cat-box-name">'+c.name+'</div>'
+        +'<div class="cfg-cat-box-desc">'+c.desc+'</div>'
+        +'</div>';
+    }).join('')
+    +'</div>';
+  const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'';
+  const cards=filteredAIJourneys.length?filteredAIJourneys.map(j=>{
     const isActive=j.status==='Active';
     const cta=isActive?aiJourneyCTA(j):null;
     return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+'" onclick="viewAIJourney(\''+j.id+'\')">'
       +(isActive?'<div class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</div>':'')
       +'<div class="ai-journey-card-top">'
-      +'<div class="ai-journey-name">'+j.name+'</div>'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+'</div>'
       +'</div>'
       +'<div class="ai-journey-desc">'+j.desc+'</div>'
       +(j.status==='Draft'
@@ -3549,12 +3564,14 @@ function buildAIExecutiveDashboardHTML(){
         :'')
       +(cta?'<button class="btn btn-primary ai-journey-cta-btn" onclick="event.stopPropagation();'+cta.action+'">'+cta.label+'</button>':'')
       +'</div>';
-  }).join('');
+  }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
     +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p></div>'
     +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>'
     +'</div>'
+    +catBoxes
+    +catInfo
     +'<div class="ai-journey-grid ai-journey-grid-lg">'+cards+'</div>'
     +'</div>';
 }
