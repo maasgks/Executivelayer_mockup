@@ -4252,14 +4252,19 @@ function cfgSetJourneyCategoryFilter(cat){
 function buildCfgContextJourneyHTML(){
   const filteredJourneys=cfgJourneyCategoryFilter?cfgJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):cfgJourneys;
   const activeCat=cfgJourneyCategoryFilter?cfgJourneyCategories.find(function(c){return c.id===cfgJourneyCategoryFilter;}):null;
-  const catTabs='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'
-    +'<button class="cfg-cat-tab'+(cfgJourneyCategoryFilter===''?' active':'')+'" onclick="cfgSetJourneyCategoryFilter(\'\')">All ('+cfgJourneys.length+')</button>'
+  const catBoxes='<div class="cfg-cat-grid">'
     +cfgJourneyCategories.map(function(c){
       const count=cfgJourneys.filter(function(j){return j.category===c.id;}).length;
-      return '<button class="cfg-cat-tab'+(cfgJourneyCategoryFilter===c.id?' active':'')+'" style="'+(cfgJourneyCategoryFilter===c.id?'border-color:'+cfgCategoryColors[c.id]+';color:'+cfgCategoryColors[c.id]:'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')" title="'+c.name+'">'+c.id+' ('+count+')</button>';
+      const col=cfgCategoryColors[c.id];
+      const isActive=cfgJourneyCategoryFilter===c.id;
+      return '<div class="cfg-cat-box'+(isActive?' active':'')+'" style="'+(isActive?'border-color:'+col+';background:'+col+'0d':'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')">'
+        +'<div class="cfg-cat-box-top"><span class="cfg-cat-box-id" style="background:'+col+'1a;color:'+col+'">'+c.id+'</span><span class="cfg-cat-box-count">'+count+' '+(count===1?'journey':'journeys')+'</span></div>'
+        +'<div class="cfg-cat-box-name">'+c.name+'</div>'
+        +'<div class="cfg-cat-box-desc">'+c.desc+'</div>'
+        +'</div>';
     }).join('')
     +'</div>';
-  const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:-6px 0 16px;max-width:680px;line-height:1.6"><b style="color:var(--navy)">'+activeCat.name+'</b> &mdash; '+activeCat.desc+'</div>':'';
+  const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px">Showing all journeys &mdash; click a category above to filter.</div>';
   const cards=filteredJourneys.length?filteredJourneys.map(function(j){
     return '<div class="ai-journey-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:24px" onclick="viewCfgJourney(\''+j.id+'\')">'
       +'<div style="flex:1;min-width:0">'
@@ -4272,7 +4277,7 @@ function buildCfgContextJourneyHTML(){
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
   return '<div class="ai-exec-page">'
     +cfgPageHead('Context & Journey','Pick a predefined business journey to see its steps and assign the agent and governance that runs each one.')
-    +catTabs
+    +catBoxes
     +catInfo
     +'<div style="display:flex;flex-direction:column;gap:16px">'+cards+'</div>'
     +'</div>';

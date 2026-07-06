@@ -229,9 +229,18 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:#f1f5f9;color:var(--navy);letter-spacing:.4px}
 .badge.cfg-agent-recommend{background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;cursor:pointer;transition:background .15s}
 .badge.cfg-agent-recommend:hover{background:#ccfbf1}
-.cfg-cat-tab{padding:7px 16px;border:1.5px solid var(--border);border-radius:20px;font-size:12.5px;font-weight:600;color:var(--gray);background:#fff;cursor:pointer;font-family:inherit;transition:.15s}
-.cfg-cat-tab:hover{color:var(--navy);border-color:#cbd5e1}
-.cfg-cat-tab.active{background:#fff7ed;color:var(--orange);border-color:var(--orange)}
+.cfg-cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:6px}
+.cfg-cat-box{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:8px}
+.cfg-cat-box:hover{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(15,23,42,.06)}
+.cfg-cat-box.active{box-shadow:0 1px 4px rgba(15,23,42,.08)}
+.cfg-cat-box-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cfg-cat-box-id{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.3px}
+.cfg-cat-box-count{font-size:11px;font-weight:600;color:var(--gray)}
+.cfg-cat-box-name{font-size:13.5px;font-weight:700;color:var(--navy)}
+.cfg-cat-box-desc{font-size:11.5px;color:var(--gray);line-height:1.5}
+.cfg-cat-clear{border:none;background:none;color:var(--orange);font-weight:600;font-size:12.5px;cursor:pointer;font-family:inherit;padding:0}
+@media (max-width:900px){.cfg-cat-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:520px){.cfg-cat-grid{grid-template-columns:1fr}}
 .close-btn{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:18px;border:1px solid var(--border);cursor:pointer;background:var(--card);color:var(--navy);transition:.2s;font-family:inherit;font-size:12px;font-weight:600}
 .close-btn:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
 .close-btn svg{width:14px;height:14px}
