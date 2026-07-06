@@ -298,8 +298,8 @@ document.addEventListener('click',e=>{
 // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ TOPBAR BUILDER ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 function buildTopbar(id,m){
   const el=document.getElementById(id);
-  const pageLeft=`<div class="adt-logo"><img src="${window.__resources?.logo||'adt-logo.png'}" alt="ADT"></div><span class="topbar-page">${getPageTitle(page)}</span><button class="page-add-btn" title="Add ${titleForAdd(page)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
-  const agentLeft=`<div class="adt-logo"><img src="${window.__resources?.logo||'adt-logo.png'}" alt="ADT"></div><span style="font-size:13px;font-weight:600">Agent Mode</span><span class="badge">BETA</span>`;
+  const pageLeft=`<div class="adt-logo"><img src="${window.__resources?.logo||'assets/Opendhilogo.png'}" alt="Opendhi"></div><span class="topbar-page">${getPageTitle(page)}</span><button class="page-add-btn" title="Add ${titleForAdd(page)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
+  const agentLeft=`<div class="adt-logo"><img src="${window.__resources?.logo||'assets/Opendhilogo.png'}" alt="Opendhi"></div><span style="font-size:13px;font-weight:600">Agent Mode</span><span class="badge">BETA</span>`;
   el.innerHTML=`<div class="topbar-left">${m==='agent'?agentLeft:pageLeft}</div>
   <div class="topbar-center"></div>
   <div class="topbar-right">
