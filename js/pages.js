@@ -3495,7 +3495,7 @@ function aiChipsCompact(chips){
 }
 function aiDrawerRow(label,val){return '<div class="review-row"><div class="rr-label">'+label+'</div><div class="rr-val" style="white-space:normal;font-weight:600">'+val+'</div></div>';}
 
-function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;navigatePage('ai-journey-detail');}
+function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;navigatePage('ai-journey-detail');}
 function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrStart(id);navigatePage('ai-automate-form');}
 function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
 
@@ -3580,11 +3580,84 @@ function buildAIJourneyDetailHTML(){
     +'</div>'
     +(j.status==='Draft'?'<div style="margin-top:16px">'+statusActionHTML+'</div>':'')
     +'</div>'
+    +buildAIJourneyRunSummaryHTML(j.id)
     +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
     +buildAIResponsibilitySplitHTML(j.id)
     +'<div class="review-title" style="margin:32px 0 14px">Journey Timeline</div>'
     +'<div class="ai-timeline">'+timeline+'</div>';
   return '<div class="ai-exec-page ai-journey-detail-page">'+mainContent+'</div>';
+}
+
+function aiJourneyRunStageCounts(journeyId){
+  const events=aiJourneyEvents[journeyId]||[];
+  const runs=aiAutomationRuns[journeyId]||[];
+  return events.map(function(e,i){
+    const atStage=runs.filter(function(r){return r.status!=='Completed'&&r.currentStepIdx===i;});
+    const exceptions=atStage.filter(function(r){return r.status==='Exception';}).length;
+    return {total:atStage.length,exceptions:exceptions};
+  });
+}
+function buildAIJourneyRunSummaryHTML(journeyId){
+  const runs=aiAutomationRuns[journeyId]||[];
+  const events=aiJourneyEvents[journeyId]||[];
+  const completed=runs.filter(function(r){return r.status==='Completed';}).length;
+  const exceptions=runs.filter(function(r){return r.status==='Exception';}).length;
+  const inProgress=runs.length-completed-exceptions;
+  const stageCounts=aiJourneyRunStageCounts(journeyId);
+  const bar='<div class="aicj-bar" style="margin-bottom:0">'+events.map(function(e,i){
+    const c=stageCounts[i];
+    const hasBadge=c.total>0;
+    const badgeCls=c.exceptions>0?'exception':'pending';
+    const badge=hasBadge?'<div class="aicj-stage-badge '+badgeCls+'">'+c.total+'</div>':'';
+    let html='<div class="aicj-step">'
+      +'<div class="aicj-dot-wrap'+(hasBadge?' clickable':'')+'"'+(hasBadge?' onclick="aiJourneyDetailSelectStage('+i+')"':'')+'>'
+      +'<div class="aicj-dot pending"></div>'
+      +badge
+      +'</div>'
+      +'<div class="aicj-step-label">'+aiCjShortLabel(e.name)+'</div>'
+      +'</div>';
+    if(i<events.length-1){
+      html+='<div class="aicj-line"><div class="aicj-line-fill"></div></div>';
+    }
+    return html;
+  }).join('')+'</div>';
+  return '<div class="review-title" style="margin-bottom:14px">Journey Runs</div>'
+    +'<div class="stat-grid" style="margin-bottom:20px">'
+    +'<div class="stat-card"><div class="stat-label"><span>Journeys Created</span></div><div class="stat-val">'+runs.length+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label"><span>Completed</span></div><div class="stat-val" style="color:#16a34a">'+completed+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label"><span>In Progress</span></div><div class="stat-val" style="color:#2563eb">'+inProgress+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label"><span>Needs Attention</span></div><div class="stat-val" style="color:'+(exceptions?'#dc2626':'var(--navy)')+'">'+exceptions+'</div></div>'
+    +'</div>'
+    +'<div class="ep-form-card" style="margin-bottom:16px;padding:18px 22px 20px">'+bar+'</div>'
+    +'<div id="aicj-run-drilldown">'+buildAIJourneyRunDrilldownHTML()+'</div>';
+}
+function buildAIJourneyRunDrilldownHTML(){
+  const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
+  const events=aiJourneyEvents[j.id]||[];
+  const idx=aiJourneyDetailSelectedStage;
+  if(idx<0)return '<div style="font-size:12px;color:var(--gray);padding:4px 2px">Click a stage above to see what\'s pending there.</div>';
+  const runs=(aiAutomationRuns[j.id]||[]).filter(function(r){return r.status!=='Completed'&&r.currentStepIdx===idx;});
+  const stageName=(events[idx]||{}).name||'';
+  const rows=runs.map(function(r){
+    return '<tr style="cursor:pointer" onclick="viewAIRun(\''+r.runId+'\')">'
+      +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+r.runId+'</div></td>'
+      +'<td><div class="cell-primary">'+r.country+'</div><div class="cell-sub">'+r.contractType+'</div></td>'
+      +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
+      +'<td class="cell-sub">'+r.lastActivity+'</td>'
+      +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRun(\''+r.runId+'\')">View Run</button></td>'
+      +'</tr>';
+  }).join('');
+  return '<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:10px">Pending at &ldquo;'+stageName+'&rdquo; &middot; '+runs.length+' '+(runs.length===1?'journey':'journeys')+'</div>'
+    +'<div class="listing-card">'
+    +'<table class="listing-table ai-run-table"><thead><tr>'
+    +'<th>Client</th><th>Country &amp; Type</th><th>Status</th><th>Last Activity</th><th>Action</th>'
+    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:20px">No journeys currently at this stage.</td></tr>')+'</tbody></table>'
+    +'</div>';
+}
+function aiJourneyDetailSelectStage(idx){
+  aiJourneyDetailSelectedStage=aiJourneyDetailSelectedStage===idx?-1:idx;
+  const el=document.getElementById('aicj-run-drilldown');
+  if(el)el.innerHTML=buildAIJourneyRunDrilldownHTML();
 }
 
 function openAIEventDrawer(journeyId,idx){
@@ -4157,13 +4230,20 @@ function buildCfgJourneyDetailHTML(){
     const key=j.id+'__'+i;
     const assign=cfgStepAssignments[key];
     const isHuman=st.type==='rule';
-    const assignLabel=isHuman?'Human approval required':(assign?'Agent: '+assign.agent:'No agent assigned yet');
+    const rec=(!assign&&!isHuman)?cfgRecommendedAgentForStep(st):null;
+    const assignBadge=isHuman
+      ?'<span class="badge" style="margin-left:6px">Human approval required</span>'
+      :assign
+        ?'<span class="badge" style="margin-left:6px">Agent: '+assign.agent+'</span>'
+        :rec
+          ?'<span class="badge cfg-agent-recommend" style="margin-left:6px" onclick="event.stopPropagation();assignRecommendedAgent(\''+j.id+'\','+i+')">&#10024; Recommended: '+rec.name+' &mdash; click to assign</span>'
+          :'<span class="badge" style="margin-left:6px">No agent assigned yet</span>';
     return '<div class="ai-timeline-item">'
       +'<div class="ai-timeline-dot">'+(i+1)+'</div>'
       +'<div class="ai-timeline-card" onclick="openCfgStepDrawer(\''+j.id+'\','+i+')">'
       +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+st.name+'</span></div>'
       +'<div class="ai-timeline-card-desc">'+st.src+'</div>'
-      +'<div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+'<span class="badge" style="margin-left:6px">'+assignLabel+'</span></div>'
+      +'<div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+'</div>'
       +'</div></div>';
   }).join('');
   return '<div class="ai-exec-page ai-journey-detail-page">'
@@ -4191,15 +4271,19 @@ function renderCfgStepDrawer(){
   const key=j.id+'__'+cfgDrawerStepIdx;
   const assign=cfgStepAssignments[key]||{};
   const isHuman=st.type==='rule';
+  const rec=(!assign.agent&&!isHuman)?cfgRecommendedAgentForStep(st):null;
+  const defaultAgent=assign.agent||(rec?rec.name:'');
+  const recBanner=rec?'<div class="info-box tip" style="margin-bottom:14px"><div class="ib-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div><div><strong>Recommended: '+rec.name+'</strong>This agent already handles this exact step.<div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="assignRecommendedAgent(\''+j.id+'\','+cfgDrawerStepIdx+');closeCfgStepDrawer()">Use this agent</button></div></div></div>':'';
   const header='<div class="ct-modal-hdr"><span class="ct-modal-title">'+st.name+'</span><button class="ct-modal-close" onclick="closeCfgStepDrawer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
   const body='<div class="review-section"><div class="review-title">Step Source</div><p style="font-size:12.5px;color:var(--navy);line-height:1.6">'+st.src+'</p></div>'
     +(isHuman
       ?'<div class="review-section" style="border-color:#93c5fd;background:#eff6ff"><div class="review-title" style="color:#1d4ed8">Human approval required</div><p style="font-size:12.5px;color:#1d4ed8;line-height:1.6">This step is governed by a rule and routes to a human for sign-off before the journey continues.</p></div>'
       :'<div class="review-section">'
         +'<div class="review-title">Assign agent &amp; governance</div>'
+        +recBanner
         +'<div class="ep-form-group" style="margin-bottom:12px"><label class="ep-form-label">Agent</label><select class="ep-form-select" id="cfg-step-agent-sel">'
         +'<option value="">Unassigned</option>'
-        +cfgAgents.map(function(a){return '<option value="'+a.name+'"'+(assign.agent===a.name?' selected':'')+'>'+a.name+'</option>';}).join('')
+        +cfgAgents.map(function(a){return '<option value="'+a.name+'"'+(defaultAgent===a.name?' selected':'')+'>'+a.name+'</option>';}).join('')
         +'</select></div>'
         +'<div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin-bottom:14px">Governance: the assigned agent reads this step\'s allowed actions and failure handling from its governance file before it can act.</div>'
         +'<button class="btn btn-primary btn-sm" onclick="saveCfgStepAssignment(\''+j.id+'\','+cfgDrawerStepIdx+')">Save assignment</button>'
@@ -4213,6 +4297,18 @@ function saveCfgStepAssignment(journeyId,idx){
   if(agent)cfgStepAssignments[key]={agent:agent,governance:'Default governance'};
   else delete cfgStepAssignments[key];
   closeCfgStepDrawer();
+  if(page==='cfg-journey-detail')navigatePage('cfg-journey-detail');
+}
+function cfgRecommendedAgentForStep(st){
+  if(st.type==='rule')return null;
+  return findCfgAgentByName(st.src)||null;
+}
+function assignRecommendedAgent(journeyId,idx){
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
+  const st=j.steps[idx];if(!st)return;
+  const rec=cfgRecommendedAgentForStep(st);if(!rec)return;
+  const key=journeyId+'__'+idx;
+  cfgStepAssignments[key]={agent:rec.name,governance:rec.guardrail||'Default governance'};
   if(page==='cfg-journey-detail')navigatePage('cfg-journey-detail');
 }
 

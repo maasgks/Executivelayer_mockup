@@ -227,6 +227,8 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .stat-val{font-size:26px;font-weight:700}
 .stat-sub{font-size:11px;color:var(--gray);font-weight:500;margin-top:4px}
 .badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--ol);color:var(--orange);letter-spacing:.4px}
+.badge.cfg-agent-recommend{background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;cursor:pointer;transition:background .15s}
+.badge.cfg-agent-recommend:hover{background:#ccfbf1}
 .close-btn{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:18px;border:1px solid var(--border);cursor:pointer;background:var(--card);color:var(--navy);transition:.2s;font-family:inherit;font-size:12px;font-weight:600}
 .close-btn:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
 .close-btn svg{width:14px;height:14px}
@@ -1135,6 +1137,12 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-toast-sub{font-size:11px;color:var(--gray);margin-top:2px;line-height:1.4}
 .aicj-bar{display:flex;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px 24px 16px;margin-bottom:22px}
 .aicj-step{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.aicj-dot-wrap{position:relative;width:20px;height:20px;flex-shrink:0}
+.aicj-dot-wrap.clickable{cursor:pointer}
+.aicj-dot-wrap.clickable:hover .aicj-dot{border-color:var(--navy)}
+.aicj-stage-badge{position:absolute;top:-7px;right:-8px;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:#fff;padding:0 3px;pointer-events:none;box-shadow:0 0 0 2px #fff}
+.aicj-stage-badge.pending{background:#2563eb}
+.aicj-stage-badge.exception{background:#dc2626}
 .aicj-dot{width:20px;height:20px;border-radius:50%;flex-shrink:0;border:3px solid var(--border);background:#fff;box-sizing:border-box;transition:border-color .25s,background .25s}
 .aicj-dot.done{background:var(--green);border-color:var(--green)}
 .aicj-dot.current{background:#fff;border-color:var(--green);box-shadow:0 0 0 4px rgba(34,197,94,.16)}
