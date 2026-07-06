@@ -3769,7 +3769,7 @@ function buildCfgSystemsHTML(){
 }
 function cfgApiDirBadge(dir){
   return dir==='rw'
-    ?'<span class="badge" style="background:var(--ol);color:var(--orange)">read + write</span>'
+    ?'<span class="badge" style="background:#f1f5f9;color:var(--navy)">read + write</span>'
     :'<span class="badge" style="background:#eff6ff;color:#2563eb">read</span>';
 }
 function startCfgSystemEdit(){cfgSystemEditing=true;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
@@ -3951,7 +3951,7 @@ function buildCfgDataFoundationHTML(){
         +'<div class="ai-journey-desc">'+m.desc+'</div>'
         +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'
         +'<span class="badge">'+m.mapped.length+' mapped</span>'
-        +'<span class="badge" style="color:var(--orange);border-color:#f1c27a;background:var(--ol)">'+m.enrichment.length+' enrichment</span>'
+        +'<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9">'+m.enrichment.length+' enrichment</span>'
         +'<span class="badge">'+m.source+'</span>'
         +'</div></div>';
     }).join('')
@@ -4077,7 +4077,7 @@ function testCfgModel(modelId,btnEl){
   }
   setTimeout(function(){
     cfgModelTested[modelId]=true;
-    navigatePage('cfg-model-detail');
+    renderPageContent('adt-content');
   },900);
 }
 function cancelCfgModelAdd(){navigatePage('cfg-data-foundation');}
@@ -4221,7 +4221,7 @@ function buildCfgContextJourneyHTML(){
 }
 function cfgStepTypeTag(type){
   if(type==='eng')return '<span class="badge" style="color:var(--gray)">Engine</span>';
-  if(type==='rule')return '<span class="badge" style="color:var(--orange);border-color:#f1c27a;background:var(--ol)">'+'Rule</span>';
+  if(type==='rule')return '<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9">'+'Rule</span>';
   return '<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source</span>';
 }
 function buildCfgJourneyDetailHTML(){
@@ -4357,7 +4357,7 @@ function renderCfgAgentSkillModal(){
   const filename=cfgAgentSlug(a.name)+'/skill.md';
   const modified=a.skillMd!==cfgAgentsOriginalSkill[idx];
   const header='<div class="ct-modal-hdr"><span class="ct-modal-title" style="font-family:monospace;font-size:12.5px;display:flex;align-items:center;gap:8px">'+filename
-    +(modified?'<span class="badge" style="color:var(--orange);border-color:#f1c27a;background:var(--ol);font-family:var(--body)">modified</span>':'')
+    +(modified?'<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9;font-family:var(--body)">modified</span>':'')
     +'</span><button class="ct-modal-close" onclick="closeCfgAgentSkillModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
   const content=cfgAgentSkillEditing
     ?'<textarea id="cfg-agent-skill-edit" style="width:100%;min-height:360px;font-family:monospace;font-size:12px;line-height:1.7;color:var(--navy);background:var(--light);border:1px solid var(--border);border-radius:10px;padding:18px 20px;resize:vertical;box-sizing:border-box">'+cfgEscapeHtml(a.skillMd)+'</textarea>'
@@ -4381,13 +4381,13 @@ function buildCfgAgentsHTML(){
       +'<div style="width:34px;height:34px;border-radius:9px;background:var(--ol);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg></div>'
       +'<div style="min-width:0"><div style="font-size:14.5px;font-weight:700;color:var(--navy)">'+a.name+'</div><div style="font-size:10.5px;color:var(--gray);margin-top:2px">'+a.type+' &middot; <span style="color:#16a34a">active</span></div></div>'
       +'</div>'
-      +'<button type="button" class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="viewCfgAgentSkill('+i+')">skill.md</button>'
+      +'<button type="button" class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="viewCfgAgentSkill('+i+')">Agent Skill</button>'
       +'</div>'
       +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:12px">'+a.desc+'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:7px">'
-      +'<span class="badge">Model &middot; '+a.model+'</span>'
-      +'<span class="badge">Used in &middot; '+a.usedIn+'</span>'
-      +'<span class="badge">Guardrail &middot; '+a.guardrail+'</span>'
+      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">Model &middot; '+a.model+'</span>'
+      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">Used in &middot; '+a.usedIn+'</span>'
+      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">Guardrail &middot; '+a.guardrail+'</span>'
       +'</div>'
       +'</div>';
   }).join('');
