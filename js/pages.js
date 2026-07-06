@@ -3602,7 +3602,6 @@ function aiTimelineDotClass(chips){
 function buildAIJourneyDetailHTML(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
   const events=aiJourneyEvents[j.id]||[];
-  const total=j.humanSteps+j.aiSteps;
   const timeline=events.map((e,i)=>{
     return '<div class="ai-timeline-item">'
       +'<div class="ai-timeline-dot '+aiTimelineDotClass(e.chips)+'">'+(i+1)+'</div>'
@@ -3619,12 +3618,6 @@ function buildAIJourneyDetailHTML(){
       :'<button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Automate This Journey</button>';
   const mainContent='<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="navigatePage(\'ai-executive\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> All Journeys</button>'
     +'<div style="margin-bottom:28px"><p style="font-size:17px;font-weight:700;margin-bottom:6px">'+j.name+'</p><p style="font-size:12.5px;color:var(--gray);margin:0;max-width:680px;line-height:1.6">'+j.desc+'</p></div>'
-    +'<div class="stat-grid" style="margin-bottom:28px">'
-    +'<div class="stat-card"><div class="stat-label"><span>Total Events</span></div><div class="stat-val">'+total+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>AI Automated</span></div><div class="stat-val" style="color:var(--orange)">'+j.aiSteps+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Human Required</span></div><div class="stat-val" style="color:#2563eb">'+j.humanSteps+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Risk Level</span></div><div class="stat-val" style="font-size:16px">'+j.risk+'</div></div>'
-    +'</div>'
     +'<div class="ep-form-card" style="margin-bottom:28px;padding:20px 22px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">'
     +'<div style="font-size:12px;color:var(--gray);line-height:1.8">Connected Modules: <strong style="color:var(--navy);font-weight:600">'+j.modules.join(', ')+'</strong><br>Status: <strong style="color:var(--navy);font-weight:600">'+j.status+'</strong> &middot; Last Updated: '+j.updated+'</div>'
@@ -4326,10 +4319,21 @@ function buildCfgJourneyDetailHTML(){
       +'<div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+'</div>'
       +'</div></div>';
   }).join('');
+  const totalSteps=j.steps.length;
+  const aiStepsCount=j.steps.filter(function(st){return st.type!=='rule';}).length;
+  const humanStepsCount=j.steps.filter(function(st){return st.type==='rule';}).length;
+  const riskLevel=(aiJourneys.find(function(x){return x.id===j.id;})||{}).risk||'—';
+  const statGrid='<div class="stat-grid" style="margin-bottom:24px">'
+    +'<div class="stat-card"><div class="stat-label"><span>Total Events</span></div><div class="stat-val">'+totalSteps+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label"><span>AI Automated</span></div><div class="stat-val" style="color:var(--orange)">'+aiStepsCount+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label"><span>Human Required</span></div><div class="stat-val" style="color:#2563eb">'+humanStepsCount+'</div></div>'
+    +'<div class="stat-card"><div class="stat-label"><span>Risk Level</span></div><div class="stat-val" style="font-size:16px">'+riskLevel+'</div></div>'
+    +'</div>';
   return '<div class="ai-exec-page ai-journey-detail-page">'
     +cfgBackBtn('cfg-context-journey','Context & Journey')
     +'<div style="margin-bottom:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><p style="font-size:17px;font-weight:700;margin:0">'+j.name+'</p>'+cfgJourneyStatusPill(j.status)+'</div>'
     +'<p style="font-size:12.5px;color:var(--gray);margin:-14px 0 24px;max-width:680px;line-height:1.6">'+j.desc+'</p>'
+    +statGrid
     +'<div class="review-title" style="margin-bottom:14px">Flow &middot; runs top to bottom &middot; click a step to assign an agent</div>'
     +'<div class="ai-timeline">'+timeline+'</div>'
     +'<button class="btn btn-secondary btn-sm" style="margin-top:16px;margin-left:44px;border-style:dashed">+ Add step</button>'
