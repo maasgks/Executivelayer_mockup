@@ -843,9 +843,9 @@ function buildAllLeavesHTML(){
     +'<button class="lp-pill-reset" onclick="resetAlFilters()">Reset</button><button class="lp-pill-search" onclick="applyAlFilters()">Search</button>'
     +'</div></div>'
     +'<div class="listing-stats" style="flex-shrink:0">'
-    +'<div class="listing-stat approved"><div class="listing-stat-count">'+approvedCount+'</div><div class="listing-stat-label">Approved</div></div>'
-    +'<div class="listing-stat inactive"><div class="listing-stat-count">'+unapprovedCount+'</div><div class="listing-stat-label">Unapproved</div></div>'
-    +'<div class="listing-stat pending"><div class="listing-stat-count">'+pendingCount+'</div><div class="listing-stat-label">Pending</div></div>'
+    +'<div class="listing-stat approved'+(alStatusFilter==='Approved'?' stat-selected':'')+'" onclick="alToggleStatFilter(\'Approved\')"><div class="listing-stat-count">'+approvedCount+'</div><div class="listing-stat-label">Approved</div></div>'
+    +'<div class="listing-stat inactive'+(alStatusFilter==='Unapproved'?' stat-selected':'')+'" onclick="alToggleStatFilter(\'Unapproved\')"><div class="listing-stat-count">'+unapprovedCount+'</div><div class="listing-stat-label">Unapproved</div></div>'
+    +'<div class="listing-stat pending'+(alStatusFilter==='Pending'?' stat-selected':'')+'" onclick="alToggleStatFilter(\'Pending\')"><div class="listing-stat-count">'+pendingCount+'</div><div class="listing-stat-label">Pending</div></div>'
     +'</div></div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr>'
@@ -879,6 +879,11 @@ function togglePmAction(id,e){
       else{m.style.bottom=(window.innerHeight-anchor.top+5)+'px';m.style.top='auto';}
     }
   }
+}
+function alToggleStatFilter(v){
+  alStatusFilter=alStatusFilter===v?'':v;
+  alSelectedId=null;
+  renderADTPage();
 }
 function applyAlFilters(){
   const status=getCSValue('al-f-status');
@@ -981,7 +986,7 @@ function buildPaymentsHTML(){
   const activeCount=paymentsData.filter(p=>p.invoiceStatus==='Paid').length;
   const pendingCount=paymentsData.filter(p=>p.invoiceStatus==='Unpaid'||p.invoiceStatus==='Pending').length;
   const closedCount=paymentsData.filter(p=>p.invoiceStatus==='Closed').length;
-  const filtered=pmInvoiceStatusFilter?paymentsData.filter(p=>p.invoiceStatus===pmInvoiceStatusFilter):paymentsData;
+  const filtered=pmInvoiceStatusFilter?(pmInvoiceStatusFilter==='__pending_group__'?paymentsData.filter(p=>p.invoiceStatus==='Unpaid'||p.invoiceStatus==='Pending'):paymentsData.filter(p=>p.invoiceStatus===pmInvoiceStatusFilter)):paymentsData;
   if(pmSelectedId&&!filtered.some(p=>p.id===pmSelectedId))pmSelectedId=null;
   const rows=filtered.length?filtered.map((p,i)=>{
     const menuItems=pmInvoiceFlow.map(s=>{
@@ -1011,14 +1016,14 @@ function buildPaymentsHTML(){
     +'<div class="lp-filter-bar-row">'
     +'<input class="ct-search-input" placeholder="Search ID" type="text" style="height:34px;border-radius:20px;min-width:120px;max-width:140px">'
     +apCS('pm-f-country',['Netherlands','Belgium','USA','India','Germany'],'','Country')
-    +apCS('pm-f-status',['Unpaid','Pending','Paid','Closed'],pmInvoiceStatusFilter,'Status')
+    +apCS('pm-f-status',['Unpaid','Pending','Paid','Closed'],pmInvoiceStatusFilter==='__pending_group__'?'':pmInvoiceStatusFilter,'Status')
     +'<input type="date" style="height:34px;border:1px solid var(--border);border-radius:20px;padding:0 12px;font-family:inherit;font-size:13px;color:var(--navy);outline:none;background:#fff;cursor:pointer">'
     +'<button class="lp-pill-reset" onclick="resetPmFilters()">Reset</button><button class="lp-pill-search" onclick="applyPmFilters()">Search</button>'
     +'</div></div>'
     +'<div class="listing-stats" style="flex-shrink:0">'
-    +'<div class="listing-stat active"><div class="listing-stat-count">'+activeCount+'</div><div class="listing-stat-label">Active</div></div>'
-    +'<div class="listing-stat pending"><div class="listing-stat-count">'+pendingCount+'</div><div class="listing-stat-label">Pending</div></div>'
-    +'<div class="listing-stat" style="border-color:#bfdbfe"><div class="listing-stat-count" style="color:#2563eb">'+closedCount+'</div><div class="listing-stat-label">Closed</div></div>'
+    +'<div class="listing-stat active'+(pmInvoiceStatusFilter==='Paid'?' stat-selected':'')+'" onclick="pmToggleStatFilter(\'Paid\')"><div class="listing-stat-count">'+activeCount+'</div><div class="listing-stat-label">Active</div></div>'
+    +'<div class="listing-stat pending'+(pmInvoiceStatusFilter==='__pending_group__'?' stat-selected':'')+'" onclick="pmToggleStatFilter(\'__pending_group__\')"><div class="listing-stat-count">'+pendingCount+'</div><div class="listing-stat-label">Pending</div></div>'
+    +'<div class="listing-stat'+(pmInvoiceStatusFilter==='Closed'?' stat-selected':'')+'" style="border-color:#bfdbfe" onclick="pmToggleStatFilter(\'Closed\')"><div class="listing-stat-count" style="color:#2563eb">'+closedCount+'</div><div class="listing-stat-label">Closed</div></div>'
     +'</div></div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr>'
@@ -1075,6 +1080,11 @@ function navChatTab(tab){chatTab=tab;const inner=document.getElementById('chat-i
 function setChatFilter(f){chatStatusFilter=f;chatSelectedId=null;renderADTPage();}
 function chatStatusBadge(s){const m={active:{bg:'#f0fdf4',c:'#16a34a',b:'#86efac',l:'Active'},waiting_client:{bg:'#fff7ed',c:'#c2410c',b:'#fed7aa',l:'Waiting for Client'},waiting_csm:{bg:'#fef3c7',c:'#d97706',b:'#fde68a',l:'Waiting for CSM'},inactive:{bg:'#f1f5f9',c:'#64748b',b:'#e2e8f0',l:'Inactive'}};const v=m[s]||{bg:'#f1f5f9',c:'#64748b',b:'#e2e8f0',l:s};return'<span style="background:'+v.bg+';color:'+v.c+';border:1.5px solid '+v.b+';border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;display:inline-block;white-space:nowrap">'+v.l+'</span>';}
 function ctPickStatus(contractId,status){document.querySelectorAll('.ct-action-menu').forEach(m=>m.classList.remove('open'));openCtSidebar(contractId,'logs',status);}
+function ctToggleStatFilter(v){
+  ctQuickStatusFilter=ctQuickStatusFilter===v?'':v;
+  ctSelectedId=null;
+  renderADTPage();
+}
 function openCtSidebar(id,tab,pendingStatus){
   ctSelectedId=id;ctTab=tab||'basic-details';
   if(pendingStatus)window._ctPendingStatus=pendingStatus;else delete window._ctPendingStatus;
@@ -1088,6 +1098,11 @@ function closeCtSidebar(){
   document.querySelectorAll('.ct-row').forEach(r=>r.classList.remove('lp-row-selected'));
 }
 function navCtTab(tab){ctTab=tab;const inner=document.getElementById('ct-isb-inner');if(inner){inner.innerHTML=renderCtSidebar();requestAnimationFrame(function(){const nt=document.getElementById('ct-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
+function pmToggleStatFilter(v){
+  pmInvoiceStatusFilter=pmInvoiceStatusFilter===v?'':v;
+  pmSelectedId=null;
+  renderADTPage();
+}
 function applyPmFilters(){
   const status=getCSValue('pm-f-status');
   pmInvoiceStatusFilter=status&&status!=='Status'?status:'';
@@ -1636,7 +1651,8 @@ function buildContractsListingHTML(){
   const countries=[...new Set(contractsData.map(c=>c.country))];
   const types=[...new Set(contractsData.map(c=>c.type))];
   const dotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
-  const rows=contractsData.map(c=>{
+  const filteredContracts=ctQuickStatusFilter?contractsData.filter(c=>c.status===ctQuickStatusFilter):contractsData;
+  const rows=filteredContracts.map(c=>{
     const flowIdx=ctFlow.indexOf(c.status);
     const menuItems=ctFlow.map((step,i)=>{
       const isDone=flowIdx>i;
@@ -1664,7 +1680,7 @@ function buildContractsListingHTML(){
       +'<td>'+ctStatusBadge(c.status)+'</td>'
       +'<td onclick="event.stopPropagation()">'+actionBtn+'</td>'
       +'</tr>';
-  }).join('');
+  }).join('')||'<tr><td colspan="9" style="padding:24px;text-align:center;color:var(--gray)">No contracts match this filter.</td></tr>';
   const sbInner=ctSelectedId?renderCtSidebar():'';
   return '<div class="lp-page">'
     +'<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:4px">'
@@ -1679,15 +1695,15 @@ function buildContractsListingHTML(){
     +'<button class="lp-pill-search">Search</button>'
     +'</div></div>'
     +'<div class="listing-stats">'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#7c3aed">'+proposalPending+'</div><div class="listing-stat-label">Proposal Pending</div></div>'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#2563eb">'+contractPending+'</div><div class="listing-stat-label">Contract Pending</div></div>'
+    +'<div class="listing-stat'+(ctQuickStatusFilter==='Proposal Sent'?' stat-selected':'')+'" onclick="ctToggleStatFilter(\'Proposal Sent\')"><div class="listing-stat-count" style="color:#7c3aed">'+proposalPending+'</div><div class="listing-stat-label">Proposal Pending</div></div>'
+    +'<div class="listing-stat'+(ctQuickStatusFilter==='Contract Sent'?' stat-selected':'')+'" onclick="ctToggleStatFilter(\'Contract Sent\')"><div class="listing-stat-count" style="color:#2563eb">'+contractPending+'</div><div class="listing-stat-label">Contract Pending</div></div>'
     +'</div></div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr>'
     +'<th>S.No</th><th>Contract ID</th><th>Employee Name</th><th>Country</th><th>Type</th><th>Compliance</th><th>Date</th><th>Status</th><th>Action</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>'
     +'<div class="lp-pagination">'
-    +'<span class="lp-pagination-info">Showing 1–'+contractsData.length+' of '+contractsData.length+' entries</span>'
+    +'<span class="lp-pagination-info">Showing 1–'+filteredContracts.length+' of '+contractsData.length+' entries</span>'
     +'<div class="lp-pagination-controls">'
     +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<button class="lp-pg-btn active">1</button>'
@@ -2374,6 +2390,10 @@ function buildMyTimesheetHTML() {
     + overlayHTML;
 }
 // ── ALL TIMESHEET PAGE ──
+function atToggleTsFilter(v){
+  atTsQuickFilter=v===''?'':(atTsQuickFilter===v?'':v);
+  renderADTPage();
+}
 function buildAllTimesheetHTML(){
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const data=allTsData;
@@ -2399,15 +2419,16 @@ function buildAllTimesheetHTML(){
     +'<button class="lp-pill-search">Search</button>'
     +'</div></div>'
     +'<div class="listing-stats">'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:var(--orange)">'+unfilled+'</div><div class="listing-stat-label">Unfilled</div></div>'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#0d9488">'+filled+'</div><div class="listing-stat-label">Filled</div></div>'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:var(--navy)">'+total+'</div><div class="listing-stat-label">Total</div></div>'
+    +'<div class="listing-stat'+(atTsQuickFilter==='Unfilled'?' stat-selected':'')+'" onclick="atToggleTsFilter(\'Unfilled\')"><div class="listing-stat-count" style="color:var(--orange)">'+unfilled+'</div><div class="listing-stat-label">Unfilled</div></div>'
+    +'<div class="listing-stat'+(atTsQuickFilter==='Filled'?' stat-selected':'')+'" onclick="atToggleTsFilter(\'Filled\')"><div class="listing-stat-count" style="color:#0d9488">'+filled+'</div><div class="listing-stat-label">Filled</div></div>'
+    +'<div class="listing-stat'+(atTsQuickFilter===''?' stat-selected':'')+'" onclick="atToggleTsFilter(\'\')"><div class="listing-stat-count" style="color:var(--navy)">'+total+'</div><div class="listing-stat-label">Total</div></div>'
     +'</div>'
     +'</div>';
 
   // Table rows
   let rows='';
-  data.forEach(function(emp){
+  const filteredTs=atTsQuickFilter?data.filter(function(d){return d.tsStatus===atTsQuickFilter;}):data;
+  filteredTs.forEach(function(emp){
     const empBadge=emp.empStatus==='Active'
       ?'<span class="at-badge-active">Active</span>'
       :'<span class="at-badge-inactive">Inactive</span>';
@@ -2976,22 +2997,24 @@ function buildCompanySettingsHTML(){
   const activeCount=statusIdx>=0?allRows.filter(r=>String(r[statusIdx]||'').toLowerCase()==='active').length:0;
   const inactiveCount=statusIdx>=0?allRows.filter(r=>String(r[statusIdx]||'').toLowerCase()==='inactive').length:0;
   const pendingCount=statusIdx>=0?allRows.filter(r=>String(r[statusIdx]||'').toLowerCase()==='pending').length:0;
+  const csStatFilter=listStatusFilters['settings']||'';
+  const rows=(csStatFilter&&statusIdx>=0)?allRows.filter(r=>String(r[statusIdx]||'').toLowerCase()===csStatFilter.toLowerCase()):allRows;
   const hamburger='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const headers=cols.map(c=>'<th>'+c+'</th>').join('')+'<th>ACTION</th>';
-  const tableRows=allRows.map(row=>'<tr class="lp-row'+(csSelectedItem===row[0]?' lp-row-selected':'')+'" onclick="openCsSidebar('+row[0]+')">'
+  const tableRows=rows.length?rows.map(row=>'<tr class="lp-row'+(csSelectedItem===row[0]?' lp-row-selected':'')+'" onclick="openCsSidebar('+row[0]+')">'
     +row.map((cell,i)=>buildListingCell(cell,cols[i])).join('')
     +'<td><button class="lp-action-btn" title="More actions" onclick="event.stopPropagation();openCsSidebar('+row[0]+')">'+hamburger+'</button></td>'
-    +'</tr>').join('');
+    +'</tr>').join(''):'<tr><td colspan="'+(cols.length+1)+'" style="padding:24px;text-align:center;color:var(--gray)">No records match this filter.</td></tr>';
   const filters=(meta.filters||[]).map((f,i)=>apCS('cs-lst-f'+i,getFilterOptions(f).slice(1),'',f)).join('');
   const sbInner=csSelectedItem?renderCsSidebar():'';
   return '<div class="listing-page">'
     +'<div class="listing-top">'
       +'<div class="lp-filter-bar" style="flex:1;min-width:0"><div class="lp-filter-bar-label">Select Filter</div>'
-      +'<div class="lp-filter-bar-row">'+filters+'<button class="lp-pill-reset">Reset</button><button class="lp-pill-search">Search</button></div></div>'
+      +'<div class="lp-filter-bar-row">'+filters+'<button class="lp-pill-reset" onclick="resetListingFilters(\'settings\')">Reset</button><button class="lp-pill-search">Search</button></div></div>'
       +'<div class="listing-stats">'
-        +'<div class="listing-stat active"><div class="listing-stat-count">'+activeCount+'</div><div class="listing-stat-label">Active</div></div>'
-        +'<div class="listing-stat inactive"><div class="listing-stat-count">'+inactiveCount+'</div><div class="listing-stat-label">Inactive</div></div>'
-        +'<div class="listing-stat pending"><div class="listing-stat-count">'+pendingCount+'</div><div class="listing-stat-label">Pending</div></div>'
+        +'<div class="listing-stat active'+(csStatFilter==='Active'?' stat-selected':'')+'" onclick="toggleListingStatFilter(\'settings\',\'Active\')"><div class="listing-stat-count">'+activeCount+'</div><div class="listing-stat-label">Active</div></div>'
+        +'<div class="listing-stat inactive'+(csStatFilter==='Inactive'?' stat-selected':'')+'" onclick="toggleListingStatFilter(\'settings\',\'Inactive\')"><div class="listing-stat-count">'+inactiveCount+'</div><div class="listing-stat-label">Inactive</div></div>'
+        +'<div class="listing-stat pending'+(csStatFilter==='Pending'?' stat-selected':'')+'" onclick="toggleListingStatFilter(\'settings\',\'Pending\')"><div class="listing-stat-count">'+pendingCount+'</div><div class="listing-stat-label">Pending</div></div>'
       +'</div>'
     +'</div>'
     +'<div class="lp-split-wrap">'
@@ -3305,6 +3328,11 @@ function renderTkSidebar(){
   return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
 
+function tkToggleStatFilter(v){
+  tkQuickStatusFilter=tkQuickStatusFilter===v?'':v;
+  tkSelectedId=null;
+  renderADTPage();
+}
 function buildTicketsPageHTML(){
   const dotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const countries=[...new Set(ticketsData.map(t=>t.country))];
@@ -3312,7 +3340,8 @@ function buildTicketsPageHTML(){
   const openCount=ticketsData.filter(t=>t.status==='open').length;
   const inProgressCount=ticketsData.filter(t=>t.status==='in_progress').length;
   const blockedCount=ticketsData.filter(t=>t.status==='blocked').length;
-  const rows=ticketsData.map((t,i)=>(
+  const filteredTickets=tkQuickStatusFilter?ticketsData.filter(t=>t.status===tkQuickStatusFilter):ticketsData;
+  const rows=filteredTickets.map((t,i)=>(
     '<tr class="tk-row'+(tkSelectedId===t.id?' lp-row-selected':'')+'" id="tk-row-'+t.id+'" style="cursor:pointer" onclick="openTkSidebar('+t.id+')">'
     +'<td style="color:#6b7280;font-size:13px">'+(i+1)+'</td>'
     +'<td style="font-weight:600;color:var(--navy)">'+t.ticketId+'</td>'
@@ -3323,7 +3352,7 @@ function buildTicketsPageHTML(){
     +'<td>'+tkStatusBadge(t.status)+'</td>'
     +'<td onclick="event.stopPropagation()"><button class="lp-action-btn" onclick="openTkSidebar('+t.id+')" title="View Details">'+dotsIco+'</button></td>'
     +'</tr>'
-  )).join('');
+  )).join('')||'<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--gray)">No tickets match this filter.</td></tr>';
   const sbInner=tkSelectedId?renderTkSidebar():'';
   return '<div class="lp-page">'
     +'<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:4px">'
@@ -3337,14 +3366,14 @@ function buildTicketsPageHTML(){
     +'<button class="lp-pill-search">Search</button>'
     +'</div></div>'
     +'<div class="listing-stats">'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#2563eb">'+openCount+'</div><div class="listing-stat-label">Open</div></div>'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#d97706">'+inProgressCount+'</div><div class="listing-stat-label">In Progress</div></div>'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#dc2626">'+blockedCount+'</div><div class="listing-stat-label">Blocked</div></div>'
+    +'<div class="listing-stat'+(tkQuickStatusFilter==='open'?' stat-selected':'')+'" onclick="tkToggleStatFilter(\'open\')"><div class="listing-stat-count" style="color:#2563eb">'+openCount+'</div><div class="listing-stat-label">Open</div></div>'
+    +'<div class="listing-stat'+(tkQuickStatusFilter==='in_progress'?' stat-selected':'')+'" onclick="tkToggleStatFilter(\'in_progress\')"><div class="listing-stat-count" style="color:#d97706">'+inProgressCount+'</div><div class="listing-stat-label">In Progress</div></div>'
+    +'<div class="listing-stat'+(tkQuickStatusFilter==='blocked'?' stat-selected':'')+'" onclick="tkToggleStatFilter(\'blocked\')"><div class="listing-stat-count" style="color:#dc2626">'+blockedCount+'</div><div class="listing-stat-label">Blocked</div></div>'
     +'</div></div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr><th>S.No</th><th>Ticket ID</th><th>Client Name</th><th>Title</th><th>Category</th><th>Created At</th><th>Status</th><th>Action</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
-    +'<div class="lp-pagination"><span class="lp-pagination-info">Showing 1–'+ticketsData.length+' of '+ticketsData.length+' entries</span>'
+    +'<div class="lp-pagination"><span class="lp-pagination-info">Showing 1–'+filteredTickets.length+' of '+ticketsData.length+' entries</span>'
     +'<div class="lp-pagination-controls">'
     +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<button class="lp-pg-btn active">1</button>'
@@ -3427,6 +3456,11 @@ function renderChatSidebar(){
   return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
 
+function chatToggleStatFilter(v){
+  chatQuickStatusFilter=chatQuickStatusFilter===v?'':v;
+  chatSelectedId=null;
+  renderADTPage();
+}
 function buildChatsPageHTML(){
   const dotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const assignees=[...new Set(chatsData.map(c=>c.assignedTo))];
@@ -3434,7 +3468,8 @@ function buildChatsPageHTML(){
   const activeCount=chatsData.filter(c=>c.status==='active').length;
   const waitingCount=chatsData.filter(c=>c.status==='waiting_client'||c.status==='waiting_csm').length;
   const inactiveCount=chatsData.filter(c=>c.status==='inactive').length;
-  const rows=chatsData.map((c,i)=>(
+  const filteredChats=chatQuickStatusFilter?(chatQuickStatusFilter==='__waiting_group__'?chatsData.filter(c=>c.status==='waiting_client'||c.status==='waiting_csm'):chatsData.filter(c=>c.status===chatQuickStatusFilter)):chatsData;
+  const rows=filteredChats.map((c,i)=>(
     '<tr class="chat-row'+(chatSelectedId===c.id?' lp-row-selected':'')+'" id="chat-row-'+c.id+'" style="cursor:pointer" onclick="openChatSidebar('+c.id+')">'
     +'<td style="color:#6b7280;font-size:13px">'+(i+1)+'</td>'
     +'<td style="font-weight:600;color:var(--navy)">'+c.chatId+'</td>'
@@ -3444,7 +3479,7 @@ function buildChatsPageHTML(){
     +'<td>'+chatStatusBadge(c.status)+'</td>'
     +'<td onclick="event.stopPropagation()"><button class="lp-action-btn" onclick="openChatSidebar('+c.id+')" title="View Details">'+dotsIco+'</button></td>'
     +'</tr>'
-  )).join('');
+  )).join('')||'<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--gray)">No chats match this filter.</td></tr>';
   const sbInner=chatSelectedId?renderChatSidebar():'';
   return '<div class="lp-page">'
     +'<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:4px">'
@@ -3458,14 +3493,14 @@ function buildChatsPageHTML(){
     +'<button class="lp-pill-search">Search</button>'
     +'</div></div>'
     +'<div class="listing-stats">'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#16a34a">'+activeCount+'</div><div class="listing-stat-label">Active</div></div>'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#d97706">'+waitingCount+'</div><div class="listing-stat-label">Waiting</div></div>'
-    +'<div class="listing-stat"><div class="listing-stat-count" style="color:#64748b">'+inactiveCount+'</div><div class="listing-stat-label">Inactive</div></div>'
+    +'<div class="listing-stat'+(chatQuickStatusFilter==='active'?' stat-selected':'')+'" onclick="chatToggleStatFilter(\'active\')"><div class="listing-stat-count" style="color:#16a34a">'+activeCount+'</div><div class="listing-stat-label">Active</div></div>'
+    +'<div class="listing-stat'+(chatQuickStatusFilter==='__waiting_group__'?' stat-selected':'')+'" onclick="chatToggleStatFilter(\'__waiting_group__\')"><div class="listing-stat-count" style="color:#d97706">'+waitingCount+'</div><div class="listing-stat-label">Waiting</div></div>'
+    +'<div class="listing-stat'+(chatQuickStatusFilter==='inactive'?' stat-selected':'')+'" onclick="chatToggleStatFilter(\'inactive\')"><div class="listing-stat-count" style="color:#64748b">'+inactiveCount+'</div><div class="listing-stat-label">Inactive</div></div>'
     +'</div></div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr><th>S.No</th><th>Chat ID</th><th>Client Name</th><th>Assigned To</th><th>Last Activity</th><th>Status</th><th>Action</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
-    +'<div class="lp-pagination"><span class="lp-pagination-info">Showing 1–'+chatsData.length+' of '+chatsData.length+' entries</span>'
+    +'<div class="lp-pagination"><span class="lp-pagination-info">Showing 1–'+filteredChats.length+' of '+chatsData.length+' entries</span>'
     +'<div class="lp-pagination-controls">'
     +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<button class="lp-pg-btn active">1</button>'

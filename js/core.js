@@ -551,9 +551,9 @@ function buildListingHTML(pg){
     +`<div class="listing-top">`
       +`<div class="lp-filter-bar" style="flex:1;min-width:0"><div class="lp-filter-bar-label">Select Filter</div><div class="lp-filter-bar-row">${filters}<button class="lp-pill-reset" onclick="resetListingFilters('${pg}')">Reset</button><button class="lp-pill-search" onclick="applyListingFilters('${pg}')">Search</button></div></div>`
       +`<div class="listing-stats">`
-        +`<div class="listing-stat ${s1Key}"><div class="listing-stat-count">${s1Count}</div><div class="listing-stat-label">${s1Label}</div></div>`
-        +`<div class="listing-stat ${s2Key}"><div class="listing-stat-count">${s2Count}</div><div class="listing-stat-label">${s2Label}</div></div>`
-        +`<div class="listing-stat pending"><div class="listing-stat-count">${s3Count}</div><div class="listing-stat-label">Pending</div></div>`
+        +`<div class="listing-stat ${s1Key}${statusFilter===s1Label?' stat-selected':''}" onclick="toggleListingStatFilter('${pg}','${s1Label}')"><div class="listing-stat-count">${s1Count}</div><div class="listing-stat-label">${s1Label}</div></div>`
+        +`<div class="listing-stat ${s2Key}${statusFilter===s2Label?' stat-selected':''}" onclick="toggleListingStatFilter('${pg}','${s2Label}')"><div class="listing-stat-count">${s2Count}</div><div class="listing-stat-label">${s2Label}</div></div>`
+        +`<div class="listing-stat pending${statusFilter==='Pending'?' stat-selected':''}" onclick="toggleListingStatFilter('${pg}','Pending')"><div class="listing-stat-count">${s3Count}</div><div class="listing-stat-label">Pending</div></div>`
       +`</div>`
     +`</div>`
     +`<div class="listing-card"><table class="lp-table" style="min-width:700px"><thead><tr>${headers}</tr></thead><tbody>${tableRows}</tbody></table>`
@@ -571,6 +571,11 @@ function applyListingFilters(pg){
 }
 function resetListingFilters(pg){
   delete listStatusFilters[pg];
+  renderADTPage();
+}
+function toggleListingStatFilter(pg,value){
+  if(listStatusFilters[pg]===value)delete listStatusFilters[pg];
+  else listStatusFilters[pg]=value;
   renderADTPage();
 }
 
@@ -621,6 +626,7 @@ let apFilterType='',apFilterValue='';
 let lpSidebarPolicyId=null,lpSidebarTab='basic-details',lpSidebarEditMode=false,lpEmpEditMode=false;
 let lpFilterField='',lpFilterStatus='',lpCurrentPage=1;
 let listStatusFilters={},alStatusFilter='',pmInvoiceStatusFilter='';
+let ctQuickStatusFilter='',atTsQuickFilter='',tkQuickStatusFilter='',chatQuickStatusFilter='';
 const LP_PAGE_SIZE=10;
 const lpLogsData={
   1:[

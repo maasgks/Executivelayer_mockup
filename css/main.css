@@ -427,8 +427,10 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .filter-search{height:32px;padding:0 16px;border-radius:20px;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;background:#1e2530;border:1.5px solid #1e2530;color:#fff;transition:.15s}
 .filter-search:hover{background:#2d3748;border-color:#2d3748}
 .listing-stats{display:flex;align-items:stretch;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0;align-self:flex-start}
-.listing-stat{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 22px;min-width:88px;gap:3px;border-right:1px solid var(--border)}
+.listing-stat{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 22px;min-width:88px;gap:3px;border-right:1px solid var(--border);cursor:pointer;user-select:none;transition:background .12s}
 .listing-stat:last-child{border-right:none}
+.listing-stat:hover{background:#f8fafc}
+.listing-stat.stat-selected{background:#eff6ff;box-shadow:inset 0 -3px 0 var(--orange)}
 .listing-stat-count{font-size:22px;font-weight:700;line-height:1.2}
 .listing-stat-label{font-size:10.5px;font-weight:500;color:var(--gray);white-space:nowrap}
 .listing-stat.active .listing-stat-count,.listing-stat.approved .listing-stat-count{color:#16a34a}
