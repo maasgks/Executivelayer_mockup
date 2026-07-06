@@ -3626,8 +3626,6 @@ function buildAIJourneyDetailHTML(){
     +(j.status==='Draft'?'<div style="margin-top:16px">'+statusActionHTML+'</div>':'')
     +'</div>'
     +buildAIJourneyRunSummaryHTML(j.id)
-    +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
-    +buildAIResponsibilitySplitHTML(j.id)
     +'<div class="review-title" style="margin:32px 0 14px">Journey Timeline</div>'
     +'<div class="ai-timeline">'+timeline+'</div>';
   return '<div class="ai-exec-page ai-journey-detail-page">'+mainContent+'</div>';
@@ -4361,7 +4359,9 @@ function buildCfgJourneyDetailHTML(){
     +'<div style="margin-bottom:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><p style="font-size:17px;font-weight:700;margin:0">'+j.name+'</p>'+cfgJourneyStatusPill(j.status)+'</div>'
     +'<p style="font-size:12.5px;color:var(--gray);margin:-14px 0 24px;max-width:680px;line-height:1.6">'+j.desc+'</p>'
     +statGrid
-    +'<div class="review-title" style="margin-bottom:14px">Flow &middot; runs top to bottom &middot; click a step to assign an agent</div>'
+    +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
+    +buildAIResponsibilitySplitHTML(j.id)
+    +'<div class="review-title" style="margin:32px 0 14px">Flow &middot; runs top to bottom &middot; click a step to assign an agent</div>'
     +'<div class="ai-timeline">'+timeline+'</div>'
     +'<button class="btn btn-secondary btn-sm" style="margin-top:16px;margin-left:44px;border-style:dashed">+ Add step</button>'
     +'</div>';
