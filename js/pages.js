@@ -4177,21 +4177,23 @@ function buildCfgModelDetailHTML(){
     :'';
   const removeSection=editing?'':'<div style="margin-top:22px"><button type="button" class="ep-cancel-btn" style="color:#dc2626;border-color:#fca5a5" onclick="confirmRemoveCfgModel(\''+m.id+'\')">Remove model</button></div>';
   const saveCancelBar=editing?'<div style="display:flex;gap:10px;margin-bottom:18px"><button class="ep-cancel-btn" onclick="cancelCfgModelEdit()">Cancel</button><button class="ep-save-btn" onclick="saveCfgModelEdit(\''+m.id+'\')">Save changes</button></div>':'';
+  const fetchSampleSection=editing?'':'<div class="ep-form-card">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">'
+    +'<div><div style="font-size:13.5px;font-weight:700;color:var(--navy)">Fetch a sample record</div><div style="font-size:12px;color:var(--gray);margin-top:3px;max-width:480px">Pulls one live record through the mapping above &mdash; to prove the wiring, without storing anything.</div></div>'
+    +'<button class="btn btn-primary btn-sm" onclick="testCfgModel(\''+m.id+'\',this)">Run test</button>'
+    +'</div>'
+    +sample
+    +'</div>';
   return '<div class="ai-exec-page">'
     +cfgBackBtn('cfg-data-foundation','Data Foundation')
     +(editing
-      ?heading+saveCancelBar
+      ?heading
       :'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px"><div style="flex:1;min-width:0">'+heading+'</div>'+actionBtns+'</div>')
     +mapSection
     +enrichSection
     +rulesSection
-    +'<div class="ep-form-card">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">'
-    +'<div><div style="font-size:13.5px;font-weight:700;color:var(--navy)">Fetch a sample record</div><div style="font-size:12px;color:var(--gray);margin-top:3px;max-width:480px">Pulls one live record through the mapping above &mdash; to prove the wiring, without storing anything.</div></div>'
-    +(editing?'':'<button class="btn btn-primary btn-sm" onclick="testCfgModel(\''+m.id+'\',this)">Run test</button>')
-    +'</div>'
-    +sample
-    +'</div>'
+    +saveCancelBar
+    +fetchSampleSection
     +removeSection
     +'</div>';
 }
