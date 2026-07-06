@@ -3649,22 +3649,20 @@ function buildAIJourneyRunSummaryHTML(journeyId){
   const exceptions=runs.filter(function(r){return r.status==='Exception';}).length;
   const inProgress=runs.length-completed-exceptions;
   const stageCounts=aiJourneyRunStageCounts(journeyId);
-  const bar='<div class="aicj-bar" style="margin-bottom:0">'+events.map(function(e,i){
+  const bar='<div class="aicj-box-row">'+events.map(function(e,i){
     const c=stageCounts[i];
     const hasBadge=c.total>0;
-    const badgeCls=c.exceptions>0?'exception':'pending';
-    const badge=hasBadge?'<div class="aicj-stage-badge '+badgeCls+'">'+c.total+'</div>':'';
-    let html='<div class="aicj-step">'
-      +'<div class="aicj-dot-wrap'+(hasBadge?' clickable':'')+'"'+(hasBadge?' onclick="aiJourneyDetailSelectStage('+i+')"':'')+'>'
-      +'<div class="aicj-dot pending"></div>'
+    const isException=c.exceptions>0;
+    const badgeCls=isException?'exception':'pending';
+    const badge=hasBadge
+      ?'<div class="aicj-box-badge '+badgeCls+'">'+c.total+' '+(isException?(c.exceptions===1?'Exception':'Exceptions'):'Pending')+'</div>'
+      :'<div class="aicj-box-badge none">No runs</div>';
+    const selected=aiJourneyDetailSelectedStage===i?' selected':'';
+    return '<div class="aicj-box'+(hasBadge?' clickable':'')+selected+'"'+(hasBadge?' onclick="aiJourneyDetailSelectStage('+i+')"':'')+'>'
+      +'<div class="aicj-box-num">'+(i+1)+'</div>'
+      +'<div class="aicj-box-name">'+e.name+'</div>'
       +badge
-      +'</div>'
-      +'<div class="aicj-step-label">'+aiCjShortLabel(e.name)+'</div>'
       +'</div>';
-    if(i<events.length-1){
-      html+='<div class="aicj-line"><div class="aicj-line-fill"></div></div>';
-    }
-    return html;
   }).join('')+'</div>';
   return '<div class="review-title" style="margin-bottom:14px">Journey Runs</div>'
     +'<div class="stat-grid" style="margin-bottom:20px">'
