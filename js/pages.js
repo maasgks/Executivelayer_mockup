@@ -3716,13 +3716,14 @@ function buildAIJourneyRunDrilldownHTML(){
   }else{
     return '<div style="font-size:12px;color:var(--gray);padding:4px 2px">Click a stat card above, or a stage in the bar below, to see the journeys behind it.</div>';
   }
+  const drilldownHamburger='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const rows=runs.map(function(r){
     return '<tr style="cursor:pointer" onclick="viewAIRun(\''+r.runId+'\')">'
       +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+r.runId+'</div></td>'
       +'<td><div class="cell-primary">'+r.country+'</div><div class="cell-sub">'+r.contractType+'</div></td>'
       +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
       +'<td class="cell-sub">'+r.lastActivity+'</td>'
-      +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRun(\''+r.runId+'\')">View Run</button></td>'
+      +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRun(\''+r.runId+'\')">View Run</button><button class="lp-action-btn" style="margin-left:8px" title="More actions" onclick="viewAIRun(\''+r.runId+'\')">'+drilldownHamburger+'</button></td>'
       +'</tr>';
   }).join('');
   return '<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:10px">'+title+' &middot; '+runs.length+' '+(runs.length===1?'journey':'journeys')+'</div>'
