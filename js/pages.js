@@ -4962,6 +4962,12 @@ function findExistingEmployeeByQuery(query){
   return all.find(function(e){return String(e.empId||'').toLowerCase()===q;})
     || findExistingEmployee(q);
 }
+function aiRunFlowSimulate(){
+  const inp=document.getElementById('ai-run-prompt');if(!inp)return;
+  const flow=aiRunFlows[aiRunFlowJourneyId];if(!flow)return;
+  inp.value=(flow.promptPlaceholder||'').replace(/^e\.g\.\s*/i,'');
+  aiRunFlowSubmit();
+}
 function aiRunFlowSubmit(){
   const inp=document.getElementById('ai-run-prompt');if(!inp)return;
   if(aiRunFlowJourneyId==='payroll-creation'){aiPayrollRunSearch(inp.value);return;}
@@ -5208,6 +5214,7 @@ function buildAIRunPromptHTML(flow,j){
     +'<div class="ai-run-icon-wrap">'+j.icon+'</div>'
     +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">'+flow.entryLabel+'</div>'
     +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:18px">'+flow.entryDesc+'</div>'
+    +'<div style="margin-bottom:14px"><button class="btn btn-secondary" onclick="aiRunFlowSimulate()">Simulate Journey</button></div>'
     +'<div class="input-row" style="margin:0;max-width:480px">'
     +'<input class="input-field" id="ai-run-prompt" placeholder="'+flow.promptPlaceholder+'" onkeydown="if(event.key===\'Enter\')aiRunFlowSubmit()">'
     +'<button class="icon-btn active" onclick="aiRunFlowSubmit()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
