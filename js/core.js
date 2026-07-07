@@ -28,6 +28,7 @@ const aiH2rCountryData={
   'Italy':{rateRules:'Employer contributions ~29%–32% of gross salary',statutory:'INPS, INAIL, TFR (severance provision)',taxBand:'Progressive IRPEF, 23%–43%'}
 };
 let selectedAIRunId='RUN-2001';
+let liveRunSeq=9000;
 let aiJourneyDetailSelectedStage=-1;
 let aiRunStatusFilter='';
 const aiAutomationRuns={

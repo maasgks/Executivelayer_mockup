@@ -3665,6 +3665,7 @@ function buildAIExecutiveDashboardHTML(){
     +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p></div>'
     +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>':'')
     +'</div>'
+    +buildMyPendingTasksHTML()
     +catBoxes
     +catInfo
     +'<div class="ai-journey-grid ai-journey-grid-lg">'+cards+'</div>'
@@ -5020,17 +5021,25 @@ function aiRunFlowRunCurrentStep(){
 function aiRunFlowApprove(){
   aiRunFlowStep++;
   if(aiRunFlowJourneyId==='h2r-lifecycle'&&aiRunFlowStep===4){
+    if(aiH2rData.runId)aiUpsertRun('h2r-lifecycle',aiH2rData.runId,{currentStepIdx:4,status:'In Progress',lastActivity:'Just now'});
     aiH2rOffboardStep=0;
     navigatePage('ai-journey-run');
     aiH2rRunOffboardStep();
     return;
+  }
+  if(aiRunFlowJourneyId==='payroll-creation'&&aiPayrollData.runId){
+    aiUpsertRun('payroll-creation',aiPayrollData.runId,{currentStepIdx:4,status:'In Progress',lastActivity:'Just now'});
   }
   navigatePage('ai-journey-run');
   aiRunFlowRunCurrentStep();
 }
 function aiPayrollCreateSlip(){
   aiShowLoader('Creating Salary Slip&hellip;','Saving payroll document for '+(aiPayrollData.name||'employee'));
-  setTimeout(function(){aiRunFlowStep=5;navigatePage('ai-journey-run');},1900);
+  setTimeout(function(){
+    aiRunFlowStep=5;
+    if(aiPayrollData.runId)aiUpsertRun('payroll-creation',aiPayrollData.runId,{currentStepIdx:5,status:'Completed',lastActivity:'Just now'});
+    navigatePage('ai-journey-run');
+  },1900);
 }
 function aiRunFlowFinish(){
   aiRunFlowStep++;
@@ -5120,7 +5129,7 @@ function aiPayrollBuildData(emp,parsed){
   const gross=attendancePay+overtime;
   const pf=Math.round(gross*0.12),pt=200,esi=Math.round(gross*0.0075),tax=Math.round(gross*0.05);
   const deductions=pf+pt+esi+tax;
-  return {employee:emp,name:emp.name,empId:emp.empId,country:emp.country||parsed.country||'India',role:emp.jobTitle||parsed.role||'Employee',dept:emp.dept||'—',email:emp.email||'—',period:'June 2026',slipId:'PAY-'+Math.floor(10000+Math.random()*89999),base:base,daysPresent:daysPresent,leaveDays:leaveDays,overtimeHours:overtimeHours,totalDays:totalDays,gross:gross,pf:pf,pt:pt,esi:esi,tax:tax,deductions:deductions,net:gross-deductions};
+  return {employee:emp,name:emp.name,empId:emp.empId,country:emp.country||parsed.country||'India',role:emp.jobTitle||parsed.role||'Employee',dept:emp.dept||'—',email:emp.email||'—',period:'June 2026',slipId:'PAY-'+Math.floor(10000+Math.random()*89999),base:base,daysPresent:daysPresent,leaveDays:leaveDays,overtimeHours:overtimeHours,totalDays:totalDays,gross:gross,pf:pf,pt:pt,esi:esi,tax:tax,deductions:deductions,net:gross-deductions,runId:'RUN-'+(liveRunSeq++)};
 }
 function aiPayrollRenderMatchCard(emp,parsed){
   const res=document.getElementById('ai-payroll-result');if(!res)return;
@@ -5151,6 +5160,7 @@ function aiPayrollUseEmployee(empId){
   aiPayrollData=aiPayrollBuildData(emp,parsed);
   aiRunFlowData=Object.assign({},aiPayrollData,{amount:aiPayrollData.net});
   aiRunFlowStep=1;
+  aiUpsertRun('payroll-creation',aiPayrollData.runId,{client:aiPayrollData.name,country:aiPayrollData.country,contractType:aiPayrollData.role,currentStepIdx:1,status:'In Progress',lastActivity:'Just now'});
   navigatePage('ai-journey-run');
   aiRunFlowRunCurrentStep();
 }
@@ -5168,6 +5178,7 @@ function buildAIPayrollStageHTML(flow,j){
 }
 function buildAIPayrollApprovalHTML(){
   const d=aiPayrollData||{};
+  if(d.runId)aiUpsertRun('payroll-creation',d.runId,{client:d.name,country:d.country,contractType:d.role,currentStepIdx:3,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'We\'ve notified <strong style="color:var(--navy)">'+aiPayrollManager.name+'</strong> (Finance Approver) to review the calculated payroll for <strong>'+(d.name||'the employee')+'</strong>. Once approved, this journey will automatically continue to salary slip generation.',
     timelineItems:[
@@ -5270,7 +5281,7 @@ function aiH2rSimulateNew(){
 function aiH2rBuildData(name,country,role){
   const compliance=aiH2rCountryData[country]||aiH2rCountryData['India'];
   const policies=leavePoliciesData.filter(function(p){return p.status==='Active';}).slice(0,4);
-  return {name:name,country:country||'India',role:role||'Employee',empId:'EMP'+Math.floor(1000+Math.random()*8999),compliance:compliance,policies:policies,finalSettlement:Math.floor(20000+Math.random()*40000)};
+  return {name:name,country:country||'India',role:role||'Employee',empId:'EMP'+Math.floor(1000+Math.random()*8999),compliance:compliance,policies:policies,finalSettlement:Math.floor(20000+Math.random()*40000),runId:'RUN-'+(liveRunSeq++)};
 }
 function aiH2rRunCreate(text){
   const parsed=parseAIRunPrompt(text);
@@ -5280,6 +5291,7 @@ function aiH2rRunCreate(text){
     aiH2rData=aiH2rBuildData(parsed.name||'New Employee',parsed.country,parsed.role);
     aiRunFlowData=Object.assign({},aiH2rData);
     aiRunFlowStep=0;
+    aiUpsertRun('h2r-lifecycle',aiH2rData.runId,{client:aiH2rData.name,country:aiH2rData.country,contractType:aiH2rData.role,currentStepIdx:0,status:'In Progress',lastActivity:'Just now'});
     navigatePage('ai-journey-run');
     aiRunFlowRunCurrentStep();
   },1500);
@@ -5329,6 +5341,7 @@ function buildAIH2rLeavePolicyHTML(){
 }
 function buildAIH2rApprovalHTML(){
   const d=aiH2rData||{};
+  if(d.runId)aiUpsertRun('h2r-lifecycle',d.runId,{client:d.name,country:d.country,contractType:d.role,currentStepIdx:3,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'A policy deviation was detected while setting up <strong>'+(d.name||'the employee')+'</strong>. We\'ve notified <strong style="color:var(--navy)">'+aiHrManager.name+'</strong> (HR Manager) to review and approve before finalizing the setup.',
     timelineItems:[
@@ -5347,6 +5360,7 @@ function aiH2rRunOffboardStep(){
   const step=aiH2rOffboardSteps[aiH2rOffboardStep];
   if(!step){
     aiRunFlowStep=5;
+    if(aiH2rData.runId)aiUpsertRun('h2r-lifecycle',aiH2rData.runId,{currentStepIdx:4,status:'Completed',lastActivity:'Just now'});
     navigatePage('ai-journey-run');
     return;
   }
@@ -5833,8 +5847,10 @@ function aiSubmitAssistedContract(type){
     country:p.country||'—',
     jobTitle:p.jobTitle||'—',
     type:type,
-    contractRecordId:newId
+    contractRecordId:newId,
+    runId:'RUN-'+(liveRunSeq++)
   };
+  aiUpsertRun('contract-creation',aiProposalDraft.runId,{client:aiProposalDraft.name,country:aiProposalDraft.country,contractType:aiProposalDraft.type,currentStepIdx:1,status:'In Progress',lastActivity:'Just now'});
   aiShowLoader('Creating Proposal&hellip;','Compiling contract data into a proposal for '+aiProposalDraft.name);
   setTimeout(function(){page='ai-proposal-created';renderADTPage();},2000);
 }
@@ -5971,6 +5987,7 @@ function buildAIWaitingApprovalHTML(opts){
 }
 function buildAIProposalWaitingApprovalHTML(){
   const d=aiProposalDraft||{};
+  if(d.runId)aiUpsertRun('contract-creation',d.runId,{client:d.name,country:d.country,contractType:d.type,currentStepIdx:2,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'We\'ve notified <strong style="color:var(--navy)">'+aiDealManager.name+'</strong> (Deal Manager) to review proposal <strong>'+d.proposalId+'</strong> for <strong>'+d.name+'</strong>. Once approved, this journey will automatically continue to contract generation.',
     timelineItems:[
@@ -5984,6 +6001,8 @@ function buildAIProposalWaitingApprovalHTML(){
 }
 function buildAIContractWaitingApprovalHTML(){
   const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
+  const pd=aiProposalDraft||{};
+  if(pd.runId)aiUpsertRun('contract-creation',pd.runId,{client:pd.name,country:pd.country,contractType:pd.type,currentStepIdx:4,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'We\'ve notified <strong style="color:var(--navy)">'+aiOpsManager.name+'</strong> (Ops Manager) to review contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+(rec.empName||'')+'</strong>. Once approved, this journey will automatically continue to onboarding.',
     timelineItems:[
@@ -6009,6 +6028,7 @@ function aiSimulateContractApproval(){
         showAiToast(aiOpsManager.name+' approved the contract',rec.empName?'Onboarding for '+rec.empName+' is starting':'Onboarding is starting');
       }
     }
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:5,status:'In Progress',lastActivity:'Just now'});
     page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
   },2000);
 }
@@ -6089,6 +6109,7 @@ function aiCtRunOnboardingStep(){
       const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
       if(rec)rec.status='Ready for Payroll';
     }
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:6,status:'Completed',lastActivity:'Just now'});
     page='ai-journey-complete';renderADTPage();
     return;
   }
@@ -6151,6 +6172,47 @@ function aiRunCounts(run,journeyId){
 function aiRunStatusPillClass(status){return status==='Active'?'active':status==='Waiting for Approval'?'pending':status==='Exception'?'inactive':status==='Completed'?'approved':'draft';}
 function viewAIActiveAutomation(journeyId){selectedAIJourneyId=journeyId;navigatePage('ai-active-automation');}
 function viewAIRun(runId){selectedAIRunId=runId;navigatePage('ai-run-detail');}
+function viewAIRunTask(runId,journeyId){selectedAIJourneyId=journeyId;selectedAIRunId=runId;navigatePage('ai-run-detail');}
+
+// -- Cross-journey pending-task tracking: live-run flows (H2R/Payroll/Contract) upsert into aiAutomationRuns here --
+function aiUpsertRun(journeyId,runId,patch){
+  const runs=aiAutomationRuns[journeyId]=aiAutomationRuns[journeyId]||[];
+  let run=runs.find(function(r){return r.runId===runId;});
+  if(!run){run={runId:runId};runs.unshift(run);}
+  Object.assign(run,patch);
+  return run;
+}
+function aiAllPendingRuns(){
+  const out=[];
+  Object.keys(aiAutomationRuns).forEach(function(jid){
+    const j=aiJourneys.find(function(x){return x.id===jid;});if(!j)return;
+    (aiAutomationRuns[jid]||[]).forEach(function(r){
+      if(r.status==='Waiting for Approval'||r.status==='Exception')out.push({run:r,journey:j});
+    });
+  });
+  out.sort(function(a,b){return (a.run.status==='Exception'?0:1)-(b.run.status==='Exception'?0:1);});
+  return out;
+}
+function buildMyPendingTasksHTML(){
+  const items=aiAllPendingRuns();
+  if(!items.length)return '';
+  const rows=items.map(function(it){
+    const r=it.run,j=it.journey;
+    const events=aiJourneyEvents[j.id]||[];
+    const step=events[Math.min(r.currentStepIdx,events.length-1)];
+    const isException=r.status==='Exception';
+    const actionText=isException?(r.exceptionNote||'This run is blocked and needs review.'):('Waiting on: '+(step?step.name:'Review'));
+    return '<div class="ea-req-row" style="cursor:pointer" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">'
+      +'<div><div class="ea-req-label">'+j.name+' &mdash; '+r.client+'</div><div class="ea-req-time">'+actionText+'</div></div>'
+      +'<span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span>'
+      +'</div>';
+  }).join('');
+  return '<div class="setup-card" style="margin-bottom:20px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="setup-title" style="margin-bottom:0">My Pending Tasks</div><span class="status-pill pending">'+items.length+' Needs Action</span></div>'
+    +'<div class="setup-sub" style="margin-bottom:14px">Journeys you&rsquo;ve run that are waiting on an approval or need attention</div>'
+    +'<div class="ea-req-list">'+rows+'</div>'
+    +'</div>';
+}
 
 function buildAIActiveAutomationHTML(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
@@ -6328,6 +6390,7 @@ function aiSimulateApproval(){
         showAiToast(aiDealManager.name+' approved the proposal','Generating the contract now');
       }
     }
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:3,status:'In Progress',lastActivity:'Just now'});
     page='ai-contract-document';renderADTPage();
   },2000);
 }
