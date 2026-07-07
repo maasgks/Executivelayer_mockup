@@ -3602,31 +3602,29 @@ function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrSt
 function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
 
 function buildAIExecutiveDashboardHTML(){
-  const filteredAIJourneys=cfgJourneyCategoryFilter?aiJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):aiJourneys;
+  const lockedRoadmapJourneys=cfgJourneys.filter(function(j){return j.locked;});
+  const allAIJourneys=aiJourneys.concat(lockedRoadmapJourneys);
+  const filteredAIJourneys=cfgJourneyCategoryFilter?allAIJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):allAIJourneys;
   const activeCat=cfgJourneyCategoryFilter?cfgJourneyCategories.find(function(c){return c.id===cfgJourneyCategoryFilter;}):null;
   const catBoxes='<div class="cfg-cat-grid" style="margin-bottom:16px">'
     +cfgJourneyCategories.map(function(c){
-      const count=aiJourneys.filter(function(j){return j.category===c.id;}).length;
-      const col=cfgCategoryColors[c.id];
-      const isActive=cfgJourneyCategoryFilter===c.id;
-      return '<div class="cfg-cat-box'+(isActive?' active':'')+'" style="'+(isActive?'border-color:'+col+';background:'+col+'0d':'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')">'
-        +'<div class="cfg-cat-box-top"><span class="cfg-cat-box-id" style="background:'+col+'1a;color:'+col+'">'+c.id+'</span><span class="cfg-cat-box-count">'+count+' '+(count===1?'journey':'journeys')+'</span></div>'
-        +'<div class="cfg-cat-box-name">'+c.name+'</div>'
-        +'<div class="cfg-cat-box-desc">'+c.desc+'</div>'
-        +'</div>';
+      const count=allAIJourneys.filter(function(j){return j.category===c.id;}).length;
+      return cfgCatBoxHTML(c,count);
     }).join('')
     +'</div>';
   const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'';
   const cards=filteredAIJourneys.length?filteredAIJourneys.map(j=>{
-    const isActive=j.status==='Active';
+    const locked=!!j.locked;
+    const lockedTap=locked&&portalRole==='entity-user';
+    const isActive=!locked&&j.status==='Active';
     const cta=isActive?aiJourneyCTA(j):null;
-    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+'" onclick="viewAIJourney(\''+j.id+'\')">'
+    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
       +(isActive?'<div class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</div>':'')
       +'<div class="ai-journey-card-top">'
-      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+'</div>'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
       +'</div>'
       +'<div class="ai-journey-desc">'+j.desc+'</div>'
-      +(j.status==='Draft'
+      +(!locked&&j.status==='Draft'
         ?'<div class="ai-journey-draft-banner" onclick="event.stopPropagation();startAutomateJourney(\''+j.id+'\')"><span class="ai-journey-draft-banner-text">Draft pending</span><span class="ai-journey-draft-banner-cta">Continue now to automate your journey &rarr;</span></div>'
         :'')
       +(cta?'<button class="btn btn-primary ai-journey-cta-btn" onclick="event.stopPropagation();'+cta.action+'">'+cta.label+'</button>':'')
@@ -4356,6 +4354,16 @@ function cfgCategoryBadge(catId){
   const c=cfgCategoryColors[catId]||'#6b7280';
   return '<span class="badge" style="background:'+c+'1a;color:'+c+';border:1px solid '+c+'55">'+catId+'</span>';
 }
+function cfgCatBoxHTML(c,count){
+  const col=cfgCategoryColors[c.id];
+  const isActive=cfgJourneyCategoryFilter===c.id;
+  const locked=portalRole!=='super-admin'&&entityLockedCategories.includes(c.id);
+  return '<div class="cfg-cat-box'+(isActive?' active':'')+(locked?' cfg-cat-box-locked':'')+'" style="'+(isActive?'border-color:'+col+';background:'+col+'0d':'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')">'
+    +'<div class="cfg-cat-box-top"><span class="cfg-cat-box-id" style="background:'+col+'1a;color:'+col+'">'+c.id+'</span>'+(locked?'<span class="cfg-cat-box-lock"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'<span class="cfg-cat-box-count">'+count+' '+(count===1?'journey':'journeys')+'</span>')+'</div>'
+    +'<div class="cfg-cat-box-name">'+c.name+'</div>'
+    +'<div class="cfg-cat-box-desc">'+c.desc+'</div>'
+    +'</div>';
+}
 function cfgSetJourneyCategoryFilter(cat){
   cfgJourneyCategoryFilter=cfgJourneyCategoryFilter===cat?'':cat;
   renderADTPage();
@@ -4366,24 +4374,19 @@ function buildCfgContextJourneyHTML(){
   const catBoxes='<div class="cfg-cat-grid">'
     +cfgJourneyCategories.map(function(c){
       const count=cfgJourneys.filter(function(j){return j.category===c.id;}).length;
-      const col=cfgCategoryColors[c.id];
-      const isActive=cfgJourneyCategoryFilter===c.id;
-      return '<div class="cfg-cat-box'+(isActive?' active':'')+'" style="'+(isActive?'border-color:'+col+';background:'+col+'0d':'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')">'
-        +'<div class="cfg-cat-box-top"><span class="cfg-cat-box-id" style="background:'+col+'1a;color:'+col+'">'+c.id+'</span><span class="cfg-cat-box-count">'+count+' '+(count===1?'journey':'journeys')+'</span></div>'
-        +'<div class="cfg-cat-box-name">'+c.name+'</div>'
-        +'<div class="cfg-cat-box-desc">'+c.desc+'</div>'
-        +'</div>';
+      return cfgCatBoxHTML(c,count);
     }).join('')
     +'</div>';
   const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px">Showing all journeys &mdash; click a category above to filter.</div>';
   const cards=filteredJourneys.length?filteredJourneys.map(function(j){
-    return '<div class="ai-journey-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:24px" onclick="viewCfgJourney(\''+j.id+'\')">'
+    const locked=!!j.locked;
+    return '<div class="ai-journey-card'+(locked?' ai-journey-card-locked':'')+'" style="flex-direction:row;align-items:center;justify-content:space-between;gap:24px"'+(locked?'':' onclick="viewCfgJourney(\''+j.id+'\')"')+'>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+cfgJourneyStatusPill(j.status)+'</div>'
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':cfgJourneyStatusPill(j.status))+'</div>'
       +'<div class="ai-journey-desc" style="white-space:normal;overflow:visible;text-overflow:clip;max-width:640px">'+j.desc+'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
       +'</div>'
-      +'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>'
+      +(locked?'':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
   return '<div class="ai-exec-page">'
@@ -5639,6 +5642,21 @@ function showAiToast(title,sub){
     el.classList.add('ai-toast-out');
     setTimeout(function(){el.remove();},250);
   },3200);
+}
+function closeLockedToast(btn){
+  const el=btn.closest('.locked-toast');if(!el)return;
+  el.classList.add('locked-toast-out');
+  setTimeout(function(){el.remove();},200);
+}
+function showLockedJourneyToast(journeyName){
+  const stack=document.getElementById('locked-toast-stack');if(!stack)return;
+  const el=document.createElement('div');
+  el.className='locked-toast';
+  el.innerHTML='<div class="locked-toast-avatar">J</div>'
+    +'<div class="locked-toast-body"><div class="locked-toast-row1"><div class="locked-toast-text">Please contact Admin to activate this journey</div><div class="locked-toast-time">Just now</div></div>'
+    +'<div class="locked-toast-row2"><span class="locked-toast-journey">'+journeyName+'</span><span class="locked-toast-pending">Locked</span></div></div>'
+    +'<button class="locked-toast-close" onclick="closeLockedToast(this)" title="Dismiss"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+  stack.appendChild(el);
 }
 function buildAIProposalCreatedHTML(){
   const d=aiProposalDraft||{};

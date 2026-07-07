@@ -1093,6 +1093,8 @@ const cfgJourneyCategories=[
   {id:'F2A',name:'Finance to Accounting',desc:'Financial transactions flowing into the general ledger, reconciliation, close, and reporting.'}
 ];
 let cfgJourneyCategoryFilter='';
+// P2P and F2A have no journeys built out yet — locked for entity-facing roles until they do; Super Admin can still browse/author into them.
+const entityLockedCategories=['P2P','F2A'];
 // -- ENTITY ADMIN: journey activation + request queue (shared session-wide, not per-entity) --
 const entityJourneyActivation={};
 let entityRequestSeq=1;
@@ -1130,7 +1132,14 @@ const cfgJourneys=[
       {name:'Show Leave Policy',src:'AI Leave Policy Engine',type:'src'},
       {name:'HR Approval (if Required)',src:'HR Manager',type:'rule'},
       {name:'Run Offboarding',src:'AI Offboarding Engine',type:'src'}
-    ]}
+    ]},
+  // -- Roadmap placeholders for P2P / F2A (not yet built out) — always shown locked, no run mechanics --
+  {id:'vendor-onboarding',name:'Vendor Onboarding Journey',category:'P2P',desc:'Automates vendor invitation, document collection, and supplier master creation ahead of procurement activation.',status:'Inactive',tags:['Roadmap','Vendor Portal, Compliance Hub'],locked:true,steps:[]},
+  {id:'po-goods-receipt',name:'PO to Goods Receipt Journey',category:'P2P',desc:'Automates purchase order creation and approval through to goods/service receipt and 3-way-match readiness.',status:'Inactive',tags:['Roadmap','Procurement, Finance'],locked:true,steps:[]},
+  {id:'supplier-invoice-payment',name:'Supplier Invoice to Payment Journey',category:'P2P',desc:'Automates supplier invoice intake, 3-way match validation, approval, and payment execution.',status:'Inactive',tags:['Roadmap','Payments, Finance'],locked:true,steps:[]},
+  {id:'payroll-gl-posting',name:'Payroll to GL Posting Journey',category:'F2A',desc:'Automates journal entry generation and general ledger posting once a payroll run is finalized.',status:'Inactive',tags:['Roadmap','Payroll, Finance'],locked:true,steps:[]},
+  {id:'month-end-close',name:'Month-End Close & Reconciliation Journey',category:'F2A',desc:'Automates reconciliation of payroll, vendor payments, and client billing ahead of period-end close.',status:'Inactive',tags:['Roadmap','Finance, Compliance Hub'],locked:true,steps:[]},
+  {id:'statutory-tax-reporting',name:'Statutory & Tax Compliance Reporting Journey',category:'F2A',desc:'Automates generation of statutory and tax compliance filings from payroll and vendor transaction data.',status:'Inactive',tags:['Roadmap','Compliance Hub, Finance'],locked:true,steps:[]}
 ];
 
 // -- Configure: Agents — one per AI-driven step across Contract Creation / Payroll Creation / H2R Lifecycle --
