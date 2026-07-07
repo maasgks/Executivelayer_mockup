@@ -83,8 +83,7 @@ function renderADTPage(){
   const sidebar=document.getElementById('adt-sidebar');
   if(sidebar)sidebar.style.display=page==='cost-calculator'?'none':'';
   renderPageContent('adt-content');
-  const content=document.getElementById('adt-content');
-  if(content)content.scrollTop=0;
+  aiScrollContentToTop();
 }
 
 // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ INIT ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬

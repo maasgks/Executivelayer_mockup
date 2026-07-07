@@ -4934,8 +4934,7 @@ function saveAIAutomation(mode){
   if(mode==='active'){delete aiAutomateProgress[j.id];}
   else{aiAutomateProgress[j.id]={step:aiAutomateStep,formData:Object.assign({},d)};}
   aiAutomateStep=0;aiAutomateFormData={};aiAutomateSkipPicker=false;
-  const col=document.getElementById('adt-content');
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">'+(mode==='active'?'Activating Automation…':'Saving Draft…')+'</div><div class="cl-sub">'+j.name+'</div></div>';
+  aiShowLoader(mode==='active'?'Activating Automation…':'Saving Draft…',j.name,document.getElementById('adt-content'));
   setTimeout(function(){navigatePage('ai-executive');},1400);
 }
 function cancelAIAutomation(){
@@ -5030,8 +5029,7 @@ function aiRunFlowApprove(){
   aiRunFlowRunCurrentStep();
 }
 function aiPayrollCreateSlip(){
-  const col=aiCtLoaderTarget();
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Salary Slip&hellip;</div><div class="cl-sub">Saving payroll document for '+(aiPayrollData.name||'employee')+'</div></div>';
+  aiShowLoader('Creating Salary Slip&hellip;','Saving payroll document for '+(aiPayrollData.name||'employee'));
   setTimeout(function(){aiRunFlowStep=5;navigatePage('ai-journey-run');},1900);
 }
 function aiRunFlowFinish(){
@@ -5514,6 +5512,17 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
 }
 function buildAIContractJourneyBarHTML(stage){return buildAIJourneyBarHTML('contract-creation',stage,'contract');}
 function aiCtLoaderTarget(){return document.getElementById('aicj-inner')||document.getElementById('adt-content');}
+function aiScrollContentToTop(){
+  const el=document.getElementById('adt-content');
+  if(!el||el.scrollTop===0)return;
+  el.scrollTo({top:0,behavior:'smooth'});
+}
+function aiShowLoader(title,sub,targetEl){
+  const el=targetEl||aiCtLoaderTarget();
+  if(!el)return;
+  el.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">'+title+'</div><div class="cl-sub">'+sub+'</div></div>';
+  aiScrollContentToTop();
+}
 function parseAIContractPrompt(text){
   const countries=['Netherlands','India','Germany','Spain','United Kingdom','France','Italy'];
   const empTypes=['EOR','PEO','Contractor'];
@@ -5826,8 +5835,7 @@ function aiSubmitAssistedContract(type){
     type:type,
     contractRecordId:newId
   };
-  const col=aiCtLoaderTarget();
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Proposal&hellip;</div><div class="cl-sub">Compiling contract data into a proposal for '+aiProposalDraft.name+'</div></div>';
+  aiShowLoader('Creating Proposal&hellip;','Compiling contract data into a proposal for '+aiProposalDraft.name);
   setTimeout(function(){page='ai-proposal-created';renderADTPage();},2000);
 }
 let _aiAutoAdvanceTimer=null;
@@ -5925,8 +5933,7 @@ function buildAIProposalCreatedHTML(){
     +'</div></div>';
 }
 function aiSendProposalForApproval(){
-  const col=aiCtLoaderTarget();
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Notifying '+aiDealManager.name+'&hellip;</div><div class="cl-sub">Sending proposal '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+' for approval</div></div>';
+  aiShowLoader('Notifying '+aiDealManager.name+'&hellip;','Sending proposal '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+' for approval');
   notifData.unshift({name:'Proposal sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:(aiProposalDraft&&aiProposalDraft.proposalId)||'',time:'Just now',pending:true});
   showAiToast('Proposal sent to '+aiDealManager.name,((aiProposalDraft&&aiProposalDraft.name)||'')+' — '+((aiProposalDraft&&aiProposalDraft.proposalId)||''));
   if(aiCreatedContractId){
@@ -5989,8 +5996,7 @@ function buildAIContractWaitingApprovalHTML(){
   });
 }
 function aiSimulateContractApproval(){
-  const col=aiCtLoaderTarget();
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Approving Contract&hellip;</div><div class="cl-sub">'+aiOpsManager.name+' is reviewing the signed contract</div></div>';
+  aiShowLoader('Approving Contract&hellip;',aiOpsManager.name+' is reviewing the signed contract');
   setTimeout(function(){
     if(notifData[0]&&notifData[0].pending)notifData[0].pending=false;
     if(aiCreatedContractId){
@@ -6049,8 +6055,7 @@ function buildAIContractDocumentHTML(){
     +'</div>';
 }
 function aiSendContractForApproval(){
-  const col=aiCtLoaderTarget();
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Sending for Signature&hellip;</div><div class="cl-sub">Routing the contract to '+aiOpsManager.name+' for approval</div></div>';
+  aiShowLoader('Sending for Signature&hellip;','Routing the contract to '+aiOpsManager.name+' for approval');
   if(aiCreatedContractId){
     const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
     if(rec){
@@ -6293,28 +6298,24 @@ function aiAdvanceRunPastAutoSteps(run,journeyId){
 function aiApproveRunStep(runId,journeyId){
   const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
-  const col=document.getElementById('adt-content');
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Continuing Journey&hellip;</div><div class="cl-sub">Applying approval and running the next automated events for '+run.client+'</div></div>';
+  aiShowLoader('Continuing Journey&hellip;','Applying approval and running the next automated events for '+run.client,document.getElementById('adt-content'));
   setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},2000);
 }
 function aiRejectRunStep(runId,journeyId){
   const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
-  const col=document.getElementById('adt-content');
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Sending Back for Correction&hellip;</div><div class="cl-sub">'+run.client+'</div></div>';
+  aiShowLoader('Sending Back for Correction&hellip;',run.client,document.getElementById('adt-content'));
   setTimeout(function(){run.lastActivity='Just now';navigatePage('ai-run-detail');},1700);
 }
 function aiResolveException(runId,journeyId){
   const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
-  const col=document.getElementById('adt-content');
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Re-validating&hellip;</div><div class="cl-sub">Re-checking data for '+run.client+' after correction</div></div>';
+  aiShowLoader('Re-validating&hellip;','Re-checking data for '+run.client+' after correction',document.getElementById('adt-content'));
   setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},2000);
 }
 
 function aiSimulateApproval(){
-  const col=aiCtLoaderTarget();
-  if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Approving Proposal&hellip;</div><div class="cl-sub">'+aiDealManager.name+' is reviewing '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+'</div></div>';
+  aiShowLoader('Approving Proposal&hellip;',aiDealManager.name+' is reviewing '+((aiProposalDraft&&aiProposalDraft.proposalId)||''));
   setTimeout(function(){
     if(notifData[0]&&notifData[0].pending)notifData[0].pending=false;
     if(aiCreatedContractId){
