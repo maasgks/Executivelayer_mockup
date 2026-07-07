@@ -107,3 +107,45 @@ Apply as a rule while building the above, not a separate refactor: every new/ada
    - Open Agents → confirm no `Agent Skill` button anywhere, `desc` text still shows.
 3. **Entity User**: switch role → confirm landing page is AI Executive directly, Configure entirely unreachable (including via stale `navigatePage('cfg-systems')`), `Create Contract` works immediately without a setup detour, locked journeys show only a lock badge with zero admin affordances, all listed operational modules render normally.
 4. **Regression**: confirm Super Admin's existing flows (system Test/Edit, full Automate Journey wizard, skill.md viewer/editor) are completely unchanged.
+
+---
+
+## Addendum: Entity Admin Dashboard (built ahead of the Systems/Context&Journey phases)
+
+### Context
+Phase 1 (role state, switcher, sidebar/page gating) is done and verified — Super Admin is untouched, Entity Admin and Entity User can be switched into and see correctly filtered sidebars. Today `page==='dashboard'` renders the exact same cached `dashboardContentHTML` snapshot (`js/renderer.js:91`, taken once from `index.html`'s static markup at boot) for every role. Before building the full Systems/Context & Journey pages (Phase 2/3), we're pulling the Entity Admin **Dashboard** forward as its own increment, since it's the first thing an Entity Admin sees after switching and should reflect their actual governance state (systems/journeys activated, requests pending) rather than Super Admin's generic view.
+
+Decisions confirmed with the user:
+- Keep the existing generic sections (Welcome banner, Attendance card, Quick Links row, Entity Setup Progress checklist) exactly as-is for Entity Admin — they're not admin-specific and cost nothing to keep.
+- Only the bottom stat-grid changes, plus a new "Your Requests" panel is added below it.
+- Build the real underlying data model now (not placeholder numbers), so this becomes the foundation Phase 2 (Systems) and Phase 3 (Context & Journey) plug into rather than a throwaway stub.
+
+### Data model additions (`js/core.js`, near `cfgSystems`/`cfgJourneys`)
+- `cfgSystems[]`: add `activatedForEntity:false` and `isDefault:true` to each of the 3 seed entries (SAP, Infor, Vendor Portal) — `isDefault` marks the "commonly-used default systems" set Entity Admin can self-serve activate; anything added later (custom system, approved request) defaults `isDefault:false`.
+- `const entityJourneyActivation={};` — empty map keyed by journey `id`. Genuinely empty today (no Activate-journey UI exists yet) — this is the same map already specified in the main RBAC plan's Context & Journey section, just declared now so the dashboard can read it.
+- `let entityRequestSeq=1; const entityRequests=[];` — empty array, same shape as the main plan's §4: `{id,type:'system-activation'|'journey-activation'|'journey-custom',refId,label,requestedBy,entity,timestamp,status:'Pending'|'Approved'|'Rejected',note}`. Left genuinely empty (no Request buttons exist yet to populate it) rather than seeded with fake demo rows — it'll fill up naturally once Phase 2/3 build the actual request actions.
+- No changes to `aiJourneys` — `aiJourneys.length` (currently 3) is the denominator for "Journeys Activated".
+
+### New builder: `buildEntityAdminDashboardHTML()` (`js/pages.js`, near the top-level dashboard/init code)
+Reuses the Welcome banner / Attendance card / Quick Links / Entity Setup Progress markup verbatim (copy from the current static block), then replaces the stat section:
+
+- **Stat row** (`.stat-grid`/`.stat-card`, same classes as today — visual parity, not a new component):
+  1. `Systems Activated` — `cfgSystems.filter(s=>s.isDefault&&s.activatedForEntity).length` / `cfgSystems.filter(s=>s.isDefault).length`
+  2. `Journeys Activated` — `Object.values(entityJourneyActivation).filter(Boolean).length` / `aiJourneys.length`
+  3. `Pending Requests` — `entityRequests.filter(r=>r.status==='Pending').length`
+  4. `Total Employees` — kept verbatim from today's card (same hardcoded `247` / `+12 this month`, consistent with the rest of this mockup's non-computed stat cards)
+- **"Your Requests" panel** — new small card (same 14px-radius/1px-border/`var(--card)` language as `.listing-card`/`.setup-card`), title "Your Requests", listing up to the 5 most recent `entityRequests` (type icon + label + relative timestamp + status pill using the existing `status-pill`/`statusClass()` helper). Empty state (today, since the array starts empty): "No requests yet — activate a system or journey to see status here."
+- No quick-links/CTA duplication here — Systems/Context & Journey/Agents/AI Executive are already one click away via the sidebar, so this page doesn't need its own nav shortcuts (keeps to the single-purpose-per-element rule already used elsewhere in this plan).
+
+### Wiring
+- `js/renderer.js:62` — change `if(page==='dashboard'){el.innerHTML=dashboardContentHTML;return;}` to branch on `portalRole==='entity-admin' ? buildEntityAdminDashboardHTML() : dashboardContentHTML`. Super Admin and Entity User both keep the untouched shared snapshot.
+- `js/core.js:200` (`showAgentModule`) — same branch for the Agent Mode dashboard shortcut, for consistency.
+
+### CSS
+- `.status-pill.approved` already exists (`css/main.css:461`, green). Add `.status-pill.rejected{background:#fff0f0;color:#dc2626;border-color:#fca5a5}` (same red as `.inactive`) next to it — the only new CSS needed, everything else reuses existing `.stat-grid`/`.stat-card`/`.listing-card` styling.
+
+### Verification
+- As Super Admin: confirm Dashboard is pixel-identical to before (still the cached snapshot).
+- Switch to Entity Admin: confirm stat row shows `Systems Activated 0/3`, `Journeys Activated 0/3`, `Pending Requests 0`, `Total Employees 247`, and the Requests panel shows the empty state. Confirm Welcome banner/Attendance/Quick Links/Setup checklist render unchanged.
+- Switch to Entity User: confirm Dashboard (if visited via sidebar) is still the original shared snapshot, unaffected by this change.
+- Confirm no console errors and that switching roles back and forth keeps re-rendering correctly (reuses the existing `renderADTPage()` refresh path from Phase 1).

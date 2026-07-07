@@ -1,4 +1,57 @@
-﻿function openDeSidebar(id){
+﻿// -- ENTITY ADMIN DASHBOARD --
+function buildEntityAdminDashboardHTML(){
+  const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
+  const sysActive=cfgSystems.filter(s=>s.isDefault&&s.activatedForEntity).length;
+  const jyTotal=aiJourneys.length;
+  const jyActive=Object.values(entityJourneyActivation).filter(Boolean).length;
+  const pending=entityRequests.filter(r=>r.status==='Pending').length;
+  const reqRows=entityRequests.slice(0,5).map(r=>`<div class="ea-req-row"><div><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp}</div></div><span class="status-pill ${statusClass(r.status)}">${r.status}</span></div>`).join('');
+  const reqBody=entityRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — activate a system or journey to see status here.</div>';
+  return `
+    <p style="font-size:14px;font-weight:600;margin-bottom:4px">Dashboard</p>
+    <p style="font-size:12px;color:var(--gray);margin-bottom:20px">Welcome back — here's your entity's automation overview.</p>
+    <div class="welcome-banner">
+      <div class="wb-left">
+        <div class="wb-title">Welcome to Dhi ADT!</div>
+        <div class="wb-desc">Simplify international payroll and workforce management with Dhi ADT's trusted global solutions.</div>
+        <div class="wb-btns"><button class="wb-btn primary">Talk to us</button><button class="wb-btn secondary">Know more</button></div>
+      </div>
+      <div class="attendance-card">
+        <div class="att-title">Attendance <a href="#">View</a></div>
+        <div class="att-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Clock-in Time <span class="att-val">00:00 AM/PM</span></div>
+        <div class="att-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> Location <span class="att-val">Hyderabad</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><span style="font-size:11px;color:var(--gray)">Logged Time - 00h:00m</span><button class="clock-btn">Clock In</button></div>
+      </div>
+    </div>
+    <div class="quick-links">
+      <div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> My Profile</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> Policies</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg> Calendar</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg> Leaves &amp; Application</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> Holidays</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg> Expense</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Signout</div>
+    </div>
+    <div class="setup-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><div class="setup-title">Entity Setup Progress</div><div class="setup-sub" style="margin-bottom:0">Complete these steps to activate full platform capabilities</div></div><span style="font-size:12px;font-weight:600;color:var(--gray)">2 of 5 Complete</span></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="font-size:11px;color:var(--gray);white-space:nowrap">Overall Progress</div><div class="setup-bar" style="flex:1;margin-bottom:0"><div class="setup-fill" style="width:40%"></div></div><span style="font-size:11px;font-weight:600;color:var(--orange);white-space:nowrap">40%</span></div>
+      <div class="setup-steps">
+        <div class="setup-step done"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 11 14 15 10"></polyline></svg><div><div class="ss-name">Business Details</div><div class="ss-status">Completed</div></div></div>
+        <div class="setup-step done"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 11 14 15 10"></polyline></svg><div><div class="ss-name">Company Structure</div><div class="ss-status">Completed</div></div></div>
+        <div class="setup-step"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><div><div class="ss-name">Bank Details</div><div class="ss-status pending">Configure</div></div></div>
+        <div class="setup-step"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><div><div class="ss-name">Add First Employee</div><div class="ss-status pending">Configure</div></div></div>
+        <div class="setup-step"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><div><div class="ss-name">Setup Teams</div><div class="ss-status pending">Configure</div></div></div>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label"><span>Systems Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg></div></div><div class="stat-val">${sysActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${sysTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Default systems in use</div></div>
+      <div class="stat-card"><div class="stat-label"><span>Journeys Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg></div></div><div class="stat-val">${jyActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${jyTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Available in AI Executive</div></div>
+      <div class="stat-card"><div class="stat-label"><span>Pending Requests</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div><div class="stat-val" style="${pending?'color:var(--orange)':''}">${pending}</div><div class="stat-sub" style="color:var(--gray)">Awaiting Super Admin approval</div></div>
+      <div class="stat-card"><div class="stat-label"><span>Total Employees</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg></div></div><div class="stat-val">247</div><div class="stat-sub" style="color:var(--green)">&#8599; +12 this month</div></div>
+    </div>
+    <div class="setup-card">
+      <div class="setup-title">Your Requests</div>
+      <div class="setup-sub" style="margin-bottom:14px">Systems and journeys you've asked Super Admin to activate</div>
+      <div class="ea-req-list">${reqBody}</div>
+    </div>
+  `;
+}
+
+function openDeSidebar(id){
   deSelectedId=id;deTab='basic-details';
   const sb=document.getElementById('de-split-sb');if(sb)sb.classList.add('open');
   const inner=document.getElementById('de-isb-inner');if(inner)inner.innerHTML=renderDeSidebar();
@@ -3582,7 +3635,7 @@ function buildAIExecutiveDashboardHTML(){
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
     +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p></div>'
-    +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>'
+    +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>':'')
     +'</div>'
     +catBoxes
     +catInfo

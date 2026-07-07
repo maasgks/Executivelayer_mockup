@@ -59,7 +59,7 @@ function renderPageContent(id){
   if(page==='switch-entity'){el.innerHTML=buildSwitchEntityHTML();return;}
   if(page==='support-tickets'){el.innerHTML=buildTicketsPageHTML();return;}
   if(page==='chats'){el.innerHTML=buildChatsPageHTML();return;}
-  if(page==='dashboard'){el.innerHTML=dashboardContentHTML;return;}
+  if(page==='dashboard'){el.innerHTML=portalRole==='entity-admin'?buildEntityAdminDashboardHTML():dashboardContentHTML;return;}
   el.innerHTML=buildListingHTML(page);
 }
 

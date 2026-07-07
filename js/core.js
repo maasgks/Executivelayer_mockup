@@ -197,7 +197,7 @@ function showAgentModule(pg){
   if(formCol)formCol.style.display='none';
   const moduleEl=ensureAgentModuleContent();
   moduleEl.style.display='block';
-  moduleEl.innerHTML=pg==='dashboard'?dashboardContentHTML:buildListingHTML(pg);
+  moduleEl.innerHTML=pg==='dashboard'?(portalRole==='entity-admin'?buildEntityAdminDashboardHTML():dashboardContentHTML):buildListingHTML(pg);
   setAgentWorkspaceButton(true);
 }
 function hideAgentWorkspaceButton(){const btn=document.getElementById('agent-workspace-btn');if(btn)btn.style.display='none';}
@@ -1047,7 +1047,7 @@ const aiJourneyEvents={
 
 // -- Configure: Systems (full parity with reference config console) --
 const cfgSystems=[
-  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',
+  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
       {name:'API_PRODUCT_SRV · Product',dir:'rw'},
       {name:'API_BUSINESS_PARTNER · Supplier',dir:'rw'},
@@ -1055,13 +1055,13 @@ const cfgSystems=[
       {name:'API_MATERIAL_DOCUMENT · GR',dir:'r'},
       {name:'API_SUPPLIERINVOICE',dir:'r'}
     ]},
-  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',
+  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
       {name:'SupplierMaster · Vendor',dir:'rw'},
       {name:'PurchaseOrder · Read',dir:'r'},
       {name:'GoodsReceipt · Read',dir:'r'}
     ]},
-  {id:'portal',name:'Vendor Portal',type:'3rd-party',method:'REST',endpoint:'https://vendors.vyoma.local/api/',auth:'OAuth 2.0',apis:12,lastTested:'2 days ago',status:'Connected',
+  {id:'portal',name:'Vendor Portal',type:'3rd-party',method:'REST',endpoint:'https://vendors.vyoma.local/api/',auth:'OAuth 2.0',apis:12,lastTested:'2 days ago',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
       {name:'VendorInvite · Onboarding',dir:'rw'},
       {name:'VendorDocuments · Read',dir:'r'}
@@ -1093,6 +1093,16 @@ const cfgJourneyCategories=[
   {id:'F2A',name:'Finance to Accounting',desc:'Financial transactions flowing into the general ledger, reconciliation, close, and reporting.'}
 ];
 let cfgJourneyCategoryFilter='';
+// -- ENTITY ADMIN: journey activation + request queue (shared session-wide, not per-entity) --
+const entityJourneyActivation={};
+let entityRequestSeq=1;
+const entityRequests=[];
+function createEntityRequest(type,refId,label,note){
+  const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:note||''};
+  entityRequests.unshift(req);
+  return req;
+}
+
 const cfgJourneys=[
   {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['7 steps','Deal Desk, Contracts'],
     steps:[
