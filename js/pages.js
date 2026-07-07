@@ -1356,7 +1356,7 @@ var peoStep=0;
 var peoData={};
 function peoGoStep(s){peoStep=s;page='contract-peo';renderADTPage();}
 function peoNext(){peoStep=Math.min(2,peoStep+1);page='contract-peo';renderADTPage();}
-function peoBack(){if(peoStep===0){peoStep=0;page='contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
+function peoBack(){if(peoStep===0){peoStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
 var eorStep=0;
 function eorGoStep(s){eorStep=s;page='contract-eor';renderADTPage();}
 function aiCaptureCurrentStep(){
@@ -1377,7 +1377,7 @@ function aiCaptureCurrentStep(){
   merge('probation',gv('peo-prob'));merge('notice',gv('peo-notice'));
 }
 function eorNext(){aiCaptureCurrentStep();eorStep=Math.min(2,eorStep+1);if(aiAssistedFlow)aiCtPushStepMessage(eorStep);page='contract-eor';renderADTPage();}
-function eorBack(){aiCaptureCurrentStep();if(eorStep===0){eorStep=0;page='contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
+function eorBack(){aiCaptureCurrentStep();if(eorStep===0){eorStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
 function buildEORContractHTML(){return buildContractFormHTML('EOR',eorStep);}
 function buildPEOContractHTML(){return buildContractFormHTML('PEO',peoStep);}
 function peoSelectRadio(groupClass,clickedEl){

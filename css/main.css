@@ -1259,8 +1259,8 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-resp-dot.ai{background:var(--orange)}
 .ai-resp-dot.human{background:#2563eb}
 /* AI-assisted contract creation: chat (left) + form workspace (right) */
-.ai-ct-split{display:flex;margin:-28px -32px;height:calc(100vh - 56px)}
-.ai-ct-split-chat{display:flex;flex-direction:column;flex:0 0 380px;border-right:1px solid var(--border);background:#fff;min-width:0}
+.ai-ct-split{display:flex;margin:0 -32px -28px;height:calc(100vh - 56px - 120px);background:var(--light)}
+.ai-ct-split-chat{display:flex;flex-direction:column;flex:0 0 380px;min-width:0;margin:14px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 2px 12px rgba(15,23,42,.04);overflow:hidden}
 /* Vertical event timeline (journey detail + run detail) */
 .ai-timeline{position:relative;padding-left:4px}
 .ai-timeline-item{position:relative;padding-left:44px;padding-bottom:20px}
