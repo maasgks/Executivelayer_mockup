@@ -11,6 +11,22 @@ let aiCtAnimatedStage=-1,aiCtPendingEmpType='',aiCtJourneyEmployee=null;
 const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'};
 const aiHrManager={name:'Pallavi Parate',role:'HR Manager',initials:'PP'};
 let aiPayrollAnimatedStage=-1,aiPayrollData={};
+let aiH2rAnimatedStage=-1,aiH2rData={},aiH2rOffboardStep=-1;
+const aiH2rOffboardSteps=[
+  {label:'Access Revocation',running:'Revoking system access…',type:'ai'},
+  {label:'Final Settlement Calculation',running:'Calculating final settlement…',type:'ai'},
+  {label:'Exit Compliance Checks',running:'Running exit compliance checks…',type:'ai'}
+];
+// -- H2R: statutory/compliance reference per country, keyed to match parseAIRunPrompt's supported countries --
+const aiH2rCountryData={
+  'India':{rateRules:'PF 12% + ESI 3.25% + Gratuity 4.81% of basic salary',statutory:'PF Registration, ESI, Professional Tax, Gratuity',taxBand:'Slab-based, 0%–30% (old/new regime)'},
+  'Netherlands':{rateRules:'Employer Social Security ~23% + Holiday Pay 8%',statutory:'AOW/WW/WAO, Pension Contribution, 30% Ruling (if eligible)',taxBand:'Box 1 income tax, 36.97%–49.5%'},
+  'Germany':{rateRules:'Social contributions ~19.4% of gross salary',statutory:'Rentenversicherung, Krankenversicherung, Pflegeversicherung, ALV',taxBand:'Progressive, 14%–45%'},
+  'Spain':{rateRules:'Employer Social Security ~30% of gross salary',statutory:'Seguridad Social, IRPF withholding, Workplace Accident Insurance',taxBand:'Progressive, 19%–47%'},
+  'United Kingdom':{rateRules:'Employer National Insurance ~13.8% above threshold',statutory:'National Insurance, Auto-enrolment Pension, PAYE',taxBand:'Progressive, 20%–45%'},
+  'France':{rateRules:'Employer social charges ~40%–45% of gross salary',statutory:'URSSAF, Retraite Complémentaire, Mutuelle',taxBand:'Progressive, 0%–45%'},
+  'Italy':{rateRules:'Employer contributions ~29%–32% of gross salary',statutory:'INPS, INAIL, TFR (severance provision)',taxBand:'Progressive IRPEF, 23%–43%'}
+};
 let selectedAIRunId='RUN-2001';
 let aiJourneyDetailSelectedStage=-1;
 let aiRunStatusFilter='';
@@ -1522,8 +1538,8 @@ const aiRunFlows={
       {label:'Employee Creation',running:'Creating employee record…',type:'ai'},
       {label:'Fetch Country Details',running:'Fetching compliance details from the Compliance Hub…',type:'ai'},
       {label:'Leave Policy Match',running:'Matching the applicable leave policy…',type:'ai'},
-      {label:'Approval Check',running:'Checking for policy deviations…',type:'auto-skip',skipNote:'No deviation detected — step skipped automatically.'},
-      {label:'Employee Onboarded',running:'Finalizing employee profile…',type:'ai'}
+      {label:'HR Approval',running:'Checking for policy deviations…',type:'manual'},
+      {label:'Offboarding',running:'Running offboarding checklist…',type:'checklist'}
     ]
   },
   'payroll-creation':{

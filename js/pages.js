@@ -4954,13 +4954,19 @@ function aiJourneyCTA(j){
 function startAIJourneyRun(journeyId){
   aiRunFlowJourneyId=journeyId;aiRunFlowStep=-1;aiRunFlowData={};
   if(journeyId==='payroll-creation'){aiPayrollData={};aiPayrollAnimatedStage=-1;}
+  if(journeyId==='h2r-lifecycle'){aiH2rData={};aiH2rAnimatedStage=-1;aiH2rOffboardStep=-1;}
   navigatePage('ai-journey-run');
 }
 function aiRunFlowExit(){
   aiRunFlowJourneyId=null;aiRunFlowStep=-1;aiRunFlowData={};
   navigatePage('ai-executive');
 }
-function aiRunFlowRestart(){aiRunFlowStep=-1;aiRunFlowData={};if(aiRunFlowJourneyId==='payroll-creation'){aiPayrollData={};aiPayrollAnimatedStage=-1;}navigatePage('ai-journey-run');}
+function aiRunFlowRestart(){
+  aiRunFlowStep=-1;aiRunFlowData={};
+  if(aiRunFlowJourneyId==='payroll-creation'){aiPayrollData={};aiPayrollAnimatedStage=-1;}
+  if(aiRunFlowJourneyId==='h2r-lifecycle'){aiH2rData={};aiH2rAnimatedStage=-1;aiH2rOffboardStep=-1;}
+  navigatePage('ai-journey-run');
+}
 function parseAIRunPrompt(text){
   const countries=['Netherlands','India','Germany','Spain','United Kingdom','France','Italy'];
   let country='',raw=text||'';
@@ -4986,6 +4992,7 @@ function aiRunFlowSimulate(){
 function aiRunFlowSubmit(){
   const inp=document.getElementById('ai-run-prompt');if(!inp)return;
   if(aiRunFlowJourneyId==='payroll-creation'){aiPayrollRunSearch(inp.value);return;}
+  if(aiRunFlowJourneyId==='h2r-lifecycle'){aiH2rRunCreate(inp.value);return;}
   const parsed=parseAIRunPrompt(inp.value);
   const emp=findExistingEmployee(parsed.name);
   aiRunFlowData={
@@ -5013,6 +5020,12 @@ function aiRunFlowRunCurrentStep(){
 }
 function aiRunFlowApprove(){
   aiRunFlowStep++;
+  if(aiRunFlowJourneyId==='h2r-lifecycle'&&aiRunFlowStep===4){
+    aiH2rOffboardStep=0;
+    navigatePage('ai-journey-run');
+    aiH2rRunOffboardStep();
+    return;
+  }
   navigatePage('ai-journey-run');
   aiRunFlowRunCurrentStep();
 }
@@ -5030,6 +5043,7 @@ function buildAIJourneyRunHTML(){
   const j=aiJourneys.find(x=>x.id===aiRunFlowJourneyId)||aiJourneys[0];
   if(!flow)return '<div class="ai-exec-page">Unknown automation.</div>';
   if(aiRunFlowJourneyId==='payroll-creation')return buildAIPayrollJourneyHTML(flow,j);
+  if(aiRunFlowJourneyId==='h2r-lifecycle')return buildAIH2rJourneyHTML(flow,j);
   if(aiRunFlowStep===-1)return buildAIRunPromptHTML(flow,j);
   const cur=aiRunFlowStep;
   const timeline=buildAIRunTimelineHTML(flow,cur);
@@ -5222,6 +5236,153 @@ function buildAIPayrollCompleteHTML(){
     +'<button class="btn btn-primary" onclick="aiRunFlowRestart()">Run Another</button>'
     +'</div></div></div>';
 }
+
+// -- HIRE TO RETIRE (H2R) JOURNEY: full bespoke run through all 5 stages of aiJourneyEvents['h2r-lifecycle'] --
+function buildAIH2rJourneyHTML(flow,j){
+  if(aiRunFlowStep===-1)return buildAIH2rPromptHTML(flow,j);
+  const stage=Math.max(0,Math.min(aiRunFlowStep,4));
+  return '<div class="aicj-wrap">'
+    +buildAIJourneyBarHTML('h2r-lifecycle',stage,'h2r')
+    +'<div id="aicj-inner">'+buildAIH2rStageHTML(flow,j)+'</div>'
+    +'</div>';
+}
+function buildAIH2rPromptHTML(flow,j){
+  return '<div class="aicj-wrap">'
+    +buildAIJourneyBarHTML('h2r-lifecycle',0,'h2r')
+    +'<div id="aicj-inner"><div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div style="margin-top:20px;text-align:center">'
+    +'<div class="ai-run-icon-wrap">'+j.icon+'</div>'
+    +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">AI Hire to Retire Assistant</div>'
+    +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin:0 auto 20px;max-width:460px">'+flow.entryDesc+'</div>'
+    +'<div style="margin-bottom:14px"><button class="btn btn-secondary" onclick="aiH2rSimulateNew()">Simulate: New Hire</button></div>'
+    +'<div class="input-row" style="margin:0 auto;max-width:480px">'
+    +'<input class="input-field" id="ai-run-prompt" placeholder="'+flow.promptPlaceholder+'" onkeydown="if(event.key===\'Enter\')aiRunFlowSubmit()">'
+    +'<button class="icon-btn active" onclick="aiRunFlowSubmit()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
+    +'</div>'
+    +'<div id="ai-h2r-result" style="margin-top:16px;text-align:left"></div>'
+    +'</div>'
+    +'</div></div></div>';
+}
+function aiH2rSimulateNew(){
+  const inp=document.getElementById('ai-run-prompt');
+  if(inp)inp.value='Create an employee for Rahul Mehta in India as Product Manager';
+  aiRunFlowSubmit();
+}
+function aiH2rBuildData(name,country,role){
+  const compliance=aiH2rCountryData[country]||aiH2rCountryData['India'];
+  const policies=leavePoliciesData.filter(function(p){return p.status==='Active';}).slice(0,4);
+  return {name:name,country:country||'India',role:role||'Employee',empId:'EMP'+Math.floor(1000+Math.random()*8999),compliance:compliance,policies:policies,finalSettlement:Math.floor(20000+Math.random()*40000)};
+}
+function aiH2rRunCreate(text){
+  const parsed=parseAIRunPrompt(text);
+  const res=document.getElementById('ai-h2r-result');if(!res)return;
+  res.innerHTML='<div class="ep-form-card" style="display:flex;align-items:center;gap:12px"><div class="cl-spinner" style="width:22px;height:22px;border-width:2.5px"></div><span style="font-size:13px;color:var(--navy);font-weight:500">Creating employee record for &ldquo;'+(parsed.name||text)+'&rdquo;&hellip;</span></div>';
+  setTimeout(function(){
+    aiH2rData=aiH2rBuildData(parsed.name||'New Employee',parsed.country,parsed.role);
+    aiRunFlowData=Object.assign({},aiH2rData);
+    aiRunFlowStep=0;
+    navigatePage('ai-journey-run');
+    aiRunFlowRunCurrentStep();
+  },1500);
+}
+function buildAIH2rStageHTML(flow,j){
+  const d=aiH2rData||{};
+  if(aiRunFlowStep===1)return buildAIH2rComplianceHTML();
+  if(aiRunFlowStep===2)return buildAIH2rLeavePolicyHTML();
+  if(aiRunFlowStep===3)return buildAIH2rApprovalHTML();
+  if(aiRunFlowStep===4)return buildAIH2rOffboardingHTML();
+  if(aiRunFlowStep>=5)return buildAIH2rCompleteHTML();
+  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin:14px 0 2px">Hire to Retire</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:18px">For <strong style="color:var(--navy)">'+(d.name||'Employee')+'</strong>'+(d.role?' &middot; '+d.role:'')+(d.country?' &middot; '+d.country:'')+'</div>'
+    +'<div class="ai-timeline">'+buildAIRunTimelineHTML(flow,aiRunFlowStep)+'</div>'
+    +'</div>';
+}
+function buildAIH2rComplianceHTML(){
+  const d=aiH2rData||{};const c=d.compliance||{};
+  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin:14px 0 2px">Hire to Retire</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:18px">For <strong style="color:var(--navy)">'+(d.name||'Employee')+'</strong> &middot; '+(d.country||'')+'</div>'
+    +'<div class="ep-form-card">'
+    +'<div style="font-size:11.5px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Fetching from Compliance Hub&hellip;</div>'
+    +'<div class="review-grid" style="grid-template-columns:1fr">'
+    +aiDrawerRow('Country Rate Rules',c.rateRules||'—')
+    +aiDrawerRow('Statutory Requirements',c.statutory||'—')
+    +aiDrawerRow('Tax Bands',c.taxBand||'—')
+    +'</div></div>'
+    +'</div>';
+}
+function buildAIH2rLeavePolicyHTML(){
+  const d=aiH2rData||{};const policies=d.policies||[];
+  const rows=policies.length?policies.map(function(p){
+    return '<div class="ea-req-row"><div><div class="ea-req-label">'+p.type+'</div><div class="ea-req-time">'+p.yearly+' days/year'+(p.carryForward?' &middot; '+p.carryForward+' carry forward':'')+'</div></div><span class="status-pill active">Active</span></div>';
+  }).join(''):'<div class="ea-req-empty">No active leave policy configured.</div>';
+  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin:14px 0 2px">Hire to Retire</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:18px">For <strong style="color:var(--navy)">'+(d.name||'Employee')+'</strong> &middot; '+(d.country||'')+'</div>'
+    +'<div class="ep-form-card">'
+    +'<div style="font-size:11.5px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Matching applicable leave policy&hellip;</div>'
+    +'<div class="ea-req-list">'+rows+'</div>'
+    +'</div></div>';
+}
+function buildAIH2rApprovalHTML(){
+  const d=aiH2rData||{};
+  return buildAIWaitingApprovalHTML({
+    description:'A policy deviation was detected while setting up <strong>'+(d.name||'the employee')+'</strong>. We\'ve notified <strong style="color:var(--navy)">'+aiHrManager.name+'</strong> (HR Manager) to review and approve before finalizing the setup.',
+    timelineItems:[
+      {label:'Country Compliance Fetched',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Leave Policy Matched',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Waiting for '+aiHrManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
+      {label:'Offboarding Checklist (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
+    ],
+    onApprove:'aiRunFlowApprove()',
+    approveLabel:'Simulate: '+aiHrManager.name+' Approves',
+    backLabel:'Back to AI Executive',
+    backAction:'aiRunFlowExit()'
+  });
+}
+function aiH2rRunOffboardStep(){
+  const step=aiH2rOffboardSteps[aiH2rOffboardStep];
+  if(!step){
+    aiRunFlowStep=5;
+    navigatePage('ai-journey-run');
+    return;
+  }
+  setTimeout(function(){
+    aiH2rOffboardStep++;
+    navigatePage('ai-journey-run');
+    aiH2rRunOffboardStep();
+  },1500);
+}
+function buildAIH2rOffboardingHTML(){
+  const d=aiH2rData||{};
+  return '<div class="ep-page" style="max-width:640px;margin:0 auto">'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin:14px 0 2px">Hire to Retire</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:18px">Running offboarding checklist for <strong style="color:var(--navy)">'+(d.name||'Employee')+'</strong></div>'
+    +'<div class="ai-timeline">'+buildAIRunTimelineHTML({steps:aiH2rOffboardSteps},aiH2rOffboardStep)+'</div>'
+    +'</div>';
+}
+function buildAIH2rCompleteHTML(){
+  const d=aiH2rData||{};
+  return '<div class="ep-page" style="max-width:640px;margin:20px auto 0">'
+    +'<div class="success-card">'
+    +'<div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+    +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Hire to Retire Journey Complete</h2>'
+    +'<p style="font-size:12.5px;color:var(--gray);margin-bottom:22px;max-width:440px;line-height:1.55">'+(d.name||'The employee')+'\'s full lifecycle — hiring, compliance, leave policy, and offboarding — has been processed end-to-end.</p>'
+    +'<div style="text-align:left;width:100%;max-width:460px">'
+    +'<div class="review-section"><div class="review-title">Employee Details</div><div class="review-grid" style="grid-template-columns:1fr">'+aiDrawerRow('Name',d.name||'—')+aiDrawerRow('Employee ID',d.empId||'—')+aiDrawerRow('Country',d.country||'—')+aiDrawerRow('Job Title',d.role||'—')+'</div></div>'
+    +'<div class="review-section"><div class="review-title">Offboarding Summary</div><div class="review-grid" style="grid-template-columns:1fr">'+aiDrawerRow('Access Revocation','Completed')+aiDrawerRow('Final Settlement',aiMoney(d.finalSettlement))+aiDrawerRow('Exit Compliance Checks','Completed')+'</div></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:6px">'
+    +'<button class="btn btn-secondary" onclick="navigatePage(\'direct\')">View Employees</button>'
+    +'<button class="btn btn-primary" onclick="aiRunFlowRestart()">Run Another</button>'
+    +'</div></div></div>';
+}
+
 function buildAIRunPromptHTML(flow,j){
   return '<div class="ep-page" style="max-width:560px;margin:30px auto 0">'
     +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
@@ -5323,9 +5484,10 @@ function aiCtCurrentAgentBadge(){
 }
 function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   const events=aiJourneyEvents[journeyId]||[];
-  const prev=animationKey==='payroll'?aiPayrollAnimatedStage:aiCtAnimatedStage;
+  const prev=animationKey==='payroll'?aiPayrollAnimatedStage:animationKey==='h2r'?aiH2rAnimatedStage:aiCtAnimatedStage;
   const animateThisRender=stage>prev;
   if(animationKey==='payroll'){if(animateThisRender)aiPayrollAnimatedStage=stage;}
+  else if(animationKey==='h2r'){if(animateThisRender)aiH2rAnimatedStage=stage;}
   else if(animateThisRender){aiCtAnimatedStage=stage;}
   const current=events[stage];
   const label=current?(
