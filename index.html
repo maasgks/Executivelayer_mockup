@@ -188,6 +188,14 @@
 <!-- TOP-RIGHT NOTIFICATION-STYLE TOAST (locked journey tap) -->
 <div id="locked-toast-stack" class="locked-toast-stack"></div>
 
+<!-- LOCKED JOURNEY DETAILS MODAL -->
+<div id="lj-modal-overlay" class="lj-modal-overlay hidden" onclick="if(event.target===this)closeLockedJourneyModal()">
+  <div class="lj-modal-panel">
+    <div class="lj-modal-header"><button class="lj-modal-close" onclick="closeLockedJourneyModal()">&#x2715;</button></div>
+    <div class="lj-modal-body" id="lj-modal-body"></div>
+  </div>
+</div>
+
 <!-- COST CALCULATOR MODAL -->
 <div id="cost-calc-overlay" class="cost-calc-overlay hidden" onclick="if(event.target===this)closeCostCalculator()">
   <div class="cost-calc-panel">

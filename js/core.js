@@ -197,7 +197,7 @@ function showAgentModule(pg){
   if(formCol)formCol.style.display='none';
   const moduleEl=ensureAgentModuleContent();
   moduleEl.style.display='block';
-  moduleEl.innerHTML=pg==='dashboard'?(portalRole==='entity-admin'?buildEntityAdminDashboardHTML():dashboardContentHTML):buildListingHTML(pg);
+  moduleEl.innerHTML=pg==='dashboard'?(portalRole==='entity-admin'?buildEntityAdminDashboardHTML():(portalRole==='super-admin'?buildSuperAdminDashboardHTML():dashboardContentHTML)):buildListingHTML(pg);
   setAgentWorkspaceButton(true);
 }
 function hideAgentWorkspaceButton(){const btn=document.getElementById('agent-workspace-btn');if(btn)btn.style.display='none';}
@@ -1013,9 +1013,9 @@ let ctSelectedId=null,ctTab='basic-details';
 
 // -- AI EXECUTIVE MODULE --
 const aiJourneys=[
-  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Inactive',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
+  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
-  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Inactive',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
+  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
 ];
 
 const aiJourneyEvents={
@@ -1103,6 +1103,18 @@ function createEntityRequest(type,refId,label,note){
   const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:note||''};
   entityRequests.unshift(req);
   return req;
+}
+function approveEntityRequest(id){
+  const req=entityRequests.find(function(r){return r.id===id;});if(!req||req.status!=='Pending')return;
+  req.status='Approved';
+  renderADTPage();
+  showAiToast('Request Approved','"'+req.label+'" has been approved.');
+}
+function rejectEntityRequest(id){
+  const req=entityRequests.find(function(r){return r.id===id;});if(!req||req.status!=='Pending')return;
+  req.status='Rejected';
+  renderADTPage();
+  showAiToast('Request Rejected','"'+req.label+'" has been rejected.');
 }
 
 const cfgJourneys=[

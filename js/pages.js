@@ -51,6 +51,24 @@ function buildEntityAdminDashboardHTML(){
   `;
 }
 
+// -- SUPER ADMIN DASHBOARD: appends a Pending Requests panel below the existing static dashboard --
+function buildSuperAdminDashboardHTML(){
+  const pendingCount=entityRequests.filter(r=>r.status==='Pending').length;
+  const rows=entityRequests.slice(0,8).map(function(r){
+    const actions=r.status==='Pending'
+      ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div>'
+      :'<span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span>';
+    return '<div class="ea-req-row"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div></div>'+actions+'</div>';
+  }).join('');
+  const body=entityRequests.length?rows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
+  return dashboardContentHTML
+    +'<div class="setup-card" style="margin-top:20px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="setup-title">Pending Requests</div>'+(pendingCount?'<span class="status-pill pending">'+pendingCount+' Pending</span>':'')+'</div>'
+    +'<div class="setup-sub" style="margin-bottom:14px">Activation requests from Entity Admins and Entity Users awaiting your review</div>'
+    +'<div class="ea-req-list">'+body+'</div>'
+    +'</div>';
+}
+
 function openDeSidebar(id){
   deSelectedId=id;deTab='basic-details';
   const sb=document.getElementById('de-split-sb');if(sb)sb.classList.add('open');
@@ -3618,7 +3636,7 @@ function buildAIExecutiveDashboardHTML(){
     const lockedTap=locked&&portalRole==='entity-user';
     const isActive=!locked&&j.status==='Active';
     const cta=isActive?aiJourneyCTA(j):null;
-    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
+    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
       +(isActive?'<div class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</div>':'')
       +'<div class="ai-journey-card-top">'
       +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
@@ -5648,15 +5666,57 @@ function closeLockedToast(btn){
   el.classList.add('locked-toast-out');
   setTimeout(function(){el.remove();},200);
 }
-function showLockedJourneyToast(journeyName){
+function removeLockedToastsForJourney(journeyId){
+  const stack=document.getElementById('locked-toast-stack');if(!stack)return;
+  stack.querySelectorAll('.locked-toast[data-journey-id="'+journeyId+'"]').forEach(function(el){
+    el.classList.add('locked-toast-out');
+    setTimeout(function(){el.remove();},200);
+  });
+}
+function clearAllLockedToasts(){
+  const stack=document.getElementById('locked-toast-stack');if(!stack)return;
+  stack.querySelectorAll('.locked-toast').forEach(function(el){
+    el.classList.add('locked-toast-out');
+    setTimeout(function(){el.remove();},200);
+  });
+}
+function showLockedJourneyToast(journeyId,journeyName){
   const stack=document.getElementById('locked-toast-stack');if(!stack)return;
   const el=document.createElement('div');
   el.className='locked-toast';
+  el.dataset.journeyId=journeyId;
   el.innerHTML='<div class="locked-toast-avatar">J</div>'
     +'<div class="locked-toast-body"><div class="locked-toast-row1"><div class="locked-toast-text">Please contact Admin to activate this journey</div><div class="locked-toast-time">Just now</div></div>'
     +'<div class="locked-toast-row2"><span class="locked-toast-journey">'+journeyName+'</span><span class="locked-toast-pending">Locked</span></div></div>'
-    +'<button class="locked-toast-close" onclick="closeLockedToast(this)" title="Dismiss"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+    +'<button class="locked-toast-close" onclick="event.stopPropagation();closeLockedToast(this)" title="Dismiss"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+  el.addEventListener('click',function(){openLockedJourneyModal(journeyId);});
   stack.appendChild(el);
+}
+function openLockedJourneyModal(journeyId){
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
+  const overlay=document.getElementById('lj-modal-overlay');const body=document.getElementById('lj-modal-body');
+  if(!overlay||!body)return;
+  clearAllLockedToasts();
+  const alreadyRequested=entityRequests.some(function(r){return r.refId===j.id&&r.type==='journey-activation'&&r.status==='Pending';});
+  const lockIcon='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  body.innerHTML='<div class="lj-modal-icon">'+lockIcon+'</div>'
+    +'<div class="lj-modal-title">'+j.name+'</div>'
+    +'<div class="lj-modal-badges">'+cfgCategoryBadge(j.category)+'<span class="ai-journey-lock-badge">'+lockIcon+'Locked</span></div>'
+    +'<div class="lj-modal-desc">'+j.desc+'</div>'
+    +(alreadyRequested
+      ?'<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Already Sent</button><div class="lj-modal-note">Your Admin has been notified and will activate this journey once approved.</div>'
+      :'<button class="btn btn-primary lj-modal-cta" onclick="notifyAdminForJourney(\''+j.id+'\')">Notify Admin to Activate</button><div class="lj-modal-note">Your Admin will see this request in their dashboard.</div>');
+  overlay.classList.remove('hidden');
+}
+function closeLockedJourneyModal(){
+  const overlay=document.getElementById('lj-modal-overlay');if(overlay)overlay.classList.add('hidden');
+}
+function notifyAdminForJourney(journeyId){
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
+  createEntityRequest('journey-activation',j.id,j.name,'Entity User requested activation from AI Executive.');
+  closeLockedJourneyModal();
+  removeLockedToastsForJourney(journeyId);
+  showAiToast('Request sent to Admin','Your Admin will be notified to activate "'+j.name+'".');
 }
 function buildAIProposalCreatedHTML(){
   const d=aiProposalDraft||{};
