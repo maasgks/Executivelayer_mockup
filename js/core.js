@@ -3,6 +3,7 @@
 let view='adt',mode='agent',page='dashboard',agent='contractor',adtSidebarCollapsed=false,agentSidebarCollapsed=true,notifOpen=false,notifShowUnread=true,agentMsgs=[{role:'bot',text:"Hi John! I'm your ADT Agent. What would you like to do today?"}],formStep=-1,returnToReview=false,cw=360,selectedAIJourneyId='contract-creation',aiEventDrawerIdx=-1;
 // -- PORTAL ROLE (Super Admin / Entity Admin / Entity User) --
 let portalRole='super-admin',userDDMode='main';
+let dashboardTab='employee';
 let aiContractPrefill=null,aiAssistedFlow=false,aiCtNotFoundOpen=false,aiProposalDraft=null,aiCtChatMsgs=[],aiWizardFormData={},aiCreatedContractId=null;
 const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
 const aiOpsManager={name:'Priya Nair',role:'Ops Manager',initials:'PN'};
@@ -197,7 +198,7 @@ function showAgentModule(pg){
   if(formCol)formCol.style.display='none';
   const moduleEl=ensureAgentModuleContent();
   moduleEl.style.display='block';
-  moduleEl.innerHTML=pg==='dashboard'?(portalRole==='entity-admin'?buildEntityAdminDashboardHTML():(portalRole==='super-admin'?buildSuperAdminDashboardHTML():dashboardContentHTML)):buildListingHTML(pg);
+  moduleEl.innerHTML=pg==='dashboard'?buildDashboardPageHTML():buildListingHTML(pg);
   setAgentWorkspaceButton(true);
 }
 function hideAgentWorkspaceButton(){const btn=document.getElementById('agent-workspace-btn');if(btn)btn.style.display='none';}
@@ -499,12 +500,26 @@ function setPortalRole(role){
   if(role===portalRole)return;
   portalRole=role;
   userDDMode='main';
+  dashboardTab='employee';
   closeAllHdrDD();
   if(view!=='adt'){stopAmThreeJS();showView('adt');}
   page=defaultPageForRole(portalRole);
   renderADTPage();
   renderUserDD();
   showAiToast('Switched to '+portalRoleLabel(portalRole),'You are now viewing ADT as this role.');
+}
+
+// -- DASHBOARD TABS: every role sees "Employee Dashboard"; admin roles get one extra role-specific tab --
+function dashboardTabsForRole(role){
+  const tabs=[{id:'employee',label:'Employee Dashboard'}];
+  if(role==='super-admin')tabs.push({id:'super-admin',label:'Opendhi Super Admin'});
+  if(role==='entity-admin')tabs.push({id:'entity-admin',label:'Entity Admin'});
+  return tabs;
+}
+function switchDashboardTab(tab){
+  dashboardTab=tab;
+  if(view==='adt')renderPageContent('adt-content');
+  else if(view==='agent-active')showAgentModule(page);
 }
 
 function buildQuickActions(){
@@ -1098,7 +1113,9 @@ const entityLockedCategories=['P2P','F2A'];
 // -- ENTITY ADMIN: journey activation + request queue (shared session-wide, not per-entity) --
 const entityJourneyActivation={};
 let entityRequestSeq=1;
-const entityRequests=[];
+const entityRequests=[
+  {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'}
+];
 function createEntityRequest(type,refId,label,note){
   const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:note||''};
   entityRequests.unshift(req);

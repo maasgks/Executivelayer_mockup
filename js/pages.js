@@ -1,57 +1,67 @@
-﻿// -- ENTITY ADMIN DASHBOARD --
+﻿// -- DASHBOARD: tab bar + per-role tab dispatch --
+function buildDashboardTabsHTML(){
+  const tabs=dashboardTabsForRole(portalRole);
+  if(tabs.length<2)return '';
+  if(!tabs.some(t=>t.id===dashboardTab))dashboardTab='employee';
+  return '<div class="dash-tabs">'+tabs.map(function(t){
+    return '<button class="dash-tab'+(dashboardTab===t.id?' active':'')+'" onclick="switchDashboardTab(\''+t.id+'\')">'+t.label+'</button>';
+  }).join('')+'</div>';
+}
+function buildDashboardPageHTML(){
+  const tabs=dashboardTabsForRole(portalRole);
+  if(!tabs.some(t=>t.id===dashboardTab))dashboardTab='employee';
+  const body=dashboardTab==='super-admin'?buildSuperAdminDashboardHTML()
+    :dashboardTab==='entity-admin'?buildEntityAdminDashboardHTML()
+    :dashboardContentHTML;
+  return buildDashboardTabsHTML()+body;
+}
+
+// -- ENTITY ADMIN DASHBOARD TAB: governance stats for this entity, not the shared employee view --
 function buildEntityAdminDashboardHTML(){
   const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
   const sysActive=cfgSystems.filter(s=>s.isDefault&&s.activatedForEntity).length;
   const jyTotal=aiJourneys.length;
   const jyActive=Object.values(entityJourneyActivation).filter(Boolean).length;
   const pending=entityRequests.filter(r=>r.status==='Pending').length;
-  const reqRows=entityRequests.slice(0,5).map(r=>`<div class="ea-req-row"><div><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp}</div></div><span class="status-pill ${statusClass(r.status)}">${r.status}</span></div>`).join('');
+  const sysRows=cfgSystems.filter(s=>s.isDefault).map(function(s){
+    const active=!!s.activatedForEntity;
+    return `<div class="ea-req-row" style="cursor:pointer" onclick="viewCfgSystem('${s.id}')"><div><div class="ea-req-label">${s.name}</div><div class="ea-req-time">${s.type} &middot; ${s.method}</div></div><span class="status-pill ${active?'active':'draft'}">${active?'Activated':'Not Activated'}</span></div>`;
+  }).join('');
+  const jyRows=aiJourneys.map(function(j){
+    const active=!!entityJourneyActivation[j.id];
+    return `<div class="ea-req-row" style="cursor:pointer" onclick="viewCfgJourney('${j.id}')"><div><div class="ea-req-label">${j.name}</div><div class="ea-req-time">${j.category}</div></div><span class="status-pill ${active?'active':'draft'}">${active?'Activated':'Locked'}</span></div>`;
+  }).join('');
+  const reqRows=entityRequests.slice(0,8).map(r=>`<div class="ea-req-row"><div><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp}</div></div><span class="status-pill ${statusClass(r.status)}">${r.status}</span></div>`).join('');
   const reqBody=entityRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — activate a system or journey to see status here.</div>';
   return `
-    <p style="font-size:14px;font-weight:600;margin-bottom:4px">Dashboard</p>
-    <p style="font-size:12px;color:var(--gray);margin-bottom:20px">Welcome back — here's your entity's automation overview.</p>
-    <div class="welcome-banner">
-      <div class="wb-left">
-        <div class="wb-title">Welcome to Dhi ADT!</div>
-        <div class="wb-desc">Simplify international payroll and workforce management with Dhi ADT's trusted global solutions.</div>
-        <div class="wb-btns"><button class="wb-btn primary">Talk to us</button><button class="wb-btn secondary">Know more</button></div>
-      </div>
-      <div class="attendance-card">
-        <div class="att-title">Attendance <a href="#">View</a></div>
-        <div class="att-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Clock-in Time <span class="att-val">00:00 AM/PM</span></div>
-        <div class="att-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> Location <span class="att-val">Hyderabad</span></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><span style="font-size:11px;color:var(--gray)">Logged Time - 00h:00m</span><button class="clock-btn">Clock In</button></div>
-      </div>
-    </div>
-    <div class="quick-links">
-      <div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> My Profile</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> Policies</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg> Calendar</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg> Leaves &amp; Application</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> Holidays</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg> Expense</div><div class="ql"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Signout</div>
-    </div>
-    <div class="setup-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div><div class="setup-title">Entity Setup Progress</div><div class="setup-sub" style="margin-bottom:0">Complete these steps to activate full platform capabilities</div></div><span style="font-size:12px;font-weight:600;color:var(--gray)">2 of 5 Complete</span></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="font-size:11px;color:var(--gray);white-space:nowrap">Overall Progress</div><div class="setup-bar" style="flex:1;margin-bottom:0"><div class="setup-fill" style="width:40%"></div></div><span style="font-size:11px;font-weight:600;color:var(--orange);white-space:nowrap">40%</span></div>
-      <div class="setup-steps">
-        <div class="setup-step done"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 11 14 15 10"></polyline></svg><div><div class="ss-name">Business Details</div><div class="ss-status">Completed</div></div></div>
-        <div class="setup-step done"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 11 14 15 10"></polyline></svg><div><div class="ss-name">Company Structure</div><div class="ss-status">Completed</div></div></div>
-        <div class="setup-step"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><div><div class="ss-name">Bank Details</div><div class="ss-status pending">Configure</div></div></div>
-        <div class="setup-step"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><div><div class="ss-name">Add First Employee</div><div class="ss-status pending">Configure</div></div></div>
-        <div class="setup-step"><svg class="ss-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><div><div class="ss-name">Setup Teams</div><div class="ss-status pending">Configure</div></div></div>
-      </div>
-    </div>
-    <div class="stat-grid">
+    <p style="font-size:14px;font-weight:600;margin-bottom:4px">Entity Admin</p>
+    <p style="font-size:12px;color:var(--gray);margin-bottom:20px">Your entity's automation overview — systems, journeys, and requests.</p>
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
       <div class="stat-card"><div class="stat-label"><span>Systems Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg></div></div><div class="stat-val">${sysActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${sysTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Default systems in use</div></div>
       <div class="stat-card"><div class="stat-label"><span>Journeys Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg></div></div><div class="stat-val">${jyActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${jyTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Available in AI Executive</div></div>
       <div class="stat-card"><div class="stat-label"><span>Pending Requests</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div><div class="stat-val" style="${pending?'color:var(--orange)':''}">${pending}</div><div class="stat-sub" style="color:var(--gray)">Awaiting Super Admin approval</div></div>
-      <div class="stat-card"><div class="stat-label"><span>Total Employees</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg></div></div><div class="stat-val">247</div><div class="stat-sub" style="color:var(--green)">&#8599; +12 this month</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div class="setup-card" style="margin-bottom:0">
+        <div class="setup-title">Systems</div>
+        <div class="setup-sub" style="margin-bottom:14px">Default systems available to activate for your entity</div>
+        <div class="ea-req-list">${sysRows}</div>
+      </div>
+      <div class="setup-card" style="margin-bottom:0">
+        <div class="setup-title">Journeys</div>
+        <div class="setup-sub" style="margin-bottom:14px">AI Executive journeys unlocked for your entity</div>
+        <div class="ea-req-list">${jyRows}</div>
+      </div>
     </div>
     <div class="setup-card">
-      <div class="setup-title">Your Requests</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="setup-title" style="margin-bottom:0">Your Requests</div>${pending?'<span class="status-pill pending">'+pending+' Pending</span>':''}</div>
       <div class="setup-sub" style="margin-bottom:14px">Systems and journeys you've asked Super Admin to activate</div>
       <div class="ea-req-list">${reqBody}</div>
     </div>
   `;
 }
 
-// -- SUPER ADMIN DASHBOARD: appends a Pending Requests panel below the existing static dashboard --
+// -- SUPER ADMIN DASHBOARD TAB: the Configure > Overview snapshot plus items needing this role's action --
 function buildSuperAdminDashboardHTML(){
   const pendingCount=entityRequests.filter(r=>r.status==='Pending').length;
   const rows=entityRequests.slice(0,8).map(function(r){
@@ -61,12 +71,14 @@ function buildSuperAdminDashboardHTML(){
     return '<div class="ea-req-row"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div></div>'+actions+'</div>';
   }).join('');
   const body=entityRequests.length?rows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
-  return dashboardContentHTML
-    +'<div class="setup-card" style="margin-top:20px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="setup-title">Pending Requests</div>'+(pendingCount?'<span class="status-pill pending">'+pendingCount+' Pending</span>':'')+'</div>'
+  return '<div class="ai-exec-page">'
+    +cfgPageHead('Opendhi Super Admin','Full platform oversight — systems, data models, journeys, and agents across every entity.')
+    +cfgOverviewBodyHTML()
+    +'<div class="setup-card" style="margin-top:24px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="setup-title">Action Required</div>'+(pendingCount?'<span class="status-pill pending">'+pendingCount+' Pending</span>':'')+'</div>'
     +'<div class="setup-sub" style="margin-bottom:14px">Activation requests from Entity Admins and Entity Users awaiting your review</div>'
     +'<div class="ea-req-list">'+body+'</div>'
-    +'</div>';
+    +'</div></div>';
 }
 
 function openDeSidebar(id){
@@ -3863,7 +3875,7 @@ function cfgPageHead(title,sub){return '<div style="margin-bottom:20px"><p style
 function cfgBackBtn(pg,label){return '<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="navigatePage(\''+pg+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+label+'</button>';}
 
 // -- Configure: Overview --
-function buildCfgOverviewHTML(){
+function cfgOverviewBodyHTML(){
   const tiles=[
     ['cfg-systems','Systems',cfgSystems.length],
     ['cfg-data-foundation','Data models',cfgModels.length],
@@ -3878,15 +3890,18 @@ function buildCfgOverviewHTML(){
       +'<div style="font-family:monospace;font-size:11.5px;color:var(--gray);white-space:nowrap">'+a.when+'</div>'
       +'</div>';
   }).join('');
-  return '<div class="ai-exec-page">'
-    +cfgPageHead('Overview','Configuration for the sandbox — connect systems, define data models, wire journeys, and manage agents.')
-    +'<div class="stat-grid" style="margin-bottom:20px">'+tiles+'</div>'
+  return '<div class="stat-grid" style="margin-bottom:20px">'+tiles+'</div>'
     +'<div class="review-section" style="display:flex;align-items:center;gap:16px;border-color:#86efac;background:#f0fdf4;margin-bottom:24px">'
     +'<div style="font-family:var(--display,inherit);font-weight:800;font-size:38px;color:#16a34a;line-height:1;flex-shrink:0">0</div>'
     +'<div><div style="font-size:13px;font-weight:700;color:#15803d">Business records stored</div><div style="font-size:12px;color:#166534;margin-top:4px;line-height:1.6">Configure holds no customer data. Records are fetched on demand through APIs, used, and released — only configuration and audit logs are kept.</div></div>'
     +'</div>'
     +'<div class="review-title" style="margin-bottom:12px">Recent activity</div>'
-    +'<div class="ep-form-card" style="padding:0">'+activity+'</div>'
+    +'<div class="ep-form-card" style="padding:0">'+activity+'</div>';
+}
+function buildCfgOverviewHTML(){
+  return '<div class="ai-exec-page">'
+    +cfgPageHead('Overview','Configuration for the sandbox — connect systems, define data models, wire journeys, and manage agents.')
+    +cfgOverviewBodyHTML()
     +'</div>';
 }
 
