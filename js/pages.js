@@ -3660,12 +3660,15 @@ function buildAIExecutiveDashboardHTML(){
       +(cta?'<button class="btn btn-primary ai-journey-cta-btn" onclick="event.stopPropagation();'+cta.action+'">'+cta.label+'</button>':'')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
+  const pendingCount=aiAllPendingRuns().length;
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
     +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p></div>'
-    +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>':'')
+    +'<div style="display:flex;gap:8px;flex-shrink:0">'
+    +'<button class="btn btn-secondary btn-sm" onclick="navigatePage(\'my-tasks\')">My Tasks'+(pendingCount?' <span class="badge" style="background:var(--orange);color:#fff;margin-left:6px">'+pendingCount+'</span>':'')+'</button>'
+    +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>':'')
     +'</div>'
-    +buildMyPendingTasksHTML()
+    +'</div>'
     +catBoxes
     +catInfo
     +'<div class="ai-journey-grid ai-journey-grid-lg">'+cards+'</div>'
@@ -6193,24 +6196,30 @@ function aiAllPendingRuns(){
   out.sort(function(a,b){return (a.run.status==='Exception'?0:1)-(b.run.status==='Exception'?0:1);});
   return out;
 }
-function buildMyPendingTasksHTML(){
+function buildMyTasksPageHTML(){
   const items=aiAllPendingRuns();
-  if(!items.length)return '';
   const rows=items.map(function(it){
     const r=it.run,j=it.journey;
     const events=aiJourneyEvents[j.id]||[];
     const step=events[Math.min(r.currentStepIdx,events.length-1)];
     const isException=r.status==='Exception';
     const actionText=isException?(r.exceptionNote||'This run is blocked and needs review.'):('Waiting on: '+(step?step.name:'Review'));
-    return '<div class="ea-req-row" style="cursor:pointer" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">'
-      +'<div><div class="ea-req-label">'+j.name+' &mdash; '+r.client+'</div><div class="ea-req-time">'+actionText+'</div></div>'
-      +'<span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span>'
-      +'</div>';
+    return '<tr style="cursor:pointer" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">'
+      +'<td><div class="cell-primary">'+j.name+'</div><div class="cell-sub">'+r.runId+'</div></td>'
+      +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+(r.country||'')+(r.contractType?' &middot; '+r.contractType:'')+'</div></td>'
+      +'<td>'+actionText+'</td>'
+      +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
+      +'<td class="cell-sub">'+r.lastActivity+'</td>'
+      +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">View &amp; Act</button></td>'
+      +'</tr>';
   }).join('');
-  return '<div class="setup-card" style="margin-bottom:20px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="setup-title" style="margin-bottom:0">My Pending Tasks</div><span class="status-pill pending">'+items.length+' Needs Action</span></div>'
-    +'<div class="setup-sub" style="margin-bottom:14px">Journeys you&rsquo;ve run that are waiting on an approval or need attention</div>'
-    +'<div class="ea-req-list">'+rows+'</div>'
+  const body=items.length
+    ?'<div class="listing-card"><table class="listing-table ai-run-table"><thead><tr><th>Journey</th><th>Client</th><th>Action Needed</th><th>Status</th><th>Last Activity</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    :'<div class="listing-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:40px">No pending tasks right now &mdash; journeys you run will show up here if they need your approval or attention.</div>';
+  return '<div class="ai-exec-page">'
+    +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Every journey run across Contract Creation, Payroll, and Hire to Retire that is waiting on your approval or needs attention.</p>'
+    +body
     +'</div>';
 }
 
