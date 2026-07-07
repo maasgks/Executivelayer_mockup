@@ -4987,7 +4987,7 @@ function aiRunFlowRunCurrentStep(){
       aiRunFlowStep++;
       navigatePage('ai-journey-run');
       aiRunFlowRunCurrentStep();
-    },step.type==='auto-skip'?600:1100);
+    },step.type==='auto-skip'?1400:2200);
   }
 }
 function aiRunFlowApprove(){
@@ -4998,7 +4998,7 @@ function aiRunFlowApprove(){
 function aiPayrollCreateSlip(){
   const col=aiCtLoaderTarget();
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Salary Slip&hellip;</div><div class="cl-sub">Saving payroll document for '+(aiPayrollData.name||'employee')+'</div></div>';
-  setTimeout(function(){aiRunFlowStep=5;navigatePage('ai-journey-run');},1200);
+  setTimeout(function(){aiRunFlowStep=5;navigatePage('ai-journey-run');},1900);
 }
 function aiRunFlowFinish(){
   aiRunFlowStep++;
@@ -5037,9 +5037,10 @@ function buildAIPayrollJourneyHTML(flow,j){
 function buildAIPayrollPromptHTML(flow,j){
   return '<div class="aicj-wrap">'
     +buildAIJourneyBarHTML('payroll-creation',0,'payroll')
-    +'<div id="aicj-inner"><div class="ep-page" style="max-width:620px;margin:0 auto">'
+    +'<div id="aicj-inner"><div class="ep-page" style="max-width:1000px;margin:0 auto">'
     +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
-    +'<div class="ep-form-card" style="margin-top:20px;text-align:center;padding:38px 36px">'
+    +'<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:20px">'
+    +'<div class="ep-form-card" style="flex:1 1 400px;min-width:340px;text-align:center;padding:38px 36px">'
     +'<div class="we-icon">'+j.icon+'</div>'
     +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">AI Payroll Assistant</div>'
     +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin:0 auto 22px;max-width:440px">The Payroll Creation journey is automated. Enter the employee name or ID, and I\'ll fetch the employee record before capturing attendance and calculating salary.</div>'
@@ -5051,7 +5052,8 @@ function buildAIPayrollPromptHTML(flow,j){
     +'<input class="input-field" id="ai-run-prompt" placeholder="'+flow.promptPlaceholder+'" onkeydown="if(event.key===\'Enter\')aiRunFlowSubmit()">'
     +'<button class="icon-btn active" onclick="aiRunFlowSubmit()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
     +'</div>'
-    +'</div><div id="ai-payroll-result" style="margin-top:20px"></div>'
+    +'</div><div id="ai-payroll-result" style="flex:1 1 400px;min-width:340px"></div>'
+    +'</div>'
     +'</div></div></div>';
 }
 function aiPayrollSimulateExisting(){
@@ -5071,7 +5073,7 @@ function aiPayrollRunSearch(text){
     const emp=findExistingEmployeeByQuery(query);
     if(emp)aiPayrollRenderMatchCard(emp,parsed);
     else res.innerHTML='<div class="ep-form-card"><div style="font-size:11.5px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">No employee found</div><div style="font-size:12px;color:var(--gray)">Please enter a valid employee name or ID to run payroll.</div></div>';
-  },900);
+  },1700);
 }
 function aiPayrollMockBase(emp){
   const s=parseInt(String(aiCtMockSalary(emp)).replace(/,/g,''),10)||52000;
@@ -5387,7 +5389,7 @@ function aiCtRunSearch(parsed,label){
     +'<div class="skel-line" style="width:55%"></div>'
     +'</div>'
     +'</div>';
-  setTimeout(function(){aiCtShowResult(parsed);},1000);
+  setTimeout(function(){aiCtShowResult(parsed);},1700);
 }
 function aiCtSubmitPrompt(){
   const inp=document.getElementById('ai-ct-prompt');if(!inp)return;
@@ -5412,7 +5414,7 @@ function aiCtShowResult(parsed){
   if(emp){
     aiCtNotFoundOpen=false;
     res.innerHTML='<div class="ep-form-card" style="display:flex;align-items:center;gap:10px"><div style="width:22px;height:22px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div><span style="font-size:13px;font-weight:700;color:#16a34a">Found the employee</span></div>';
-    setTimeout(function(){aiCtRenderMatchCard(emp,parsed);},600);
+    setTimeout(function(){aiCtRenderMatchCard(emp,parsed);},1000);
   }else{
     aiCtNotFoundOpen=true;
     res.innerHTML=aiCtNotFoundPanel(parsed);
@@ -5642,12 +5644,12 @@ function aiSubmitAssistedContract(type){
   };
   const col=aiCtLoaderTarget();
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Creating Proposal&hellip;</div><div class="cl-sub">Compiling contract data into a proposal for '+aiProposalDraft.name+'</div></div>';
-  setTimeout(function(){page='ai-proposal-created';renderADTPage();},1400);
+  setTimeout(function(){page='ai-proposal-created';renderADTPage();},2000);
 }
 let _aiAutoAdvanceTimer=null;
 function aiScheduleAutoAdvance(expectedPage,fn,delay){
   if(_aiAutoAdvanceTimer)clearTimeout(_aiAutoAdvanceTimer);
-  _aiAutoAdvanceTimer=setTimeout(function(){_aiAutoAdvanceTimer=null;if(page===expectedPage)fn();},delay||1300);
+  _aiAutoAdvanceTimer=setTimeout(function(){_aiAutoAdvanceTimer=null;if(page===expectedPage)fn();},delay||1800);
 }
 function showAiToast(title,sub){
   const stack=document.getElementById('ai-toast-stack');if(!stack)return;
@@ -5751,7 +5753,7 @@ function aiSendProposalForApproval(){
       (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:'Pallavi Parate',status:'Proposal Sent',action:'Proposal sent to '+aiDealManager.name+' ('+aiDealManager.role+') for approval.'});
     }
   }
-  setTimeout(function(){page='ai-proposal-waiting-approval';renderADTPage();},1400);
+  setTimeout(function(){page='ai-proposal-waiting-approval';renderADTPage();},2000);
 }
 function buildAIWaitingApprovalHTML(opts){
   const backLabel=opts.backLabel||'Back to Contracts';
@@ -5818,7 +5820,7 @@ function aiSimulateContractApproval(){
       }
     }
     page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
-  },1500);
+  },2000);
 }
 function buildAIContractDocumentHTML(){
   const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
@@ -5875,7 +5877,7 @@ function aiSendContractForApproval(){
   }
   notifData.unshift({name:'Contract sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:aiCreatedContractId||'',time:'Just now',pending:true});
   showAiToast('Contract sent for signature',aiOpsManager.name+' has been notified for approval');
-  setTimeout(function(){page='ai-contract-waiting-approval';renderADTPage();},1400);
+  setTimeout(function(){page='ai-contract-waiting-approval';renderADTPage();},2000);
 }
 let aiCtOnboardingStep=-1;
 const aiCtOnboardingSteps=[
@@ -5905,7 +5907,7 @@ function aiCtRunOnboardingStep(){
     aiCtOnboardingStep++;
     navigatePage('ai-onboarding-run');
     aiCtRunOnboardingStep();
-  },900);
+  },1600);
 }
 function buildAIOnboardingRunHTML(){
   return '<div class="ep-page" style="max-width:680px;margin:0 auto">'
@@ -6109,21 +6111,21 @@ function aiApproveRunStep(runId,journeyId){
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Continuing Journey&hellip;</div><div class="cl-sub">Applying approval and running the next automated events for '+run.client+'</div></div>';
-  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},1600);
+  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},2000);
 }
 function aiRejectRunStep(runId,journeyId){
   const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Sending Back for Correction&hellip;</div><div class="cl-sub">'+run.client+'</div></div>';
-  setTimeout(function(){run.lastActivity='Just now';navigatePage('ai-run-detail');},1200);
+  setTimeout(function(){run.lastActivity='Just now';navigatePage('ai-run-detail');},1700);
 }
 function aiResolveException(runId,journeyId){
   const runs=aiAutomationRuns[journeyId||selectedAIJourneyId]||[];
   const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
   const col=document.getElementById('adt-content');
   if(col)col.innerHTML='<div class="contract-loader"><div class="cl-spinner"></div><div class="cl-title">Re-validating&hellip;</div><div class="cl-sub">Re-checking data for '+run.client+' after correction</div></div>';
-  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},1600);
+  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';navigatePage('ai-run-detail');},2000);
 }
 
 function aiSimulateApproval(){
@@ -6142,5 +6144,5 @@ function aiSimulateApproval(){
       }
     }
     page='ai-contract-document';renderADTPage();
-  },1500);
+  },2000);
 }
