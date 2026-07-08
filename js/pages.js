@@ -1377,8 +1377,8 @@ function renderCtSidebar(){
 var peoStep=0;
 var peoData={};
 function peoGoStep(s){peoStep=s;page='contract-peo';renderADTPage();}
-function peoNext(){peoStep=Math.min(2,peoStep+1);page='contract-peo';renderADTPage();}
-function peoBack(){if(peoStep===0){peoStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
+function peoNext(){aiCaptureCurrentStep();peoStep=Math.min(2,peoStep+1);if(aiAssistedFlow)aiCtPushStepMessage(peoStep);page='contract-peo';renderADTPage();}
+function peoBack(){aiCaptureCurrentStep();if(peoStep===0){peoStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
 var eorStep=0;
 function eorGoStep(s){eorStep=s;page='contract-eor';renderADTPage();}
 function aiCaptureCurrentStep(){
@@ -1387,7 +1387,7 @@ function aiCaptureCurrentStep(){
   const merge=function(k,v){if(v!==undefined&&v!=='')aiWizardFormData[k]=v;};
   merge('fname',gv('peo-fname'));merge('lname',gv('peo-lname'));merge('gender',gv('peo-gender'));
   merge('email',gv('peo-email'));merge('mobile',gv('peo-mobile'));merge('dob',gv('peo-dob'));
-  merge('address',gv('peo-address'));merge('country',gv('peo-work-country'));
+  merge('address',gv('peo-address'));merge('country',gv('peo-work-country'));merge('nationality',gv('peo-nationality'));
   const wpEl=document.querySelector('.peo-wp-radio.selected span');
   if(wpEl)aiWizardFormData.workPermit=wpEl.textContent.indexOf('has work permit')!==-1;
   merge('jobTitle',gv('peo-jobtitle'));merge('skill',gv('peo-skill'));merge('jobDesc',gv('peo-jobdesc'));
@@ -1428,9 +1428,10 @@ function peoSelectWorkPermit(el){
   var outer=el.querySelector('.peo-radio-outer');
   if(outer){outer.style.borderColor='var(--orange)';}
 }
+const AI_CT_COUNTRIES=['Afghanistan','Australia','Austria','Bangladesh','Belgium','Brazil','Canada','China','Denmark','Egypt','Finland','France','Germany','Ghana','Greece','India','Indonesia','Iran','Iraq','Ireland','Italy','Japan','Jordan','Kenya','Malaysia','Mexico','Morocco','Nepal','Netherlands','New Zealand','Nigeria','Norway','Pakistan','Philippines','Poland','Portugal','Qatar','Romania','Russia','Saudi Arabia','Singapore','South Africa','South Korea','Spain','Sri Lanka','Sweden','Switzerland','Thailand','Turkey','Ukraine','United Arab Emirates','United Kingdom','United States','Vietnam'];
 function buildContractFormHTML(type,step,splitMode){
   const tl=type.toLowerCase();
-  const countries=['Afghanistan','Australia','Austria','Bangladesh','Belgium','Brazil','Canada','China','Denmark','Egypt','Finland','France','Germany','Ghana','Greece','India','Indonesia','Iran','Iraq','Ireland','Italy','Japan','Jordan','Kenya','Malaysia','Mexico','Morocco','Nepal','Netherlands','New Zealand','Nigeria','Norway','Pakistan','Philippines','Poland','Portugal','Qatar','Romania','Russia','Saudi Arabia','Singapore','South Africa','South Korea','Spain','Sri Lanka','Sweden','Switzerland','Thailand','Turkey','Ukraine','United Arab Emirates','United Kingdom','United States','Vietnam'];
+  const countries=AI_CT_COUNTRIES;
   const countryOpts='<option value="">Select Country</option>'+countries.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
   const countryOptsSel=function(sel){return '<option value="">Select Country</option>'+countries.map(function(c){return '<option value="'+c+'"'+(c===sel?' selected':'')+'>'+c+'</option>';}).join('');};
   const prefill=aiAssistedFlow?Object.assign({},aiContractPrefill||{},aiWizardFormData||{}):{};
@@ -1468,7 +1469,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<div style="padding:24px">'
       +'<div class="ep-form-grid" style="margin-bottom:20px">'
       +'<div class="ep-form-group"><label class="ep-form-label">Employee Nationality <span class="req">*</span></label>'
-      +'<select class="ep-form-select" id="peo-nationality" style="height:42px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer;box-sizing:border-box;width:100%">'+countryOpts+'</select></div>'
+      +'<select class="ep-form-select" id="peo-nationality" style="height:42px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer;box-sizing:border-box;width:100%">'+countryOptsSel(prefill.nationality||'')+'</select></div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Country employee will be working from <span class="req">*</span></label>'
       +'<select class="ep-form-select" id="peo-work-country" style="height:42px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer;box-sizing:border-box;width:100%">'+countryOptsSel(prefill.country||'')+'</select></div>'
       +'</div>'
@@ -5856,6 +5857,104 @@ function aiCtLiveParse(){
   if(co&&parsed.country)co.value=parsed.country;
   if(et&&parsed.empType)et.value=parsed.empType;
 }
+
+// ── AI Contract Assistant: chat-driven slot filling ──
+// Flat list of fields the assisted contract form can be missing. Ordered to match the
+// top-to-bottom layout of the (single-page) assisted form, since the chat asks about
+// whichever one is empty next.
+const AI_CT_FIELDS=[
+  {key:'nationality',id:'peo-nationality',label:'Employee Nationality',type:'select',options:AI_CT_COUNTRIES,question:"What is the employee's nationality?"},
+  {key:'country',id:'peo-work-country',label:'Country employee will be working from',type:'select',options:AI_CT_COUNTRIES,question:'Which country will the employee be working from?'},
+  {key:'fname',id:'peo-fname',label:'First Name',type:'text',question:"What's the employee's first name?"},
+  {key:'lname',id:'peo-lname',label:'Last Name',type:'text',question:"And their last name?"},
+  {key:'email',id:'peo-email',label:'Email',type:'email',question:"What's their email address?"},
+  {key:'mobile',id:'peo-mobile',label:'Mobile Number',type:'tel',question:"What's a good mobile number for them?"},
+  {key:'dob',id:'peo-dob',label:'Date of Birth',type:'date',question:"What's their date of birth? (e.g. 1995-04-12)"},
+  {key:'address',id:'peo-address',label:'Address',type:'text',question:"What's their residential address?"},
+  {key:'jobTitle',id:'peo-jobtitle',label:'Job Title',type:'text',question:"What's the employee's job title?"},
+  {key:'jobDesc',id:'peo-jobdesc',label:'Job Description',type:'text',question:'Can you give a short job description or scope of work?'},
+  {key:'toDate',id:'peo-to',label:'Contract End Date',type:'date',question:"What's the contract end date? (e.g. 2027-04-12)"},
+  {key:'pay',id:'peo-pay',label:'Pay Amount',type:'number',question:"What's the monthly pay amount (in the local currency)?"}
+];
+function aiCtFieldMissing(field){
+  const el=document.getElementById(field.id);
+  const v=(el?el.value:'').toString().trim();
+  if(field.type==='number')return !v||parseFloat(v)===0||isNaN(parseFloat(v));
+  return !v;
+}
+function aiCtMissingFields(){return AI_CT_FIELDS.filter(aiCtFieldMissing);}
+function aiCtMatchOption(text,options){
+  const q=text.toLowerCase().trim();
+  return options.find(function(o){return o.toLowerCase()===q;})
+    ||options.find(function(o){return o.toLowerCase().indexOf(q)!==-1||q.indexOf(o.toLowerCase())!==-1;})
+    ||null;
+}
+function aiCtNormalizeDate(text){
+  const t=text.trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;
+  const p2=function(n){return String(n).padStart(2,'0');};
+  const m=t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m)return m[3]+'-'+p2(m[2])+'-'+p2(m[1]);
+  const d=new Date(t);
+  if(!isNaN(d.getTime()))return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+  return null;
+}
+function aiCtAskNextField(){
+  const next=aiCtMissingFields()[0];
+  if(next){
+    aiCtPendingField=next;
+    aiCtChatMsgs.push({role:'bot',text:next.question});
+  }else{
+    aiCtPendingField=null;
+    aiCtChatMsgs.push({role:'bot',text:'All the required details are filled in on the right. Review the form and click the button at the bottom when you\'re ready.'});
+  }
+  renderChat('ai-ct-chat',aiCtChatMsgs);
+}
+function aiCtStartQuestionFlow(){
+  if(!aiAssistedFlow||aiCtQuestionsStarted)return;
+  aiCtQuestionsStarted=true;
+  showTyping('ai-ct-chat');
+  setTimeout(function(){hideTyping();aiCtAskNextField();},900);
+}
+function aiCtApplyFieldAnswer(field,text){
+  let value=text.trim();
+  if(field.type==='select'){
+    const matched=aiCtMatchOption(value,field.options);
+    if(!matched){
+      showTyping('ai-ct-chat');
+      setTimeout(function(){hideTyping();aiCtChatMsgs.push({role:'bot',text:'I couldn\'t match &ldquo;'+value+'&rdquo; to a country &mdash; could you spell out the full country name?'});renderChat('ai-ct-chat',aiCtChatMsgs);},500);
+      return;
+    }
+    value=matched;
+  }else if(field.type==='date'){
+    const norm=aiCtNormalizeDate(value);
+    if(!norm){
+      showTyping('ai-ct-chat');
+      setTimeout(function(){hideTyping();aiCtChatMsgs.push({role:'bot',text:'Sorry, I didn\'t catch that date &mdash; try a format like YYYY-MM-DD.'});renderChat('ai-ct-chat',aiCtChatMsgs);},500);
+      return;
+    }
+    value=norm;
+  }else if(field.type==='number'){
+    const num=parseFloat(value.replace(/[^0-9.]/g,''));
+    if(!num){
+      showTyping('ai-ct-chat');
+      setTimeout(function(){hideTyping();aiCtChatMsgs.push({role:'bot',text:'Could you share that as a number, e.g. 55000?'});renderChat('ai-ct-chat',aiCtChatMsgs);},500);
+      return;
+    }
+    value=String(num);
+  }
+  aiWizardFormData[field.key]=value;
+  const el=document.getElementById(field.id);
+  if(el){el.value=value;el.classList.add('ai-ct-field-fill');setTimeout(function(){el.classList.remove('ai-ct-field-fill');},600);}
+  aiCtPendingField=null;
+  showTyping('ai-ct-chat');
+  setTimeout(function(){
+    hideTyping();
+    aiCtChatMsgs.push({role:'bot',text:'Got it &mdash; set <b>'+field.label+'</b> to &ldquo;'+value+'&rdquo;.'});
+    renderChat('ai-ct-chat',aiCtChatMsgs);
+    setTimeout(aiCtAskNextField,450);
+  },500);
+}
 function aiCtRouteToContractType(empType){
   if(empType==='PEO'){peoStep=0;page='contract-peo';}
   else if(empType==='EOR'){eorStep=0;page='contract-eor';}
@@ -5868,7 +5967,7 @@ function aiCtUseEmployee(empId){
   const parsed=window._aiCtLastParsed||{};
   const parts=emp.name.split(' ');
   aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||'',pay:aiCtMockSalary(emp).replace(/,/g,'')};
-  aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;
+  aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
   aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||'';
   const promptEl=document.getElementById('ai-ct-prompt');
   aiCtChatMsgs=[
@@ -5891,7 +5990,7 @@ function aiCtUseManualEntry(){
   arr.push(rec);
   aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||'';
   aiContractPrefill={fname:fname,lname:lname,email:'',country:country,jobTitle:jobTitle};
-  aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;
+  aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
   const promptEl=document.getElementById('ai-ct-prompt');
   aiCtChatMsgs=[
     {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+fullName)},
@@ -5936,13 +6035,14 @@ function buildAIAssistedContractSplitHTML(type){
     +'</div>'
     +'</div>';
 }
-function initAICtChatPanel(){renderChat('ai-ct-chat',aiCtChatMsgs);}
+function initAICtChatPanel(){renderChat('ai-ct-chat',aiCtChatMsgs);aiCtStartQuestionFlow();}
 function aiCtChatSend(){
   const inp=document.getElementById('ai-ct-chat-input-field');if(!inp)return;
   const text=inp.value.trim();if(!text)return;
   aiCtChatMsgs.push({role:'user',text:text});
   inp.value='';
   renderChat('ai-ct-chat',aiCtChatMsgs);
+  if(aiCtPendingField){aiCtApplyFieldAnswer(aiCtPendingField,text);return;}
   setTimeout(function(){
     aiCtChatMsgs.push({role:'bot',text:'Got it &mdash; I\'ve noted that. Keep filling in the form on the right, and I\'ll keep helping as you go.'});
     renderChat('ai-ct-chat',aiCtChatMsgs);
