@@ -34,7 +34,7 @@ function renderPageContent(id){
   if(page==='cfg-context-journey'){el.innerHTML=buildCfgContextJourneyHTML();return;}
   if(page==='cfg-journey-detail'){el.innerHTML=buildCfgJourneyDetailHTML();return;}
   if(page==='cfg-agents'){el.innerHTML=buildCfgAgentsHTML();return;}
-  if(page==='ai-executive'){el.innerHTML=buildAIExecutiveDashboardHTML();return;}
+  if(page==='ai-executive'){el.innerHTML=portalRole==='super-admin'?buildAIClientsListingHTML():buildAIExecutiveDashboardHTML();return;}
   if(page==='my-tasks'){el.innerHTML=buildMyTasksPageHTML();return;}
   if(page==='ai-journey-detail'){el.innerHTML=buildAIJourneyDetailHTML();return;}
   if(page==='ai-automate-form'){el.innerHTML=buildAutomateJourneyFormHTML();return;}
