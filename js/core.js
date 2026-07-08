@@ -1149,7 +1149,9 @@ let cfgJourneyCategoryFilter='';
 // P2P and F2A have no journeys built out yet — locked for entity-facing roles until they do; Super Admin can still browse/author into them.
 const entityLockedCategories=['P2P','F2A'];
 // -- ENTITY ADMIN: journey activation + request queue (shared session-wide, not per-entity) --
-const entityJourneyActivation={};
+// contract-creation ships pre-activated so Entity User lands on a working "Create Contract" action out of the box;
+// payroll-creation/h2r-lifecycle start locked so the request -> approve -> unlock flow has something real to demo.
+const entityJourneyActivation={'contract-creation':true};
 let entityRequestSeq=1;
 const entityRequests=[
   {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'},
@@ -1166,6 +1168,7 @@ function createEntityRequest(type,refId,label,note){
 function approveEntityRequest(id){
   const req=entityRequests.find(function(r){return r.id===id;});if(!req||req.status!=='Pending')return;
   req.status='Approved';
+  if(req.type==='journey-activation')entityJourneyActivation[req.refId]=true;
   renderADTPage();
   showAiToast('Request Approved','"'+req.label+'" has been approved.');
 }
@@ -1180,6 +1183,20 @@ function acknowledgeManagerNotify(id){
   req.status='Approved';
   renderADTPage();
   showAiToast('Marked as reviewed','You\'ve acknowledged this note from your Entity User.');
+}
+// -- Two-hop journey activation: Entity User asks Entity Admin, Entity Admin forwards to Super Admin --
+function forwardJourneyRequestToSuperAdmin(id){
+  const req=entityRequests.find(function(r){return r.id===id&&r.type==='journey-request-to-admin';});if(!req||req.status!=='Pending')return;
+  req.status='Forwarded';
+  createEntityRequest('journey-activation',req.refId,req.label,'Requested by '+req.requestedBy+' via AI Executive; forwarded by '+portalRoleLabel(portalRole)+'.');
+  renderADTPage();
+  showAiToast('Sent to Super Admin','"'+req.label+'" has been forwarded for approval.');
+}
+function declineJourneyRequest(id){
+  const req=entityRequests.find(function(r){return r.id===id&&r.type==='journey-request-to-admin';});if(!req||req.status!=='Pending')return;
+  req.status='Rejected';
+  renderADTPage();
+  showAiToast('Request declined','"'+req.label+'" was not sent to Super Admin.');
 }
 
 const cfgJourneys=[

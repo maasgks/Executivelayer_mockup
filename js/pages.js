@@ -22,7 +22,7 @@ function buildEntityAdminDashboardHTML(){
   const sysActive=cfgSystems.filter(s=>s.isDefault&&s.activatedForEntity).length;
   const jyTotal=aiJourneys.length;
   const jyActive=Object.values(entityJourneyActivation).filter(Boolean).length;
-  const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify');
+  const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify'&&r.type!=='journey-request-to-admin');
   const pending=visibleRequests.filter(r=>r.status==='Pending').length;
   const sysRows=cfgSystems.filter(s=>s.isDefault).map(function(s){
     const active=!!s.activatedForEntity;
@@ -72,7 +72,7 @@ function buildEntityAdminDashboardHTML(){
 
 // -- SUPER ADMIN DASHBOARD TAB: the Configure > Overview snapshot plus items needing this role's action --
 function buildSuperAdminDashboardHTML(){
-  const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify');
+  const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify'&&r.type!=='journey-request-to-admin');
   const pendingCount=visibleRequests.filter(r=>r.status==='Pending').length;
   const rows=visibleRequests.slice(0,8).map(function(r){
     const actions=r.status==='Pending'
@@ -3721,7 +3721,7 @@ function addAIClientJourney(clientId,journeyId){
 function renderAIClientSidebar(){
   const c=aiClients.find(function(x){return x.id===aiClientSelectedId;});if(!c)return '';
   const journeys=aiClientJourneys.filter(function(cj){return cj.clientId===c.id;});
-  const requests=entityRequests.filter(function(r){return r.clientId===c.id&&r.type!=='manager-notify';});
+  const requests=entityRequests.filter(function(r){return r.clientId===c.id&&r.type!=='manager-notify'&&r.type!=='journey-request-to-admin';});
   const pendingCount=requests.filter(function(r){return r.status==='Pending';}).length;
   const tabs=[{id:'journeys',label:'Journeys'},{id:'requests',label:'Requests'+(pendingCount?' ('+pendingCount+')':'')}];
   const tabBar='<div class="lp-isb-tabbar">'
@@ -3790,7 +3790,7 @@ function buildAIClientsListingHTML(){
     const journeysCell=journeys.length
       ?'<div class="cell-primary">'+journeys.length+' '+(journeys.length===1?'Journey':'Journeys')+'</div><div class="cell-sub">'+journeyNames+'</div>'
       :'<span style="color:#9ca3af">'+journeyNames+'</span>';
-    const pending=entityRequests.filter(function(r){return r.clientId===c.id&&r.type!=='manager-notify'&&r.status==='Pending';});
+    const pending=entityRequests.filter(function(r){return r.clientId===c.id&&r.type!=='manager-notify'&&r.type!=='journey-request-to-admin'&&r.status==='Pending';});
     const reqBadge=pending.length?'<span class="status-pill pending">'+pending.length+' Pending</span>':'<span style="color:#9ca3af;font-size:12px">No requests</span>';
     const lastActivity=(pending[0]&&pending[0].timestamp)||(journeys[0]&&journeys[0].builtOn)||'—';
     const defaultTab=pending.length?'requests':'journeys';
@@ -3828,8 +3828,9 @@ function buildAIExecutiveDashboardHTML(){
     +'</div>';
   const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'';
   const cards=filteredAIJourneys.length?filteredAIJourneys.map(j=>{
-    const locked=!!j.locked;
-    const lockedTap=locked&&portalRole==='entity-user';
+    const isRoadmap=!!j.locked;
+    const locked=isRoadmap?true:(portalRole!=='super-admin'&&!entityJourneyActivation[j.id]);
+    const lockedTap=locked&&portalRole!=='super-admin';
     const isActive=!locked&&j.status==='Active';
     const cta=isActive?aiJourneyCTA(j):null;
     return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
@@ -6334,31 +6335,51 @@ function showLockedJourneyToast(journeyId,journeyName){
   el.addEventListener('click',function(){openLockedJourneyModal(journeyId);});
   stack.appendChild(el);
 }
+function journeyRequestState(journeyId){
+  if(entityRequests.some(function(r){return r.refId===journeyId&&r.type==='journey-activation'&&r.status==='Pending';}))return 'awaiting-superadmin';
+  if(entityRequests.some(function(r){return r.refId===journeyId&&r.type==='journey-request-to-admin'&&r.status==='Pending';}))return 'awaiting-admin';
+  return 'none';
+}
 function openLockedJourneyModal(journeyId){
   const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
   const overlay=document.getElementById('lj-modal-overlay');const body=document.getElementById('lj-modal-body');
   if(!overlay||!body)return;
   clearAllLockedToasts();
-  const alreadyRequested=entityRequests.some(function(r){return r.refId===j.id&&r.type==='journey-activation'&&r.status==='Pending';});
+  const state=journeyRequestState(j.id);
   const lockIcon='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  let cta;
+  if(portalRole==='entity-user'){
+    if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Sent to Entity Admin</button><div class="lj-modal-note">Your Entity Admin has been notified and will review this request.</div>';
+    else if(state==='awaiting-superadmin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Pending Super Admin Approval</button><div class="lj-modal-note">Your Entity Admin has sent this to Super Admin for approval.</div>';
+    else cta='<button class="btn btn-primary lj-modal-cta" onclick="requestJourneyFromEntityAdmin(\''+j.id+'\')">Notify Entity Admin</button><div class="lj-modal-note">Your Entity Admin will see this request in their tasks.</div>';
+  }else{
+    if(state==='awaiting-superadmin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Already Sent</button><div class="lj-modal-note">Your Super Admin has been notified and will activate this journey once approved.</div>';
+    else if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Pending in My Tasks</button><div class="lj-modal-note">An Entity User has already requested this — review it in My Tasks to send it to Super Admin.</div>';
+    else cta='<button class="btn btn-primary lj-modal-cta" onclick="notifyAdminForJourney(\''+j.id+'\')">Request from Super Admin</button><div class="lj-modal-note">Super Admin will see this request in their tasks.</div>';
+  }
   body.innerHTML='<div class="lj-modal-icon">'+lockIcon+'</div>'
     +'<div class="lj-modal-title">'+j.name+'</div>'
     +'<div class="lj-modal-badges">'+cfgCategoryBadge(j.category)+'<span class="ai-journey-lock-badge">'+lockIcon+'Locked</span></div>'
     +'<div class="lj-modal-desc">'+j.desc+'</div>'
-    +(alreadyRequested
-      ?'<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Already Sent</button><div class="lj-modal-note">Your Admin has been notified and will activate this journey once approved.</div>'
-      :'<button class="btn btn-primary lj-modal-cta" onclick="notifyAdminForJourney(\''+j.id+'\')">Notify Admin to Activate</button><div class="lj-modal-note">Your Admin will see this request in their dashboard.</div>');
+    +cta;
   overlay.classList.remove('hidden');
 }
 function closeLockedJourneyModal(){
   const overlay=document.getElementById('lj-modal-overlay');if(overlay)overlay.classList.add('hidden');
 }
-function notifyAdminForJourney(journeyId){
+function requestJourneyFromEntityAdmin(journeyId){
   const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
-  createEntityRequest('journey-activation',j.id,j.name,'Entity User requested activation from AI Executive.');
+  createEntityRequest('journey-request-to-admin',j.id,j.name,'Requested from AI Executive — review and send to Super Admin to activate.');
   closeLockedJourneyModal();
   removeLockedToastsForJourney(journeyId);
-  showAiToast('Request sent to Admin','Your Admin will be notified to activate "'+j.name+'".');
+  showAiToast('Request sent to Entity Admin','Your Entity Admin will review this request.');
+}
+function notifyAdminForJourney(journeyId){
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
+  createEntityRequest('journey-activation',j.id,j.name,portalRoleLabel(portalRole)+' requested activation from AI Executive.');
+  closeLockedJourneyModal();
+  removeLockedToastsForJourney(journeyId);
+  showAiToast('Request sent to Super Admin','Super Admin will be notified to activate "'+j.name+'".');
 }
 let notifyMgrCtx=null;
 function openNotifyManagerModal(managerName,contextLabel,refId){
@@ -6709,30 +6730,43 @@ function aiAllPendingRuns(){
   return out;
 }
 function entityAccessRequestsPending(){
-  return entityRequests.filter(function(r){return r.type!=='manager-notify'&&r.status==='Pending';});
+  return entityRequests.filter(function(r){return r.type!=='manager-notify'&&r.type!=='journey-request-to-admin'&&r.status==='Pending';});
 }
 function managerNotifyPending(){
   return entityRequests.filter(function(r){return r.type==='manager-notify'&&r.status==='Pending';});
 }
+function journeyRequestsToAdminPending(){
+  return entityRequests.filter(function(r){return r.type==='journey-request-to-admin'&&r.status==='Pending';});
+}
 function myTasksPendingCount(){
   if(portalRole==='super-admin')return entityAccessRequestsPending().length;
-  if(portalRole==='entity-admin')return managerNotifyPending().length;
+  if(portalRole==='entity-admin')return managerNotifyPending().length+journeyRequestsToAdminPending().length;
   return aiAllPendingRuns().length;
 }
 function buildEntityAdminMyTasksHTML(){
+  const journeyReqs=entityRequests.filter(function(r){return r.type==='journey-request-to-admin';});
+  const journeyRows=journeyReqs.map(function(r){
+    const isPending=r.status==='Pending';
+    const actions=isPending
+      ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="forwardJourneyRequestToSuperAdmin(\''+r.id+'\')">Send to Super Admin</button><button class="sa-req-btn sa-req-reject" onclick="declineJourneyRequest(\''+r.id+'\')">Decline</button></div>'
+      :'<span class="status-pill '+(r.status==='Forwarded'?'pending':statusClass(r.status))+'">'+r.status+'</span>';
+    return '<div class="ea-req-row" style="align-items:flex-start"><div><div class="ea-req-label">Activate &ldquo;'+r.label+'&rdquo;</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div></div>'+actions+'</div>';
+  }).join('');
+  const journeyBody=journeyReqs.length?journeyRows:'<div class="ea-req-empty">No journey requests right now &mdash; if your Entity User asks to unlock a journey, it\'ll show up here.</div>';
   const notes=entityRequests.filter(function(r){return r.type==='manager-notify';});
-  const rows=notes.map(function(r){
+  const noteRows=notes.map(function(r){
     const isPending=r.status==='Pending';
     const actions=isPending
       ?'<button class="sa-req-btn sa-req-approve" onclick="acknowledgeManagerNotify(\''+r.id+'\')">Mark as Reviewed</button>'
       :'<span class="status-pill approved">Reviewed</span>';
     return '<div class="ea-req-row" style="align-items:flex-start"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div>'+(r.note?'<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5">'+r.note+'</div>':'')+'</div>'+actions+'</div>';
   }).join('');
-  const body=notes.length?rows:'<div class="ea-req-empty">No tasks right now &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
+  const noteBody=notes.length?noteRows:'<div class="ea-req-empty">No notes yet &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
   return '<div class="ai-exec-page">'
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Approvals your Entity User has flagged for your review &mdash; day-to-day journey approvals stay with whoever is running them.</p>'
-    +'<div class="setup-card"><div class="ea-req-list">'+body+'</div></div>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Journey requests to review and forward, plus approvals your Entity User has flagged for a second opinion.</p>'
+    +'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Journey Requests</div><div class="setup-sub" style="margin-bottom:14px">Your Entity User is asking to unlock these &mdash; send to Super Admin to activate, or decline.</div><div class="ea-req-list">'+journeyBody+'</div></div>'
+    +'<div class="setup-card"><div class="setup-title">Notes from Entity User</div><div class="setup-sub" style="margin-bottom:14px">Approvals flagged for your review &mdash; day-to-day journey approvals stay with whoever is running them.</div><div class="ea-req-list">'+noteBody+'</div></div>'
     +'</div>';
 }
 function buildSuperAdminMyTasksHTML(){
