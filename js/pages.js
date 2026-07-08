@@ -6690,8 +6690,29 @@ function aiAllPendingRuns(){
 function entityAccessRequestsPending(){
   return entityRequests.filter(function(r){return r.type!=='manager-notify'&&r.status==='Pending';});
 }
+function managerNotifyPending(){
+  return entityRequests.filter(function(r){return r.type==='manager-notify'&&r.status==='Pending';});
+}
 function myTasksPendingCount(){
-  return portalRole==='super-admin'?entityAccessRequestsPending().length:aiAllPendingRuns().length;
+  if(portalRole==='super-admin')return entityAccessRequestsPending().length;
+  if(portalRole==='entity-admin')return managerNotifyPending().length;
+  return aiAllPendingRuns().length;
+}
+function buildEntityAdminMyTasksHTML(){
+  const notes=entityRequests.filter(function(r){return r.type==='manager-notify';});
+  const rows=notes.map(function(r){
+    const isPending=r.status==='Pending';
+    const actions=isPending
+      ?'<button class="sa-req-btn sa-req-approve" onclick="acknowledgeManagerNotify(\''+r.id+'\')">Mark as Reviewed</button>'
+      :'<span class="status-pill approved">Reviewed</span>';
+    return '<div class="ea-req-row" style="align-items:flex-start"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div>'+(r.note?'<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5">'+r.note+'</div>':'')+'</div>'+actions+'</div>';
+  }).join('');
+  const body=notes.length?rows:'<div class="ea-req-empty">No tasks right now &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
+  return '<div class="ai-exec-page">'
+    +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Approvals your Entity User has flagged for your review &mdash; day-to-day journey approvals stay with whoever is running them.</p>'
+    +'<div class="setup-card"><div class="ea-req-list">'+body+'</div></div>'
+    +'</div>';
 }
 function buildSuperAdminMyTasksHTML(){
   const pending=entityAccessRequestsPending();
@@ -6708,6 +6729,7 @@ function buildSuperAdminMyTasksHTML(){
 }
 function buildMyTasksPageHTML(){
   if(portalRole==='super-admin')return buildSuperAdminMyTasksHTML();
+  if(portalRole==='entity-admin')return buildEntityAdminMyTasksHTML();
   const items=aiAllPendingRuns();
   const mtDotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const rows=items.map(function(it){

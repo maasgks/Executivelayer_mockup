@@ -1155,7 +1155,8 @@ const entityRequests=[
   {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'},
   {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'h2r-lifecycle',label:'Activate Hire to Retire (H2R) Journey for Norrbridge Logistics',requestedBy:'Sanne de Vries (Entity Admin)',entity:'Norrbridge Logistics B.V.',clientId:'norrbridge-logistics',timestamp:'28 Jun 2026, 3:15 PM',status:'Pending',note:'Client wants the H2R journey live before their next hiring wave.'},
   {id:'REQ-'+(entityRequestSeq++),type:'journey-custom',refId:'custom-vendor-onboarding',label:'Custom journey request: Vendor Onboarding & Compliance',requestedBy:'Karan Mehta (Entity Admin)',entity:'Vantage Freight Pvt Ltd',clientId:'vantage-freight',timestamp:'20 Jun 2026, 10:05 AM',status:'Approved',note:'Approved and folded into their Contract Creation journey scope.'},
-  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'payroll-creation',label:'Activate Payroll Creation Journey for Kaira Textiles',requestedBy:'Rohan Shah (Entity Admin)',entity:'Kaira Textiles Ltd',clientId:'kaira-textiles',timestamp:'12 Jun 2026, 5:40 PM',status:'Approved',note:''}
+  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'payroll-creation',label:'Activate Payroll Creation Journey for Kaira Textiles',requestedBy:'Rohan Shah (Entity Admin)',entity:'Kaira Textiles Ltd',clientId:'kaira-textiles',timestamp:'12 Jun 2026, 5:40 PM',status:'Approved',note:''},
+  {id:'REQ-'+(entityRequestSeq++),type:'manager-notify',refId:'PRO-5820',label:'Proposal approval — second opinion requested',requestedBy:'Entity User',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:'05 Jul 2026, 11:40 AM',status:'Pending',note:"Not sure about the margin on this one — can you take a look before I approve?"}
 ];
 function createEntityRequest(type,refId,label,note){
   const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:note||''};
@@ -1173,6 +1174,12 @@ function rejectEntityRequest(id){
   req.status='Rejected';
   renderADTPage();
   showAiToast('Request Rejected','"'+req.label+'" has been rejected.');
+}
+function acknowledgeManagerNotify(id){
+  const req=entityRequests.find(function(r){return r.id===id&&r.type==='manager-notify';});if(!req||req.status!=='Pending')return;
+  req.status='Approved';
+  renderADTPage();
+  showAiToast('Marked as reviewed','You\'ve acknowledged this note from your Entity User.');
 }
 
 const cfgJourneys=[
