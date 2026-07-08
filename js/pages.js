@@ -5700,7 +5700,7 @@ function findExistingEmployee(name){
 }
 function buildAIContractAssistantHTML(){
   return '<div class="ep-page" style="max-width:1040px;margin:0 auto">'
-    +'<button class="ep-back" onclick="page=\'contracts\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to Contracts</button>'
+    +'<button class="ep-back" onclick="page=\'ai-executive\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
     +'<div class="ai-ct-assist-split">'
     +'<div class="ai-ct-assist-left">'
     +'<div class="ep-form-card" style="text-align:center;padding:32px 30px">'
@@ -6134,8 +6134,8 @@ function aiSendProposalForApproval(){
   setTimeout(function(){page='ai-proposal-waiting-approval';renderADTPage();},2000);
 }
 function buildAIWaitingApprovalHTML(opts){
-  const backLabel=opts.backLabel||'Back to Contracts';
-  const backAction=opts.backAction||"page='contracts';renderADTPage()";
+  const backLabel=opts.backLabel||'Back to AI Executive';
+  const backAction=opts.backAction||"page='ai-executive';renderADTPage()";
   const showDataPanel=portalRole==='entity-user'&&!!opts.approvalPanelHTML;
   const actionButtons=showDataPanel
     ?'<button class="btn btn-secondary" onclick="openNotifyManagerModal(\''+(opts.managerName||'')+'\',\''+(opts.noteContextLabel||'')+'\',\''+(opts.noteRefId||'')+'\')">Notify Entity Admin</button><button class="btn btn-success" onclick="'+opts.onApprove+'">Approve</button>'
