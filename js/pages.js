@@ -3642,6 +3642,179 @@ function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyD
 function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrStart(id);navigatePage('ai-automate-form');}
 function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
 
+// -- AI EXECUTIVE — SUPER ADMIN: client roster listing (no run affordances; view journeys built per client, edit their step config, action pending requests) --
+function viewAIClientFromRequest(clientId){
+  if(!clientId)return;
+  navigatePage('ai-executive');
+  openAIClientSidebar(clientId,'requests');
+}
+function openAIClientSidebar(id,tab){
+  aiClientSelectedId=id;aiClientTab=tab||'journeys';
+  const sb=document.getElementById('aic-split-sb');if(sb)sb.classList.add('open');
+  const inner=document.getElementById('aic-isb-inner');if(inner)inner.innerHTML=renderAIClientSidebar();
+  document.querySelectorAll('.aic-client-row').forEach(function(r){r.classList.toggle('lp-row-selected',r.id==='aic-row-'+id);});
+}
+function closeAIClientSidebar(){
+  aiClientSelectedId=null;
+  const sb=document.getElementById('aic-split-sb');if(sb)sb.classList.remove('open');
+  document.querySelectorAll('.aic-client-row').forEach(function(r){r.classList.remove('lp-row-selected');});
+}
+function navAIClientTab(tab){
+  aiClientTab=tab;
+  const inner=document.getElementById('aic-isb-inner');
+  if(inner){
+    inner.innerHTML=renderAIClientSidebar();
+    requestAnimationFrame(function(){const nt=document.getElementById('aic-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});
+  }
+}
+function aiClientScopeModeChoose(el,cjId,i,mode,eventName){
+  const seg=el.parentElement;
+  const activeBtn=seg.querySelector('.seg-btn.active');
+  const currentMode=activeBtn?activeBtn.getAttribute('data-mode'):null;
+  if(currentMode===mode)return;
+  document.getElementById('ct-modal-overlay').innerHTML=
+    '<div class="ct-modal" style="width:min(460px,92vw);text-align:center;padding:34px 32px" onclick="event.stopPropagation()">'
+    +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" shape-rendering="geometricPrecision"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17.02" x2="12.01" y2="17.02"/></svg></div>'
+    +'<div style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:12px">Confirm Change</div>'
+    +'<div style="font-size:13.5px;color:var(--gray);line-height:1.65;margin-bottom:26px">Set <strong style="color:var(--navy)">'+eventName+'</strong> to run as <strong style="color:var(--navy)">'+(mode==='ai'?'AI Automated':'Manual')+'</strong> for this client?</div>'
+    +'<div style="display:flex;justify-content:center;gap:12px">'
+    +'<button class="ep-cancel-btn" onclick="closeCtModal()">Cancel</button>'
+    +'<button class="ep-save-btn" onclick="aiClientScopeModeApply(\''+cjId+'\','+i+',\''+mode+'\')">Yes, Confirm</button>'
+    +'</div></div>';
+  document.getElementById('ct-modal-overlay').style.display='flex';
+}
+function aiClientScopeModeApply(cjId,i,mode){
+  const cj=aiClientJourneys.find(function(x){return x.id===cjId;});if(!cj)return;
+  if(!cj.scope)cj.scope=[];
+  cj.scope[i]={mode:mode};
+  closeCtModal();
+  const inner=document.getElementById('aic-isb-inner');if(inner)inner.innerHTML=renderAIClientSidebar();
+  showAiToast('Configuration updated','Step set to '+(mode==='ai'?'AI Automated':'Manual')+'.');
+}
+function openAIClientAddJourneyModal(clientId){
+  const c=aiClients.find(function(x){return x.id===clientId;});if(!c)return;
+  const builtIds=aiClientJourneys.filter(function(cj){return cj.clientId===clientId;}).map(function(cj){return cj.journeyId;});
+  const available=aiJourneys.filter(function(j){return builtIds.indexOf(j.id)===-1;});
+  const rows=available.length?available.map(function(j){
+    const stepCount=(aiJourneyEvents[j.id]||[]).length;
+    return '<div class="ea-req-row" style="cursor:pointer" onclick="addAIClientJourney(\''+clientId+'\',\''+j.id+'\')"><div><div class="ea-req-label">'+j.name+'</div><div class="ea-req-time">'+j.category+' &middot; '+j.modules.length+' modules &middot; '+stepCount+' steps</div></div><span class="status-pill draft">+ Add</span></div>';
+  }).join(''):'<div class="ea-req-empty">Every journey in the catalog has already been built for this client.</div>';
+  document.getElementById('ct-modal-overlay').innerHTML=
+    '<div class="ct-modal" style="width:min(480px,92vw)" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">Add Journey for '+c.name+'</span><button class="ct-modal-close" onclick="closeCtModal()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'<div style="font-size:12.5px;color:var(--gray);margin-bottom:16px">Choose a journey from the catalog to build out for this client. It starts in Draft with the default AI/human step config, which you can adjust right after.</div>'
+    +'<div class="ea-req-list">'+rows+'</div>'
+    +'</div>';
+  document.getElementById('ct-modal-overlay').style.display='flex';
+}
+function addAIClientJourney(clientId,journeyId){
+  const c=aiClients.find(function(x){return x.id===clientId;});
+  const j=aiJourneys.find(function(x){return x.id===journeyId;});
+  if(!c||!j)return;
+  const builtOn=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  aiClientJourneys.push({id:'cj-'+(aiClientJourneySeq++),clientId:clientId,journeyId:journeyId,status:'Draft',builtOn:builtOn,scope:[]});
+  closeCtModal();
+  aiClientSelectedId=clientId;aiClientTab='journeys';
+  renderADTPage();
+  showAiToast('Journey added','"'+j.name+'" has been added for '+c.name+' as a Draft.');
+}
+function renderAIClientSidebar(){
+  const c=aiClients.find(function(x){return x.id===aiClientSelectedId;});if(!c)return '';
+  const journeys=aiClientJourneys.filter(function(cj){return cj.clientId===c.id;});
+  const requests=entityRequests.filter(function(r){return r.clientId===c.id&&r.type!=='manager-notify';});
+  const pendingCount=requests.filter(function(r){return r.status==='Pending';}).length;
+  const tabs=[{id:'journeys',label:'Journeys'},{id:'requests',label:'Requests'+(pendingCount?' ('+pendingCount+')':'')}];
+  const tabBar='<div class="lp-isb-tabbar">'
+    +'<button class="lp-isb-nav-btn" onclick="scrollTabRow(\'left\',\'aic-isb-tabs\')" title="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
+    +'<div class="lp-isb-tabs" id="aic-isb-tabs">'+tabs.map(function(t){return '<button class="lp-isb-tab'+(aiClientTab===t.id?' active':'')+'" onclick="navAIClientTab(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'
+    +'<button class="lp-isb-nav-btn nav-right" onclick="scrollTabRow(\'right\',\'aic-isb-tabs\')" title="Scroll right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeAIClientSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'</div>';
+  const addJourneyBtn=aiClientTab==='journeys'?'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="openAIClientAddJourneyModal(\''+c.id+'\')">+ Add Journey</button>':'';
+  const header='<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--border)">'
+    +'<div>'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy)">'+c.name+'</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-top:3px">'+c.country+' &middot; '+c.plan+' Plan &middot; '+c.employees+' employees</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-top:2px">Primary contact: '+c.contactName+' ('+c.contactRole+')</div>'
+    +'</div>'
+    +addJourneyBtn
+    +'</div>';
+  let body;
+  if(aiClientTab==='requests'){
+    const rows=requests.length?requests.map(function(r){
+      const actions=r.status==='Pending'
+        ?'<div class="sa-req-actions" onclick="event.stopPropagation()"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div>'
+        :'<span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span>';
+      return '<div class="ea-req-row" style="align-items:flex-start"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div>'+(r.note?'<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5">'+r.note+'</div>':'')+'</div>'+actions+'</div>';
+    }).join(''):'<div class="ea-req-empty">No requests from this client yet.</div>';
+    body='<div class="ea-req-list">'+rows+'</div>';
+  }else{
+    const cards=journeys.length?journeys.map(function(cj){
+      const j=aiJourneys.find(function(x){return x.id===cj.journeyId;});if(!j)return '';
+      const events=aiJourneyEvents[cj.journeyId]||[];
+      const rows=events.map(function(e,i){
+        const toggleable=e.chips.includes('AI Automated');
+        const saved=(cj.scope&&cj.scope[i])?cj.scope[i]:null;
+        const mode=saved?saved.mode:(toggleable?'ai':'manual');
+        const nameSafe=e.name.replace(/'/g,"\\'");
+        if(!toggleable){
+          return '<div class="ai-scope-row ai-scope-row-manual">'
+            +'<div class="ai-scope-name"><div class="ai-scope-name-text">'+(i+1)+'. '+e.name+'</div><div class="ai-timeline-chips">'+aiChips(e.chips)+'</div></div>'
+            +'<div class="ai-scope-manual-badge">Manual step &mdash; requires human action</div>'
+            +'</div>';
+        }
+        return '<div class="ai-scope-row">'
+          +'<div class="ai-scope-name"><div class="ai-scope-name-text">'+(i+1)+'. '+e.name+'</div><div class="ai-timeline-chips">'+aiChips(e.chips)+'</div></div>'
+          +'<div class="segmented ai-scope-mode-seg" id="aic-scope-mode-'+cj.id+'-'+i+'">'
+          +'<button type="button" class="seg-btn'+(mode==='ai'?' active':'')+'" data-mode="ai" onclick="aiClientScopeModeChoose(this,\''+cj.id+'\','+i+',\'ai\',\''+nameSafe+'\')">AI</button>'
+          +'<button type="button" class="seg-btn'+(mode==='manual'?' active':'')+'" data-mode="manual" onclick="aiClientScopeModeChoose(this,\''+cj.id+'\','+i+',\'manual\',\''+nameSafe+'\')">Manual</button>'
+          +'</div></div>';
+      }).join('');
+      return '<div class="ep-form-card" style="margin-bottom:14px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:10px"><div style="font-size:14px;font-weight:700;color:var(--navy)">'+j.name+'</div><span class="status-pill '+(cj.status==='Active'?'active':'draft')+'">'+cj.status+'</span></div>'
+        +'<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">Built '+cj.builtOn+' &middot; '+events.length+' steps &middot; '+j.category+'</div>'
+        +'<div class="ai-scope-table">'+rows+'</div>'
+        +'</div>';
+    }).join(''):'<div class="ea-req-empty">No journeys have been built for this client yet.</div>';
+    body=cards;
+  }
+  return tabBar+'<div class="lp-isb-body">'+header+body+'</div>';
+}
+function buildAIClientsListingHTML(){
+  const rows=aiClients.map(function(c){
+    const journeys=aiClientJourneys.filter(function(cj){return cj.clientId===c.id;});
+    const journeyNames=journeys.length?journeys.map(function(cj){
+      const j=aiJourneys.find(function(x){return x.id===cj.journeyId;});
+      return j?j.name.replace(' Journey',''):cj.journeyId;
+    }).join(', '):'No journeys built yet';
+    const journeysCell=journeys.length
+      ?'<div class="cell-primary">'+journeys.length+' '+(journeys.length===1?'Journey':'Journeys')+'</div><div class="cell-sub">'+journeyNames+'</div>'
+      :'<span style="color:#9ca3af">'+journeyNames+'</span>';
+    const pending=entityRequests.filter(function(r){return r.clientId===c.id&&r.type!=='manager-notify'&&r.status==='Pending';});
+    const reqBadge=pending.length?'<span class="status-pill pending">'+pending.length+' Pending</span>':'<span style="color:#9ca3af;font-size:12px">No requests</span>';
+    const lastActivity=(pending[0]&&pending[0].timestamp)||(journeys[0]&&journeys[0].builtOn)||'—';
+    const defaultTab=pending.length?'requests':'journeys';
+    return '<tr class="aic-client-row'+(aiClientSelectedId===c.id?' lp-row-selected':'')+'" id="aic-row-'+c.id+'" style="cursor:pointer" onclick="openAIClientSidebar(\''+c.id+'\',\''+defaultTab+'\')">'
+      +'<td><div class="cell-primary">'+c.name+'</div><div class="cell-sub">'+c.plan+' &middot; '+c.employees+' employees</div></td>'
+      +'<td>'+c.country+'</td>'
+      +'<td style="font-size:12.5px">'+journeysCell+'</td>'
+      +'<td>'+reqBadge+'</td>'
+      +'<td class="cell-sub">'+lastActivity+'</td>'
+      +'</tr>';
+  }).join('');
+  const sbInner=aiClientSelectedId?renderAIClientSidebar():'';
+  return '<div class="ai-exec-page">'
+    +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px;max-width:640px">Journeys built for each client, their step-by-step AI/human configuration, and any pending access requests.</p>'
+    +'<div class="lp-split-wrap"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
+    +'<table class="lp-table"><thead><tr><th>Client</th><th>Country</th><th>Journeys Built</th><th>Requests</th><th>Last Activity</th></tr></thead><tbody>'
+    +(rows||'<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--gray)">No clients yet.</td></tr>')
+    +'</tbody></table>'
+    +'</div></div>'
+    +'<div class="lp-split-sb'+(aiClientSelectedId?' open':'')+'" id="aic-split-sb"><div class="lp-isb" id="aic-isb-inner">'+sbInner+'</div></div>'
+    +'</div></div>';
+}
+
 function buildAIExecutiveDashboardHTML(){
   const lockedRoadmapJourneys=cfgJourneys.filter(function(j){return j.locked;});
   const allAIJourneys=aiJourneys.concat(lockedRoadmapJourneys);
@@ -3671,7 +3844,7 @@ function buildAIExecutiveDashboardHTML(){
       +(cta?'<button class="btn btn-primary ai-journey-cta-btn" onclick="event.stopPropagation();'+cta.action+'">'+cta.label+'</button>':'')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
-  const pendingCount=aiAllPendingRuns().length;
+  const pendingCount=myTasksPendingCount();
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
     +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p></div>'
@@ -5273,64 +5446,58 @@ function buildContractCommercialReviewSectionsHTML(rec){
   const items=(rec.complianceItems||[]).map(function(it){
     return '<div class="ea-req-row"><div><div class="ea-req-label">'+(it.item||'—')+'</div><div class="ea-req-time">'+(it.note||'')+'</div></div><span class="status-pill '+statusClass(it.status||'Pending')+'">'+(it.status||'Pending')+'</span></div>';
   }).join('')||'<div class="ea-req-empty">No compliance items on file.</div>';
-  return '<div class="adt-doc-section"><div class="adt-doc-section-title">Commercial Terms</div><div class="review-grid">'
-    +'<div class="review-row"><div class="rr-label">Monthly Gross Pay</div><div class="rr-val">'+(rec.payAmount?rec.payAmount+' '+(rec.currency||''):'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Pay Frequency</div><div class="rr-val">'+(rec.payFrequency||'Monthly')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">ADT Platform Fee</div><div class="rr-val">'+(rec.currency||'')+' '+(commercial.adtFee||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Social Contribution</div><div class="rr-val">'+(commercial.socialPremPct?commercial.socialPremPct+'%':'—')+'</div></div>'
+  return '<div class="review-section"><div class="review-title">Commercial Terms</div><div class="review-grid">'
+    +aiDrawerRow('Monthly Gross Pay',rec.payAmount?rec.payAmount+' '+(rec.currency||''):'—')
+    +aiDrawerRow('Pay Frequency',rec.payFrequency||'Monthly')
+    +aiDrawerRow('ADT Platform Fee',(rec.currency||'')+' '+(commercial.adtFee||'—'))
+    +aiDrawerRow('Social Contribution',commercial.socialPremPct?commercial.socialPremPct+'%':'—')
     +'</div></div>'
-    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Compliance Checklist</div><div class="ea-req-list">'+items+'</div></div>';
+    +'<div class="review-section"><div class="review-title">Compliance Checklist</div><div class="ea-req-list">'+items+'</div></div>';
 }
 function buildAIProposalApprovalDataHTML(d,rec){
   rec=rec||{};
-  return '<div class="adt-doc-page" style="margin:0;max-width:none">'
-    +'<div class="adt-doc-header">'
-    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Deal Desk</div></div>'
-    +'<div><div class="adt-doc-title">COMMERCIAL PROPOSAL</div><div class="adt-doc-meta">Proposal '+(d.proposalId||'—')+'</div></div>'
-    +'</div>'
-    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Parties</div><div class="review-grid">'
-    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(d.name||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(d.country||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Contract Type</div><div class="rr-val">'+(d.type||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Job Title</div><div class="rr-val">'+(d.jobTitle||'—')+'</div></div>'
+  return '<div>'
+    +'<div style="margin-bottom:14px"><div style="font-size:14px;font-weight:700">Proposal '+(d.proposalId||'—')+'</div><div style="font-size:11.5px;color:var(--gray);margin-top:2px">Details AI filled in for this proposal — review before approving.</div></div>'
+    +'<div class="review-section"><div class="review-title">Parties</div><div class="review-grid">'
+    +aiDrawerRow('Employee',d.name||'—')
+    +aiDrawerRow('Country',d.country||'—')
+    +aiDrawerRow('Contract Type',d.type||'—')
+    +aiDrawerRow('Job Title',d.jobTitle||'—')
     +'</div></div>'
-    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Eligibility &amp; Personal Details</div><div class="review-grid">'
-    +'<div class="review-row"><div class="rr-label">Nationality</div><div class="rr-val">'+(rec.nationality||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Work Permit</div><div class="rr-val">'+(rec.workPermit?'Yes':'No')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Email</div><div class="rr-val">'+(rec.email||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Contact</div><div class="rr-val">'+(rec.contact||'—')+'</div></div>'
+    +'<div class="review-section"><div class="review-title">Eligibility &amp; Personal Details</div><div class="review-grid">'
+    +aiDrawerRow('Nationality',rec.nationality||'—')
+    +aiDrawerRow('Work Permit',rec.workPermit?'Yes':'No')
+    +aiDrawerRow('Email',rec.email||'—')
+    +aiDrawerRow('Contact',rec.contact||'—')
     +'</div></div>'
-    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Position &amp; Schedule</div><div class="review-grid">'
-    +'<div class="review-row"><div class="rr-label">Employment Duration</div><div class="rr-val">'+(rec.empDuration||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Work Schedule</div><div class="rr-val">'+(rec.workSchedule||'—')+'</div></div>'
+    +'<div class="review-section"><div class="review-title">Position &amp; Schedule</div><div class="review-grid">'
+    +aiDrawerRow('Employment Duration',rec.empDuration||'—')
+    +aiDrawerRow('Work Schedule',rec.workSchedule||'—')
     +'</div>'
-    +'<div class="review-row" style="margin-top:4px"><div class="rr-label">Job Description</div><div class="rr-val" style="white-space:normal">'+(rec.jobDesc||'—')+'</div></div>'
+    +'<div class="review-grid" style="grid-template-columns:1fr;margin-top:4px">'+aiDrawerRow('Job Description',rec.jobDesc||'—')+'</div>'
     +'</div>'
     +buildContractCommercialReviewSectionsHTML(rec)
     +'</div>';
 }
 function buildAIContractApprovalDataHTML(rec){
   rec=rec||{};
-  return '<div class="adt-doc-page" style="margin:0;max-width:none">'
-    +'<div class="adt-doc-header">'
-    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Global Employment Platform</div></div>'
-    +'<div><div class="adt-doc-title">EMPLOYMENT AGREEMENT</div><div class="adt-doc-meta">Contract No. '+(rec.contractId||'—')+'</div></div>'
-    +'</div>'
-    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Parties &amp; Position</div><div class="review-grid">'
-    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(rec.empName||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Designation</div><div class="rr-val">'+(rec.empDesig||rec.jobTitle||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(rec.country||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Contract Type</div><div class="rr-val">'+(rec.type||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Employment Term</div><div class="rr-val">'+(rec.empDuration||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Work Schedule</div><div class="rr-val">'+(rec.workSchedule||'—')+'</div></div>'
+  return '<div>'
+    +'<div style="margin-bottom:14px"><div style="font-size:14px;font-weight:700">Contract '+(rec.contractId||'—')+'</div><div style="font-size:11.5px;color:var(--gray);margin-top:2px">Details AI filled in for this contract — review before approving.</div></div>'
+    +'<div class="review-section"><div class="review-title">Parties &amp; Position</div><div class="review-grid">'
+    +aiDrawerRow('Employee',rec.empName||'—')
+    +aiDrawerRow('Designation',rec.empDesig||rec.jobTitle||'—')
+    +aiDrawerRow('Country',rec.country||'—')
+    +aiDrawerRow('Contract Type',rec.type||'—')
+    +aiDrawerRow('Employment Term',rec.empDuration||'—')
+    +aiDrawerRow('Work Schedule',rec.workSchedule||'—')
     +'</div></div>'
-    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Eligibility &amp; Personal Details</div><div class="review-grid">'
-    +'<div class="review-row"><div class="rr-label">Nationality</div><div class="rr-val">'+(rec.nationality||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Work Permit</div><div class="rr-val">'+(rec.workPermit?'Yes':'No')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Email</div><div class="rr-val">'+(rec.email||'—')+'</div></div>'
-    +'<div class="review-row"><div class="rr-label">Contact</div><div class="rr-val">'+(rec.contact||'—')+'</div></div>'
+    +'<div class="review-section"><div class="review-title">Eligibility &amp; Personal Details</div><div class="review-grid">'
+    +aiDrawerRow('Nationality',rec.nationality||'—')
+    +aiDrawerRow('Work Permit',rec.workPermit?'Yes':'No')
+    +aiDrawerRow('Email',rec.email||'—')
+    +aiDrawerRow('Contact',rec.contact||'—')
     +'</div></div>'
-    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Job Description</div><div class="review-row"><div class="rr-val" style="white-space:normal">'+(rec.jobDesc||'—')+'</div></div></div>'
+    +'<div class="review-section"><div class="review-title">Job Description</div><div style="font-size:12.5px;font-weight:600;line-height:1.6">'+(rec.jobDesc||'—')+'</div></div>'
     +buildContractCommercialReviewSectionsHTML(rec)
     +'</div>';
 }
@@ -6498,8 +6665,8 @@ function aiRunCounts(run,journeyId){
 }
 function aiRunStatusPillClass(status){return status==='Active'?'active':status==='Waiting for Approval'?'pending':status==='Exception'?'inactive':status==='Completed'?'approved':'draft';}
 function viewAIActiveAutomation(journeyId){selectedAIJourneyId=journeyId;navigatePage('ai-active-automation');}
-function viewAIRun(runId){selectedAIRunId=runId;navigatePage('ai-run-detail');}
-function viewAIRunTask(runId,journeyId){selectedAIJourneyId=journeyId;selectedAIRunId=runId;navigatePage('ai-run-detail');}
+function viewAIRun(runId){selectedAIRunId=runId;aiRunDetailBackTo=page;navigatePage('ai-run-detail');}
+function viewAIRunTask(runId,journeyId){selectedAIJourneyId=journeyId;selectedAIRunId=runId;aiRunDetailBackTo='my-tasks';navigatePage('ai-run-detail');}
 
 // -- Cross-journey pending-task tracking: live-run flows (H2R/Payroll/Contract) upsert into aiAutomationRuns here --
 function aiUpsertRun(journeyId,runId,patch){
@@ -6520,7 +6687,27 @@ function aiAllPendingRuns(){
   out.sort(function(a,b){return (a.run.status==='Exception'?0:1)-(b.run.status==='Exception'?0:1);});
   return out;
 }
+function entityAccessRequestsPending(){
+  return entityRequests.filter(function(r){return r.type!=='manager-notify'&&r.status==='Pending';});
+}
+function myTasksPendingCount(){
+  return portalRole==='super-admin'?entityAccessRequestsPending().length:aiAllPendingRuns().length;
+}
+function buildSuperAdminMyTasksHTML(){
+  const pending=entityAccessRequestsPending();
+  const rows=pending.map(function(r){
+    return '<div class="ea-req-row" style="cursor:pointer" onclick="viewAIClientFromRequest(\''+(r.clientId||'')+'\')"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+' &middot; '+r.entity+'</div></div>'
+      +'<div class="sa-req-actions" onclick="event.stopPropagation()"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div></div>';
+  }).join('');
+  const body=pending.length?rows:'<div class="ea-req-empty">No pending requests right now &mdash; requests to enable a system, agent, or journey will show up here.</div>';
+  return '<div class="ai-exec-page">'
+    +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Requests from Entity Admins and Entity Users to enable a system, agent, or journey &mdash; waiting on your approval.</p>'
+    +'<div class="setup-card"><div class="ea-req-list">'+body+'</div></div>'
+    +'</div>';
+}
 function buildMyTasksPageHTML(){
+  if(portalRole==='super-admin')return buildSuperAdminMyTasksHTML();
   const items=aiAllPendingRuns();
   const mtDotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const rows=items.map(function(it){
@@ -6694,7 +6881,11 @@ function buildAIRunDetailHTML(){
       +'</div>';
   }
 
-  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="viewAIJourney(\''+j.id+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back to '+j.name+'</button>'
+  let backLabel,backAction;
+  if(aiRunDetailBackTo==='my-tasks'){backLabel='Back to My Tasks';backAction="navigatePage('my-tasks')";}
+  else if(aiRunDetailBackTo==='ai-active-automation'){backLabel='Back to '+j.name+' Automation';backAction="navigatePage('ai-active-automation')";}
+  else{backLabel='Back to '+j.name;backAction="viewAIJourney('"+j.id+"')";}
+  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="'+backAction+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+backLabel+'</button>'
     +'<p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+' &mdash; '+run.client+'</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">'+run.country+' &middot; '+run.contractType+' &middot; Run ID '+run.runId+' &middot; <span class="status-pill '+aiRunStatusPillClass(run.status)+'">'+run.status+'</span></p>'
     +'<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start">'

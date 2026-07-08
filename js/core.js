@@ -29,6 +29,8 @@ const aiH2rCountryData={
   'Italy':{rateRules:'Employer contributions ~29%–32% of gross salary',statutory:'INPS, INAIL, TFR (severance provision)',taxBand:'Progressive IRPEF, 23%–43%'}
 };
 let selectedAIRunId='RUN-2001';
+let aiRunDetailBackTo=null;
+let aiClientSelectedId=null,aiClientTab='journeys';
 let liveRunSeq=9000;
 let aiJourneyDetailSelectedStage=-1;
 let aiRunStatusFilter='';
@@ -1079,6 +1081,23 @@ const aiJourneyEvents={
   ]
 };
 
+// -- AI EXECUTIVE — SUPER ADMIN: client roster + which journeys were built for each, with their own step config --
+const aiClients=[
+  {id:'dhi-hyperlocal',name:'Dhi Hyperlocal',country:'India',plan:'Enterprise',employees:142,contactName:'Priya Nair',contactRole:'Entity Admin'},
+  {id:'vantage-freight',name:'Vantage Freight Pvt Ltd',country:'India',plan:'Growth',employees:64,contactName:'Karan Mehta',contactRole:'Entity Admin'},
+  {id:'norrbridge-logistics',name:'Norrbridge Logistics B.V.',country:'Netherlands',plan:'Enterprise',employees:210,contactName:'Sanne de Vries',contactRole:'Entity Admin'},
+  {id:'kaira-textiles',name:'Kaira Textiles Ltd',country:'India',plan:'Growth',employees:38,contactName:'Rohan Shah',contactRole:'Entity Admin'}
+];
+// scope[i] mirrors aiJourneyEvents[journeyId][i] by position — {mode:'ai'|'manual'}; only present where it deviates from that step's default.
+const aiClientJourneys=[
+  {id:'cj-1',clientId:'dhi-hyperlocal',journeyId:'contract-creation',status:'Active',builtOn:'01 Jul 2026',scope:[]},
+  {id:'cj-2',clientId:'dhi-hyperlocal',journeyId:'payroll-creation',status:'Active',builtOn:'02 Jul 2026',scope:[]},
+  {id:'cj-3',clientId:'vantage-freight',journeyId:'contract-creation',status:'Active',builtOn:'22 Jun 2026',scope:[null,null,null,null,null,{mode:'manual'}]},
+  {id:'cj-4',clientId:'norrbridge-logistics',journeyId:'h2r-lifecycle',status:'Draft',builtOn:'28 Jun 2026',scope:[]},
+  {id:'cj-5',clientId:'kaira-textiles',journeyId:'payroll-creation',status:'Active',builtOn:'15 Jun 2026',scope:[null,null,null,null,{mode:'manual'}]}
+];
+let aiClientJourneySeq=6;
+
 // -- Configure: Systems (full parity with reference config console) --
 const cfgSystems=[
   {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:false,
@@ -1133,10 +1152,13 @@ const entityLockedCategories=['P2P','F2A'];
 const entityJourneyActivation={};
 let entityRequestSeq=1;
 const entityRequests=[
-  {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'}
+  {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'},
+  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'h2r-lifecycle',label:'Activate Hire to Retire (H2R) Journey for Norrbridge Logistics',requestedBy:'Sanne de Vries (Entity Admin)',entity:'Norrbridge Logistics B.V.',clientId:'norrbridge-logistics',timestamp:'28 Jun 2026, 3:15 PM',status:'Pending',note:'Client wants the H2R journey live before their next hiring wave.'},
+  {id:'REQ-'+(entityRequestSeq++),type:'journey-custom',refId:'custom-vendor-onboarding',label:'Custom journey request: Vendor Onboarding & Compliance',requestedBy:'Karan Mehta (Entity Admin)',entity:'Vantage Freight Pvt Ltd',clientId:'vantage-freight',timestamp:'20 Jun 2026, 10:05 AM',status:'Approved',note:'Approved and folded into their Contract Creation journey scope.'},
+  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'payroll-creation',label:'Activate Payroll Creation Journey for Kaira Textiles',requestedBy:'Rohan Shah (Entity Admin)',entity:'Kaira Textiles Ltd',clientId:'kaira-textiles',timestamp:'12 Jun 2026, 5:40 PM',status:'Approved',note:''}
 ];
 function createEntityRequest(type,refId,label,note){
-  const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:note||''};
+  const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:note||''};
   entityRequests.unshift(req);
   return req;
 }
