@@ -6,7 +6,7 @@
   if(page==='contract-peo'){if(aiAssistedFlow){el.innerHTML=buildAIAssistedContractSplitHTML('PEO');initAICtChatPanel();return;}el.innerHTML=buildPEOContractHTML();return;}
   if(page==='ai-proposal-created'){el.innerHTML=buildAIProposalCreatedHTML();aiScheduleAutoAdvance('ai-proposal-created',aiSendProposalForApproval,1300);return;}
   if(page==='ai-proposal-waiting-approval'){el.innerHTML=buildAIProposalWaitingApprovalHTML();return;}
-  if(page==='ai-contract-document'){el.innerHTML=buildAIContractDocumentHTML();aiScheduleAutoAdvance('ai-contract-document',aiSendContractForApproval,1300);return;}
+  if(page==='ai-contract-document'){el.innerHTML=buildAIContractDocumentHTML();return;}
   if(page==='ai-contract-waiting-approval'){el.innerHTML=buildAIContractWaitingApprovalHTML();return;}
   if(page==='ai-onboarding-run'){el.innerHTML=buildAIOnboardingRunHTML();return;}
   if(page==='ai-journey-complete'){el.innerHTML=buildAIJourneyCompleteHTML();return;}

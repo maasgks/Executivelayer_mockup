@@ -1087,6 +1087,16 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-run-table{min-width:960px}
 .ai-run-table th:first-child,.ai-run-table td:first-child{text-align:left;width:auto;font-weight:400}
 .ai-run-table td{height:auto;padding:14px 16px;white-space:nowrap}
+/* My Tasks: fits within the page width, no horizontal scroll */
+.ai-run-table.mt-table{min-width:0;width:100%;table-layout:fixed}
+.ai-run-table.mt-table th,.ai-run-table.mt-table td{white-space:normal;word-break:break-word}
+.ai-run-table.mt-table th:nth-child(1),.ai-run-table.mt-table td:nth-child(1){width:19%}
+.ai-run-table.mt-table th:nth-child(2),.ai-run-table.mt-table td:nth-child(2){width:15%}
+.ai-run-table.mt-table th:nth-child(3),.ai-run-table.mt-table td:nth-child(3){width:34%}
+.ai-run-table.mt-table th:nth-child(4),.ai-run-table.mt-table td:nth-child(4){width:13%}
+.ai-run-table.mt-table th:nth-child(5),.ai-run-table.mt-table td:nth-child(5){width:11%}
+.ai-run-table.mt-table th:nth-child(6),.ai-run-table.mt-table td:nth-child(6){width:52px;text-align:center}
+.ai-run-table.mt-table .cell-primary,.ai-run-table.mt-table .cell-sub{white-space:normal}
 /* AI Executive — Create Your Journey wizard */
 .ai-wizard-stepper{display:flex;align-items:center;gap:0;margin-bottom:28px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 24px;overflow-x:auto}
 .ai-wizard-step{display:flex;align-items:center;gap:9px;cursor:pointer;flex-shrink:0}
@@ -1241,6 +1251,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .aicj-box-badge.none{background:#f1f5f9;color:var(--gray)}
 /* Contract Creation Journey — dummy ADT contract document template */
 .adt-doc-page{background:#fff;border:1px solid var(--border);border-radius:14px;max-width:680px;margin:0 auto;padding:36px 40px;box-shadow:0 10px 30px rgba(15,23,42,.08)}
+.adt-doc-page.adt-doc-editing{outline:2px dashed var(--orange);outline-offset:6px;cursor:text}
+.adt-doc-page.adt-doc-editing .rr-val,.adt-doc-page.adt-doc-editing .adt-doc-clause{border-radius:4px;transition:.15s}
+.adt-doc-page.adt-doc-editing .rr-val:hover,.adt-doc-page.adt-doc-editing .adt-doc-clause:hover{background:#fff7ed}
 .adt-doc-header{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2px solid var(--navy);padding-bottom:18px;margin-bottom:24px}
 .adt-doc-brand{font-size:18px;font-weight:800;color:var(--navy);letter-spacing:.5px}
 .adt-doc-brand-sub{font-size:10.5px;color:var(--gray);margin-top:2px;letter-spacing:.3px}

@@ -5401,7 +5401,7 @@ function buildAIH2rPromptHTML(flow,j){
     +'<div id="aicj-inner"><div class="ep-page" style="max-width:640px;margin:0 auto">'
     +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
     +'<div style="margin-top:20px;text-align:center">'
-    +'<div class="ai-run-icon-wrap">'+j.icon+'</div>'
+    +'<div class="ai-run-icon-wrap" style="margin-left:auto;margin-right:auto">'+j.icon+'</div>'
     +'<div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px">AI Hire to Retire Assistant</div>'
     +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin:0 auto 20px;max-width:460px">'+flow.entryDesc+'</div>'
     +'<div style="margin-bottom:14px"><button class="btn btn-secondary" onclick="aiH2rSimulateNew()">Simulate: New Hire</button></div>'
@@ -6326,13 +6326,46 @@ function aiSimulateContractApproval(){
     page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
   },2000);
 }
+let aiContractEditMode=false;
+function aiContractDocActionBarHTML(){
+  if(aiContractEditMode){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding:10px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px">'
+      +'<div style="font-size:12.5px;font-weight:600;color:#c2410c">Editing contract &mdash; make your changes below, then save.</div>'
+      +'<button class="btn btn-success btn-sm" onclick="aiContractDocSave()">Save</button>'
+      +'</div>';
+  }
+  return '<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px">'
+    +'<button class="btn btn-secondary btn-sm" onclick="aiContractDocEdit()">Edit</button>'
+    +'<button class="btn btn-success btn-sm" onclick="aiContractDocApprove()">Approve</button>'
+    +'</div>';
+}
+function aiContractDocEdit(){
+  aiContractEditMode=true;
+  const body=document.getElementById('ai-contract-doc-body');
+  if(body){body.setAttribute('contenteditable','true');body.classList.add('adt-doc-editing');}
+  const bar=document.getElementById('ai-contract-doc-actionbar');
+  if(bar)bar.innerHTML=aiContractDocActionBarHTML();
+}
+function aiContractDocSave(){
+  aiContractEditMode=false;
+  const body=document.getElementById('ai-contract-doc-body');
+  if(body){body.removeAttribute('contenteditable');body.classList.remove('adt-doc-editing');}
+  const bar=document.getElementById('ai-contract-doc-actionbar');
+  if(bar)bar.innerHTML=aiContractDocActionBarHTML();
+  showAiToast('Contract updated','Your edits have been saved to the draft contract');
+}
+function aiContractDocApprove(){
+  aiContractEditMode=false;
+  aiSendContractForApproval();
+}
 function buildAIContractDocumentHTML(){
   const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
   const d=aiProposalDraft||{};
   const now=aiFormatNow();
   const entity='ADT '+(rec.country||d.country||'Netherlands')+(rec.type==='PEO'?' PEO Services B.V.':' EOR Services B.V.');
   return '<div style="padding:8px 0 24px">'
-    +'<div class="adt-doc-page">'
+    +'<div id="ai-contract-doc-actionbar">'+aiContractDocActionBarHTML()+'</div>'
+    +'<div class="adt-doc-page'+(aiContractEditMode?' adt-doc-editing':'')+'" id="ai-contract-doc-body"'+(aiContractEditMode?' contenteditable="true"':'')+'>'
     +'<div class="adt-doc-header">'
     +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Global Employment Platform</div></div>'
     +'<div><div class="adt-doc-title">EMPLOYMENT AGREEMENT</div><div class="adt-doc-meta">Contract No. '+(rec.contractId||'—')+'<br>Issued '+now.date+'</div></div>'
@@ -6365,7 +6398,6 @@ function buildAIContractDocumentHTML(){
     +'<div class="adt-doc-sig-block">'+(rec.empName||d.name||'Employee')+'<div class="adt-doc-sig-label">Employee Signature &middot; Pending</div></div>'
     +'</div>'
     +'</div>'
-    +'<div style="text-align:center;margin-top:22px;font-size:11.5px;color:var(--gray)">Automatically sending for signature via Docuseal<span class="ai-ellipsis"><span>.</span><span>.</span><span>.</span></span></div>'
     +'</div>';
 }
 function aiSendContractForApproval(){
@@ -6490,29 +6522,55 @@ function aiAllPendingRuns(){
 }
 function buildMyTasksPageHTML(){
   const items=aiAllPendingRuns();
+  const mtDotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const rows=items.map(function(it){
     const r=it.run,j=it.journey;
     const events=aiJourneyEvents[j.id]||[];
     const step=events[Math.min(r.currentStepIdx,events.length-1)];
     const isException=r.status==='Exception';
     const actionText=isException?(r.exceptionNote||'This run is blocked and needs review.'):('Waiting on: '+(step?step.name:'Review'));
+    const menu='<div class="ct-action-wrap">'
+      +'<button class="lp-action-btn" onclick="toggleMtAction(\''+r.runId+'\',event)" title="Actions">'+mtDotsIco+'</button>'
+      +'<div class="ct-action-menu" id="mt-ctm-'+r.runId+'">'
+      +'<div class="ct-act-item" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">View &amp; Act</div>'
+      +'<div class="ct-act-item" onclick="viewAIActiveAutomation(\''+j.id+'\')">View All Runs</div>'
+      +'<div class="ct-act-item" onclick="viewAIJourney(\''+j.id+'\')">View Journey</div>'
+      +'</div></div>';
     return '<tr style="cursor:pointer" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">'
       +'<td><div class="cell-primary">'+j.name+'</div><div class="cell-sub">'+r.runId+'</div></td>'
       +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+(r.country||'')+(r.contractType?' &middot; '+r.contractType:'')+'</div></td>'
       +'<td>'+actionText+'</td>'
       +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
       +'<td class="cell-sub">'+r.lastActivity+'</td>'
-      +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">View &amp; Act</button></td>'
+      +'<td onclick="event.stopPropagation()">'+menu+'</td>'
       +'</tr>';
   }).join('');
   const body=items.length
-    ?'<div class="listing-card"><table class="listing-table ai-run-table"><thead><tr><th>Journey</th><th>Client</th><th>Action Needed</th><th>Status</th><th>Last Activity</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    ?'<div class="listing-card" style="overflow-x:hidden"><table class="listing-table ai-run-table mt-table"><thead><tr><th>Journey</th><th>Client</th><th>Action Needed</th><th>Status</th><th>Last Activity</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
     :'<div class="listing-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:40px">No pending tasks right now &mdash; journeys you run will show up here if they need your approval or attention.</div>';
   return '<div class="ai-exec-page">'
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Every journey run across Contract Creation, Payroll, and Hire to Retire that is waiting on your approval or needs attention.</p>'
     +body
     +'</div>';
+}
+function toggleMtAction(id,e){
+  if(e)e.stopPropagation();
+  document.querySelectorAll('.ct-action-menu').forEach(function(m){if(m.id!=='mt-ctm-'+id)m.classList.remove('open');});
+  const m=document.getElementById('mt-ctm-'+id);if(!m)return;
+  const willOpen=!m.classList.contains('open');
+  m.classList.toggle('open');
+  if(willOpen&&e){
+    const wrap=e.target.closest('.ct-action-wrap');
+    const anchor=wrap?wrap.getBoundingClientRect():null;
+    if(anchor){
+      const menuH=m.offsetHeight;
+      const spaceBelow=window.innerHeight-anchor.bottom-8;
+      m.style.right=(window.innerWidth-anchor.right)+'px';m.style.left='auto';
+      if(spaceBelow>=menuH){m.style.top=(anchor.bottom+5)+'px';m.style.bottom='auto';}
+      else{m.style.bottom=(window.innerHeight-anchor.top+5)+'px';m.style.top='auto';}
+    }
+  }
 }
 
 function buildAIActiveAutomationHTML(){
@@ -6636,7 +6694,7 @@ function buildAIRunDetailHTML(){
       +'</div>';
   }
 
-  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'ai-active-automation\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back to Active Automation</button>'
+  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="viewAIJourney(\''+j.id+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back to '+j.name+'</button>'
     +'<p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+' &mdash; '+run.client+'</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">'+run.country+' &middot; '+run.contractType+' &middot; Run ID '+run.runId+' &middot; <span class="status-pill '+aiRunStatusPillClass(run.status)+'">'+run.status+'</span></p>'
     +'<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start">'
@@ -6692,6 +6750,7 @@ function aiSimulateApproval(){
       }
     }
     if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:3,status:'In Progress',lastActivity:'Just now'});
+    aiContractEditMode=false;
     page='ai-contract-document';renderADTPage();
   },2000);
 }
