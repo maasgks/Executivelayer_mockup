@@ -4784,21 +4784,42 @@ function renderCfgAgentSkillModal(){
     +actions
     +'</div>';
 }
+const agentIconPaths={
+  'AI Prompt Parser':'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  'AI Contract Assistant':'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  'AI + Docuseal':'<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  'AI Onboarding Engine':'<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>',
+  'AI Payroll Readiness Check':'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  'AI Timesheet Sync':'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  'AI Payroll Engine':'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  'AI Payslip Generator':'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  'AI Payroll Archive':'<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="13" x2="14" y2="13"/>',
+  'AI Compliance Hub Sync':'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  'AI Leave Policy Engine':'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  'AI Offboarding Engine':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
+};
+function agentIconSvg(name){
+  const path=agentIconPaths[name]||'<path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/>';
+  return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>';
+}
 function buildCfgAgentsHTML(){
   const cards=cfgAgents.map(function(a,i){
-    return '<div class="ep-form-card" style="margin-bottom:14px">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px">'
-      +'<div style="display:flex;align-items:center;gap:11px;min-width:0">'
-      +'<div style="width:34px;height:34px;border-radius:9px;background:var(--ol);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg></div>'
-      +'<div style="min-width:0"><div style="font-size:14.5px;font-weight:700;color:var(--navy)">'+a.name+'</div><div style="font-size:10.5px;color:var(--gray);margin-top:2px">'+a.type+' &middot; <span style="color:#16a34a">active</span></div></div>'
+    const usedInPills=a.usedIn.split(', ').map(function(u){
+      return '<span class="badge" style="color:var(--navy);background:#f1f5f9">'+u+'</span>';
+    }).join('');
+    return '<div class="agent-card">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;gap:12px;min-width:0">'
+      +'<div class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</div>'
+      +'<div style="min-width:0"><div style="font-size:14.5px;font-weight:700;color:var(--navy)">'+a.name+'</div><div style="font-size:11px;color:var(--gray);margin-top:3px;display:flex;align-items:center;gap:7px"><span>'+a.type+'</span><span class="status-pill active" style="min-width:0;height:auto;padding:1.5px 8px;font-size:9.5px">Active</span></div></div>'
       +'</div>'
       +'<button type="button" class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="viewCfgAgentSkill('+i+')">Agent Skill</button>'
       +'</div>'
-      +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:12px">'+a.desc+'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:7px">'
-      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">Model &middot; '+a.model+'</span>'
-      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">Used in &middot; '+a.usedIn+'</span>'
-      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">Guardrail &middot; '+a.guardrail+'</span>'
+      +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:14px">'+a.desc+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center">'
+      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">'+a.guardrail+'</span>'
+      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">'+a.model+'</span>'
+      +usedInPills
       +'</div>'
       +'</div>';
   }).join('');
@@ -6308,7 +6329,7 @@ function showLockedJourneyToast(journeyId,journeyName){
   el.dataset.journeyId=journeyId;
   el.innerHTML='<div class="locked-toast-avatar">J</div>'
     +'<div class="locked-toast-body"><div class="locked-toast-row1"><div class="locked-toast-text">Please contact Admin to activate this journey</div><div class="locked-toast-time">Just now</div></div>'
-    +'<div class="locked-toast-row2"><span class="locked-toast-journey">'+journeyName+'</span><span class="locked-toast-pending">Locked</span></div></div>'
+    +'<div class="locked-toast-row2"><span class="locked-toast-journey">'+journeyName+'</span><span class="locked-toast-pending">Locked</span><button class="locked-toast-contact-btn" onclick="event.stopPropagation();openLockedJourneyModal(\''+journeyId+'\')">Contact</button></div></div>'
     +'<button class="locked-toast-close" onclick="event.stopPropagation();closeLockedToast(this)" title="Dismiss"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
   el.addEventListener('click',function(){openLockedJourneyModal(journeyId);});
   stack.appendChild(el);
