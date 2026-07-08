@@ -22,7 +22,8 @@ function buildEntityAdminDashboardHTML(){
   const sysActive=cfgSystems.filter(s=>s.isDefault&&s.activatedForEntity).length;
   const jyTotal=aiJourneys.length;
   const jyActive=Object.values(entityJourneyActivation).filter(Boolean).length;
-  const pending=entityRequests.filter(r=>r.status==='Pending').length;
+  const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify');
+  const pending=visibleRequests.filter(r=>r.status==='Pending').length;
   const sysRows=cfgSystems.filter(s=>s.isDefault).map(function(s){
     const active=!!s.activatedForEntity;
     return `<div class="ea-req-row" style="cursor:pointer" onclick="viewCfgSystem('${s.id}')"><div><div class="ea-req-label">${s.name}</div><div class="ea-req-time">${s.type} &middot; ${s.method}</div></div><span class="status-pill ${active?'active':'draft'}">${active?'Activated':'Not Activated'}</span></div>`;
@@ -31,8 +32,11 @@ function buildEntityAdminDashboardHTML(){
     const active=!!entityJourneyActivation[j.id];
     return `<div class="ea-req-row" style="cursor:pointer" onclick="viewCfgJourney('${j.id}')"><div><div class="ea-req-label">${j.name}</div><div class="ea-req-time">${j.category}</div></div><span class="status-pill ${active?'active':'draft'}">${active?'Activated':'Locked'}</span></div>`;
   }).join('');
-  const reqRows=entityRequests.slice(0,8).map(r=>`<div class="ea-req-row"><div><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp}</div></div><span class="status-pill ${statusClass(r.status)}">${r.status}</span></div>`).join('');
-  const reqBody=entityRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — activate a system or journey to see status here.</div>';
+  const reqRows=visibleRequests.slice(0,8).map(r=>`<div class="ea-req-row"><div><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp}</div></div><span class="status-pill ${statusClass(r.status)}">${r.status}</span></div>`).join('');
+  const reqBody=visibleRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — activate a system or journey to see status here.</div>';
+  const notifyEntries=entityRequests.filter(r=>r.type==='manager-notify');
+  const notifyRows=notifyEntries.slice(0,8).map(r=>`<div class="ea-req-row" style="flex-direction:column;align-items:flex-start;gap:4px"><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp} &middot; ${r.requestedBy}</div><div style="font-size:12.5px;color:var(--navy);line-height:1.5">${r.note}</div></div>`).join('');
+  const notifyBody=notifyEntries.length?notifyRows:'<div class="ea-req-empty">No notes yet — your Entity Users will show up here if they escalate an approval.</div>';
   return `
     <p style="font-size:14px;font-weight:600;margin-bottom:4px">Entity Admin</p>
     <p style="font-size:12px;color:var(--gray);margin-bottom:20px">Your entity's automation overview — systems, journeys, and requests.</p>
@@ -58,19 +62,25 @@ function buildEntityAdminDashboardHTML(){
       <div class="setup-sub" style="margin-bottom:14px">Systems and journeys you've asked Super Admin to activate</div>
       <div class="ea-req-list">${reqBody}</div>
     </div>
+    <div class="setup-card">
+      <div class="setup-title">Notes from Entity User</div>
+      <div class="setup-sub" style="margin-bottom:14px">Approvals your team has flagged for your attention</div>
+      <div class="ea-req-list">${notifyBody}</div>
+    </div>
   `;
 }
 
 // -- SUPER ADMIN DASHBOARD TAB: the Configure > Overview snapshot plus items needing this role's action --
 function buildSuperAdminDashboardHTML(){
-  const pendingCount=entityRequests.filter(r=>r.status==='Pending').length;
-  const rows=entityRequests.slice(0,8).map(function(r){
+  const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify');
+  const pendingCount=visibleRequests.filter(r=>r.status==='Pending').length;
+  const rows=visibleRequests.slice(0,8).map(function(r){
     const actions=r.status==='Pending'
       ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div>'
       :'<span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span>';
     return '<div class="ea-req-row"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div></div>'+actions+'</div>';
   }).join('');
-  const body=entityRequests.length?rows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
+  const body=visibleRequests.length?rows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
   return '<div class="ai-exec-page">'
     +cfgPageHead('Opendhi Super Admin','Full platform oversight — systems, data models, journeys, and agents across every entity.')
     +cfgOverviewBodyHTML()
@@ -5184,6 +5194,7 @@ function buildAIPayrollApprovalHTML(){
   if(d.runId)aiUpsertRun('payroll-creation',d.runId,{client:d.name,country:d.country,contractType:d.role,currentStepIdx:3,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'We\'ve notified <strong style="color:var(--navy)">'+aiPayrollManager.name+'</strong> (Finance Approver) to review the calculated payroll for <strong>'+(d.name||'the employee')+'</strong>. Once approved, this journey will automatically continue to salary slip generation.',
+    entityUserDescription:'The calculated payroll for <strong>'+(d.name||'the employee')+'</strong> is ready for your review. Approve it to continue to salary slip generation, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
     timelineItems:[
       {label:'Attendance Captured',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
       {label:'Salary Calculated',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
@@ -5193,10 +5204,135 @@ function buildAIPayrollApprovalHTML(){
     onApprove:'aiRunFlowApprove()',
     approveLabel:'Simulate: '+aiPayrollManager.name+' Approves',
     backLabel:'Back to AI Executive',
-    backAction:'aiRunFlowExit()'
+    backAction:'aiRunFlowExit()',
+    approvalPanelHTML:buildAIPayrollApprovalDataHTML(d),
+    managerName:aiPayrollManager.name,
+    noteContextLabel:'Payroll approval — '+(d.name||'Employee'),
+    noteRefId:d.runId||d.slipId||''
   });
 }
 function aiMoney(v){return '&#8377; '+Math.round(v||0).toLocaleString('en-IN');}
+function buildAIPayrollApprovalDataHTML(d){
+  return '<div class="adt-doc-page" style="margin:0;max-width:none">'
+    +'<div class="adt-doc-header">'
+    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Payroll Services</div></div>'
+    +'<div><div class="adt-doc-title">PAYROLL SUMMARY</div><div class="adt-doc-meta">Pay Period '+(d.period||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Employee Details</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(d.name||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Employee ID</div><div class="rr-val">'+(d.empId||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Department</div><div class="rr-val">'+(d.dept||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Job Title</div><div class="rr-val">'+(d.role||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(d.country||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Attendance Capture</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Total Payable Days</div><div class="rr-val">'+(d.totalDays||0)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Days Present</div><div class="rr-val">'+(d.daysPresent||0)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Leave Days</div><div class="rr-val">'+(d.leaveDays||0)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Overtime Hours</div><div class="rr-val">'+(d.overtimeHours||0)+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Salary Breakdown</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Gross Salary</div><div class="rr-val">'+aiMoney(d.gross)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Provident Fund</div><div class="rr-val">'+aiMoney(d.pf)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Professional Tax</div><div class="rr-val">'+aiMoney(d.pt)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">ESI</div><div class="rr-val">'+aiMoney(d.esi)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Income Tax</div><div class="rr-val">'+aiMoney(d.tax)+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Total Deductions</div><div class="rr-val">'+aiMoney(d.deductions)+'</div></div>'
+    +'</div>'
+    +'<div class="review-row" style="margin-top:8px;padding-top:12px;border-top:2px solid var(--navy)"><div class="rr-label" style="font-weight:800;color:var(--navy)">Net Pay</div><div class="rr-val" style="font-size:16px;font-weight:800;color:var(--orange)">'+aiMoney(d.net)+'</div></div>'
+    +'</div>'
+    +'</div>';
+}
+function buildAIH2rApprovalDataHTML(d){
+  const c=d.compliance||{};
+  const policies=(d.policies||[]).map(function(p){
+    return '<div class="review-row"><div class="rr-label">'+(p.type||'—')+'</div><div class="rr-val">'+(p.yearly||0)+' days/yr &middot; Carry Forward '+(p.carryForward||0)+'</div></div>';
+  }).join('')||'<div class="ea-req-empty">No active leave policies matched.</div>';
+  return '<div class="adt-doc-page" style="margin:0;max-width:none">'
+    +'<div class="adt-doc-header">'
+    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Compliance Hub</div></div>'
+    +'<div><div class="adt-doc-title">EMPLOYEE COMPLIANCE RECORD</div><div class="adt-doc-meta">Employee ID '+(d.empId||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Employee Details</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(d.name||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(d.country||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Role</div><div class="rr-val">'+(d.role||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Country Compliance</div><div class="review-grid" style="grid-template-columns:1fr">'
+    +'<div class="review-row"><div class="rr-label">Rate Rules</div><div class="rr-val" style="white-space:normal">'+(c.rateRules||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Statutory Requirements</div><div class="rr-val" style="white-space:normal">'+(c.statutory||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Tax Band</div><div class="rr-val" style="white-space:normal">'+(c.taxBand||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Leave Policy Match</div><div class="review-grid" style="grid-template-columns:1fr">'+policies+'</div></div>'
+    +'</div>';
+}
+function buildContractCommercialReviewSectionsHTML(rec){
+  rec=rec||{};
+  const commercial=rec.commercial||{};
+  const items=(rec.complianceItems||[]).map(function(it){
+    return '<div class="ea-req-row"><div><div class="ea-req-label">'+(it.item||'—')+'</div><div class="ea-req-time">'+(it.note||'')+'</div></div><span class="status-pill '+statusClass(it.status||'Pending')+'">'+(it.status||'Pending')+'</span></div>';
+  }).join('')||'<div class="ea-req-empty">No compliance items on file.</div>';
+  return '<div class="adt-doc-section"><div class="adt-doc-section-title">Commercial Terms</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Monthly Gross Pay</div><div class="rr-val">'+(rec.payAmount?rec.payAmount+' '+(rec.currency||''):'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Pay Frequency</div><div class="rr-val">'+(rec.payFrequency||'Monthly')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">ADT Platform Fee</div><div class="rr-val">'+(rec.currency||'')+' '+(commercial.adtFee||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Social Contribution</div><div class="rr-val">'+(commercial.socialPremPct?commercial.socialPremPct+'%':'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Compliance Checklist</div><div class="ea-req-list">'+items+'</div></div>';
+}
+function buildAIProposalApprovalDataHTML(d,rec){
+  rec=rec||{};
+  return '<div class="adt-doc-page" style="margin:0;max-width:none">'
+    +'<div class="adt-doc-header">'
+    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Deal Desk</div></div>'
+    +'<div><div class="adt-doc-title">COMMERCIAL PROPOSAL</div><div class="adt-doc-meta">Proposal '+(d.proposalId||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Parties</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(d.name||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(d.country||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Contract Type</div><div class="rr-val">'+(d.type||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Job Title</div><div class="rr-val">'+(d.jobTitle||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Eligibility &amp; Personal Details</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Nationality</div><div class="rr-val">'+(rec.nationality||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Work Permit</div><div class="rr-val">'+(rec.workPermit?'Yes':'No')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Email</div><div class="rr-val">'+(rec.email||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Contact</div><div class="rr-val">'+(rec.contact||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Position &amp; Schedule</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employment Duration</div><div class="rr-val">'+(rec.empDuration||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Work Schedule</div><div class="rr-val">'+(rec.workSchedule||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="review-row" style="margin-top:4px"><div class="rr-label">Job Description</div><div class="rr-val" style="white-space:normal">'+(rec.jobDesc||'—')+'</div></div>'
+    +'</div>'
+    +buildContractCommercialReviewSectionsHTML(rec)
+    +'</div>';
+}
+function buildAIContractApprovalDataHTML(rec){
+  rec=rec||{};
+  return '<div class="adt-doc-page" style="margin:0;max-width:none">'
+    +'<div class="adt-doc-header">'
+    +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Global Employment Platform</div></div>'
+    +'<div><div class="adt-doc-title">EMPLOYMENT AGREEMENT</div><div class="adt-doc-meta">Contract No. '+(rec.contractId||'—')+'</div></div>'
+    +'</div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Parties &amp; Position</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Employee</div><div class="rr-val">'+(rec.empName||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Designation</div><div class="rr-val">'+(rec.empDesig||rec.jobTitle||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Country</div><div class="rr-val">'+(rec.country||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Contract Type</div><div class="rr-val">'+(rec.type||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Employment Term</div><div class="rr-val">'+(rec.empDuration||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Work Schedule</div><div class="rr-val">'+(rec.workSchedule||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Eligibility &amp; Personal Details</div><div class="review-grid">'
+    +'<div class="review-row"><div class="rr-label">Nationality</div><div class="rr-val">'+(rec.nationality||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Work Permit</div><div class="rr-val">'+(rec.workPermit?'Yes':'No')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Email</div><div class="rr-val">'+(rec.email||'—')+'</div></div>'
+    +'<div class="review-row"><div class="rr-label">Contact</div><div class="rr-val">'+(rec.contact||'—')+'</div></div>'
+    +'</div></div>'
+    +'<div class="adt-doc-section"><div class="adt-doc-section-title">Job Description</div><div class="review-row"><div class="rr-val" style="white-space:normal">'+(rec.jobDesc||'—')+'</div></div></div>'
+    +buildContractCommercialReviewSectionsHTML(rec)
+    +'</div>';
+}
 function buildAIPayrollSlipHTML(){
   const d=aiPayrollData||{};const now=aiFormatNow();
   return '<div style="padding:8px 0 24px">'
@@ -5347,6 +5483,7 @@ function buildAIH2rApprovalHTML(){
   if(d.runId)aiUpsertRun('h2r-lifecycle',d.runId,{client:d.name,country:d.country,contractType:d.role,currentStepIdx:3,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'A policy deviation was detected while setting up <strong>'+(d.name||'the employee')+'</strong>. We\'ve notified <strong style="color:var(--navy)">'+aiHrManager.name+'</strong> (HR Manager) to review and approve before finalizing the setup.',
+    entityUserDescription:'A policy deviation was detected while setting up <strong>'+(d.name||'the employee')+'</strong>. Review the compliance and leave policy details and approve to finalize the setup, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
     timelineItems:[
       {label:'Country Compliance Fetched',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
       {label:'Leave Policy Matched',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
@@ -5356,7 +5493,11 @@ function buildAIH2rApprovalHTML(){
     onApprove:'aiRunFlowApprove()',
     approveLabel:'Simulate: '+aiHrManager.name+' Approves',
     backLabel:'Back to AI Executive',
-    backAction:'aiRunFlowExit()'
+    backAction:'aiRunFlowExit()',
+    approvalPanelHTML:buildAIH2rApprovalDataHTML(d),
+    managerName:aiHrManager.name,
+    noteContextLabel:'H2R approval — '+(d.name||'Employee'),
+    noteRefId:d.runId||''
   });
 }
 function aiH2rRunOffboardStep(){
@@ -5726,7 +5867,7 @@ function aiCtUseEmployee(empId){
   if(!emp)return;
   const parsed=window._aiCtLastParsed||{};
   const parts=emp.name.split(' ');
-  aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||''};
+  aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||'',pay:aiCtMockSalary(emp).replace(/,/g,'')};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;
   aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||'';
   const promptEl=document.getElementById('ai-ct-prompt');
@@ -5931,6 +6072,32 @@ function notifyAdminForJourney(journeyId){
   removeLockedToastsForJourney(journeyId);
   showAiToast('Request sent to Admin','Your Admin will be notified to activate "'+j.name+'".');
 }
+let notifyMgrCtx=null;
+function openNotifyManagerModal(managerName,contextLabel,refId){
+  notifyMgrCtx={managerName:managerName,contextLabel:contextLabel,refId:refId};
+  const overlay=document.getElementById('notify-mgr-overlay');const body=document.getElementById('notify-mgr-body');
+  if(!overlay||!body)return;
+  body.innerHTML='<div class="lj-modal-title">Notify Entity Admin</div>'
+    +'<div class="lj-modal-desc">Let your Entity Admin know why you\'d like a second opinion on this approval.</div>'
+    +'<textarea id="notify-mgr-note" class="ep-form-input" style="height:100px;width:100%;resize:vertical;margin-bottom:16px;font-family:inherit" placeholder="Add a note for your Entity Admin..."></textarea>'
+    +'<div style="display:flex;gap:10px;justify-content:center">'
+    +'<button class="btn btn-secondary" onclick="closeNotifyManagerModal()">Cancel</button>'
+    +'<button class="btn btn-primary" onclick="submitNotifyManager()">Send Notification</button>'
+    +'</div>';
+  overlay.classList.remove('hidden');
+}
+function closeNotifyManagerModal(){
+  const overlay=document.getElementById('notify-mgr-overlay');if(overlay)overlay.classList.add('hidden');
+  notifyMgrCtx=null;
+}
+function submitNotifyManager(){
+  if(!notifyMgrCtx)return;
+  const inp=document.getElementById('notify-mgr-note');
+  const note=(inp&&inp.value.trim())||'No additional note provided.';
+  createEntityRequest('manager-notify',notifyMgrCtx.refId,notifyMgrCtx.contextLabel,note);
+  closeNotifyManagerModal();
+  showAiToast('Notification sent','Your Entity Admin has been notified about this approval.');
+}
 function buildAIProposalCreatedHTML(){
   const d=aiProposalDraft||{};
   return '<div class="ep-page" style="max-width:680px;margin:40px auto">'
@@ -5952,9 +6119,10 @@ function buildAIProposalCreatedHTML(){
     +'</div></div>';
 }
 function aiSendProposalForApproval(){
-  aiShowLoader('Notifying '+aiDealManager.name+'&hellip;','Sending proposal '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+' for approval');
+  const notifyName=portalRole==='entity-user'?'Entity Admin':aiDealManager.name;
+  aiShowLoader('Notifying '+notifyName+'&hellip;','Sending proposal '+((aiProposalDraft&&aiProposalDraft.proposalId)||'')+' for approval');
   notifData.unshift({name:'Proposal sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:(aiProposalDraft&&aiProposalDraft.proposalId)||'',time:'Just now',pending:true});
-  showAiToast('Proposal sent to '+aiDealManager.name,((aiProposalDraft&&aiProposalDraft.name)||'')+' — '+((aiProposalDraft&&aiProposalDraft.proposalId)||''));
+  showAiToast('Proposal sent to '+notifyName,((aiProposalDraft&&aiProposalDraft.name)||'')+' — '+((aiProposalDraft&&aiProposalDraft.proposalId)||''));
   if(aiCreatedContractId){
     const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
     if(rec){
@@ -5968,38 +6136,56 @@ function aiSendProposalForApproval(){
 function buildAIWaitingApprovalHTML(opts){
   const backLabel=opts.backLabel||'Back to Contracts';
   const backAction=opts.backAction||"page='contracts';renderADTPage()";
-  return '<div class="ep-page" style="max-width:680px;margin:20px auto 0;text-align:center">'
-    +'<div class="ep-form-card" style="padding:40px 32px">'
+  const showDataPanel=portalRole==='entity-user'&&!!opts.approvalPanelHTML;
+  const actionButtons=showDataPanel
+    ?'<button class="btn btn-secondary" onclick="openNotifyManagerModal(\''+(opts.managerName||'')+'\',\''+(opts.noteContextLabel||'')+'\',\''+(opts.noteRefId||'')+'\')">Notify Entity Admin</button><button class="btn btn-success" onclick="'+opts.onApprove+'">Approve</button>'
+    :'<button class="btn btn-success" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>';
+  const card='<div class="ep-form-card" style="padding:40px 32px">'
     +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">'
     +'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
     +'</div>'
     +'<div class="success-meta" style="background:#fef3c7;color:#b45309;margin:0 auto 14px">&#9203; Pending Approval</div>'
     +'<h2 style="font-size:19px;font-weight:700;margin-bottom:8px">Waiting for Approval</h2>'
-    +'<p style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:20px">'+opts.description+'</p>'
+    +'<p style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:20px">'+(showDataPanel&&opts.entityUserDescription?opts.entityUserDescription:opts.description)+'</p>'
     +'<div class="ai-timeline" style="text-align:left;max-width:360px;margin:0 auto 24px">'
     +opts.timelineItems.map(function(it,i){
       const chips=it.chips.map(function(c){return '<span class="ai-chip '+c.cls+'">'+c.label+'</span>';}).join('');
-      return '<div class="ai-timeline-item"><div class="ai-timeline-dot '+it.dotClass+'">'+(i+1)+'</div><div class="ai-timeline-card" style="cursor:default'+(it.pending?';opacity:.55':'')+'"><div class="ai-timeline-card-title">'+it.label+'</div><div class="ai-timeline-chips">'+chips+'</div></div></div>';
+      const label=(showDataPanel&&it.dotClass==='human')?'Waiting for Your Approval':it.label;
+      return '<div class="ai-timeline-item"><div class="ai-timeline-dot '+it.dotClass+'">'+(i+1)+'</div><div class="ai-timeline-card" style="cursor:default'+(it.pending?';opacity:.55':'')+'"><div class="ai-timeline-card-title">'+label+'</div><div class="ai-timeline-chips">'+chips+'</div></div></div>';
     }).join('')
     +'</div>'
     +'<div style="display:flex;gap:10px;justify-content:center">'
     +'<button class="btn btn-secondary" onclick="'+backAction+'">'+backLabel+'</button>'
-    +'<button class="btn btn-success" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>'
+    +actionButtons
     +'</div>'
+    +'</div>';
+  if(!showDataPanel){
+    return '<div class="ep-page" style="max-width:680px;margin:20px auto 0;text-align:center">'+card+'</div>';
+  }
+  return '<div class="ep-page" style="max-width:1040px;margin:20px auto 0">'
+    +'<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">'
+    +'<div style="flex:1 1 420px;text-align:center">'+card+'</div>'
+    +'<div style="flex:1 1 420px">'+opts.approvalPanelHTML+'</div>'
     +'</div></div>';
 }
 function buildAIProposalWaitingApprovalHTML(){
   const d=aiProposalDraft||{};
+  const rec=contractsData.find(function(c){return c.id===d.contractRecordId;})||{};
   if(d.runId)aiUpsertRun('contract-creation',d.runId,{client:d.name,country:d.country,contractType:d.type,currentStepIdx:2,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'We\'ve notified <strong style="color:var(--navy)">'+aiDealManager.name+'</strong> (Deal Manager) to review proposal <strong>'+d.proposalId+'</strong> for <strong>'+d.name+'</strong>. Once approved, this journey will automatically continue to contract generation.',
+    entityUserDescription:'Proposal <strong>'+d.proposalId+'</strong> for <strong>'+d.name+'</strong> is ready for your review. Approve it to continue to contract generation, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
     timelineItems:[
       {label:'Proposal Created',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
       {label:'Waiting for '+aiDealManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
       {label:'Contract Generation (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
     ],
     onApprove:'aiSimulateApproval()',
-    approveLabel:'Simulate: '+aiDealManager.name+' Approves'
+    approveLabel:'Simulate: '+aiDealManager.name+' Approves',
+    approvalPanelHTML:buildAIProposalApprovalDataHTML(d,rec),
+    managerName:aiDealManager.name,
+    noteContextLabel:'Proposal approval — '+(d.name||'Employee'),
+    noteRefId:d.proposalId||''
   });
 }
 function buildAIContractWaitingApprovalHTML(){
@@ -6008,13 +6194,18 @@ function buildAIContractWaitingApprovalHTML(){
   if(pd.runId)aiUpsertRun('contract-creation',pd.runId,{client:pd.name,country:pd.country,contractType:pd.type,currentStepIdx:4,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'We\'ve notified <strong style="color:var(--navy)">'+aiOpsManager.name+'</strong> (Ops Manager) to review contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+(rec.empName||'')+'</strong>. Once approved, this journey will automatically continue to onboarding.',
+    entityUserDescription:'Contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+(rec.empName||'')+'</strong> is ready for your review. Approve it to continue to onboarding, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
     timelineItems:[
       {label:'Contract Generated',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
       {label:'Waiting for '+aiOpsManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
       {label:'Onboarding (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
     ],
     onApprove:'aiSimulateContractApproval()',
-    approveLabel:'Simulate: '+aiOpsManager.name+' Approves'
+    approveLabel:'Simulate: '+aiOpsManager.name+' Approves',
+    approvalPanelHTML:buildAIContractApprovalDataHTML(rec),
+    managerName:aiOpsManager.name,
+    noteContextLabel:'Contract approval — '+(rec.empName||'Employee'),
+    noteRefId:rec.contractId||''
   });
 }
 function aiSimulateContractApproval(){
@@ -6078,7 +6269,8 @@ function buildAIContractDocumentHTML(){
     +'</div>';
 }
 function aiSendContractForApproval(){
-  aiShowLoader('Sending for Signature&hellip;','Routing the contract to '+aiOpsManager.name+' for approval');
+  const notifyName=portalRole==='entity-user'?'Entity Admin':aiOpsManager.name;
+  aiShowLoader('Sending for Signature&hellip;','Routing the contract to '+notifyName+' for approval');
   if(aiCreatedContractId){
     const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
     if(rec){
@@ -6088,7 +6280,7 @@ function aiSendContractForApproval(){
     }
   }
   notifData.unshift({name:'Contract sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:aiCreatedContractId||'',time:'Just now',pending:true});
-  showAiToast('Contract sent for signature',aiOpsManager.name+' has been notified for approval');
+  showAiToast('Contract sent for signature',notifyName+' has been notified for approval');
   setTimeout(function(){page='ai-contract-waiting-approval';renderADTPage();},2000);
 }
 let aiCtOnboardingStep=-1;
