@@ -3703,7 +3703,15 @@ function aiStepResponsibility(chips){
   return{label:'Agent',cls:'ai'};
 }
 
-function viewAIJourney(id){selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;aiRunStatusFilter='';navigatePage('ai-journey-detail');}
+function viewAIJourney(id){
+  if(!activePersonaCanAccessJourney(id)){
+    selectedAIJourneyId=activePersonaJourneyIds()[0]||'contract-creation';
+    navigatePage('ai-executive');
+    showAiToast('Journey hidden for this role','Only journeys owned by '+portalRoleLabel(portalRole)+' are available here.');
+    return;
+  }
+  selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;aiRunStatusFilter='';navigatePage('ai-journey-detail');
+}
 function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrStart(id);navigatePage('ai-automate-form');}
 function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
 
@@ -3881,17 +3889,25 @@ function buildAIClientsListingHTML(){
 }
 
 function buildAIExecutiveDashboardHTML(){
+  const persona=portalRole==='entity-user'?getActivePersona():null;
+  const visibleJourneyIds=portalRole==='entity-user'?activePersonaJourneyIds():null;
   const lockedRoadmapJourneys=cfgJourneys.filter(function(j){return j.locked;});
-  const allAIJourneys=aiJourneys.concat(lockedRoadmapJourneys);
+  const allAIJourneys=portalRole==='entity-user'
+    ?aiJourneys.filter(function(j){return visibleJourneyIds.indexOf(j.id)>=0;})
+    :aiJourneys.concat(lockedRoadmapJourneys);
+  const visibleCategories=cfgJourneyCategories.filter(function(c){
+    return allAIJourneys.some(function(j){return j.category===c.id;});
+  });
+  if(cfgJourneyCategoryFilter&&!visibleCategories.some(function(c){return c.id===cfgJourneyCategoryFilter;}))cfgJourneyCategoryFilter='';
   const filteredAIJourneys=cfgJourneyCategoryFilter?allAIJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):allAIJourneys;
-  const activeCat=cfgJourneyCategoryFilter?cfgJourneyCategories.find(function(c){return c.id===cfgJourneyCategoryFilter;}):null;
+  const activeCat=cfgJourneyCategoryFilter?visibleCategories.find(function(c){return c.id===cfgJourneyCategoryFilter;}):null;
   const catBoxes='<div class="cfg-cat-grid" style="margin-bottom:16px">'
-    +cfgJourneyCategories.map(function(c){
+    +visibleCategories.map(function(c){
       const count=allAIJourneys.filter(function(j){return j.category===c.id;}).length;
       return cfgCatBoxHTML(c,count);
     }).join('')
     +'</div>';
-  const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'';
+  const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':(persona?'<div class="role-scope-note"><span>'+persona.label+'</span> sees '+allAIJourneys.length+' journey'+(allAIJourneys.length===1?'':'s')+' where this role owns work.</div>':'');
   const cards=filteredAIJourneys.length?filteredAIJourneys.map(j=>{
     const isRoadmap=!!j.locked;
     const locked=isRoadmap?true:(portalRole!=='super-admin'&&!entityJourneyActivation[j.id]);
@@ -3909,11 +3925,11 @@ function buildAIExecutiveDashboardHTML(){
         :'')
       +(cta?'<button class="btn btn-primary ai-journey-cta-btn" onclick="event.stopPropagation();'+cta.action+'">'+cta.label+'</button>':'')
       +'</div>';
-  }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
+  }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys are assigned to this role in this category.</div>';
   const pendingCount=myTasksPendingCount();
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
-    +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.</p></div>'
+    +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">'+(persona?'Journeys routed to '+persona.label+' based on Enterprise Workflow ownership.':'Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.')+'</p></div>'
     +'<div style="display:flex;gap:8px;flex-shrink:0">'
     +'<button class="btn btn-secondary btn-sm" onclick="navigatePage(\'my-tasks\')">My Tasks'+(pendingCount?' <span class="badge" style="background:var(--orange);color:#fff;margin-left:6px">'+pendingCount+'</span>':'')+'</button>'
     +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>':'')
@@ -3950,6 +3966,11 @@ function aiTimelineDotClass(chips){
 
 function buildAIJourneyDetailHTML(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
+  if(!activePersonaCanAccessJourney(j.id)){
+    const first=activePersonaJourneyIds()[0];
+    selectedAIJourneyId=first||'contract-creation';
+    return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User persona only sees journeys where they own workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
+  }
   const events=aiJourneyEvents[j.id]||[];
   const timeline=events.map((e,i)=>{
     return '<div class="ai-timeline-item">'
@@ -5226,6 +5247,11 @@ function aiJourneyCTA(j){
   return null;
 }
 function startAIJourneyRun(journeyId){
+  if(!activePersonaCanAccessJourney(journeyId)){
+    navigatePage('ai-executive');
+    showAiToast('Journey hidden for this role','Only journeys owned by '+portalRoleLabel(portalRole)+' are available here.');
+    return;
+  }
   aiRunFlowJourneyId=journeyId;aiRunFlowStep=-1;aiRunFlowData={};
   if(journeyId==='payroll-creation'){aiPayrollData={};aiPayrollAnimatedStage=-1;}
   if(journeyId==='h2r-lifecycle'){aiH2rData={};aiH2rAnimatedStage=-1;aiH2rOffboardStep=-1;}
@@ -5322,6 +5348,7 @@ function aiRunFlowFinish(){
 function buildAIJourneyRunHTML(){
   const flow=aiRunFlows[aiRunFlowJourneyId];
   const j=aiJourneys.find(x=>x.id===aiRunFlowJourneyId)||aiJourneys[0];
+  if(!activePersonaCanAccessJourney(j.id))return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User persona only sees journeys where they own workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
   if(!flow)return '<div class="ai-exec-page">Unknown automation.</div>';
   if(aiRunFlowJourneyId==='payroll-creation')return buildAIPayrollJourneyHTML(flow,j);
   if(aiRunFlowJourneyId==='h2r-lifecycle')return buildAIH2rJourneyHTML(flow,j);
@@ -6771,7 +6798,14 @@ function aiRunCounts(run,journeyId){
   return {aiCompleted:aiCompleted,humanPending:humanPending};
 }
 function aiRunStatusPillClass(status){return status==='Active'?'active':status==='Waiting for Approval'?'pending':status==='Exception'?'inactive':status==='Completed'?'approved':'draft';}
-function viewAIActiveAutomation(journeyId){selectedAIJourneyId=journeyId;navigatePage('ai-active-automation');}
+function viewAIActiveAutomation(journeyId){
+  if(!activePersonaCanAccessJourney(journeyId)){
+    navigatePage('ai-executive');
+    showAiToast('Journey hidden for this role','Only journeys owned by '+portalRoleLabel(portalRole)+' are available here.');
+    return;
+  }
+  selectedAIJourneyId=journeyId;navigatePage('ai-active-automation');
+}
 function viewAIRun(runId){selectedAIRunId=runId;aiRunDetailBackTo=page;navigatePage('ai-run-detail');}
 function viewAIRunTask(runId,journeyId){selectedAIJourneyId=journeyId;selectedAIRunId=runId;aiRunDetailBackTo='my-tasks';navigatePage('ai-run-detail');}
 
@@ -6907,6 +6941,7 @@ function toggleMtAction(id,e){
 
 function buildAIActiveAutomationHTML(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
+  if(!activePersonaCanAccessJourney(j.id))return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User persona only sees journeys where they own workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
   const runs=aiAutomationRuns[j.id]||[];
   const cfg=aiAutomationConfigs[j.id];
   const totalRuns=runs.length;

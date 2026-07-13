@@ -26,6 +26,11 @@ const enterprisePersonas=[
   {id:'finance-approver',name:'Meera Iyer',label:'Finance Approver',department:'Finance',function:'Approver',initials:'MI',email:'meera.iyer@dhihyperlocal.com',focus:'Payroll calculation approval, disbursement authorization, final settlements, and financial controls.',journeys:['payroll-creation','h2r-lifecycle'],steps:['J2-S4','J2-S6','J3-S12','Sub-J A4'],approvals:4,owned:4,kpis:[['Payroll Approvals','2'],['Disbursements','3'],['Held Amount','INR 1.8L'],['Rate Exceptions','1']]}
 ];
 function getActivePersona(){return enterprisePersonas.find(function(p){return p.id===activePersonaId;})||enterprisePersonas[0];}
+function activePersonaJourneyIds(){return (getActivePersona().journeys||[]).slice();}
+function activePersonaCanAccessJourney(journeyId){
+  if(portalRole!=='entity-user')return true;
+  return activePersonaJourneyIds().indexOf(journeyId)>=0;
+}
 function setActivePersona(id){
   if(!enterprisePersonas.some(function(p){return p.id===id;}))return;
   activePersonaId=id;
