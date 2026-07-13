@@ -12,8 +12,73 @@ function buildDashboardPageHTML(){
   if(!tabs.some(t=>t.id===dashboardTab))dashboardTab='employee';
   const body=dashboardTab==='super-admin'?buildSuperAdminDashboardHTML()
     :dashboardTab==='entity-admin'?buildEntityAdminDashboardHTML()
+    :portalRole==='entity-user'?buildPersonaDashboardHTML()
     :dashboardContentHTML;
   return buildDashboardTabsHTML()+body;
+}
+
+function personaOwnedRunItems(persona){
+  const items=[];
+  const sourceMap={
+    'Deal Manager':'deal-manager',
+    'Ops Manager':'ops-manager',
+    'Finance Approver':'finance-approver',
+    'HR Manager':'hr-manager',
+    'AI Onboarding Engine':'hr',
+    'AI Payroll Readiness Check':'hr',
+    'AI Prompt Parser':'hr',
+    'AI Timesheet Sync':'hr',
+    'AI Payroll Engine':'hr',
+    'AI Payslip Generator':'hr',
+    'AI Payroll Archive':'hr',
+    'AI Compliance Hub Sync':'compliance-officer',
+    'AI + Docuseal':'legal-contracts-manager',
+    'AI Contract Assistant':'account-manager'
+  };
+  Object.keys(aiAutomationRuns).forEach(function(jid){
+    const journey=aiJourneys.find(function(j){return j.id===jid;});
+    const events=aiJourneyEvents[jid]||[];
+    (aiAutomationRuns[jid]||[]).forEach(function(run){
+      const event=events[Math.min(run.currentStepIdx,events.length-1)];
+      const owner=event?(sourceMap[event.source]||''):'';
+      const approvalOwner=event&&event.chips&&event.chips.indexOf('Approval Required')>=0;
+      const exceptionOwner=run.status==='Exception'&&(owner===persona.id||persona.id==='hr-manager'||persona.id==='finance-approver');
+      const waitingOwner=run.status==='Waiting for Approval'&&owner===persona.id&&approvalOwner;
+      if(waitingOwner||exceptionOwner)items.push({run:run,journey:journey,event:event});
+    });
+  });
+  return items;
+}
+function buildPersonaDashboardHTML(){
+  const p=getActivePersona();
+  const items=personaOwnedRunItems(p);
+  const exceptions=items.filter(function(x){return x.run.status==='Exception';}).length;
+  const approvals=items.filter(function(x){return x.run.status==='Waiting for Approval';}).length;
+  const kpis=p.kpis.map(function(k,i){
+    const val=i===0&&items.length?items.length:k[1];
+    return '<div class="stat-card"><div class="stat-label"><span>'+k[0]+'</span></div><div class="stat-val">'+val+'</div><div class="stat-sub">'+(i===0?'Role-scoped queue':'Current tenant view')+'</div></div>';
+  }).join('');
+  const ownedRows=p.steps.slice(0,8).map(function(s,i){
+    const journeyLabel=s.indexOf('J1')===0?'Contract Creation':s.indexOf('J2')===0?'Payroll Creation':s.indexOf('J3')===0?'H2R Lifecycle':'Sub-journey';
+    return '<tr><td><div class="cell-primary">'+s+'</div><div class="cell-sub">'+journeyLabel+'</div></td><td>'+p.department+'</td><td><span class="status-pill '+(i%3===0?'pending':i%3===1?'active':'approved')+'">'+(i%3===0?'Pending':i%3===1?'In Progress':'Completed')+'</span></td><td class="cell-sub">'+(i+1)+'h left</td></tr>';
+  }).join('');
+  const queueRows=items.slice(0,6).map(function(it){
+    const action=it.run.status==='Exception'?(it.run.exceptionNote||'Exception needs review'):'Approval required: '+(it.event?it.event.name:'Review');
+    return '<tr style="cursor:pointer" onclick="viewAIRunTask(\''+it.run.runId+'\',\''+it.journey.id+'\')"><td><div class="cell-primary">'+it.journey.name+'</div><div class="cell-sub">'+it.run.runId+'</div></td><td>'+it.run.client+'</td><td>'+action+'</td><td><span class="status-pill '+aiRunStatusPillClass(it.run.status)+'">'+it.run.status+'</span></td><td class="cell-sub">'+it.run.lastActivity+'</td></tr>';
+  }).join('');
+  const queueBody=queueRows||'<tr><td colspan="5" style="padding:28px;text-align:center;color:var(--gray);font-size:12.5px">No role-scoped approvals or exceptions right now.</td></tr>';
+  return '<div class="persona-dash">'
+    +'<div class="persona-hero">'
+      +'<div class="persona-avatar-lg">'+p.initials+'</div>'
+      +'<div><div class="persona-role">'+p.label+'</div><div class="persona-name">'+p.name+' &middot; '+p.department+'</div><div class="persona-focus">'+p.focus+'</div></div>'
+      +'<div class="persona-mode"><span>AI Mode</span><strong>'+p.owned+' owned steps</strong></div>'
+    +'</div>'
+    +'<div class="stat-grid" style="margin-bottom:20px">'+kpis+'</div>'
+    +'<div class="persona-grid">'
+      +'<div class="listing-card"><div class="persona-section-head"><div><div class="setup-title">Action Queue</div><div class="setup-sub">Approvals and exceptions routed to '+p.label+'</div></div><span class="status-pill pending">'+(approvals+exceptions)+' Open</span></div><table class="listing-table ai-run-table"><thead><tr><th>Journey</th><th>Client</th><th>Action Needed</th><th>Status</th><th>Last Activity</th></tr></thead><tbody>'+queueBody+'</tbody></table></div>'
+      +'<div class="listing-card"><div class="persona-section-head"><div><div class="setup-title">Owned Workflow Steps</div><div class="setup-sub">From Enterprise Workflow Design section 2</div></div><span class="status-pill active">'+p.journeys.length+' Journeys</span></div><table class="listing-table"><thead><tr><th>Step</th><th>Department</th><th>Status</th><th>SLA</th></tr></thead><tbody>'+ownedRows+'</tbody></table></div>'
+    +'</div>'
+    +'</div>';
 }
 
 // -- ENTITY ADMIN DASHBOARD TAB: governance stats for this entity, not the shared employee view --
@@ -6719,6 +6784,9 @@ function aiUpsertRun(journeyId,runId,patch){
   return run;
 }
 function aiAllPendingRuns(){
+  if(portalRole==='entity-user'){
+    return personaOwnedRunItems(getActivePersona()).map(function(it){return {run:it.run,journey:it.journey};});
+  }
   const out=[];
   Object.keys(aiAutomationRuns).forEach(function(jid){
     const j=aiJourneys.find(function(x){return x.id===jid;});if(!j)return;

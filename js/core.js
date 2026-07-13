@@ -3,6 +3,7 @@
 let view='adt',mode='agent',page='dashboard',agent='contractor',adtSidebarCollapsed=false,agentSidebarCollapsed=true,notifOpen=false,notifShowUnread=true,agentMsgs=[{role:'bot',text:"Hi John! I'm your ADT Agent. What would you like to do today?"}],formStep=-1,returnToReview=false,cw=360,selectedAIJourneyId='contract-creation',aiEventDrawerIdx=-1;
 // -- PORTAL ROLE (Super Admin / Entity Admin / Entity User) --
 let portalRole='super-admin',userDDMode='main';
+let activePersonaId='hr';
 let dashboardTab='employee';
 let aiContractPrefill=null,aiAssistedFlow=false,aiCtNotFoundOpen=false,aiProposalDraft=null,aiCtChatMsgs=[],aiWizardFormData={},aiCreatedContractId=null;
 const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
@@ -13,6 +14,23 @@ const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'}
 const aiHrManager={name:'Pallavi Parate',role:'HR Manager',initials:'PP'};
 let aiPayrollAnimatedStage=-1,aiPayrollData={};
 let aiH2rAnimatedStage=-1,aiH2rData={},aiH2rOffboardStep=-1;
+const enterprisePersonas=[
+  {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@dhihyperlocal.com',focus:'Deals, proposals, client acceptance, and commercial exceptions.',journeys:['contract-creation'],steps:['J1-S1','J1-S3','J1-S5'],approvals:0,owned:3,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
+  {id:'deal-manager',name:'Karan Mehta',label:'Deal Manager',department:'Sales / Deal Desk',function:'Approver',initials:'KM',email:'karan.mehta@dhihyperlocal.com',focus:'Internal proposal approvals and sales escalations.',journeys:['contract-creation'],steps:['J1-S4'],approvals:1,owned:1,kpis:[['Approval Queue','2'],['SLA Breaches','0'],['Rework Loops','1'],['Team Tasks','9']]},
+  {id:'compliance-officer',name:'Kavya Iyer',label:'Compliance Officer',department:'Compliance',function:'Executor + Consultant',initials:'KI',email:'kavya.iyer@dhihyperlocal.com',focus:'Country compliance checks, statutory rules, and compliance exceptions.',journeys:['contract-creation','h2r-lifecycle'],steps:['J1-S2','J3-S4'],approvals:0,owned:2,kpis:[['Country Checks','14'],['Missing Configs','1'],['Payroll Blocks','2'],['Resolved Today','6']]},
+  {id:'legal-contracts-manager',name:'Devendra Rao',label:'Legal / Contracts Manager',department:'Legal / Contracts',function:'Executor',initials:'DR',email:'devendra.rao@dhihyperlocal.com',focus:'Contract generation, signature tracking, and legal document corrections.',journeys:['contract-creation'],steps:['J1-S6'],approvals:0,owned:1,kpis:[['Contracts Sent','6'],['Signature Pending','4'],['Bounced Requests','1'],['Templates Used','3']]},
+  {id:'ops-manager',name:'Sunita Kulkarni',label:'Ops Manager',department:'Operations',function:'Approver',initials:'SK',email:'sunita.kulkarni@dhihyperlocal.com',focus:'Signed-contract verification and operational readiness approval.',journeys:['contract-creation'],steps:['J1-S7'],approvals:1,owned:1,kpis:[['Contract Reviews','3'],['Discrepancies','1'],['Ready for HR','5'],['SLA Risk','0']]},
+  {id:'hr',name:'Priyanka Bhatt',label:'HR',department:'HR',function:'Executor',initials:'PB',email:'priyanka.bhatt@dhihyperlocal.com',focus:'Onboarding, payroll runs, benefits, attendance capture, and employee lifecycle execution.',journeys:['contract-creation','payroll-creation','h2r-lifecycle'],steps:['J1-S8','J1-S9','J2-S1','J2-S2','J2-S3','J2-S5','J2-S7','J2-S8','J3-S1','J3-S2','J3-S3','J3-S5','J3-S6','J3-S7','J3-S9','J3-S10','J3-S11','J3-S12'],approvals:0,owned:18,kpis:[['Onboarding Pending','7'],['Payroll Runs','4'],['Docs to Verify','12'],['Exceptions','3']]},
+  {id:'hr-manager',name:'Pallavi Parate',label:'HR Manager',department:'HR',function:'Approver + Escalation Owner',initials:'PP',email:'pallavi.parate@dhihyperlocal.com',focus:'HR approvals, policy deviations, role changes, salary revisions, and HR escalations.',journeys:['h2r-lifecycle','payroll-creation'],steps:['J3-S8','Sub-J A4','Sub-J C4'],approvals:3,owned:3,kpis:[['Approvals','3'],['Escalations','4'],['Deviation Reviews','2'],['SLA Breaches','1']]},
+  {id:'it-systems-admin',name:'Rohit Menon',label:'IT / Systems Admin',department:'IT / Systems Admin',function:'Executor',initials:'RM',email:'rohit.menon@dhihyperlocal.com',focus:'Access provisioning, revocation, integrations, and system-account exceptions.',journeys:['h2r-lifecycle'],steps:['J3-S3','J3-S10'],approvals:0,owned:2,kpis:[['Access Requests','9'],['Revocations','2'],['Provisioning SLA','96%'],['Blocked','1']]},
+  {id:'finance-approver',name:'Meera Iyer',label:'Finance Approver',department:'Finance',function:'Approver',initials:'MI',email:'meera.iyer@dhihyperlocal.com',focus:'Payroll calculation approval, disbursement authorization, final settlements, and financial controls.',journeys:['payroll-creation','h2r-lifecycle'],steps:['J2-S4','J2-S6','J3-S12','Sub-J A4'],approvals:4,owned:4,kpis:[['Payroll Approvals','2'],['Disbursements','3'],['Held Amount','INR 1.8L'],['Rate Exceptions','1']]}
+];
+function getActivePersona(){return enterprisePersonas.find(function(p){return p.id===activePersonaId;})||enterprisePersonas[0];}
+function setActivePersona(id){
+  if(!enterprisePersonas.some(function(p){return p.id===id;}))return;
+  activePersonaId=id;
+  setPortalRole('entity-user',true);
+}
 const aiH2rOffboardSteps=[
   {label:'Access Revocation',running:'Revoking system access…',type:'ai'},
   {label:'Final Settlement Calculation',running:'Calculating final settlement…',type:'ai'},
@@ -336,31 +354,48 @@ document.addEventListener('click',e=>{
 function openUserDD(){userDDMode='main';renderUserDD();toggleHdrDD('user-dd');}
 function showSwitchUserMenu(e){if(e)e.stopPropagation();userDDMode='switch';renderUserDD();}
 function renderUserDD(){
+  const persona=getActivePersona();
   const nameEl=document.getElementById('user-trigger-label');if(nameEl)nameEl.textContent=portalRoleLabel(portalRole);
   const avEl=document.getElementById('user-trigger-avatar');if(avEl)avEl.textContent=portalRoleInitials(portalRole);
   const panel=document.getElementById('user-dd');if(!panel)return;
   const emailMap={'super-admin':'pallavi@dhihyperlocal.com','entity-admin':'entity.admin@dhihyperlocal.com','entity-user':'entity.user@dhihyperlocal.com'};
   if(userDDMode==='switch'){
-    const others=['super-admin','entity-admin','entity-user'].filter(r=>r!==portalRole);
+    const platformRoles=['super-admin','entity-admin'];
+    const platformItems=platformRoles.map(r=>`<button class="hdr-dd-item" onclick="closeAllHdrDD();setPortalRole('${r}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        ${portalRoleLabel(r)}
+      </button>`).join('');
+    const personaItems=enterprisePersonas.map(function(p){
+      return `<button class="hdr-dd-item ${portalRole==='entity-user'&&activePersonaId===p.id?'active':''}" onclick="closeAllHdrDD();setActivePersona('${p.id}')">
+        <span class="user-avatar-sm" style="width:24px;height:24px;font-size:9px;flex-shrink:0">${p.initials}</span>
+        <span style="display:flex;flex-direction:column;gap:1px;min-width:0">
+          <span style="font-size:12.5px;font-weight:650;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.label}</span>
+          <span style="font-size:10.5px;color:var(--gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.department}</span>
+        </span>
+      </button>`;
+    }).join('');
     panel.innerHTML=`<div class="hdr-dd-header">
         <button class="hdr-dd-item" style="width:auto;padding:6px;flex:0 0 auto" onclick="event.stopPropagation();userDDMode='main';renderUserDD();" title="Back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
         <div class="hdr-dd-title">Switch User</div>
       </div>
       <div class="hdr-dd-divider"></div>
-      ${others.map(r=>`<button class="hdr-dd-item" onclick="closeAllHdrDD();setPortalRole('${r}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        ${portalRoleLabel(r)}
-      </button>`).join('')}`;
+      ${platformItems}
+      <div class="hdr-dd-divider"></div>
+      <div class="hdr-dd-subtitle" style="padding:7px 10px 4px;font-weight:700;text-transform:uppercase;letter-spacing:.35px">Entity User Personas</div>
+      <div class="persona-switch-list">${personaItems}</div>`;
     return;
   }
+  const displayEmail=portalRole==='entity-user'?persona.email:emailMap[portalRole];
+  const displaySub=portalRole==='entity-user'?persona.department:displayEmail;
   panel.innerHTML=`<div class="hdr-dd-header">
       <div class="user-avatar-sm" style="width:36px;height:36px;font-size:13px;flex-shrink:0">${portalRoleInitials(portalRole)}</div>
       <div>
         <div class="hdr-dd-title">${portalRoleLabel(portalRole)}</div>
-        <div class="hdr-dd-subtitle">${emailMap[portalRole]}</div>
+        <div class="hdr-dd-subtitle">${displaySub}</div>
       </div>
     </div>
     <div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Role</span><span class="hdr-dd-info-val">${portalRoleLabel(portalRole)}</span></div>
+    ${portalRole==='entity-user'?'<div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Department</span><span class="hdr-dd-info-val">'+persona.department+'</span></div>':''}
     <div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Last login</span><span class="hdr-dd-info-val">Today, 9:41 AM</span></div>
     <div class="hdr-dd-divider"></div>
     <button class="hdr-dd-item" onclick="closeAllHdrDD();navigatePage('my-profile')">
@@ -515,10 +550,11 @@ function navigatePage(pg){
   if(view==='agent-active'){showAgentModule(resolved);return;}
 }
 
-function portalRoleLabel(r){return r==='super-admin'?'Super Admin':r==='entity-admin'?'Entity Admin':'Entity User';}
-function portalRoleInitials(r){return r==='super-admin'?'SA':r==='entity-admin'?'EA':'EU';}
-function setPortalRole(role){
-  if(role===portalRole)return;
+function portalRoleLabel(r){return r==='super-admin'?'Super Admin':r==='entity-admin'?'Entity Admin':getActivePersona().label;}
+function portalRoleInitials(r){return r==='super-admin'?'SA':r==='entity-admin'?'EA':getActivePersona().initials;}
+function setPortalRole(role,force){
+  if(role==='entity-user'&&!activePersonaId)activePersonaId='hr';
+  if(role===portalRole&&!force)return;
   portalRole=role;
   userDDMode='main';
   dashboardTab='employee';
