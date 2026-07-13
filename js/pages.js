@@ -2,19 +2,115 @@
 function buildDashboardTabsHTML(){
   const tabs=dashboardTabsForRole(portalRole);
   if(tabs.length<2)return '';
-  if(!tabs.some(t=>t.id===dashboardTab))dashboardTab='employee';
+  if(!tabs.some(t=>t.id===dashboardTab))dashboardTab=tabs[0]?tabs[0].id:'employee';
   return '<div class="dash-tabs">'+tabs.map(function(t){
     return '<button class="dash-tab'+(dashboardTab===t.id?' active':'')+'" onclick="switchDashboardTab(\''+t.id+'\')">'+t.label+'</button>';
   }).join('')+'</div>';
 }
 function buildDashboardPageHTML(){
   const tabs=dashboardTabsForRole(portalRole);
-  if(!tabs.some(t=>t.id===dashboardTab))dashboardTab='employee';
+  if(!tabs.some(t=>t.id===dashboardTab))dashboardTab=tabs[0]?tabs[0].id:'employee';
   const body=dashboardTab==='super-admin'?buildSuperAdminDashboardHTML()
     :dashboardTab==='entity-admin'?buildEntityAdminDashboardHTML()
-    :portalRole==='entity-user'?buildPersonaDashboardHTML()
+    :portalRole==='entity-user'?buildPersonaRoleDashboardHTML(dashboardTab)
     :dashboardContentHTML;
   return buildDashboardTabsHTML()+body;
+}
+
+function dashStat(label,val,sub,kind){
+  const color=kind==='green'?'#16a34a':kind==='red'?'#dc2626':kind==='orange'?'var(--orange)':'var(--navy)';
+  return '<div class="stat-card"><div class="stat-label"><span>'+label+'</span></div><div class="stat-val" style="color:'+color+'">'+val+'</div><div class="stat-sub">'+(sub||'')+'</div></div>';
+}
+function dashAction(title,sub,icon){
+  return '<div class="dash-action-card"><div class="dash-action-icon">'+(icon||'')+'</div><div><div class="dash-action-title">'+title+'</div><div class="dash-action-sub">'+sub+'</div></div></div>';
+}
+function dashTable(title,columns,rows,link){
+  return '<div class="listing-card dash-panel"><div class="dash-panel-head"><div>'+title+'</div>'+(link?'<span>'+link+'</span>':'')+'</div><table class="listing-table dash-table"><thead><tr>'+columns.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+}
+function statusMini(text,type){return '<span class="dash-status '+(type||'pending')+'">'+text+'</span>';}
+const dashIcoDoc='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+const dashIcoUser='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+const dashIcoMoney='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+const dashIcoShield='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+function buildPersonaRoleDashboardHTML(tab){
+  const p=getActivePersona();
+  if(tab==='hr')return buildHRDashboardHTML();
+  if(tab==='manager')return buildReportingManagerDashboardHTML(p);
+  if(tab==='finance-approval'||tab==='finance-admin')return buildFinanceApprovalDashboardHTML();
+  if(tab==='compliance')return buildComplianceDashboardHTML();
+  if(tab==='ops')return buildOpsDashboardHTML();
+  if(tab==='ops-approvals')return buildOpsApprovalsDashboardHTML();
+  if(tab==='sales'||tab==='sales-approvals')return buildSalesDashboardHTML(p,tab);
+  if(tab==='sales-team')return buildSalesTeamDashboardHTML();
+  if(tab==='contracts-admin')return buildContractsAdminDashboardHTML();
+  if(tab==='it-admin')return buildITAdminDashboardHTML();
+  return buildPersonaDashboardHTML();
+}
+function dashHeader(title,sub){
+  return '<div class="dash-ref"><div class="dash-ref-title">'+title+'</div><div class="dash-ref-sub">'+sub+'</div>';
+}
+function buildHRDashboardHTML(){
+  return dashHeader('HR Dashboard','Overview of your workforce and HR operations.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Total Employees','148','Across 6 departments')+dashStat('On Leave Today','12','8% attendance','green')+dashStat('Birthdays Today','5','Send wishes')+dashStat('Pending Requests','8','Review now','orange')+dashStat('Payroll Status','Ready','Current cycle is on track','green')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Onboarding Pending','7','Employees awaiting setup','orange')+dashStat('Document Verification Pending','9','Documents awaiting review','orange')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Add Employee','Onboard a new team member',dashIcoUser)+dashAction('Upload Policy','Share company policies',dashIcoDoc)+dashAction('Add Holiday','Create company holidays',dashIcoDoc)+'</div>'
+    +'<div class="dash-two-col">'+dashTable('Leave Requests',['Employee','Leave Type','Date','Status'],[['Ramesh Patel','Sick Leave','20 May',statusMini('Pending','pending')],['Priya Sharma','Casual Leave','22 May',statusMini('Approved','approved')],['Aishi Verma','Earned Leave','23-25 May',statusMini('Approved','approved')],['Arjun Desai','Sick Leave','28 May',statusMini('Pending','pending')]],'View all')+dashTable('Holidays',['Date','Holiday','Type'],[['09','Ugadi','Registered'],['14','Telangana Formation Day','Registered'],['18','Good Friday','Relaxed'],['22','Eid-ul-Fitr','Relaxed'],['01','May Day','National']], 'View calendar')+'</div>'
+    +dashTable('Birthdays & Anniversaries',['Person','Event','Date','Department'],[['Ramesh Patel','Birthday','18 May','HR'],['Ashirwad Koul','Birthday','16 May','Operations'],['Chishan Sirangi','1 yr anniversary','15 May','Finance'],['Gojendra Singh','Birthday','23 May','Compliance']], 'View more')+'</div>';
+}
+function buildReportingManagerDashboardHTML(p){
+  return dashHeader('Team Dashboard','Track your direct reports, approvals, and team performance.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('My Team','12','Direct reports')+dashStat('Present Today','9','75% of team','green')+dashStat('Pending Approvals','6','Items waiting for action','orange')+dashStat('On Leave Today','2','Utkarsh, Ashneet')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Approve Leaves','Review pending leave requests',dashIcoDoc)+dashAction('Approve Expenses','Manage expense claim approvals',dashIcoMoney)+'</div>'
+    +'<div class="dash-two-col">'+dashTable('Team Leave Requests',['Employee','Leave Type','Duration','Days','Action'],[['Utkarsh Shukla','Casual Leave','15 - 16 May','2',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['Ashneet Kaur','Sick Leave','18 May','1',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['Sneha Kulkarni','Earned Leave','22 - 23 May','2',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')]],'View all')+dashTable('Pending Expense Claims',['Employee','Amount','Category','Status'],[['Diksha Kumari','Rs 2,400','Travel',statusMini('Pending','pending')],['Pardeep Verga','Rs 850','Office Supplies',statusMini('Pending','pending')],['Deepak Joshi','Rs 5,200','Software',statusMini('Pending','pending')]],'View all')+'</div></div>';
+}
+function buildSalesTeamDashboardHTML(){
+  return dashHeader('Sales Team Dashboard','Track deal desk throughput, proposal approvals, and commercial exceptions.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Team Deals','18','Across Deal Desk')+dashStat('Proposals Pending','5','Awaiting manager review','orange')+dashStat('Client Responses','7','Due this week','orange')+dashStat('Margin Exceptions','2','Need approval','red')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Review Proposal Queue','Check commercial terms and margin policy',dashIcoDoc)+dashAction('Reassign Deal','Move stalled work within Deal Desk',dashIcoUser)+'</div>'
+    +'<div class="dash-two-col">'+dashTable('Deal Desk Queue',['Owner','Client','Current Step','Status'],[['Arjun Vaidya','Rashi Singh','Proposal Approval',statusMini('Approval Required','pending')],['Arjun Vaidya','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['Neha Sharma','Emma Schmidt','Contract Sent',statusMini('In Progress','pending')]],'View all')+dashTable('Proposal Approval Queue',['Proposal','Client','Margin','Action'],[['PRO-5820','Rashi Singh','18%',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['PRO-5824','Nora Kim','Deviation',statusMini('Review','pending')],['PRO-5829','Owen Brooks','21%',statusMini('Approve','approved')]],'View all')+'</div></div>';
+}
+function buildFinanceApprovalDashboardHTML(){
+  return dashHeader('Finance Approval Dashboard','Review payroll calculations, disbursements, invoice payments, and financial controls.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Payroll Approvals','6','Waiting for sign-off','orange')+dashStat('Disbursement Authorisations','3','Due today','orange')+dashStat('Upcoming Payments','Rs 18.4L','Due in next 7 days')+dashStat('Payment Compliance','5','Issues flagged','orange')+dashStat('Total Invoiced','Rs 14.3L','This month')+dashStat('Pending Invoices','7','Awaiting client payment','orange')+dashStat('Paid Invoices','43','Cleared this cycle','green')+dashStat('Overdue Invoices','2','Past due date','red')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Approve Payroll','Review salary calculations',dashIcoMoney)+dashAction('Authorise Disbursement','Release approved payroll funds',dashIcoMoney)+dashAction('Payment Reports','Trends, summaries, and cycle analytics',dashIcoDoc)+dashAction('Contract Billing','View rates, cycles, and billing status',dashIcoDoc)+'</div>'
+    +'<div class="dash-two-col">'+dashTable('Payroll Approval Queue',['Run ID','Employee','Net Pay','Action'],[['RUN-3001','Testemp Antar','Rs 82,400',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['RUN-3002','Anika Shah','Rate mismatch',statusMini('Review','pending')],['RUN-4104','Sofia Romano','Final settlement',statusMini('Review','pending')]],'View all')+dashTable('Paid Invoices',['Invoice ID','Entity','Amount','Paid On'],[['INV-2038','Dhi Hyperlocal','Rs 2,75,000','12 May'],['INV-2031','Dhi Hyperlocal','Rs 1,85,000','08 May'],['INV-2027','ADT Singapore Pte.','Rs 3,40,000','02 May']], 'View all paid')+'</div></div>';
+}
+function buildComplianceDashboardHTML(){
+  return dashHeader('Opendhi Compliance Admin Dashboard','Monitor contract compliance, compliance hub items, payment compliance, and assigned support tasks.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Contract Compliance','18','5 blocking payroll readiness','orange')+dashStat('Compliance Hub Items','26','9 require review','orange')+dashStat('Assigned Support Items','7','3 high priority','orange')+dashStat('Payment Compliance','5','5 pending issues','orange')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Document Verification Pending','9','Documents awaiting review','orange')+dashStat('Expiring Documents','5','Expiring in next 30 days','orange')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Review Contracts','Check missing clauses, signatures, and document readiness',dashIcoDoc)+dashAction('Compliance Hub','Manage statutory, policy, and document compliance items',dashIcoShield)+'</div>'
+    +'<div class="dash-two-col">'+dashTable('Contract Compliance Queue',['Employee','Contract Issue','Status','Action'],[['Ramesh Patel','Missing signature',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Priya Sharma','Work permit pending',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Arjun Desai','Clause update required',statusMini('Needs Review','pending'),statusMini('Open','draft')],['Aishi Verma','Contract verified',statusMini('Ready','approved'),statusMini('View','draft')]],'View all')+dashTable('Compliance Hub Items',['Item','Category','Due','Status'],[['Employee KYC review','Documents','Today',statusMini('Pending','pending')],['Local tax registration','Payroll','24 May',statusMini('Blocking','rejected')],['Policy acknowledgment','Policy','26 May',statusMini('Pending','pending')],['Statutory filing check','Entity','31 May',statusMini('Ready','approved')]],'Open hub')+'</div>'
+    +dashTable('Assigned Support Items',['Item','Description','Tag'],[['Payroll blocked by missing Tax ID','John Doe payroll readiness is blocked until Tax ID verification is completed.','Payroll Compliance'],['Work permit document pending','Thijs Verbeek has a pending work authorization document for review.','Contract Compliance']], 'View assigned')+'</div>';
+}
+function buildOpsDashboardHTML(){
+  return dashHeader('Opendhi Ops Admin Dashboard','Track contract pipeline, active contracts, compliance items, and pending entities across the selected entity.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Active Contracts','25','Across all entities','green')+dashStat('Active People','148','Direct + EOR/PEO','green')+dashStat('Compliance Items','14','3 due soon','orange')+dashStat('Pending Entities','3','Awaiting setup','orange')+dashStat('Ready for Payroll','25','Cleared this cycle','green')+dashStat('Payroll Status','Ready','Current cycle is on track','green')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Setup Progress','82%','Entity setup completion','green')+'</div>'
+    +'<div class="listing-card dash-panel"><div class="dash-panel-head"><div>Contract Pipeline</div><span>View all contracts</span></div><div class="stat-grid dash-stat-grid">'+dashStat('Proposal Sent','8','Pending client action','orange')+dashStat('Proposal Approved','5','Client approved','green')+dashStat('Contract Sent','6','Awaiting countersign','orange')+dashStat('Contract Approved','3','Signed & approved','green')+'</div></div>'
+    +'<div class="dash-two-col">'+dashTable('Active Contracts',['Contract','Country','Type','Stage'],[['Netherlands EOR - Anika','Netherlands','EOR',statusMini('Ready for Payroll','approved')],['India Contractor - Rahul','India','Contractor',statusMini('Ready for Payroll','approved')],['UK EOR - Owen','United Kingdom','EOR',statusMini('Contract Sent','pending')],['Germany PEO - Nora','Germany','PEO',statusMini('Proposal Sent','rejected')]],'View all')+dashTable('Compliance Items',['Item','Category','Blocking','Status'],[['Employee KYC Review','Documents','Yes',statusMini('Pending','rejected')],['Work Authorization','Statutory','Yes',statusMini('Evidence Uploaded','pending')],['Tax Registration','Payroll','Yes',statusMini('Pending','rejected')],['Policy Acknowledgement','Policy','No',statusMini('Completed','approved')]],'View all')+'</div></div>';
+}
+function buildOpsApprovalsDashboardHTML(){
+  return dashHeader('Ops Approvals Dashboard','Review signed contracts, discrepancies, readiness gates, and operational exceptions.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Contract Reviews','3','Waiting for Ops approval','orange')+dashStat('Discrepancies','1','Needs correction','red')+dashStat('Ready for HR','5','Approved handoffs','green')+dashStat('SLA Risk','0','No overdue approvals','green')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Approve Signed Contract','Verify countersigned contract against approved proposal',dashIcoDoc)+dashAction('Send Back for Correction','Route discrepancy to Legal / Contracts',dashIcoShield)+'</div>'
+    +'<div class="dash-two-col">'+dashTable('Signed Contract Approval Queue',['Employee','Country','Contract','Action'],[['Rashi Singh','Netherlands','EOR Contract',statusMini('Approve','approved')+' '+statusMini('Discrepancy','rejected')],['Rajdeep Singh','Netherlands','EOR Contract',statusMini('Review','pending')],['Emma Schmidt','Germany','EOR Contract',statusMini('Approve','approved')]],'View all')+dashTable('Operational Exceptions',['Run','Issue','Owner','Status'],[['RUN-2002','Signed document mismatch','Legal',statusMini('Exception','rejected')],['RUN-2011','Missing onboarding evidence','HR',statusMini('Pending','pending')],['RUN-2017','Payroll readiness blocked','HR',statusMini('Review','pending')]],'View all')+'</div></div>';
+}
+function buildSalesDashboardHTML(p,tab){
+  const isManager=tab==='sales-approvals';
+  return dashHeader(isManager?'Deal Approvals Dashboard':'Deal Desk Dashboard',isManager?'Review proposal approvals, exceptions, and team deal movement.':'Track owned deals, proposals, client acceptance, and contract creation work.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Open Deals','8','Owned by this role')+dashStat('Proposal Drafts','3','Ready for review','orange')+dashStat('Client Responses','5','Awaiting acceptance','orange')+dashStat('Exceptions','1','Needs attention','red')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Create Proposal','Draft commercial terms with compliance checks',dashIcoDoc)+dashAction(isManager?'Approve Proposal':'Send Proposal',isManager?'Review margin and compliance checklist':'Send approved proposal to client',dashIcoDoc)+'</div>'
+    +dashTable(isManager?'Proposal Approval Queue':'Deal Pipeline',['Deal','Client','Step','Status'],[['PRO-5820','Rashi Singh','Proposal Approved',statusMini(isManager?'Approval Required':'Waiting','pending')],['PRO-5821','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['PRO-5822','Emma Schmidt','Ready for Payroll',statusMini('Complete','approved')]],'View all')+'</div>';
+}
+function buildContractsAdminDashboardHTML(){
+  return dashHeader('Contracts Dashboard','Generate contracts, monitor signatures, and resolve legal document exceptions.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Contracts Sent','6','Awaiting signature','orange')+dashStat('Signature Pending','4','Client countersign')+dashStat('Bounced Requests','1','Needs resend','red')+dashStat('Templates Used','3','This week')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Generate Contract','Create employment contract from approved proposal',dashIcoDoc)+dashAction('Resend Signature','Retry bounced Docuseal request',dashIcoDoc)+'</div>'
+    +dashTable('Contract Queue',['Employee','Country','Document','Status'],[['Anika Shah','Netherlands','EOR Contract',statusMini('Sent','pending')],['Rahul Mehta','India','Contractor Agreement',statusMini('Signed','approved')],['Nora Kim','Germany','PEO Contract',statusMini('Bounced','rejected')]],'View all')+'</div>';
+}
+function buildITAdminDashboardHTML(){
+  return dashHeader('IT Systems Dashboard','Provision access, revoke accounts, and resolve system readiness blockers.')
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Access Requests','9','Awaiting provisioning','orange')+dashStat('Revocations','2','Due today','red')+dashStat('Provisioning SLA','96%','Within target','green')+dashStat('Blocked','1','Needs admin action','orange')+'</div>'
+    +'<div class="dash-actions">'+dashAction('Provision Access','Grant systems for new joiners',dashIcoUser)+dashAction('Revoke Access','Complete offboarding checklist',dashIcoShield)+'</div>'
+    +dashTable('Systems Queue',['Employee','Request','System','Status'],[['Sofia Romano','New hire access','HRMS + Payroll',statusMini('Pending','pending')],['Lucas Dubois','Offboarding','Email + SSO',statusMini('Due Today','rejected')],['James Wilson','Role change','ERP',statusMini('In Progress','pending')]],'View all')+'</div>';
 }
 
 function personaOwnedRunItems(persona){

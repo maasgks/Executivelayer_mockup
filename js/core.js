@@ -573,6 +573,20 @@ function setPortalRole(role,force){
 
 // -- DASHBOARD TABS: every role sees "Employee Dashboard"; admin roles get one extra role-specific tab --
 function dashboardTabsForRole(role){
+  if(role==='entity-user'){
+    const map={
+      'account-manager':[{id:'sales',label:'Deal Desk Dashboard'}],
+      'deal-manager':[{id:'sales-team',label:'Sales Team Dashboard'},{id:'sales-approvals',label:'Deal Approvals'}],
+      'compliance-officer':[{id:'compliance',label:'Compliance Dashboard'}],
+      'legal-contracts-manager':[{id:'contracts-admin',label:'Contracts Dashboard'}],
+      'ops-manager':[{id:'ops',label:'Ops Dashboard'},{id:'ops-approvals',label:'Ops Approvals'}],
+      'hr':[{id:'hr',label:'HR Dashboard'},{id:'manager',label:'Reporting Manager'}],
+      'hr-manager':[{id:'hr',label:'HR Dashboard'},{id:'manager',label:'Reporting Manager'}],
+      'it-systems-admin':[{id:'it-admin',label:'IT Systems Dashboard'}],
+      'finance-approver':[{id:'finance-approval',label:'Finance Approval'},{id:'finance-admin',label:'Finance Admin'}]
+    };
+    return map[activePersonaId]||[{id:'employee',label:'Employee Dashboard'}];
+  }
   const tabs=[{id:'employee',label:'Employee Dashboard'}];
   if(role==='super-admin')tabs.push({id:'super-admin',label:'Opendhi Super Admin'});
   if(role==='entity-admin')tabs.push({id:'entity-admin',label:'Entity Admin'});
