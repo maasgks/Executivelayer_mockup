@@ -3994,16 +3994,18 @@ function buildAIExecutiveDashboardHTML(){
   const visibleCategories=cfgJourneyCategories.filter(function(c){
     return allAIJourneys.some(function(j){return j.category===c.id;});
   });
+  const showCategorySummary=portalRole!=='entity-user';
+  if(!showCategorySummary)cfgJourneyCategoryFilter='';
   if(cfgJourneyCategoryFilter&&!visibleCategories.some(function(c){return c.id===cfgJourneyCategoryFilter;}))cfgJourneyCategoryFilter='';
   const filteredAIJourneys=cfgJourneyCategoryFilter?allAIJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):allAIJourneys;
   const activeCat=cfgJourneyCategoryFilter?visibleCategories.find(function(c){return c.id===cfgJourneyCategoryFilter;}):null;
-  const catBoxes='<div class="cfg-cat-grid" style="margin-bottom:16px">'
+  const catBoxes=showCategorySummary?'<div class="cfg-cat-grid" style="margin-bottom:16px">'
     +visibleCategories.map(function(c){
       const count=allAIJourneys.filter(function(j){return j.category===c.id;}).length;
       return cfgCatBoxHTML(c,count);
     }).join('')
-    +'</div>';
-  const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':(persona?'<div class="role-scope-note"><span>'+persona.label+'</span> sees '+allAIJourneys.length+' journey'+(allAIJourneys.length===1?'':'s')+' where this role owns work.</div>':'');
+    +'</div>':'';
+  const catInfo=showCategorySummary&&activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':(persona?'<div class="role-scope-note"><span>'+persona.label+'</span> sees '+allAIJourneys.length+' journey'+(allAIJourneys.length===1?'':'s')+' where this role owns work.</div>':'');
   const cards=filteredAIJourneys.length?filteredAIJourneys.map(j=>{
     const isRoadmap=!!j.locked;
     const locked=isRoadmap?true:(portalRole!=='super-admin'&&!entityJourneyActivation[j.id]);
@@ -4025,9 +4027,10 @@ function buildAIExecutiveDashboardHTML(){
   const pendingCount=myTasksPendingCount();
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">'
-    +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:640px">'+(persona?'Journeys routed to '+persona.label+' based on Enterprise Workflow ownership.':'Automate ADT business journeys with governed AI assistance, approvals, and audit tracking.')+'</p></div>'
+    +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:720px">'+(persona?'Journeys routed to '+persona.label+' based on Enterprise Workflow ownership. Manual Mode stays available; Enable Agent uses the existing agentic workflow.':'Select and run the journeys enabled for this entity. Operational monitoring lives in Configure > Operations Cockpit.')+'</p></div>'
     +'<div style="display:flex;gap:8px;flex-shrink:0">'
     +'<button class="btn btn-secondary btn-sm" onclick="navigatePage(\'my-tasks\')">My Tasks'+(pendingCount?' <span class="badge" style="background:var(--orange);color:#fff;margin-left:6px">'+pendingCount+'</span>':'')+'</button>'
+    +(portalRole!=='entity-user'?'<button class="btn btn-secondary btn-sm" onclick="navigatePage(\'operations-cockpit\')">Operations Cockpit</button>':'')
     +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>':'')
     +'</div>'
     +'</div>'
@@ -4035,6 +4038,335 @@ function buildAIExecutiveDashboardHTML(){
     +catInfo
     +'<div class="ai-journey-grid ai-journey-grid-lg">'+cards+'</div>'
     +'</div>';
+}
+
+function buildOperationsCockpitPageHTML(){
+  return '<div class="ai-exec-page">'
+    +cfgPageHead('Operations Cockpit','Monitor active journey runs, SLA risk, blocked steps, owners, next actions, escalations, audit signals, and manual-to-agent upgrade opportunities.')
+    +buildOperationsCockpitHTML()
+    +'</div>';
+}
+function buildOperationsCockpitHTML(){
+  const activeRuns=manualJourneyRuns.filter(function(r){return r.status!=='Completed';}).concat(aiAllPendingRuns().map(function(x){
+    return {runId:x.run.runId,journeyId:x.journey.id,subject:x.run.client,entity:'Dhi Hyperlocal',mode:'Agent',currentStepIdx:x.run.currentStepIdx,status:x.run.status,slaRisk:x.run.status==='Exception'?'High':'Medium',blockedReason:x.run.exceptionNote||'Approval required',escalation:x.run.status==='Exception'?'Entity Admin in 2h':'None',manualHours:0,agentEstimateHours:0,exceptions:x.run.status==='Exception'?[{type:'Agent exception',ownerRole:'Entity Admin',status:'Open',suggestedResolution:x.run.exceptionNote||'Review run detail.'}]:[],audit:['Agentic run tracked from existing automation flow']};
+  }));
+  const highRisk=activeRuns.filter(function(r){return r.slaRisk==='High';}).length;
+  const runNeedsAttention=function(r){
+    return r.status==='Blocked'||(r.exceptions||[]).some(function(e){return e.status==='Open';})||(r.status==='Waiting Approval'&&r.blockedReason&&r.blockedReason!=='None');
+  };
+  const blocked=activeRuns.filter(runNeedsAttention).length;
+  const runOwnerDepartment=function(r){
+    const steps=manualJourneySteps(r.journeyId);
+    const st=steps[r.currentStepIdx]||{};
+    const owner=st.ownerRole||r.ownerRole||'Entity Admin';
+    if(/HR/i.test(owner))return 'HR';
+    if(/Compliance/i.test(owner))return 'Compliance';
+    if(/Finance/i.test(owner))return 'Finance';
+    if(/Ops/i.test(owner))return 'Operations';
+    if(/Legal|Contract/i.test(owner))return 'Legal';
+    if(/Account|Deal/i.test(owner))return 'Sales';
+    return 'Admin';
+  };
+  const departments=activeRuns.reduce(function(list,r){
+    const d=runOwnerDepartment(r);
+    if(list.indexOf(d)<0)list.push(d);
+    return list;
+  },[]);
+  const openExceptionCount=activeRuns.reduce(function(sum,r){return sum+(r.exceptions||[]).filter(function(e){return e.status==='Open';}).length;},0);
+  const runFilters=[
+    ['all','All',activeRuns.length],
+    ['manual','Manual',activeRuns.filter(function(r){return r.mode==='Manual';}).length],
+    ['agent','Agent',activeRuns.filter(function(r){return r.mode==='Agent'||r.mode==='Hybrid';}).length],
+    ['blocked','Blocked',blocked],
+    ['high','High Priority',highRisk]
+  ];
+  const filteredRuns=activeRuns.filter(function(r){
+    if(cockpitRunFilter==='manual')return r.mode==='Manual';
+    if(cockpitRunFilter==='agent')return r.mode==='Agent'||r.mode==='Hybrid';
+    if(cockpitRunFilter==='blocked')return runNeedsAttention(r);
+    if(cockpitRunFilter==='high')return r.slaRisk==='High';
+    return true;
+  });
+  const showFilters=cockpitShowExceptionQueue;
+  const filterMeta={
+    all:{title:'All Active Runs',sub:'Every journey currently in motion',note:'Showing all live manual, hybrid, and agentic runs with the owner and next action needed.'},
+    manual:{title:'Manual Runs',sub:'Human-owned execution queue',note:'Showing journeys where users must complete the current step through mapped module screens.'},
+    agent:{title:'Agent / Hybrid Runs',sub:'Automation and human handoff queue',note:'Showing runs where agent-capable work is active, with any human handoff still visible.'},
+    blocked:{title:'Blocked Runs',sub:'Exceptions that must be cleared',note:'Showing only runs with an open blocker, exception, or missing evidence before the journey can continue.'},
+    high:{title:'High Priority Runs',sub:'Runs closest to breach or escalation',note:'Showing only high-priority runs so operators can act on escalation, owner, and next action first.'}
+  }[cockpitRunFilter]||{};
+  const filterHeader=showFilters?('<div class="cockpit-filter-context"><div><strong>'+filterMeta.title+'</strong><span>'+filterMeta.note+'</span></div><em>'+filterMeta.sub+'</em></div>'):'';
+  const filterBar=showFilters?('<div class="cockpit-filter-bar">'+runFilters.map(function(f){return '<button class="cockpit-filter-chip '+(cockpitRunFilter===f[0]?'active':'')+'" onclick="setCockpitRunFilter(\''+f[0]+'\')">'+f[1]+' <span>'+f[2]+'</span></button>';}).join('')+'</div>'):'';
+  const slaPriorityLabel={High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'};
+  const rows=filteredRuns.slice(0,8).map(function(r,idx){
+    const c=cockpitRunComputed(r);
+    const slaClass=r.slaRisk==='High'?'inactive':r.slaRisk==='Medium'?'unapproved':'active';
+    const progressBar=c.isBlockedRun?('<div class="cockpit-progress"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+((r.escalation&&r.escalation!=='None')?r.escalation:'No escalation')+'</span></div>'):'';
+    const ownerName=manualStepOwnerName(c.st.ownerRole||r.ownerRole||'Entity Admin');
+    const stepName=c.st.name||'this step';
+    const isNotified=notifiedRunIds.has(r.runId);
+    const notifyIcon=isNotified
+      ?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"/></svg>'
+      :'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+    const notifyBtn=isNotified
+      ?'<button class="btn btn-secondary btn-sm cockpit-notify-btn notified" disabled>'+notifyIcon+'Notified</button>'
+      :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\')">'+notifyIcon+'Send Notification</button>';
+    return '<div class="cockpit-run-card" onclick="openCockpitRunSidebar(\''+r.runId+'\')">'
+      +'<div class="cockpit-run-head"><div class="cockpit-run-num">'+(idx+1)+'</div><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+r.runId+'</div><div class="cockpit-run-entity">'+(r.entity||'Dhi Hyperlocal')+'</div></div><span class="status-pill '+slaClass+'">'+(slaPriorityLabel[r.slaRisk]||r.slaRisk)+'</span></div>'
+      +progressBar
+      +'<div class="cockpit-run-mini-sub"><span>'+(r.subject||c.j.name||r.journeyId)+'</span>'+notifyBtn+'</div>'
+      +'</div>';
+  }).join('')||'<div class="cockpit-empty-state">No active runs match this filter.</div>';
+  const sidebarRun=cockpitSidebarRunId?activeRuns.find(function(r){return r.runId===cockpitSidebarRunId;}):null;
+  const sidebarOverlay=sidebarRun?('<div class="ts-overlay"><div class="ts-overlay-bg" onclick="closeCockpitRunSidebar()"></div><div class="ts-overlay-panel">'+buildCockpitRunSidebarHTML(sidebarRun)+'</div></div>'):'';
+  const exceptionSourceRuns=activeRuns.filter(function(r){
+    if(cockpitRunFilter==='manual')return r.mode==='Manual';
+    if(cockpitRunFilter==='agent')return r.mode==='Agent'||r.mode==='Hybrid';
+    if(cockpitRunFilter==='high')return r.slaRisk==='High';
+    return true;
+  });
+  const allOpenExceptions=exceptionSourceRuns.reduce(function(list,r){
+    (r.exceptions||[]).forEach(function(e,i){if(e.status==='Open')list.push({run:r,ex:e,idx:i});});
+    return list;
+  },[]);
+  const exceptionRows=allOpenExceptions.map(function(x){
+    const sev=x.run.slaRisk==='High'?'High':'Medium';
+    const isManual=String(x.run.runId).indexOf('MAN-')===0;
+    const dept=runOwnerDepartment(x.run);
+    const resolveAction=isManual
+      ?'openExceptionResolver(\''+x.run.runId+'\','+x.idx+')'
+      :'openExceptionResolver(\''+x.run.runId+'\','+x.idx+',\''+x.run.journeyId+'\')';
+    return '<div class="cockpit-ex-card">'
+      +'<div class="cockpit-ex-left"><span class="cockpit-ex-indicator '+sev.toLowerCase()+'"></span><div><div class="cockpit-ex-title">'+x.ex.type+'</div><div class="cockpit-ex-meta"><span>'+x.run.runId+'</span><span>'+x.run.mode+'</span><span class="cockpit-ex-dept" onclick="event.stopPropagation();openCockpitDepartmentDetail(\''+dept.toLowerCase()+'\')">'+dept+'</span><span>'+sev+' priority</span></div><div class="cockpit-ex-resolution">'+x.ex.suggestedResolution+'</div></div></div>'
+      +'<button class="btn btn-secondary btn-sm cockpit-ex-btn" onclick="'+resolveAction+'">'+(isManual?'Resolve':'Review &amp; Resolve')+'</button>'
+      +'</div>';
+  }).join('')||'<div class="cockpit-empty-state">No open exceptions'+(cockpitRunFilter==='all'?'':' in this filter')+'.</div>';
+  const deptStat='<div class="stat-card cockpit-stat-clickable" onclick="openCockpitDepartmentOverview()"><div class="stat-label"><span>Departments</span></div><div class="stat-val">'+cockpitDepartmentDirectory.length+'</div><div class="stat-sub">Click to view department ownership</div></div>';
+  const activeRunsStat='<div class="stat-card cockpit-stat-clickable" onclick="openCockpitRunsView()"><div class="stat-label"><span>Active Runs</span></div><div class="stat-val">'+activeRuns.length+'</div><div class="stat-sub">Manual, agentic, and hybrid</div></div>';
+  const exceptionsStat='<div class="stat-card cockpit-stat-clickable" onclick="openCockpitExceptionsView()"><div class="stat-label"><span>Exceptions & Blockers</span></div><div class="stat-val" style="color:#dc2626">'+(openExceptionCount||blocked)+'</div><div class="stat-sub">Open issues needing resolution</div></div>';
+  const activeRunsPanel='<div class="listing-card dash-panel cockpit-run-panel"><div class="dash-panel-head"><div>Active Journey Runs</div><span>Live operator queue</span></div>'+filterHeader+filterBar+'<div class="cockpit-run-list">'+rows+'</div></div>';
+  const exceptionQueuePanel='<div class="listing-card dash-panel cockpit-side-panel"><div class="dash-panel-head"><div>Exception-First Queue</div><span>'+allOpenExceptions.length+' open &middot; owner + resolution</span></div><div class="cockpit-ex-list">'+exceptionRows+'</div></div>';
+  const mainContent=cockpitDepartmentView==='overview'
+    ?buildCockpitDepartmentOverviewHTML()
+    :cockpitDepartmentView==='detail'
+      ?buildCockpitDepartmentDetailHTML()
+      :cockpitShowExceptionQueue
+        ?'<div class="dash-two-col cockpit-panels">'+activeRunsPanel+exceptionQueuePanel+'</div>'
+        :activeRunsPanel;
+  return '<div class="cockpit-wrap">'
+    +'<div class="stat-grid dash-stat-grid cockpit-stats stat-grid-3">'+activeRunsStat+deptStat+exceptionsStat+'</div>'
+    +mainContent
+    +'</div>'
+    +sidebarOverlay;
+}
+function cockpitRunComputed(r){
+  const j=aiJourneys.find(function(x){return x.id===r.journeyId;})||cfgJourneys.find(function(x){return x.id===r.journeyId;})||{};
+  const steps=manualJourneySteps(r.journeyId);
+  const st=steps[r.currentStepIdx]||{};
+  const openExceptions=(r.exceptions||[]).filter(function(e){return e.status==='Open';});
+  const next=openExceptions.length?openExceptions[0].suggestedResolution:(r.status==='Completed'?'Archive run':(st.manualAction||'Review run detail'));
+  const total=Math.max(steps.length,1);
+  const progress=r.status==='Completed'?100:Math.min(100,Math.round(((r.currentStepIdx||0)+1)/total*100));
+  const isBlockedRun=r.status==='Blocked'||openExceptions.length>0||(r.status==='Waiting Approval'&&r.blockedReason&&r.blockedReason!=='None');
+  return {j:j,steps:steps,st:st,openExceptions:openExceptions,next:next,progress:progress,isBlockedRun:isBlockedRun};
+}
+function buildCockpitRunSidebarHTML(r){
+  const c=cockpitRunComputed(r);
+  const owner=c.st.ownerRole||r.ownerRole||'Entity Admin';
+  const slaClass=r.slaRisk==='High'?'inactive':r.slaRisk==='Medium'?'unapproved':'active';
+  const blockerText=c.openExceptions.length?c.openExceptions[0].type:(r.blockedReason&&r.blockedReason!=='None'?r.blockedReason:'No blocker');
+  const progressBar='<div class="cockpit-progress"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+((r.escalation&&r.escalation!=='None')?r.escalation:'No escalation')+'</span></div>';
+  const fieldsData=[['Journey',(c.j&&c.j.name)||r.journeyId],['Subject',r.subject||'—'],['Current step',c.st.name||'Current step'],['Owner',owner],['Mode',r.mode],['Status',r.status]];
+  if(c.isBlockedRun)fieldsData.push(['Blocker',blockerText],['Escalation',(r.escalation&&r.escalation!=='None')?r.escalation:'None']);
+  const fields=fieldsData.map(function(item){return '<div class="cockpit-sb-field"><span class="cockpit-sb-flabel">'+item[0]+'</span><span class="cockpit-sb-fval">'+item[1]+'</span></div>';}).join('');
+  const exIdx=r.exceptions?r.exceptions.findIndex(function(e){return e.status==='Open';}):-1;
+  const isManualRun=String(r.runId).indexOf('MAN-')===0;
+  const resolveBtn=exIdx<0?'':(isManualRun
+    ?'<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px" onclick="closeCockpitRunSidebar();openManualExceptionResolver(\''+r.runId+'\','+exIdx+')">Resolve Exception</button>'
+    :'<div class="cockpit-sb-hint">Resolve this exception from the full run detail.</div>');
+  return '<div class="ts-sb-head"><span class="ts-sb-title">'+r.runId+'</span><button class="ts-sb-close" onclick="closeCockpitRunSidebar()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'<div class="ts-sb-inner">'
+    +'<div class="ts-sb-date-box"><div><div class="ts-sb-date-val">'+(r.entity||'Dhi Hyperlocal')+'</div><div class="ts-sb-date-day"><span class="status-pill '+slaClass+'" style="margin-top:4px">'+({High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'}[r.slaRisk]||r.slaRisk)+'</span></div></div></div>'
+    +progressBar
+    +'<div class="ts-sb-section">'+fields+'</div>'
+    +'<div class="ts-sb-section"><div class="ts-sb-sec-title">Next Action</div><p class="cockpit-sb-note">'+c.next+'</p></div>'
+    +'<div class="ts-sb-actions"><button class="btn btn-primary btn-sm" style="width:100%" onclick="closeCockpitRunSidebar();openCockpitRun(\''+r.runId+'\',\''+r.journeyId+'\')">Open Full Run</button>'+resolveBtn+'</div>'
+    +'</div>';
+}
+function openCockpitRunSidebar(runId){cockpitSidebarRunId=runId;renderADTPage();}
+function closeCockpitRunSidebar(){cockpitSidebarRunId=null;renderADTPage();}
+function openCockpitDepartmentOverview(){cockpitDepartmentView='overview';renderADTPage();}
+function openCockpitRunsView(){cockpitDepartmentView='';cockpitRunFilter='all';cockpitShowExceptionQueue=false;cockpitSidebarRunId=null;renderADTPage();}
+function openCockpitExceptionsView(){cockpitDepartmentView='';cockpitRunFilter='blocked';cockpitShowExceptionQueue=true;cockpitSidebarRunId=null;renderADTPage();}
+function openCockpitDepartmentDetail(id){selectedCockpitDepartmentId=id;cockpitDepartmentView='detail';renderADTPage();}
+function closeCockpitDepartmentView(){cockpitDepartmentView='';renderADTPage();}
+function cockpitDeptById(id){return cockpitDepartmentDirectory.find(function(d){return d.id===id;})||cockpitDepartmentDirectory[0];}
+function cockpitDeptJourneysHTML(member){
+  return '<div class="cockpit-member-journeys">'+(member.journeys||[]).map(function(j){return '<span>'+j+'</span>';}).join('')+'</div>';
+}
+function buildCockpitDepartmentOverviewHTML(){
+  const cards=cockpitDepartmentDirectory.map(function(d){
+    const people=1+(d.managers||[]).length+(d.associates||[]).length;
+    const journeys=[].concat(d.admin.journeys||[],...(d.managers||[]).map(function(a){return a.journeys||[];}),...(d.associates||[]).map(function(a){return a.journeys||[];})).filter(function(v,i,a){return a.indexOf(v)===i;});
+    const leadInitials=d.admin.name.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase();
+    return '<div class="cockpit-dept-card" onclick="openCockpitDepartmentDetail(\''+d.id+'\')">'
+      +'<div class="cockpit-dept-top">'
+        +'<div class="cockpit-dept-identity"><div><div class="cockpit-dept-name">'+d.name+'</div><div class="cockpit-dept-members">'+people+' member'+(people===1?'':'s')+'</div></div></div>'
+        +'<span class="cockpit-dept-journeys-tag">'+journeys.length+' journey'+(journeys.length===1?'':'s')+'</span>'
+      +'</div>'
+      +'<p class="cockpit-dept-summary">'+d.summary+'</p>'
+      +'<div class="cockpit-dept-owner-row"><span class="cockpit-dept-owner-avatar">'+leadInitials+'</span><div class="cockpit-dept-owner-info"><span>Team Lead</span><strong>'+d.admin.name+'</strong></div></div>'
+      +'</div>';
+  }).join('');
+  return '<div class="listing-card dash-panel cockpit-dept-panel"><div class="dash-panel-head"><div>Department Overview</div><span><button class="btn btn-secondary btn-sm" onclick="closeCockpitDepartmentView()">Back to runs</button></span></div><div class="cockpit-dept-grid">'+cards+'</div></div>';
+}
+function buildCockpitDepartmentDetailHTML(){
+  const d=cockpitDeptById(selectedCockpitDepartmentId);
+  const memberCard=function(m,kind,idx){
+    const removeBtn=kind==='admin'?'':'<button class="cockpit-member-remove" title="Remove access" onclick="event.stopPropagation();openCockpitRemoveMemberConfirm(\''+d.id+'\',\''+kind+'\','+idx+')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+    return '<div class="cockpit-member-card '+kind+'">'
+      +'<div class="cockpit-member-avatar">'+m.name.split(' ').map(function(p){return p[0];}).join('').slice(0,2)+'</div>'
+      +'<div class="cockpit-member-main"><div class="cockpit-member-name">'+m.name+'</div><div class="cockpit-member-meta">'+m.title+' · '+m.email+'</div>'+cockpitDeptJourneysHTML(m)+'</div>'
+      +'<div class="cockpit-member-side"><button class="btn btn-secondary btn-sm cockpit-member-manage-btn" onclick="event.stopPropagation();openCockpitManageMemberModal(\''+d.id+'\',\''+kind+'\','+idx+')">Manage</button>'+removeBtn+'</div>'
+      +'</div>';
+  };
+  const managers=(d.managers||[]).map(function(m,i){return memberCard(m,'manager',i);}).join('');
+  const associates=(d.associates||[]).map(function(m,i){return memberCard(m,'associate',i);}).join('');
+  return '<div class="listing-card dash-panel cockpit-dept-detail"><div class="dash-panel-head"><div>'+d.name+' Department</div><span><button class="btn btn-secondary btn-sm" onclick="openCockpitDepartmentOverview()">All departments</button></span></div>'
+    +'<div class="cockpit-dept-detail-hero"><div><strong>'+d.summary+'</strong><p>Review ownership by department and manage journey assignments for each member.</p></div></div>'
+    +'<div class="cockpit-role-block"><div class="cockpit-role-title">'+d.admin.title+'</div>'+memberCard(d.admin,'admin',0)+'</div>'
+    +((d.managers||[]).length?'<div class="cockpit-role-block"><div class="cockpit-role-title">Managers</div><div class="cockpit-member-grid">'+managers+'</div></div>':'')
+    +'<div class="cockpit-role-block"><div class="cockpit-role-title">Associates</div><div class="cockpit-member-grid">'+associates+'</div></div>'
+    +'</div>';
+}
+function cockpitMemberByKind(d,kind,idx){
+  if(kind==='admin')return d.admin;
+  const list=kind==='manager'?(d.managers||[]):(d.associates||[]);
+  return list[idx];
+}
+function openCockpitManageMemberModal(deptId,kind,idx){
+  const d=cockpitDeptById(deptId);
+  const m=cockpitMemberByKind(d,kind,idx);if(!m)return;
+  const assigned=m.journeys||[];
+  const deptJourneys=[].concat(d.admin.journeys||[],...(d.managers||[]).map(function(a){return a.journeys||[];}),...(d.associates||[]).map(function(a){return a.journeys||[];})).filter(function(v,i,a){return a.indexOf(v)===i;});
+  const checks=deptJourneys.map(function(name){return '<label class="cockpit-add-check"><input type="checkbox" value="'+name.replace(/"/g,'&quot;')+'" '+(assigned.indexOf(name)>=0?'checked':'')+'> '+name+'</label>';}).join('');
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML='<div class="ct-modal cockpit-add-member-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">Manage Journeys — '+m.name+'</span><button class="ct-modal-close" onclick="closeCtModal()">×</button></div>'
+    +'<div class="cockpit-manage-meta">'+m.title+' · '+m.email+'</div>'
+    +'<div class="manual-res-section-title">Available journeys</div><div class="cockpit-add-checks">'+checks+'</div>'
+    +'<div class="manual-res-footer"><div>Select the journeys this member should be assigned to.</div><button class="btn btn-secondary" onclick="closeCtModal()">Cancel</button><button class="btn btn-primary" onclick="saveCockpitMemberJourneys(\''+deptId+'\',\''+kind+'\','+idx+')">Save</button></div>'
+    +'</div>';
+  overlay.style.display='flex';
+}
+function saveCockpitMemberJourneys(deptId,kind,idx){
+  const d=cockpitDeptById(deptId);
+  const m=cockpitMemberByKind(d,kind,idx);if(!m)return;
+  const journeys=[].slice.call(document.querySelectorAll('.cockpit-add-check input:checked')).map(function(x){return x.value;});
+  m.journeys=journeys;
+  closeCtModal();
+  selectedCockpitDepartmentId=deptId;cockpitDepartmentView='detail';
+  renderADTPage();
+  if(typeof showAiToast==='function')showAiToast('Journeys updated',m.name+' is now assigned to '+journeys.length+' journey'+(journeys.length===1?'':'s')+'.');
+}
+function openCockpitRemoveMemberConfirm(deptId,kind,idx){
+  const d=cockpitDeptById(deptId);
+  const list=kind==='manager'?(d.managers||[]):(d.associates||[]);
+  const m=list[idx];if(!m)return;
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML='<div class="ct-modal cockpit-remove-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">Remove Member Access</span><button class="ct-modal-close" onclick="closeCtModal()">×</button></div>'
+    +'<div class="cockpit-remove-body">You want to remove <strong>'+m.name+'</strong> access?</div>'
+    +'<div class="manual-res-footer"><div></div><button class="btn btn-secondary" onclick="closeCtModal()">Cancel</button><button class="btn btn-primary" onclick="removeCockpitDepartmentMember(\''+deptId+'\',\''+kind+'\','+idx+')">Remove</button></div>'
+    +'</div>';
+  overlay.style.display='flex';
+}
+function removeCockpitDepartmentMember(deptId,kind,idx){
+  const d=cockpitDeptById(deptId);
+  const list=kind==='manager'?(d.managers||[]):(d.associates||[]);
+  const m=list[idx];if(!m)return;
+  list.splice(idx,1);
+  closeCtModal();
+  selectedCockpitDepartmentId=deptId;cockpitDepartmentView='detail';
+  renderADTPage();
+  if(typeof showAiToast==='function')showAiToast('Access removed',m.name+' was removed from '+d.name+'.');
+}
+function setCockpitRunFilter(filter){
+  cockpitRunFilter=filter||'all';
+  renderADTPage();
+}
+function openCockpitRun(runId,journeyId){
+  if(String(runId).indexOf('MAN-')===0){selectedManualRunId=runId;manualJourneyBackPage='operations-cockpit';navigatePage('manual-journey-run');return;}
+  if(journeyId)selectedAIJourneyId=journeyId;
+  viewAIRun(runId);
+}
+function openExceptionResolver(runId,idx,journeyId){
+  if(String(runId).indexOf('MAN-')===0){openManualExceptionResolver(runId,idx);return;}
+  openCockpitRun(runId,journeyId);
+}
+function manualResolutionOptions(ex,run,step){
+  const type=(ex&&ex.type)||'Exception';
+  if(type==='Missing compliance rule')return [
+    {id:'add-rule',title:'Add missing compliance rule',desc:'Use when the statutory rule is valid and should become part of the reusable country compliance setup.',steps:['Open Compliance Hub for the employee country','Add the missing work-permit/statutory rule with effective date','Attach source reference or policy note','Re-run the compliance check and save evidence']},
+    {id:'override',title:'Attach override evidence',desc:'Use only when this employee has an approved exception or temporary business override.',steps:['Upload legal/compliance approval note','Capture approver name and validity window','Add reason for bypassing the missing rule','Mark the exception as resolved with audit evidence']}
+  ];
+  if(type==='Timesheet discrepancy')return [
+    {id:'reconcile-timesheet',title:'Reconcile attendance and leave',desc:'Use when payable days, leave days, or holidays do not match before payroll calculation.',steps:['Open Timesheets and Leave records for the pay period','Compare present days, approved leave, holidays, and overtime','Update payable days with correction note','Re-run payroll validation before salary calculation']},
+    {id:'manager-confirmation',title:'Request manager confirmation',desc:'Use when attendance cannot be corrected without manager confirmation.',steps:['Send discrepancy summary to Reporting Manager','Capture approval or correction comment','Attach confirmation to payroll run','Recalculate salary after confirmation']}
+  ];
+  if(type==='Salary mismatch')return [
+    {id:'recalculate-salary',title:'Recalculate salary inputs',desc:'Use when gross pay, deductions, statutory rates, or net pay do not align.',steps:['Review payheads and employee compensation setup','Recalculate gross, deductions, statutory rates, and net pay','Compare before/after salary values','Attach calculation note and continue approval']}
+  ];
+  return [
+    {id:'correct-evidence',title:'Correct evidence and revalidate',desc:'Use when the current step needs a manual correction before it can continue.',steps:['Review source data and documents used by this step','Add missing information or correction note','Attach supporting evidence','Re-run validation and resolve the blocker']}
+  ];
+}
+function openManualExceptionResolver(runId,idx){
+  const run=getManualRun(runId);if(!run||!run.exceptions[idx])return;
+  const ex=run.exceptions[idx];
+  const step=manualJourneySteps(run.journeyId)[run.currentStepIdx]||{};
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  const options=manualResolutionOptions(ex,run,step);
+  const optionCards=options.map(function(o,i){
+    return '<label class="manual-res-option '+(i===0?'selected':'')+'" onclick="selectManualResolutionOption(this)">'
+      +'<input type="radio" name="manual-resolution-option" value="'+o.id+'" data-title="'+o.title.replace(/"/g,'&quot;')+'" '+(i===0?'checked':'')+'>'
+      +'<div><strong>'+o.title+'</strong><span>'+o.desc+'</span><ol>'+o.steps.map(function(s){return '<li>'+s+'</li>';}).join('')+'</ol></div>'
+      +'</label>';
+  }).join('');
+  overlay.innerHTML='<div class="ct-modal manual-res-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">Resolve Blocker</span><button class="ct-modal-close" onclick="closeCtModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'<div class="manual-res-body">'
+    +'<div class="manual-res-issue"><div><span>Issue</span><strong>'+ex.type+'</strong><p>'+ex.suggestedResolution+'</p></div><div><span>Owner</span><strong>'+ex.ownerRole+'</strong><p>'+run.runId+' · '+(step.name||'Current step')+'</p></div></div>'
+    +'<div class="manual-res-layout"><div><div class="manual-res-section-title">Choose resolution path</div><div class="manual-res-options">'+optionCards+'</div></div>'
+    +'<div class="manual-res-confirm"><div class="manual-res-section-title">Completion checklist</div>'
+    +'<label><input type="checkbox" class="manual-res-check"> I completed the selected resolution steps.</label>'
+    +'<label><input type="checkbox" class="manual-res-check"> I attached or verified supporting evidence.</label>'
+    +'<label><input type="checkbox" class="manual-res-check"> I reviewed the audit impact before closing.</label>'
+    +'<textarea id="manual-res-note" placeholder="Add resolution note, source reference, or approval comment"></textarea>'
+    +'</div></div></div>'
+    +'<div class="manual-res-footer"><div>Resolution updates blocker status, run status, and audit trail.</div><button class="btn btn-secondary" onclick="closeCtModal()">Cancel</button><button class="btn btn-primary" onclick="applyManualExceptionResolution(\''+runId+'\','+idx+')">Apply Resolution</button></div>'
+    +'</div>';
+  overlay.style.display='flex';
+}
+function selectManualResolutionOption(el){
+  const wrap=el.parentElement;if(!wrap)return;
+  [].slice.call(wrap.querySelectorAll('.manual-res-option')).forEach(function(x){x.classList.remove('selected');});
+  el.classList.add('selected');
+  const input=el.querySelector('input');if(input)input.checked=true;
+}
+function applyManualExceptionResolution(runId,idx){
+  const picked=document.querySelector('input[name="manual-resolution-option"]:checked');
+  const title=picked?picked.getAttribute('data-title'):'Manual resolution completed';
+  const checks=[].slice.call(document.querySelectorAll('.manual-res-check'));
+  const checked=checks.filter(function(x){return x.checked;}).length;
+  if(checked<checks.length){
+    if(typeof showAiToast==='function')showAiToast('Checklist incomplete','Confirm all resolution checks before applying the blocker resolution.');
+    return;
+  }
+  const noteEl=document.getElementById('manual-res-note');
+  const note=noteEl?noteEl.value.trim():'';
+  resolveManualException(runId,idx,{title:title,note:note,evidenceChecks:checked});
+  closeCtModal();
 }
 
 function buildAIResponsibilitySplitHTML(journeyId){
@@ -4065,7 +4397,7 @@ function buildAIJourneyDetailHTML(){
   if(!activePersonaCanAccessJourney(j.id)){
     const first=activePersonaJourneyIds()[0];
     selectedAIJourneyId=first||'contract-creation';
-    return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User persona only sees journeys where they own workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
+    return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey unavailable</div><div class="setup-sub">This journey is not available for the current role.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
   }
   const events=aiJourneyEvents[j.id]||[];
   const timeline=events.map((e,i)=>{
@@ -4262,10 +4594,6 @@ function cfgOverviewBodyHTML(){
       +'</div>';
   }).join('');
   return '<div class="stat-grid" style="margin-bottom:20px">'+tiles+'</div>'
-    +'<div class="review-section" style="display:flex;align-items:center;gap:16px;border-color:#86efac;background:#f0fdf4;margin-bottom:24px">'
-    +'<div style="font-family:var(--display,inherit);font-weight:800;font-size:38px;color:#16a34a;line-height:1;flex-shrink:0">0</div>'
-    +'<div><div style="font-size:13px;font-weight:700;color:#15803d">Business records stored</div><div style="font-size:12px;color:#166534;margin-top:4px;line-height:1.6">Configure holds no customer data. Records are fetched on demand through APIs, used, and released — only configuration and audit logs are kept.</div></div>'
-    +'</div>'
     +'<div class="review-title" style="margin-bottom:12px">Recent activity</div>'
     +'<div class="ep-form-card" style="padding:0">'+activity+'</div>';
 }
@@ -4768,6 +5096,30 @@ function cfgCatBoxHTML(c,count){
     +'<div class="cfg-cat-box-desc">'+c.desc+'</div>'
     +'</div>';
 }
+function journeyModeBadgeHTML(journeyId){
+  const mode=journeyModeLabel(journeyId);
+  const cls=mode==='Agent Enabled'?'agent':mode==='Hybrid'?'hybrid':'manual';
+  return '<span class="journey-mode-badge '+cls+'">'+mode+'</span>';
+}
+function enableAgentToggleHTML(journeyId,small){
+  const on=isJourneyAgentEnabled(journeyId);
+  return '<button class="agent-toggle '+(on?'on':'')+(small?' small':'')+'" onclick="event.stopPropagation();toggleJourneyAgent(\''+journeyId+'\')" title="'+(on?'Disable agent mode':'Enable agent mode')+'"><span class="agent-toggle-track"></span><span class="agent-toggle-label">'+(on?'On':'Off')+'</span></button>';
+}
+function stepAgentToggleHTML(journeyId,idx){
+  const st=manualJourneySteps(journeyId)[idx];
+  const disabled=!st||st.approvalRequired||!st.agentCapable;
+  const on=isStepAgentEnabled(journeyId,idx);
+  if(disabled)return '';
+  return '<button class="agent-toggle small '+(on?'on':'')+(disabled?' disabled':'')+'" '+(disabled?'disabled':'onclick="event.stopPropagation();toggleJourneyStepAgent(\''+journeyId+'\','+idx+')"')+' title="'+(disabled?'Human approval steps always remain manual':'Enable Agent for this step')+'"><span class="agent-toggle-track"></span><span class="agent-toggle-label">'+(on?'On':'Off')+'</span></button>';
+}
+function journeyActivationBadgeHTML(journeyId,locked){
+  if(locked)return '<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>';
+  if(entityJourneyActivation[journeyId])return '<span class="status-pill active">Activated</span>';
+  const state=journeyRequestState(journeyId);
+  if(state==='awaiting-admin')return '<span class="status-pill pending">Requested</span>';
+  if(state==='awaiting-superadmin')return '<span class="status-pill pending">Pending Super Admin</span>';
+  return '<span class="status-pill draft">Available</span>';
+}
 function cfgSetJourneyCategoryFilter(cat){
   cfgJourneyCategoryFilter=cfgJourneyCategoryFilter===cat?'':cat;
   renderADTPage();
@@ -4784,13 +5136,16 @@ function buildCfgContextJourneyHTML(){
   const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px">Showing all journeys &mdash; click a category above to filter.</div>';
   const cards=filteredJourneys.length?filteredJourneys.map(function(j){
     const locked=!!j.locked;
-    return '<div class="ai-journey-card'+(locked?' ai-journey-card-locked':'')+'" style="flex-direction:row;align-items:center;justify-content:space-between;gap:24px"'+(locked?'':' onclick="viewCfgJourney(\''+j.id+'\')"')+'>'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':cfgJourneyStatusPill(j.status))+'</div>'
-      +'<div class="ai-journey-desc" style="white-space:normal;overflow:visible;text-overflow:clip;max-width:640px">'+j.desc+'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
+    const canConfigure=!locked;
+    const showJourneyActions=portalRole!=='super-admin';
+    return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+(locked?'':' onclick="viewCfgJourney(\''+j.id+'\')"')+'>'
+      +'<div class="cfg-journey-main">'
+      +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked)+(!locked?journeyModeBadgeHTML(j.id):'')+'</div></div>'
+      +'<div class="ai-journey-desc cfg-journey-desc">'+j.desc+'</div>'
+      +'<div class="cfg-journey-tags">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
       +'</div>'
-      +(locked?'':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>')
+      +(canConfigure&&showJourneyActions?'<div class="cfg-journey-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openJourneySimulation(\''+j.id+'\')">Dry Run</button><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();selectedAIJourneyId=\''+j.id+'\';navigatePage(\'ai-active-automation\')">Runs</button></div>':'')
+      +(locked?'':'<span class="cfg-journey-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
   return '<div class="ai-exec-page">'
@@ -4807,28 +5162,38 @@ function cfgStepTypeTag(type){
 }
 function buildCfgJourneyDetailHTML(){
   const j=cfgJourneys.find(function(x){return x.id===selectedCfgJourneyId;})||cfgJourneys[0];
+  const agentOn=isJourneyAgentEnabled(j.id);
+  const detailActions=portalRole!=='super-admin'?'<div class="cfg-detail-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div><button class="btn btn-secondary btn-sm" onclick="openJourneySimulation(\''+j.id+'\')">Dry Run</button></div>':'';
   const timeline=j.steps.map(function(st,i){
     const key=j.id+'__'+i;
     const assign=cfgStepAssignments[key];
     const isHuman=st.type==='rule';
-    const rec=(!assign&&!isHuman)?cfgRecommendedAgentForStep(st):null;
+    const manualIdx=cfgManualStepIndex(j.id,i);
+    const manualStep=cfgManualStep(j.id,i);
+    const canShowAgent=agentOn&&!isHuman&&manualStep.agentCapable&&!manualStep.approvalRequired;
+    const rec=(!assign&&canShowAgent)?cfgRecommendedAgentForStep(st):null;
     const assignBadge=isHuman
       ?'<span class="badge" style="margin-left:6px">Human approval required</span>'
-      :assign
+      :!agentOn
+        ?''
+        :assign
         ?'<span class="badge" style="margin-left:6px">Agent: '+assign.agent+'</span>'
         :rec
           ?'<span class="badge cfg-agent-recommend" style="margin-left:6px" onclick="event.stopPropagation();assignRecommendedAgent(\''+j.id+'\','+i+')">&#10024; Recommended: '+rec.name+' &mdash; click to assign</span>'
           :'<span class="badge" style="margin-left:6px">No agent assigned yet</span>';
-    return '<div class="ai-timeline-item">'
+    const stepMode=canShowAgent&&isStepAgentEnabled(j.id,manualIdx)?'<span class="manual-step-mode agent">Agent step</span>':'<span class="manual-step-mode">Manual step</span>';
+    const ownerLabel=manualStep.ownerRole||'Owner TBD';
+    const agentControl=canShowAgent?'<div class="cfg-step-agent-control"><span>Agent</span>'+stepAgentToggleHTML(j.id,manualIdx)+'</div>':'';
+    return '<div class="ai-timeline-item cfg-step-item">'
       +'<div class="ai-timeline-dot">'+(i+1)+'</div>'
-      +'<div class="ai-timeline-card" onclick="openCfgStepDrawer(\''+j.id+'\','+i+')">'
-      +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+st.name+'</span></div>'
-      +'<div class="ai-timeline-card-desc">'+st.src+'</div>'
-      +'<div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+'</div>'
+      +'<div class="ai-timeline-card cfg-step-card" onclick="openCfgStepDrawer(\''+j.id+'\','+i+')">'
+      +'<div class="cfg-step-head"><div class="cfg-step-title-wrap"><div class="ai-timeline-card-title">'+st.name+'</div><div class="ai-timeline-card-desc">'+st.src+'</div></div><span class="cfg-owner-pill">'+ownerLabel+'</span></div>'
+      +'<div class="cfg-step-meta"><span>Module: '+(manualStep.modulePage?manualModuleLabel(manualStep.modulePage):'Not mapped')+'</span><span>SLA: '+(manualStep.sla||'TBD')+'</span></div>'
+      +'<div class="cfg-step-footer"><div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+stepMode+'</div>'+agentControl+'</div>'
       +'</div></div>';
   }).join('');
   const totalSteps=j.steps.length;
-  const aiStepsCount=j.steps.filter(function(st){return st.type!=='rule';}).length;
+  const aiStepsCount=j.steps.filter(function(st,i){const m=cfgManualStep(j.id,i);return agentOn&&st.type!=='rule'&&m.agentCapable&&!m.approvalRequired&&isStepAgentEnabled(j.id,cfgManualStepIndex(j.id,i));}).length;
   const humanStepsCount=j.steps.filter(function(st){return st.type==='rule';}).length;
   const riskLevel=(aiJourneys.find(function(x){return x.id===j.id;})||{}).risk||'—';
   const statGrid='<div class="stat-grid" style="margin-bottom:24px">'
@@ -4839,8 +5204,8 @@ function buildCfgJourneyDetailHTML(){
     +'</div>';
   return '<div class="ai-exec-page ai-journey-detail-page">'
     +cfgBackBtn('cfg-context-journey','Context & Journey')
-    +'<div style="margin-bottom:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><p style="font-size:17px;font-weight:700;margin:0">'+j.name+'</p>'+cfgJourneyStatusPill(j.status)+'</div>'
-    +'<p style="font-size:12.5px;color:var(--gray);margin:-14px 0 24px;max-width:680px;line-height:1.6">'+j.desc+'</p>'
+    +'<div class="cfg-detail-hero"><div><div class="cfg-detail-title-row"><p>'+j.name+'</p>'+journeyActivationBadgeHTML(j.id,!!j.locked)+journeyModeBadgeHTML(j.id)+'</div><div class="cfg-detail-sub">'+j.desc+'</div></div>'+detailActions+'</div>'
+    +'<div class="dry-run-note"><strong>Dry Run</strong><span>Preview owners, manual steps, human approvals, required configs, blockers, and agent impact before starting or changing this journey.</span></div>'
     +statGrid
     +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
     +buildAIResponsibilitySplitHTML(j.id)
@@ -4865,13 +5230,18 @@ function renderCfgStepDrawer(){
   const key=j.id+'__'+cfgDrawerStepIdx;
   const assign=cfgStepAssignments[key]||{};
   const isHuman=st.type==='rule';
-  const rec=(!assign.agent&&!isHuman)?cfgRecommendedAgentForStep(st):null;
+  const manualStep=cfgManualStep(j.id,cfgDrawerStepIdx);
+  const agentOn=isJourneyAgentEnabled(j.id);
+  const canShowAgent=agentOn&&!isHuman&&manualStep.agentCapable&&!manualStep.approvalRequired;
+  const rec=(!assign.agent&&canShowAgent)?cfgRecommendedAgentForStep(st):null;
   const defaultAgent=assign.agent||(rec?rec.name:'');
   const recBanner=rec?'<div class="info-box tip" style="margin-bottom:14px"><div class="ib-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div><div><strong>Recommended: '+rec.name+'</strong>This agent already handles this exact step.<div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="assignRecommendedAgent(\''+j.id+'\','+cfgDrawerStepIdx+');closeCfgStepDrawer()">Use this agent</button></div></div></div>':'';
   const header='<div class="ct-modal-hdr"><span class="ct-modal-title">'+st.name+'</span><button class="ct-modal-close" onclick="closeCfgStepDrawer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
   const body='<div class="review-section"><div class="review-title">Step Source</div><p style="font-size:12.5px;color:var(--navy);line-height:1.6">'+st.src+'</p></div>'
     +(isHuman
       ?'<div class="review-section" style="border-color:#93c5fd;background:#eff6ff"><div class="review-title" style="color:#1d4ed8">Human approval required</div><p style="font-size:12.5px;color:#1d4ed8;line-height:1.6">This step is governed by a rule and routes to a human for sign-off before the journey continues.</p></div>'
+      :!canShowAgent
+        ?'<div class="review-section"><div class="review-title">Manual step</div><p style="font-size:12.5px;color:var(--gray);line-height:1.6">'+(agentOn?'No agent is available for this step, so it remains manual.':'Enable Agent at journey level to configure agent-capable steps. Until then, this step stays manual.')+'</p></div>'
       :'<div class="review-section">'
         +'<div class="review-title">Assign agent &amp; governance</div>'
         +recBanner
@@ -5336,8 +5706,96 @@ function cancelAIAutomation(){
   navigatePage(dest);
 }
 
+function buildManualJourneyRunHTML(){
+  const run=getManualRun(selectedManualRunId);
+  if(!run)return '<div class="ai-exec-page"><div class="setup-card">No manual run selected.</div></div>';
+  const j=aiJourneys.find(function(x){return x.id===run.journeyId;})||cfgJourneys.find(function(x){return x.id===run.journeyId;})||{};
+  const steps=manualJourneySteps(run.journeyId);
+  const cur=steps[run.currentStepIdx]||steps[0]||{};
+  const saved=Math.max(0,(run.manualHours||0)-(run.agentEstimateHours||0)).toFixed(1);
+  const timeline=steps.map(function(st,i){
+    const done=run.status==='Completed'||i<run.currentStepIdx;
+    const current=i===run.currentStepIdx&&run.status!=='Completed';
+    const mode=isStepAgentEnabled(run.journeyId,i)?'Agent':'Manual';
+    return '<div class="manual-step-row '+(done?'done':'')+(current?'current':'')+'">'
+      +'<div class="manual-step-num">'+(done?'✓':i+1)+'</div>'
+      +'<div class="manual-step-body"><div class="manual-step-title">'+st.name+'</div><div class="manual-step-sub">'+st.ownerRole+' · '+manualModuleLabel(st.modulePage)+' · SLA '+st.sla+'</div><div class="manual-step-action">'+st.manualAction+'</div></div>'
+      +'<div class="manual-step-mode">'+mode+'</div>'
+      +'</div>';
+  }).join('');
+  const evidence=buildEvidencePackHTML(run,cur,run.currentStepIdx);
+  const exceptions=(run.exceptions||[]).map(function(e,i){return {e:e,i:i};}).filter(function(x){return x.e.status==='Open';}).map(function(x){
+    return '<div class="manual-exception-card"><div><div class="cell-primary">'+x.e.type+'</div><div class="cell-sub">'+x.e.ownerRole+'</div><p>'+x.e.suggestedResolution+'</p></div><button class="btn btn-secondary btn-sm" onclick="openManualExceptionResolver(\''+run.runId+'\','+x.i+')">Resolve</button></div>';
+  }).join('')||'<div class="manual-empty-note">No open exceptions on this run.</div>';
+  const audit=(run.audit||[]).map(function(a){return '<div class="audit-line"><span class="audit-dot"></span><div class="audit-copy"><strong>Run event</strong>'+a+'</div></div>';}).join('');
+  const progress=run.status==='Completed'?100:Math.min(100,Math.round(((run.currentStepIdx||0)+1)/Math.max(steps.length,1)*100));
+  const openExceptionCount=(run.exceptions||[]).filter(function(e){return e.status==='Open';}).length;
+  const stepsCompletedLabel=(run.status==='Completed'?steps.length:(run.currentStepIdx||0))+' of '+steps.length;
+  const moduleLabel=manualModuleLabel(cur.modulePage);
+  return '<div class="ai-exec-page manual-run-page">'
+    +'<button class="ep-back" onclick="backFromManualJourneyRun()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back</button>'
+    +'<div class="manual-run-hero"><div><div class="manual-run-kicker"><span>'+run.runId+'</span><span>'+run.mode+'</span><span>'+run.status+'</span></div><div class="manual-run-title">'+(j.name||run.journeyId)+'</div><div class="manual-run-sub">'+run.subject+' · '+run.entity+' · Started '+run.startedAt+'</div></div><div class="manual-run-actions"><button class="btn btn-secondary btn-sm" onclick="openJourneySimulation(\''+run.journeyId+'\')">Dry Run</button><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Step Complete</button></div></div>'
+    +'<div class="manual-current-card"><div class="manual-current-head"><div><span class="manual-current-kicker">Current Step</span><div class="manual-current-title">'+cur.name+'</div></div><div class="manual-current-progress"><strong>'+progress+'%</strong><span>'+openExceptionCount+' open blocker'+(openExceptionCount===1?'':'s')+'</span></div></div>'
+    +'<p class="manual-current-desc">'+cur.manualAction+'</p>'
+    +'<div class="manual-current-foot"><div class="manual-current-meta"><span>'+(cur.ownerRole||'Entity Admin')+'</span><span class="dot">&middot;</span><span>'+moduleLabel+'</span><span class="dot">&middot;</span><span>SLA '+(cur.sla||'—')+'</span></div><div class="manual-current-actions"><button class="btn btn-secondary btn-sm" onclick="navigatePage(\''+(cur.modulePage||'dashboard')+'\')">Open '+moduleLabel+'</button><button class="btn btn-secondary btn-sm" onclick="raiseManualException(\''+run.runId+'\')">Raise Exception</button></div></div></div>'
+    +'<div class="stat-grid dash-stat-grid stat-grid-3">'+dashStat('SLA Risk',run.slaRisk,run.blockedReason,run.slaRisk==='High'?'red':run.slaRisk==='Medium'?'orange':'green')+dashStat('Steps Completed',stepsCompletedLabel,'Across this journey run')+dashStat('Agent Savings',saved+'h','Potential on this run','green')+'</div>'
+    +'<div class="dash-two-col manual-run-grid"><div class="listing-card dash-panel manual-steps-panel"><div class="dash-panel-head"><div>Journey Steps</div><span>Manual / Agent mode per step</span></div><div class="manual-panel-body">'+timeline+'</div></div><div class="manual-run-side"><div class="listing-card dash-panel manual-evidence-panel"><div class="dash-panel-head"><div>Step-Level Evidence Pack</div><span>Trust layer</span></div><div class="manual-panel-body">'+evidence+'</div></div><div class="listing-card dash-panel manual-exceptions-panel"><div class="dash-panel-head"><div>Exceptions</div><span>Exception-first queue</span></div><div class="manual-panel-body">'+exceptions+'</div></div><div class="listing-card dash-panel manual-audit-panel"><div class="dash-panel-head"><div>Audit Trail</div><span>Immutable story</span></div><div class="manual-panel-body">'+audit+'</div></div></div></div>'
+    +'</div>';
+}
+function buildEvidencePackHTML(run,step,idx){
+  const before=idx%2===0?'Not captured':'Pending validation';
+  const after=idx%2===0?'Captured manually':'Awaiting correction';
+  return '<div class="evidence-grid">'
+    +'<div class="evidence-item"><div class="evidence-label">Source data</div><div class="evidence-value">'+run.subject+' · '+run.entity+'</div></div>'
+    +'<div class="evidence-item"><div class="evidence-label">Documents used</div><div class="evidence-value">Contract, timesheet, compliance report</div></div>'
+    +'<div class="evidence-item"><div class="evidence-label">Rule/check applied</div><div class="evidence-value">'+(step.exceptionType||'Standard validation')+'</div></div>'
+    +'<div class="evidence-item"><div class="evidence-label">Owner role</div><div class="evidence-value">'+(step.ownerRole||'Entity Admin')+'</div></div>'
+    +'<div class="evidence-item"><div class="evidence-label">Timestamp</div><div class="evidence-value">'+new Date().toLocaleString()+'</div></div>'
+    +'<div class="evidence-item"><div class="evidence-label">Before / After</div><div class="evidence-value">'+before+' -> '+after+'</div></div>'
+    +'<div class="evidence-item"><div class="evidence-label">Approval notes</div><div class="evidence-value">'+(step.approvalRequired?'Approval required':'No approval required')+'</div></div>'
+    +'<div class="evidence-item"><div class="evidence-label">System logs</div><div class="evidence-value">'+(run.audit&&run.audit[0]?run.audit[0]:'Run created')+'</div></div>'
+    +'</div>';
+}
+function buildJourneySimulationHTML(){
+  const j=cfgJourneys.find(function(x){return x.id===selectedSimulationJourneyId;})||cfgJourneys[0];
+  const steps=manualJourneySteps(j.id);
+  const agentOn=isJourneyAgentEnabled(j.id);
+  const approvalCount=steps.filter(function(st){return st.approvalRequired;}).length;
+  const agentCapableCount=steps.filter(function(st){return st.agentCapable&&!st.approvalRequired;}).length;
+  const agentEnabledCount=steps.filter(function(st,i){return isStepAgentEnabled(j.id,i);}).length;
+  const blockers=steps.filter(function(st,i){return isStepAgentEnabled(j.id,i)&&i%4===1;});
+  const secondStat=dashStat('Human Approvals',String(approvalCount),'Always manual');
+  const thirdStat=agentOn
+    ?dashStat('Agent Steps',agentEnabledCount+' of '+agentCapableCount,'Agent-capable steps enabled','green')
+    :dashStat('Agent Steps','0 of '+agentCapableCount,'Agent is off','orange');
+  const cycleTimeHTML='<div class="dry-run-cycle-card">'
+    +'<div class="dry-run-cycle-head"><div><strong>Estimated journey cycle time</strong><span>Planning estimate after all steps are completed one after another.</span></div><span class="journey-mode-badge '+(agentOn?'agent':'manual')+'">'+(agentOn?'Agent mode preview':'Manual baseline')+'</span></div>'
+    +'<div class="dry-run-cycle-grid"><div><span>Manual completion</span><strong>30-40 min</strong><p>Owners complete each step manually across modules.</p></div><div><span>With agent mode</span><strong>~10 min</strong><p>'+(agentOn?'Based on enabled agent-capable steps; approvals still stay human.':'Available after enabling agent-capable steps; approvals still stay human.')+'</p></div><div><span>Expected reduction</span><strong>~70%</strong><p>Useful as a business case, not a guaranteed SLA.</p></div></div>'
+    +'</div>';
+  const thirdFinding=agentOn
+    ?'<div class="sim-finding"><span class="sim-finding-icon">3</span><div><div class="sim-finding-title">'+(blockers.length?'Agent blockers found':'Agent readiness clear')+'</div><div class="sim-finding-copy">'+(blockers.length?'Agent mode is blocked by missing integration/data checks on '+blockers.length+' step(s).':'Agent mode has no simulated blockers for this setup.')+'</div></div></div>'
+    :'<div class="sim-finding"><span class="sim-finding-icon">3</span><div><div class="sim-finding-title">Agent preview is off</div><div class="sim-finding-copy">Turn on Enable Agent to compare automation time, required integrations, and blockers. Until then, this dry run reflects manual execution only.</div></div></div>';
+  const rows=steps.map(function(st,i){
+    return '<tr><td>'+(i+1)+'. '+st.name+'</td><td>'+st.ownerRole+'</td><td>'+manualModuleLabel(st.modulePage)+'</td><td>'+(st.approvalRequired?'Human approval':isStepAgentEnabled(j.id,i)?'Agent enabled':'Manual')+'</td><td>'+st.sla+'</td></tr>';
+  }).join('');
+  return '<div class="ai-exec-page">'
+    +'<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="backFromJourneySimulation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back</button>'
+    +'<div class="manual-run-hero"><div><div class="manual-run-kicker">Journey Dry Run</div><div class="manual-run-title">'+j.name+'</div><div class="manual-run-sub">'+(agentOn?'Validate owners, approvals, blockers, and enabled agent steps before changing operations.':'Agent is currently off. This dry run validates the manual execution path only.')+'</div></div><div class="manual-run-actions"><button class="btn btn-secondary btn-sm" onclick="toggleJourneyAgent(\''+j.id+'\')">'+(agentOn?'Disable Agent':'Enable Agent')+'</button><button class="btn btn-primary btn-sm" onclick="selectedCfgJourneyId=\''+j.id+'\';navigatePage(\'cfg-journey-detail\')">Configure Steps</button></div></div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStat('Execution Steps',String(steps.length),'Owners and modules mapped')+secondStat+thirdStat+dashStat(agentOn?'Config Blockers':'Manual Blockers',String(agentOn?blockers.length:0),agentOn?(blockers.length?'Missing integration/data checks':'Can run now'):'No agent checks applied',agentOn&&blockers.length?'red':'green')+'</div>'
+    +cycleTimeHTML
+    +'<div class="dash-two-col"><div class="listing-card dash-panel"><div class="dash-panel-head"><div>Execution Path</div><span>Owners, modules, and modes</span></div><table class="listing-table dash-table"><thead><tr><th>Step</th><th>Owner</th><th>Module</th><th>Mode</th><th>SLA</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div class="listing-card dash-panel"><div class="dash-panel-head"><div>Dry Run Findings</div><span>'+(agentOn?'Agent-enabled preflight':'Manual preflight')+'</span></div>'
+    +'<div class="sim-finding"><span class="sim-finding-icon">1</span><div><div class="sim-finding-title">Manual run available</div><div class="sim-finding-copy">All owners can execute the journey through existing module screens.</div></div></div>'
+    +'<div class="sim-finding"><span class="sim-finding-icon">2</span><div><div class="sim-finding-title">Approvals remain human</div><div class="sim-finding-copy">Approval-required steps stay manual even when Enable Agent is on.</div></div></div>'
+    +thirdFinding
+    +'<div class="roi-card"><div class="roi-card-title">Recommended next action</div><div class="roi-card-copy">'+(agentOn?'Review blockers, then keep agent enabled only for repeatable data-heavy steps.':'Start manually, collect operational evidence, then enable agents for repeated checks and data-heavy steps.')+'</div></div></div></div>'
+    +'</div>';
+}
+
 // -- AI Executive: live run flows for activated journeys (Create Employee / Run Payroll) --
 function aiJourneyCTA(j){
+  const mode=journeyModeLabel(j.id);
+  if(mode==='Manual Mode'||mode==='Hybrid')return {label:(mode==='Hybrid'?'Start Hybrid Run':'Start Manual Run'),action:"startManualJourneyRun('"+j.id+"')"};
   if(j.id==='contract-creation')return {label:'Create Contract',action:"addListingItem('contracts')"};
   if(aiRunFlows[j.id])return {label:aiRunFlows[j.id].entryLabel,action:"startAIJourneyRun('"+j.id+"')"};
   return null;
@@ -5444,7 +5902,7 @@ function aiRunFlowFinish(){
 function buildAIJourneyRunHTML(){
   const flow=aiRunFlows[aiRunFlowJourneyId];
   const j=aiJourneys.find(x=>x.id===aiRunFlowJourneyId)||aiJourneys[0];
-  if(!activePersonaCanAccessJourney(j.id))return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User persona only sees journeys where they own workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
+  if(!activePersonaCanAccessJourney(j.id))return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User role only sees journeys where it owns workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
   if(!flow)return '<div class="ai-exec-page">Unknown automation.</div>';
   if(aiRunFlowJourneyId==='payroll-creation')return buildAIPayrollJourneyHTML(flow,j);
   if(aiRunFlowJourneyId==='h2r-lifecycle')return buildAIH2rJourneyHTML(flow,j);
@@ -6480,6 +6938,22 @@ function aiScheduleAutoAdvance(expectedPage,fn,delay){
   if(_aiAutoAdvanceTimer)clearTimeout(_aiAutoAdvanceTimer);
   _aiAutoAdvanceTimer=setTimeout(function(){_aiAutoAdvanceTimer=null;if(page===expectedPage)fn();},delay||1800);
 }
+let _runNotifyTimer=null;
+function notifyRunOwner(runId,ownerName,stepName){
+  notifiedRunIds.add(runId);
+  const overlay=document.getElementById('run-notify-overlay');const desc=document.getElementById('run-notify-desc');
+  if(overlay&&desc){
+    desc.textContent='Sent notification to '+ownerName+' — owner of '+stepName+'.';
+    overlay.classList.remove('hidden');
+    clearTimeout(_runNotifyTimer);
+    _runNotifyTimer=setTimeout(closeRunNotifyModal,2600);
+  }
+  renderADTPage();
+}
+function closeRunNotifyModal(){
+  const overlay=document.getElementById('run-notify-overlay');if(overlay)overlay.classList.add('hidden');
+  clearTimeout(_runNotifyTimer);
+}
 function showAiToast(title,sub){
   const stack=document.getElementById('ai-toast-stack');if(!stack)return;
   const el=document.createElement('div');
@@ -7037,7 +7511,7 @@ function toggleMtAction(id,e){
 
 function buildAIActiveAutomationHTML(){
   const j=aiJourneys.find(x=>x.id===selectedAIJourneyId)||aiJourneys[0];
-  if(!activePersonaCanAccessJourney(j.id))return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User persona only sees journeys where they own workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
+  if(!activePersonaCanAccessJourney(j.id))return '<div class="ai-exec-page"><div class="setup-card"><div class="setup-title">Journey hidden for this role</div><div class="setup-sub">This Entity User role only sees journeys where it owns workflow steps.</div><button class="btn btn-primary btn-sm" onclick="navigatePage(\'ai-executive\')">Back to AI Executive</button></div></div>';
   const runs=aiAutomationRuns[j.id]||[];
   const cfg=aiAutomationConfigs[j.id];
   const totalRuns=runs.length;
@@ -7159,6 +7633,7 @@ function buildAIRunDetailHTML(){
 
   let backLabel,backAction;
   if(aiRunDetailBackTo==='my-tasks'){backLabel='Back to My Tasks';backAction="navigatePage('my-tasks')";}
+  else if(aiRunDetailBackTo==='operations-cockpit'){backLabel='Back to Operations Cockpit';backAction="navigatePage('operations-cockpit')";}
   else if(aiRunDetailBackTo==='ai-active-automation'){backLabel='Back to '+j.name+' Automation';backAction="navigatePage('ai-active-automation')";}
   else{backLabel='Back to '+j.name;backAction="viewAIJourney('"+j.id+"')";}
   const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="'+backAction+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+backLabel+'</button>'

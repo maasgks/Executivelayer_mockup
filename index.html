@@ -204,6 +204,18 @@
   </div>
 </div>
 
+<!-- RUN OWNER NOTIFICATION SENT MODAL -->
+<div id="run-notify-overlay" class="lj-modal-overlay hidden" onclick="if(event.target===this)closeRunNotifyModal()">
+  <div class="lj-modal-panel" style="max-width:380px">
+    <div class="lj-modal-header"><button class="lj-modal-close" onclick="closeRunNotifyModal()">&#x2715;</button></div>
+    <div class="lj-modal-body">
+      <div class="lj-modal-icon" style="background:#dcfce7;color:#16a34a"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="lj-modal-title">Notification Sent</div>
+      <div class="lj-modal-desc" id="run-notify-desc" style="margin-bottom:0"></div>
+    </div>
+  </div>
+</div>
+
 <!-- COST CALCULATOR MODAL -->
 <div id="cost-calc-overlay" class="cost-calc-overlay hidden" onclick="if(event.target===this)closeCostCalculator()">
   <div class="cost-calc-panel">

@@ -84,7 +84,8 @@ const sidebarItems=[
     {id:'cfg-systems',label:'Systems',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg>'},
     {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
     {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
-    {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'}
+    {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'},
+    {id:'operations-cockpit',label:'Operations Cockpit',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
   ]},
   {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
   {id:'my-tasks',label:'My Tasks',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
@@ -158,11 +159,11 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='operations-cockpit')return{title:'Operations Cockpit',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'Operations Cockpit',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='cfg-journey-detail')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -268,8 +269,8 @@ function buildSidebar(id,collapsed,activePg){
   items.forEach(item=>{
     if(item.section){if(!collapsed){const s=document.createElement('div');s.className='sb-section';s.textContent=item.section;el.appendChild(s);}return;}
     if(item.dropdown){
-      const isOpen=openDropdowns.has(item.dropdown);
       const hasActiveChild=(item.children||[]).some(c=>c.id===activePg);
+      const isOpen=openDropdowns.has(item.dropdown)||hasActiveChild;
       if(!collapsed){
         const parentBtn=document.createElement('button');parentBtn.type='button';
         parentBtn.className='sb-parent'+(isOpen?' open':'')+(hasActiveChild?' has-active':'');
@@ -386,7 +387,7 @@ function renderUserDD(){
       <div class="hdr-dd-divider"></div>
       ${platformItems}
       <div class="hdr-dd-divider"></div>
-      <div class="hdr-dd-subtitle" style="padding:7px 10px 4px;font-weight:700;text-transform:uppercase;letter-spacing:.35px">Entity User Personas</div>
+      <div class="hdr-dd-subtitle" style="padding:7px 10px 4px;font-weight:700;text-transform:uppercase;letter-spacing:.35px">Entity User</div>
       <div class="persona-switch-list">${personaItems}</div>`;
     return;
   }
@@ -542,7 +543,7 @@ const pageRoleMap={
   'cfg-overview':['super-admin'],'cfg-data-foundation':['super-admin'],'cfg-model-detail':['super-admin'],'cfg-model-add':['super-admin'],'cfg-system-add':['super-admin'],
   'cfg-systems':['super-admin','entity-admin'],'cfg-system-detail':['super-admin','entity-admin'],
   'cfg-context-journey':['super-admin','entity-admin'],'cfg-journey-detail':['super-admin','entity-admin'],
-  'cfg-agents':['super-admin','entity-admin'],
+  'cfg-agents':['super-admin','entity-admin'],'operations-cockpit':['super-admin','entity-admin'],
   'all-users':['super-admin'],'settings':['super-admin']
 };
 function canAccessPage(pg,role){const allowed=pageRoleMap[pg];return !allowed||allowed.includes(role);}
@@ -1290,6 +1291,174 @@ const cfgJourneys=[
   {id:'month-end-close',name:'Month-End Close & Reconciliation Journey',category:'F2A',desc:'Automates reconciliation of payroll, vendor payments, and client billing ahead of period-end close.',status:'Inactive',tags:['Roadmap','Finance, Compliance Hub'],locked:true,steps:[]},
   {id:'statutory-tax-reporting',name:'Statutory & Tax Compliance Reporting Journey',category:'F2A',desc:'Automates generation of statutory and tax compliance filings from payroll and vendor transaction data.',status:'Inactive',tags:['Roadmap','Compliance Hub, Finance'],locked:true,steps:[]}
 ];
+
+// -- Journey execution modes: additive layer. Agentic workflows stay intact and are used when enabled. --
+const journeyAgentEnabled={};
+const journeyStepAgentEnabled={};
+let selectedManualRunId='MAN-1001';
+let selectedSimulationJourneyId='contract-creation';
+let manualJourneyBackPage='operations-cockpit';
+let journeySimulationBackPage='cfg-context-journey';
+let cockpitRunFilter='all';
+let cockpitShowExceptionQueue=false;
+let cockpitSidebarRunId=null;
+let cockpitDepartmentView='';
+let selectedCockpitDepartmentId='hr';
+let selectedEvidenceRunId='MAN-1001',selectedEvidenceStepIdx=1;
+let selectedExceptionRunId='MAN-1002',selectedExceptionIdx=0;
+let manualRunSeq=1004;
+let notifiedRunIds=new Set();
+const cockpitDepartmentDirectory=[
+  {id:'hr',name:'HR',summary:'Employee lifecycle, onboarding, attendance, payroll setup, and H2R approvals.',admin:{name:'Ananya Rao',email:'ananya.rao@dhi.com',title:'HR Team Lead',journeys:['Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Ramesh Patel',email:'ramesh.patel@dhi.com',title:'HR Associate',journeys:['Payroll Creation Journey']},{name:'Priya Sharma',email:'priya.sharma@dhi.com',title:'HR Associate',journeys:['Hire to Retire (H2R) Journey']},{name:'Aishi Verma',email:'aishi.verma@dhi.com',title:'HR Associate',journeys:['Contract Creation Journey','Payroll Creation Journey']}]},
+  {id:'compliance',name:'Compliance',summary:'Compliance Hub checks, statutory rules, document readiness, and blockers.',admin:{name:'Kiran Iyer',email:'kiran.iyer@dhi.com',title:'Compliance Team Lead',journeys:['Contract Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Meera Nair',email:'meera.nair@dhi.com',title:'Compliance Associate',journeys:['Contract Creation Journey']},{name:'Devika Rao',email:'devika.rao@dhi.com',title:'Compliance Associate',journeys:['Hire to Retire (H2R) Journey']}]},
+  {id:'finance',name:'Finance',summary:'Payroll approvals, disbursement authorization, payments, and GL posting.',admin:{name:'Nisha Kapoor',email:'nisha.kapoor@dhi.com',title:'Finance Team Lead',journeys:['Payroll Creation Journey','Payroll to GL Posting Journey']},associates:[{name:'Arun Menon',email:'arun.menon@dhi.com',title:'Finance Associate',journeys:['Payroll Creation Journey']},{name:'Fatima Khan',email:'fatima.khan@dhi.com',title:'Finance Associate',journeys:['Month-End Close & Reconciliation Journey']}]},
+  {id:'operations',name:'Operations',summary:'Signed-contract readiness, onboarding handoff, payroll readiness, and escalations.',admin:{name:'Sanjay Kulkarni',email:'sanjay.kulkarni@dhi.com',title:'Ops Team Lead',journeys:['Contract Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Gojendra Singh',email:'gojendra.singh@dhi.com',title:'Ops Associate',journeys:['Contract Creation Journey']},{name:'Sneha Kulkarni',email:'sneha.kulkarni@dhi.com',title:'Ops Associate',journeys:['Hire to Retire (H2R) Journey']}]},
+  {id:'legal',name:'Legal',summary:'Contract generation, clause review, signature readiness, and legal exceptions.',admin:{name:'Dev Rajan',email:'dev.rajan@dhi.com',title:'Legal / Contracts Team Lead',journeys:['Contract Creation Journey']},associates:[{name:'Neha Sharma',email:'neha.sharma@dhi.com',title:'Contracts Associate',journeys:['Contract Creation Journey']},{name:'Owen Brooks',email:'owen.brooks@dhi.com',title:'Legal Associate',journeys:['Vendor Onboarding Journey']}]},
+  {id:'sales',name:'Sales',summary:'Deal desk, proposal drafting, client acceptance, and commercial approvals.',admin:{name:'Arjun Vaidya',email:'arjun.vaidya@dhi.com',title:'Sales Team Lead',journeys:['Contract Creation Journey']},associates:[{name:'Rajdeep Singh',email:'rajdeep.singh@dhi.com',title:'Account Manager',journeys:['Contract Creation Journey']},{name:'Anika Shah',email:'anika.shah@dhi.com',title:'Deal Desk Associate',journeys:['Contract Creation Journey']}]},
+  {id:'admin',name:'Admin',summary:'Entity governance, activation requests, system setup, and operational ownership.',admin:{name:'Entity Admin',email:'entity.admin@dhi.com',title:'Entity Team Lead',journeys:['Contract Creation Journey','Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Rahul Mehta',email:'rahul.mehta@dhi.com',title:'Entity Coordinator',journeys:['Contract Creation Journey']},{name:'Deepak Joshi',email:'deepak.joshi@dhi.com',title:'Systems Coordinator',journeys:['Hire to Retire (H2R) Journey']}]}
+];
+const manualJourneyStepCatalog={
+  'contract-creation':[
+    {name:'Deal & Employee Record',ownerRole:'Account Manager',modulePage:'contracts',manualAction:'Create or match the employee record and capture deal basics manually.',sla:'4h',agentCapable:true},
+    {name:'Compliance Check',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Open Compliance Hub, check country rules, statutory obligations, tax rates, and work permit rules.',sla:'4h',agentCapable:true,exceptionType:'Missing compliance rule'},
+    {name:'Proposal Drafted',ownerRole:'Account Manager',modulePage:'contracts',manualAction:'Draft commercial terms, pay rate, billing rate, margin, and compliance checklist manually.',sla:'4h',agentCapable:true},
+    {name:'Proposal Approved',ownerRole:'Deal Manager',modulePage:'my-tasks',manualAction:'Approve or reject proposal terms with comments.',sla:'4h',agentCapable:false,approvalRequired:true},
+    {name:'Client Acceptance',ownerRole:'Account Manager',modulePage:'contracts',manualAction:'Send proposal, track acceptance, and record client response.',sla:'8h',agentCapable:true},
+    {name:'Contract Generated & Sent',ownerRole:'Legal / Contracts Manager',modulePage:'contracts',manualAction:'Generate contract, validate clauses, and send for signature.',sla:'4h',agentCapable:true},
+    {name:'Signed Contract Approved',ownerRole:'Ops Manager',modulePage:'my-tasks',manualAction:'Verify signed contract against approved proposal and approve readiness.',sla:'4h',agentCapable:false,approvalRequired:true},
+    {name:'Onboarding',ownerRole:'HR',modulePage:'direct',manualAction:'Run onboarding checklist, documents, reminders, and employee setup manually.',sla:'8h',agentCapable:true},
+    {name:'Payroll Readiness',ownerRole:'HR',modulePage:'payroll',manualAction:'Validate bank details, tax ID, compensation mapping, and pay frequency manually.',sla:'4h',agentCapable:true,exceptionType:'Incomplete bank details'}
+  ],
+  'payroll-creation':[
+    {name:'Payroll Run Initiated',ownerRole:'HR',modulePage:'payroll',manualAction:'Select payroll scope, employee list, and pay period manually.',sla:'2h',agentCapable:true},
+    {name:'Attendance Capture',ownerRole:'HR',modulePage:'all-timesheet',manualAction:'Open timesheets, check attendance, leave, overtime, and enter payable days manually.',sla:'4h',agentCapable:true,exceptionType:'Timesheet discrepancy'},
+    {name:'Salary Calculation',ownerRole:'HR',modulePage:'payroll',manualAction:'Calculate gross pay, deductions, statutory rates, and net pay manually.',sla:'4h',agentCapable:true,exceptionType:'Salary mismatch'},
+    {name:'Payroll Approved',ownerRole:'Finance Approver',modulePage:'my-tasks',manualAction:'Review calculation and approve or reject payroll.',sla:'4h',agentCapable:false,approvalRequired:true},
+    {name:'Salary Slip Generated',ownerRole:'HR',modulePage:'payroll',manualAction:'Create and store payslip manually for employee review.',sla:'4h',agentCapable:true},
+    {name:'Disbursement Authorised',ownerRole:'Finance Approver',modulePage:'payments',manualAction:'Authorize fund release after reviewing payment summary.',sla:'4h',agentCapable:false,approvalRequired:true},
+    {name:'Payment Disbursed',ownerRole:'Finance Approver',modulePage:'payments',manualAction:'Process bank transfer or card-load file and record confirmation.',sla:'4h',agentCapable:true,exceptionType:'Failed disbursement'},
+    {name:'ERP Write-back',ownerRole:'Finance Approver',modulePage:'payments',manualAction:'Post payroll accounting entries and attach GL confirmation.',sla:'8h',agentCapable:true,exceptionType:'Failed ERP posting'}
+  ],
+  'h2r-lifecycle':[
+    {name:'Employee Record Created',ownerRole:'HR',modulePage:'direct',manualAction:'Create employee profile and verify duplicate records.',sla:'4h',agentCapable:true},
+    {name:'Document Collection',ownerRole:'HR',modulePage:'direct',manualAction:'Send country-specific document checklist and validate uploads manually.',sla:'8h',agentCapable:true,exceptionType:'Expired document'},
+    {name:'Work Permit Check',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Check work authorization and immigration requirements in Compliance Hub.',sla:'4h',agentCapable:true,exceptionType:'Work permit issue'},
+    {name:'Country Compliance Fetch',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Collect tax bands, social security rates, benefits, and notice-period rules.',sla:'4h',agentCapable:true},
+    {name:'Benefits Enrollment',ownerRole:'HR',modulePage:'direct',manualAction:'Enroll employee in mandatory benefits and track provider confirmation.',sla:'8h',agentCapable:true},
+    {name:'Payroll Setup',ownerRole:'HR',modulePage:'payheads',manualAction:'Configure payheads, deductions, allowances, and pay frequency manually.',sla:'4h',agentCapable:true},
+    {name:'Leave Policy Setup',ownerRole:'HR',modulePage:'leave-policies',manualAction:'Assign applicable leave policy or create a missing policy.',sla:'4h',agentCapable:true},
+    {name:'HR Approval',ownerRole:'HR Manager',modulePage:'my-tasks',manualAction:'Approve or reject any deviation from standard setup.',sla:'8h',agentCapable:false,approvalRequired:true},
+    {name:'Active Employment',ownerRole:'HR',modulePage:'direct',manualAction:'Monitor active employment and trigger salary revision, extension, or role change.',sla:'Ongoing',agentCapable:true},
+    {name:'Exit Trigger',ownerRole:'HR',modulePage:'direct',manualAction:'Capture resignation/contract end and start offboarding.',sla:'4h',agentCapable:true},
+    {name:'Final Settlement',ownerRole:'Finance Approver',modulePage:'payments',manualAction:'Calculate and approve outstanding salary, leave encashment, gratuity, and deductions.',sla:'4h',agentCapable:true,exceptionType:'Salary mismatch'},
+    {name:'Offboarding',ownerRole:'HR',modulePage:'direct',manualAction:'Complete offboarding checklist, letters, access revocation, and closure.',sla:'8h',agentCapable:true}
+  ]
+};
+const cfgToManualStepIndexMap={
+  'contract-creation':[0,2,3,5,6,7,8],
+  'payroll-creation':[0,1,2,3,4,7],
+  'h2r-lifecycle':[0,3,6,7,11]
+};
+function cfgManualStepIndex(journeyId,cfgIdx){
+  const map=cfgToManualStepIndexMap[journeyId];
+  return map&&typeof map[cfgIdx]==='number'?map[cfgIdx]:cfgIdx;
+}
+function cfgManualStep(journeyId,cfgIdx){return manualJourneySteps(journeyId)[cfgManualStepIndex(journeyId,cfgIdx)]||{};}
+const manualJourneyRuns=[
+  {runId:'MAN-1001',journeyId:'contract-creation',subject:'Rashi Singh',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:1,status:'Blocked',slaRisk:'High',blockedReason:'Netherlands work permit rule missing in Compliance Hub',escalation:'Entity Admin in 1h',startedAt:'Today 09:10 AM',manualHours:3.2,agentEstimateHours:.4,exceptions:[{type:'Missing compliance rule',ownerRole:'Compliance Officer',status:'Open',suggestedResolution:'Add Netherlands work permit rule or attach override evidence.'}],audit:['Deal record created by Account Manager','Compliance Hub opened 4 times','Exception raised for missing work permit rule']},
+  {runId:'MAN-1002',journeyId:'payroll-creation',subject:'Anika Shah',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:2,status:'Active',slaRisk:'Medium',blockedReason:'Timesheet and leave totals need reconciliation',escalation:'None',startedAt:'Today 10:35 AM',manualHours:2.4,agentEstimateHours:.3,exceptions:[{type:'Timesheet discrepancy',ownerRole:'HR',status:'Open',suggestedResolution:'Reconcile 22 present days with 2 approved leave days before salary calculation.'}],audit:['Payroll run initiated manually','Timesheet module visited 3 times','Attendance days entered manually']},
+  {runId:'MAN-1003',journeyId:'h2r-lifecycle',subject:'Sofia Romano',entity:'Dhi Hyperlocal',mode:'Hybrid',currentStepIdx:7,status:'Waiting Approval',slaRisk:'Low',blockedReason:'HR Manager approval required for leave-policy deviation',escalation:'None',startedAt:'Yesterday 04:20 PM',manualHours:5.1,agentEstimateHours:1.2,exceptions:[],audit:['Employee record created','Compliance profile attached','Leave policy deviation routed to HR Manager']}
+];
+function manualJourneySteps(journeyId){return manualJourneyStepCatalog[journeyId]||[];}
+const manualModulePageLabels={contracts:'Contracts',compliance:'Compliance Hub','my-tasks':'My Tasks',direct:'Direct Employee',payroll:'Payroll','all-timesheet':'All Timesheet',payments:'Payments',payheads:'Payheads','leave-policies':'Leave Policies'};
+function manualModuleLabel(pageId){return manualModulePageLabels[pageId]||getPageTitle(pageId)||pageId;}
+const manualStepOwnerContacts={'Account Manager':'Rajdeep Singh','Compliance Officer':'Kiran Iyer','Deal Manager':aiDealManager.name,'Legal / Contracts Manager':'Dev Rajan','Ops Manager':aiOpsManager.name,'HR':'Ananya Rao','Finance Approver':aiPayrollManager.name,'HR Manager':aiHrManager.name,'Entity Admin':'Entity Admin'};
+function manualStepOwnerName(ownerRole){return manualStepOwnerContacts[ownerRole]||ownerRole||'the responsible owner';}
+function getManualRun(runId){return manualJourneyRuns.find(function(r){return r.runId===runId;});}
+function isJourneyAgentEnabled(journeyId){return !!journeyAgentEnabled[journeyId];}
+function isStepAgentEnabled(journeyId,idx){
+  const step=manualJourneySteps(journeyId)[idx];
+  if(!step||step.approvalRequired)return false;
+  const overrides=journeyStepAgentEnabled[journeyId]||{};
+  if(Object.prototype.hasOwnProperty.call(overrides,idx))return !!overrides[idx];
+  return isJourneyAgentEnabled(journeyId)&&!!step.agentCapable;
+}
+function journeyModeLabel(journeyId){
+  const steps=manualJourneySteps(journeyId);
+  const capable=steps.map(function(s,i){return {step:s,idx:i};}).filter(function(x){return x.step.agentCapable&&!x.step.approvalRequired;});
+  if(!capable.length)return 'Manual Mode';
+  const enabled=capable.filter(function(x){return isStepAgentEnabled(journeyId,x.idx);}).length;
+  if(enabled===0)return 'Manual Mode';
+  if(enabled===capable.length)return 'Agent Enabled';
+  return 'Hybrid';
+}
+function toggleJourneyAgent(journeyId){
+  journeyAgentEnabled[journeyId]=!journeyAgentEnabled[journeyId];
+  if(!journeyStepAgentEnabled[journeyId])journeyStepAgentEnabled[journeyId]={};
+  manualJourneySteps(journeyId).forEach(function(st,i){if(st.agentCapable&&!st.approvalRequired)journeyStepAgentEnabled[journeyId][i]=journeyAgentEnabled[journeyId];});
+  renderADTPage();
+}
+function toggleJourneyStepAgent(journeyId,idx){
+  const st=manualJourneySteps(journeyId)[idx];if(!st||st.approvalRequired||!st.agentCapable)return;
+  if(!journeyStepAgentEnabled[journeyId])journeyStepAgentEnabled[journeyId]={};
+  journeyStepAgentEnabled[journeyId][idx]=!isStepAgentEnabled(journeyId,idx);
+  renderADTPage();
+}
+function openJourneySimulation(journeyId){
+  selectedSimulationJourneyId=journeyId;
+  if(page!=='journey-simulation')journeySimulationBackPage=page||'cfg-context-journey';
+  page='journey-simulation';
+  renderADTPage();
+}
+function backFromJourneySimulation(){navigatePage(journeySimulationBackPage||'cfg-context-journey');}
+function startManualJourneyRun(journeyId){
+  const j=aiJourneys.find(function(x){return x.id===journeyId;})||cfgJourneys.find(function(x){return x.id===journeyId;});
+  const run={runId:'MAN-'+(manualRunSeq++),journeyId:journeyId,subject:journeyId==='payroll-creation'?'Anika Shah':journeyId==='h2r-lifecycle'?'Sofia Romano':'Rashi Singh',entity:'Dhi Hyperlocal',mode:journeyModeLabel(journeyId),currentStepIdx:0,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',manualHours:0,agentEstimateHours:0,exceptions:[],audit:['Manual run started for '+(j?j.name:journeyId)]};
+  manualJourneyRuns.unshift(run);
+  selectedManualRunId=run.runId;
+  manualJourneyBackPage=page||'ai-executive';
+  page='manual-journey-run';
+  renderADTPage();
+}
+function backFromManualJourneyRun(){navigatePage(manualJourneyBackPage||'operations-cockpit');}
+function completeManualStep(runId){
+  const run=getManualRun(runId);if(!run)return;
+  if((run.exceptions||[]).some(function(e){return e.status==='Open';})){
+    run.status='Blocked';run.slaRisk='High';
+    if(typeof showAiToast==='function')showAiToast('Resolve blocker first','This journey run has an open exception that must be cleared before the current step can be completed.');
+    renderADTPage();
+    return;
+  }
+  const steps=manualJourneySteps(run.journeyId);
+  const st=steps[run.currentStepIdx];
+  if(st)run.audit.unshift(st.name+' completed by '+st.ownerRole);
+  run.manualHours+=(st&&st.sla==='Ongoing')?0:.8;
+  if(run.currentStepIdx<steps.length-1){run.currentStepIdx++;run.status='Active';run.slaRisk=run.currentStepIdx%3===0?'Medium':'Low';}
+  else{run.status='Completed';run.slaRisk='Low';run.blockedReason='None';}
+  renderADTPage();
+}
+function raiseManualException(runId){
+  const run=getManualRun(runId);if(!run)return;
+  const st=manualJourneySteps(run.journeyId)[run.currentStepIdx]||{};
+  const ex={type:st.exceptionType||'Approval breach',ownerRole:st.ownerRole||'Entity Admin',status:'Open',suggestedResolution:'Review evidence, add correction note, and re-run the step validation.'};
+  run.exceptions.unshift(ex);
+  run.status='Blocked';run.slaRisk='High';run.blockedReason=ex.type;run.escalation='Entity Admin in 2h';run.audit.unshift('Exception raised: '+ex.type);
+  renderADTPage();
+}
+function resolveManualException(runId,idx,resolution){
+  const run=getManualRun(runId);if(!run||!run.exceptions[idx])return;
+  const title=typeof resolution==='string'?resolution:(resolution&&resolution.title)||'Manual resolution completed';
+  run.exceptions[idx].status='Resolved';
+  run.exceptions[idx].resolutionPath=title;
+  if(resolution&&typeof resolution==='object'){
+    run.exceptions[idx].resolutionNote=resolution.note||'';
+    run.exceptions[idx].evidenceChecks=resolution.evidenceChecks||0;
+    run.exceptions[idx].resolvedAt=new Date().toLocaleString();
+  }
+  run.audit.unshift('Exception resolved: '+run.exceptions[idx].type+' via '+title+((resolution&&resolution.note)?' - '+resolution.note:''));
+  if(!run.exceptions.some(function(e){return e.status==='Open';})){run.status='Active';run.blockedReason='None';run.slaRisk='Low';run.escalation='None';}
+  renderADTPage();
+}
 
 // -- Configure: Agents — one per AI-driven step across Contract Creation / Payroll Creation / H2R Lifecycle --
 const cfgAgents=[
