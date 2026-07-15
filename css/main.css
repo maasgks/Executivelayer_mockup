@@ -359,6 +359,14 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .typing-dots span{width:5px;height:5px;border-radius:50%;background:var(--gray);animation:blink 1.2s infinite}
 .typing-dots span:nth-child(2){animation-delay:.2s}
 .typing-dots span:nth-child(3){animation-delay:.4s}
+.msg-attachment-img{max-width:220px;max-height:220px;border-radius:10px;display:block;object-fit:cover}
+.msg-attachment-file{font-size:12px;font-weight:600;background:rgba(255,255,255,.15);border-radius:8px;padding:6px 10px}
+.agrun-attach-chip{display:flex;align-items:center;gap:8px;background:#f1f3f5;border:1px solid var(--border);border-radius:10px;padding:6px 10px;margin:0 auto 8px;max-width:720px;font-size:12px;color:var(--navy)}
+.agrun-attach-chip img{width:28px;height:28px;object-fit:cover;border-radius:6px;flex-shrink:0}
+.agrun-attach-file-ic{font-size:14px}
+.agrun-attach-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agrun-attach-remove{background:none;border:none;color:var(--gray);font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
+.agrun-attach-remove:hover{color:var(--navy)}
 /* AGENT EMPTY */
 #v-agent-empty{position:relative}
 #am-webgl-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
@@ -494,6 +502,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ea-req-label{font-size:13px;font-weight:600}
 .ea-req-time{font-size:11px;color:var(--gray);margin-top:2px}
 .ea-req-empty{font-size:12px;color:var(--gray);padding:8px 0}
+.req-avatar{margin-top:1px}
+.ea-req-requester{font-size:12px;font-weight:650;color:var(--navy)}
+.ea-req-requester .req-by-role{font-weight:500;color:var(--gray)}
 .sa-req-actions{display:flex;gap:8px;flex-shrink:0}
 .sa-req-btn{padding:5px 12px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;border:1.5px solid transparent}
 .sa-req-approve{background:#f0fdf4;color:#16a34a;border-color:#86efac}
@@ -1345,6 +1356,76 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-timeline-card-title{font-size:13px;font-weight:700;color:var(--navy)}
 .ai-timeline-card-desc{font-size:11.5px;color:var(--gray);line-height:1.5;margin-bottom:9px}
 .ai-timeline-chips{display:flex;flex-wrap:wrap;gap:6px}
+/* Agent Mode — chat-driven journey run panel */
+.agrun-wrap{padding:22px 26px;overflow-y:auto;height:100%;flex:1;min-width:0}
+.agrun-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.agrun-title{font-size:15px;font-weight:700;color:var(--navy)}
+.agrun-sub{font-size:12px;color:var(--gray);margin-top:3px}
+.agrun-body{display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap}
+.agrun-timeline-col{flex:1 1 340px;min-width:300px}
+.agrun-details-col{flex:1 1 360px;min-width:300px}
+.agrun-success-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#f0fdf4;border:1px solid #86efac;color:#16a34a;border-radius:10px;padding:12px 16px;font-size:12.5px;font-weight:600;margin-bottom:18px;animation:fadeUp .35s ease}
+.agrun-noconfig{background:#fff7ed;border:1px solid #fed7aa;color:#9a4d09;border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:600;margin-top:2px;line-height:1.5}
+.agrun-approver-assigned{display:flex;align-items:center;gap:8px;margin-top:10px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+.agrun-approver-name{font-size:12px;font-weight:700;color:var(--navy)}
+.agrun-approver-role{font-size:10.5px;color:var(--gray)}
+.agrun-progress-track{height:5px;border-radius:99px;background:#eef1f5;overflow:hidden;margin-bottom:18px}
+.agrun-progress-fill{height:100%;background:linear-gradient(90deg,var(--orange),#fbbf6b);border-radius:99px;transition:width .5s ease}
+.agrun-activity{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--navy);font-weight:600}
+.agrun-activity-dot{width:7px;height:7px;border-radius:50%;background:var(--orange);flex-shrink:0;animation:agrunPulse 1s ease-in-out infinite}
+@keyframes agrunPulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
+/* Agent evaluation comparison (setup step: "checking for the right agent") */
+.agrun-agent-eval{display:flex;flex-direction:column;gap:8px;animation:fadeUp .3s ease}
+.agrun-agent-eval-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:#fff}
+.agrun-agent-eval-row.selected{border-color:#86efac;background:#f6fdf8}
+.agrun-agent-eval-row.skipped{opacity:.65}
+.agrun-agent-eval-info{flex:1;min-width:0}
+.agrun-agent-eval-name{font-size:12px;font-weight:700;color:var(--navy)}
+.agrun-agent-eval-desc{font-size:10.5px;color:var(--gray)}
+.agrun-agent-eval-badge{font-size:10px;font-weight:700;color:#16a34a;background:#dcfce7;border:1px solid #86efac;border-radius:20px;padding:3px 9px;white-space:nowrap}
+.agrun-agent-eval-badge.muted{color:#94a3b8;background:#f1f5f9;border-color:#e2e8f0}
+/* Contract document preview */
+.agrun-doc{position:relative;background:#fff;border:1px solid var(--border);border-radius:16px;padding:26px 28px;box-shadow:0 4px 20px rgba(15,23,42,.06);overflow:hidden}
+.agrun-doc-stamp{position:absolute;top:22px;right:-34px;transform:rotate(35deg);width:150px;text-align:center;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:4px 0;border-top:1.5px solid;border-bottom:1.5px solid}
+.agrun-doc-stamp.draft{color:#94a3b8;border-color:#cbd5e1;background:#f8fafc}
+.agrun-doc-stamp.sent{color:#2563eb;border-color:#93c5fd;background:#eff6ff}
+.agrun-doc-stamp.signed{color:#16a34a;border-color:#86efac;background:#f0fdf4}
+.agrun-doc-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.agrun-doc-brand{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:var(--navy)}
+.agrun-doc-brand img{width:18px;height:18px;object-fit:contain}
+.agrun-doc-num{font-size:11px;color:var(--gray);font-weight:600}
+.agrun-doc-title{font-size:17px;font-weight:800;color:var(--navy);letter-spacing:-.2px}
+.agrun-doc-sub{font-size:12px;color:var(--gray);margin-top:2px}
+.agrun-doc-divider{height:1px;background:var(--border);margin:16px 0}
+.agrun-doc-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px}
+.agrun-doc-field label{display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.agrun-doc-field div{font-size:12.5px;font-weight:600;color:var(--navy);animation:fadeUp .3s ease}
+.agrun-doc-field.pending div{color:#cbd5e1;font-weight:500;font-style:italic}
+.agrun-doc-section{margin-top:20px;padding-top:16px;border-top:1px dashed var(--border)}
+.agrun-doc-section-title{font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px}
+.agrun-doc-sig-row{display:flex;gap:24px;flex-wrap:wrap}
+.agrun-doc-sig{flex:1;min-width:160px}
+.agrun-doc-sig span{display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.agrun-doc-sig-line{font-size:12.5px;font-weight:600;color:var(--navy);border-bottom:1.5px solid var(--border);padding-bottom:8px;font-family:cursive}
+/* Field-by-field capture: chips inside step cards + flash on the doc field being written */
+.agrun-kv-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.agrun-kv{display:inline-flex;flex-direction:column;gap:1px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:5px 9px;animation:fadeUp .25s ease}
+.agrun-kv span{font-size:9.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.3px}
+.agrun-kv b{font-size:11.5px;color:var(--navy);font-weight:600}
+.agrun-kv.just-filled{border-color:#f3cf8f;background:var(--ol)}
+.agrun-doc-field.just-filled div{animation:agrunFieldFlash 1s ease}
+@keyframes agrunFieldFlash{0%{background:#fff0d9;box-shadow:0 0 0 5px #fff0d9;border-radius:4px}100%{background:transparent;box-shadow:none}}
+.agrun-phase-label{font-size:10.5px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.7px;margin:0 0 12px 2px}
+.agrun-setup-summary{cursor:pointer;background:#f6fdf8;border-color:#bbf0cd}
+.agrun-setup-summary:hover{border-color:#86efac;box-shadow:0 2px 10px rgba(22,163,74,.08)}
+.agrun-linktext{font-size:11px;font-weight:700;color:var(--orange);white-space:nowrap}
+.agrun-linkbtn{display:block;background:none;border:none;font-family:inherit;font-size:11px;font-weight:700;color:var(--orange);cursor:pointer;padding:4px 0 0 44px}
+.agrun-linkbtn:hover{text-decoration:underline}
+.agrun-live-badge{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;color:var(--orange);background:var(--ol);border:1px solid #f3cf8f;border-radius:20px;padding:3px 10px;text-transform:none;letter-spacing:0}
+.agrun-stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.agrun-stat{display:flex;align-items:baseline;gap:7px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 14px;animation:fadeUp .35s ease}
+.agrun-stat b{font-size:17px;font-weight:800;color:var(--navy)}
+.agrun-stat span{font-size:11px;color:var(--gray);font-weight:600}
 /* Automate Journey — per-event scope rows */
 .ai-scope-table{border:1px solid var(--border);border-radius:12px;overflow:hidden}
 .ai-scope-row{display:flex;align-items:center;gap:16px;padding:14px 16px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap}

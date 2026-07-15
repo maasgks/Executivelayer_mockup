@@ -14,6 +14,8 @@ const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'}
 const aiHrManager={name:'Pallavi Parate',role:'HR Manager',initials:'PP'};
 let aiPayrollAnimatedStage=-1,aiPayrollData={};
 let aiH2rAnimatedStage=-1,aiH2rData={},aiH2rOffboardStep=-1;
+// -- Agent Mode: chat-driven journey run (typed prompt -> live journey execution in form-col) --
+let pendingAgentAttachment=null,agentUploadTargetId=null,agentRunData=null;
 const enterprisePersonas=[
   {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@dhihyperlocal.com',focus:'Deals, proposals, client acceptance, and commercial exceptions.',journeys:['contract-creation'],steps:['J1-S1','J1-S3','J1-S5'],approvals:0,owned:3,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
   {id:'deal-manager',name:'Karan Mehta',label:'Deal Manager',department:'Sales / Deal Desk',function:'Approver',initials:'KM',email:'karan.mehta@dhihyperlocal.com',focus:'Internal proposal approvals and sales escalations.',journeys:['contract-creation'],steps:['J1-S4'],approvals:1,owned:1,kpis:[['Approval Queue','2'],['SLA Breaches','0'],['Rework Loops','1'],['Team Tasks','9']]},
@@ -26,6 +28,17 @@ const enterprisePersonas=[
   {id:'finance-approver',name:'Meera Iyer',label:'Finance Approver',department:'Finance',function:'Approver',initials:'MI',email:'meera.iyer@dhihyperlocal.com',focus:'Payroll calculation approval, disbursement authorization, final settlements, and financial controls.',journeys:['payroll-creation','h2r-lifecycle'],steps:['J2-S4','J2-S6','J3-S12','Sub-J A4'],approvals:4,owned:4,kpis:[['Payroll Approvals','2'],['Disbursements','3'],['Held Amount','INR 1.8L'],['Rate Exceptions','1']]}
 ];
 function getActivePersona(){return enterprisePersonas.find(function(p){return p.id===activePersonaId;})||enterprisePersonas[0];}
+function personaByLabel(label){return enterprisePersonas.find(function(p){return p.label===label;});}
+// -- Resolve a "requestedBy" string (e.g. "HR" or "Priya Nair (Entity Admin)") into a displayable profile --
+function requesterProfile(requestedBy){
+  const persona=personaByLabel(requestedBy);
+  if(persona)return{initials:persona.initials,name:persona.name,role:persona.label};
+  const m=/^(.+?)\s*\((.+)\)$/.exec(requestedBy||'');
+  const name=m?m[1]:(requestedBy||'Unknown');
+  const role=m?m[2]:'';
+  const initials=name.split(/\s+/).filter(Boolean).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'?';
+  return{initials:initials,name:name,role:role};
+}
 function activePersonaJourneyIds(){return (getActivePersona().journeys||[]).slice();}
 function activePersonaCanAccessJourney(journeyId){
   if(portalRole!=='entity-user')return true;
@@ -447,10 +460,11 @@ function buildTopbar(id,m){
 // -- INPUT BAR BUILDER --
 function buildInput(id,ph){
   const el=document.getElementById(id);
-  el.innerHTML=`<div class="input-row">
+  const attachChip=pendingAgentAttachment?(`<div class="agrun-attach-chip">${pendingAgentAttachment.isImage?`<img src="${pendingAgentAttachment.dataUrl}" alt="">`:'<span class="agrun-attach-file-ic">&#128206;</span>'}<span class="agrun-attach-name">${pendingAgentAttachment.name}</span><button type="button" class="agrun-attach-remove" onclick="clearPendingAgentAttachment('${id}')" title="Remove attachment">&times;</button></div>`):'';
+  el.innerHTML=attachChip+`<div class="input-row">
     <div class="icon-btn" onclick="togglePlus('${id}')" style="position:relative"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       <div class="plus-dd" id="pdd-${id}">
-        <div class="plus-dd-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload File</div>
+        <div class="plus-dd-item" onclick="triggerAgentUpload('${id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload File</div>
         <div class="plus-dd-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Share Link</div>
         <div class="plus-dd-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Add URL</div>
       </div>
@@ -472,6 +486,19 @@ function togglePlus(id){const d=document.getElementById('pdd-'+id);d.classList.t
 function toggleAgent(id){const d=document.getElementById('add-'+id);d.classList.toggle('open');setTimeout(()=>document.addEventListener('click',function h(){d.classList.remove('open');document.removeEventListener('click',h);}),10);}
 function pickAgent(a,id){agent=a;document.getElementById('add-'+id).classList.remove('open');rebuildInputs();}
 function rebuildInputs(){if(view==='agent-empty')buildInput('inp-empty');if(view==='agent-active')buildInput('inp-active');}
+// -- Agent Mode: file attach (shown as a chip in the input bar, then carried into the sent chat message) --
+function triggerAgentUpload(id){agentUploadTargetId=id;const inp=document.getElementById('agent-upload-input');if(!inp)return;inp.value='';inp.click();}
+function handleAgentUpload(e){
+  const file=e.target.files&&e.target.files[0];if(!file)return;
+  const isImage=file.type.indexOf('image/')===0;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    pendingAgentAttachment={name:file.name,dataUrl:ev.target.result,isImage:isImage};
+    if(agentUploadTargetId)buildInput(agentUploadTargetId);
+  };
+  reader.readAsDataURL(file);
+}
+function clearPendingAgentAttachment(id){pendingAgentAttachment=null;buildInput(id);}
 
 // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ RENDER CHAT ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ RENDER CHAT ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -479,7 +506,10 @@ function renderChat(area,msgs){
   const el=document.getElementById(area);el.innerHTML='';
   msgs.forEach(m=>{const r=document.createElement('div');r.className='msg-row '+(m.role==='user'?'user':'');
     if(m.role==='bot')r.innerHTML=`<div class="bot-av"><svg width="12" height="12" viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div>`;
-    const b=document.createElement('div');b.className='bubble '+(m.role==='user'?'user':'bot');b.innerHTML=m.text;r.appendChild(b);
+    const b=document.createElement('div');b.className='bubble '+(m.role==='user'?'user':'bot');
+    let inner=m.attachment?(m.attachment.isImage?`<img class="msg-attachment-img" src="${m.attachment.dataUrl}" alt="${m.attachment.name}">`:`<div class="msg-attachment-file">&#128206; ${m.attachment.name}</div>`):'';
+    inner+=m.text?`<div${m.attachment?' style="margin-top:6px"':''}>${m.text}</div>`:'';
+    b.innerHTML=inner;r.appendChild(b);
     if(m.role==='user')r.innerHTML+=`<div class="user-av">PP</div>`;
     el.appendChild(r);
   });el.scrollTop=el.scrollHeight;
@@ -536,7 +566,7 @@ function toggleSidebar(scope){
 }
 
 function openAgent(){hideAgentWorkspaceButton();showView('agent-empty');mode='agent';buildTopbar('agent-topbar-empty','agent');buildInput('inp-empty');buildQuickActions();setTimeout(initAmThreeJS,80);}
-function closeAgent(){stopAmThreeJS();hideAgentWorkspaceButton();showView('adt');renderADTPage();}
+function closeAgent(){stopAmThreeJS();hideAgentWorkspaceButton();agentRunData=null;pendingAgentAttachment=null;showView('adt');renderADTPage();}
 
 // -- ROLE ACCESS GUARD --
 const pageRoleMap={
@@ -694,16 +724,22 @@ function agentReply(t){
   return 'I can help you with contracts, payroll, compliance, and more. Try <b>create contract in Netherlands</b>, or ask me about any data on this page like <i>"How many contracts are active?"</i>';}
 
 function sendMsg(id){
-  const inp=document.querySelector('#'+id+' .input-field');const t=inp.value.trim();if(!t)return;inp.value='';
+  const inp=document.querySelector('#'+id+' .input-field');const t=inp.value.trim();
+  if(!t&&!pendingAgentAttachment)return;
+  inp.value='';
   if(view==='agent-empty'||view==='agent-active'){
-    const startsContract=isNetherlandsContractRequest(t);
-    agentMsgs.push({role:'user',text:t});
-    if(view==='agent-empty'){stopAmThreeJS();showView('agent-active');buildTopbar('agent-topbar-active','agent');buildSidebar('agent-sb',agentSidebarCollapsed,page);buildInput('inp-active');if(formStep<0)showWorkspaceEmpty();}
-    else if(formStep<0){showWorkspaceEmpty();}
+    const contractReq=parseAgentContractPrompt(t);
+    const attachment=pendingAgentAttachment;pendingAgentAttachment=null;
+    const startsContract=!contractReq&&isNetherlandsContractRequest(t);
+    const userMsg={role:'user',text:t};if(attachment)userMsg.attachment=attachment;
+    agentMsgs.push(userMsg);
+    if(view==='agent-empty'){stopAmThreeJS();showView('agent-active');buildTopbar('agent-topbar-active','agent');buildSidebar('agent-sb',agentSidebarCollapsed,page);buildInput('inp-active');if(formStep<0&&!agentRunData)showWorkspaceEmpty();}
+    else{buildInput(id);if(formStep<0&&!agentRunData)showWorkspaceEmpty();}
     renderChat('agent-chat',agentMsgs);showTyping('agent-chat');
     setTimeout(()=>{hideTyping();
-      if(startsContract){agentMsgs.push({role:'bot',text:"Great! I'll open the Netherlands contract workspace now."});startNetherlandsContract();}
-      else{var reply=agentReply(t);if(reply){agentMsgs.push({role:'bot',text:reply});if(formStep<0)showWorkspaceEmpty();}}
+      if(contractReq){agentRunStart(contractReq.name,contractReq.country,attachment);}
+      else if(startsContract){agentMsgs.push({role:'bot',text:"Great! I'll open the Netherlands contract workspace now."});startNetherlandsContract();}
+      else{var reply=agentReply(t);if(reply){agentMsgs.push({role:'bot',text:reply});if(formStep<0&&!agentRunData)showWorkspaceEmpty();}}
       renderChat('agent-chat',agentMsgs);
     },1000);
   }
@@ -1372,8 +1408,24 @@ const manualJourneyRuns=[
 function manualJourneySteps(journeyId){return manualJourneyStepCatalog[journeyId]||[];}
 const manualModulePageLabels={contracts:'Contracts',compliance:'Compliance Hub','my-tasks':'My Tasks',direct:'Direct Employee',payroll:'Payroll','all-timesheet':'All Timesheet',payments:'Payments',payheads:'Payheads','leave-policies':'Leave Policies'};
 function manualModuleLabel(pageId){return manualModulePageLabels[pageId]||getPageTitle(pageId)||pageId;}
-const manualStepOwnerContacts={'Account Manager':'Rajdeep Singh','Compliance Officer':'Kiran Iyer','Deal Manager':aiDealManager.name,'Legal / Contracts Manager':'Dev Rajan','Ops Manager':aiOpsManager.name,'HR':'Ananya Rao','Finance Approver':aiPayrollManager.name,'HR Manager':aiHrManager.name,'Entity Admin':'Entity Admin'};
-function manualStepOwnerName(ownerRole){return manualStepOwnerContacts[ownerRole]||ownerRole||'the responsible owner';}
+function manualStepOwnerDeptId(ownerRole){
+  const role=ownerRole||'';
+  if(/HR/i.test(role))return 'hr';
+  if(/Compliance/i.test(role))return 'compliance';
+  if(/Finance/i.test(role))return 'finance';
+  if(/Ops/i.test(role))return 'operations';
+  if(/Legal|Contract/i.test(role))return 'legal';
+  if(/Account|Deal/i.test(role))return 'sales';
+  return 'admin';
+}
+function manualStepOwnerName(ownerRole){
+  if(!ownerRole)return 'the responsible owner';
+  const dept=cockpitDepartmentDirectory.find(function(d){return d.id===manualStepOwnerDeptId(ownerRole);});
+  if(!dept)return ownerRole;
+  const people=[dept.admin].concat(dept.managers||[],dept.associates||[]);
+  const exact=people.find(function(p){return p.title===ownerRole;});
+  return (exact||dept.admin).name;
+}
 function getManualRun(runId){return manualJourneyRuns.find(function(r){return r.runId===runId;});}
 function isJourneyAgentEnabled(journeyId){return !!journeyAgentEnabled[journeyId];}
 function isStepAgentEnabled(journeyId,idx){

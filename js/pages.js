@@ -1907,7 +1907,7 @@ function buildContractsListingHTML(){
   const types=[...new Set(contractsData.map(c=>c.type))];
   const dotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const filteredContracts=ctQuickStatusFilter?contractsData.filter(c=>c.status===ctQuickStatusFilter):contractsData;
-  const rows=filteredContracts.map(c=>{
+  const rows=filteredContracts.map((c,ctIdx)=>{
     const flowIdx=ctFlow.indexOf(c.status);
     const menuItems=ctFlow.map((step,i)=>{
       const isDone=flowIdx>i;
@@ -1925,7 +1925,7 @@ function buildContractsListingHTML(){
       +'<div class="ct-action-menu" id="ctm-'+c.id+'">'+menuItems+'</div>'
       +'</div>';
     return '<tr class="ct-row'+(ctSelectedId===c.id?' lp-row-selected':'')+'" id="ct-row-'+c.id+'" style="cursor:pointer" onclick="openCtSidebar('+c.id+')">'
-      +'<td style="color:#6b7280;font-size:13px">'+c.id+'</td>'
+      +'<td style="color:#6b7280;font-size:13px">'+(ctIdx+1)+'</td>'
       +'<td style="font-weight:600;color:var(--navy)">'+c.contractId+'</td>'
       +'<td><div style="font-weight:600;color:var(--navy)">'+c.empName+'</div><div style="font-size:11px;color:#9ca3af">'+c.empDesig+'</div></td>'
       +'<td>'+c.country+'</td>'
@@ -4059,13 +4059,7 @@ function buildOperationsCockpitHTML(){
     const steps=manualJourneySteps(r.journeyId);
     const st=steps[r.currentStepIdx]||{};
     const owner=st.ownerRole||r.ownerRole||'Entity Admin';
-    if(/HR/i.test(owner))return 'HR';
-    if(/Compliance/i.test(owner))return 'Compliance';
-    if(/Finance/i.test(owner))return 'Finance';
-    if(/Ops/i.test(owner))return 'Operations';
-    if(/Legal|Contract/i.test(owner))return 'Legal';
-    if(/Account|Deal/i.test(owner))return 'Sales';
-    return 'Admin';
+    return cockpitDeptById(manualStepOwnerDeptId(owner)).name;
   };
   const departments=activeRuns.reduce(function(list,r){
     const d=runOwnerDepartment(r);
@@ -4176,7 +4170,7 @@ function buildCockpitRunSidebarHTML(r){
   const slaClass=r.slaRisk==='High'?'inactive':r.slaRisk==='Medium'?'unapproved':'active';
   const blockerText=c.openExceptions.length?c.openExceptions[0].type:(r.blockedReason&&r.blockedReason!=='None'?r.blockedReason:'No blocker');
   const progressBar='<div class="cockpit-progress"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+((r.escalation&&r.escalation!=='None')?r.escalation:'No escalation')+'</span></div>';
-  const fieldsData=[['Journey',(c.j&&c.j.name)||r.journeyId],['Subject',r.subject||'—'],['Current step',c.st.name||'Current step'],['Owner',owner],['Mode',r.mode],['Status',r.status]];
+  const fieldsData=[['Journey',(c.j&&c.j.name)||r.journeyId],['Employee',r.subject||'—'],['Current step',c.st.name||'Current step'],['Owner',owner],['Mode',r.mode],['Status',r.status]];
   if(c.isBlockedRun)fieldsData.push(['Blocker',blockerText],['Escalation',(r.escalation&&r.escalation!=='None')?r.escalation:'None']);
   const fields=fieldsData.map(function(item){return '<div class="cockpit-sb-field"><span class="cockpit-sb-flabel">'+item[0]+'</span><span class="cockpit-sb-fval">'+item[1]+'</span></div>';}).join('');
   const exIdx=r.exceptions?r.exceptions.findIndex(function(e){return e.status==='Open';}):-1;
@@ -6446,6 +6440,438 @@ function buildAIRunCompletionPanelHTML(flow,j){
     +'</div></div>';
 }
 
+// -- AGENT MODE: chat-driven journey run — typed prompt ("create a contract for X for Y") plays out the
+// Contract Creation journey (aiJourneyEvents['contract-creation']) live in the form-col, narrated in the chat. --
+function parseAgentContractPrompt(text){
+  const m=/create\s+(?:a\s+)?contract\s+for\s+([a-z][a-z .'-]*?)\s+(?:for|in)\s+([a-z][a-z .'-]+?)[.?!]*$/i.exec(String(text||'').trim());
+  if(!m)return null;
+  const name=m[1].trim().split(/\s+/).map(function(w){return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();}).join(' ');
+  const countryAliases={usa:'United States',us:'United States','united states':'United States','united states of america':'United States',uk:'United Kingdom','united kingdom':'United Kingdom',uae:'UAE'};
+  const rawCountry=m[2].trim();
+  const country=countryAliases[rawCountry.toLowerCase()]||rawCountry.split(/\s+/).map(function(w){return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();}).join(' ');
+  return {name:name,country:country};
+}
+const AGENT_RUN_SETUP_ACTIVITIES={
+  init:['Spinning up the Contractor Agent workspace&hellip;','Loading journey definitions&hellip;'],
+  lookup:['Querying the Employee Directory&hellip;','Cross-referencing Keka HRMS &amp; SAP S/4HANA&hellip;'],
+  found:['Matching employee profile&hellip;','Verifying identity confidence score&hellip;'],
+  doc:['Reading the uploaded file&hellip;','Extracting structured fields&hellip;'],
+  fetch:['Calling the Compliance Hub API&hellip;','Mapping statutory requirements for the country&hellip;'],
+  agent:['Scoring available agents against this journey&hellip;','Comparing Contractor Agent vs Payroll Agent&hellip;']
+};
+const AGENT_RUN_JOURNEY_ACTIVITIES={
+  0:['Creating the deal record&hellip;','Generating an Employee ID&hellip;'],
+  1:['Drafting commercial terms&hellip;','Running the compliance checklist&hellip;'],
+  3:['Generating the contract document&hellip;','Pushing to Docuseal for signature&hellip;'],
+  5:['Running the onboarding checklist&hellip;','Provisioning system access&hellip;'],
+  6:['Validating bank &amp; tax details&hellip;','Mapping compensation to payroll structure&hellip;']
+};
+function agentRunBuildSetupSteps(name,attachment){
+  const steps=[
+    {key:'init',label:'Setting up the agent'},
+    {key:'lookup',label:'Checking for '+name+' in your system'},
+    {key:'found',label:'Found the employee in Keka'}
+  ];
+  if(attachment)steps.push({key:'doc',label:'Checking the document you shared'});
+  steps.push({key:'fetch',label:'Fetching the details'});
+  steps.push({key:'agent',label:'Checking for the right agent for this role'});
+  return steps;
+}
+function agentRunStart(name,country,attachment){
+  const journeySteps=aiJourneyEvents['contract-creation']||[];
+  const setupSteps=agentRunBuildSetupSteps(name,attachment);
+  agentRunData={
+    name:name,country:country,attachment:attachment,
+    empId:'EMP-'+(4000+Math.floor(Math.random()*5999)),
+    contractId:'CTR-'+(100000+Math.floor(Math.random()*899999)),
+    setupSteps:setupSteps,setupIdx:0,setupState:setupSteps.map(function(){return 'pending';}),
+    journeySteps:journeySteps,journeyIdx:0,journeyState:journeySteps.map(function(){return 'pending';}),
+    fieldGroups:[],approvals:{},phase:'setup',selectedAgentLabel:null,activity:null,createdContractRowId:null,
+    lastFilled:null,setupExpanded:false
+  };
+  const chatCol=document.getElementById('agent-chat-col');if(chatCol)chatCol.style.flex='0 0 380px';
+  const col=document.getElementById('form-col');if(col)col.style.display='flex';
+  renderAgentRunPanel();
+  setTimeout(agentRunSetupStep,500);
+}
+// -- Ticks through a short list of "what I'm doing right now" phrases before a step resolves, so progress reads
+// as granular work rather than one flat spinner. Re-renders the panel on every tick. --
+function agentRunTickActivities(d,activities,onDone){
+  if(!activities||!activities.length){onDone();return;}
+  let i=0;
+  const tick=function(){
+    if(agentRunData!==d)return;
+    d.activity=activities[i];
+    renderAgentRunPanel();
+    i++;
+    if(i<activities.length){setTimeout(tick,750);}
+    else{setTimeout(function(){if(agentRunData!==d)return;d.activity=null;onDone();},750);}
+  };
+  tick();
+}
+// -- Reveals a step's captured fields one at a time (~400ms apart). Each tick names the field being written in
+// the activity line and flashes it in the contract preview, so the document visibly fills in field by field. --
+function agentRunRevealFields(d,title,fields,onDone){
+  const keys=Object.keys(fields);
+  const group={title:title,fields:{}};
+  d.fieldGroups.push(group);
+  let i=0;
+  const tick=function(){
+    if(agentRunData!==d)return;
+    if(i>=keys.length){d.lastFilled=null;d.activity=null;renderAgentRunPanel();onDone();return;}
+    const k=keys[i];
+    group.fields[k]=fields[k];
+    d.lastFilled=k;
+    d.activity='Capturing <b>'+k+'</b>&hellip;';
+    renderAgentRunPanel();
+    i++;
+    setTimeout(tick,420);
+  };
+  tick();
+}
+function agentRunToggleSetup(){
+  const d=agentRunData;if(!d)return;
+  d.setupExpanded=!d.setupExpanded;
+  renderAgentRunPanel();
+}
+function agentRunSetupStep(){
+  const d=agentRunData;if(!d)return;
+  if(d.setupIdx>=d.setupSteps.length){d.phase='journey';d.activity=null;renderAgentRunPanel();setTimeout(agentRunJourneyStep,500);return;}
+  const step=d.setupSteps[d.setupIdx];
+  d.setupState[d.setupIdx]='active';
+  renderAgentRunPanel();
+  showTyping('agent-chat');
+  agentRunTickActivities(d,AGENT_RUN_SETUP_ACTIVITIES[step.key],function(){
+    hideTyping();
+    d.setupState[d.setupIdx]='done';
+    let meta='',chatText=step.label+'.';
+    if(step.key==='init')meta='Contractor Agent workspace ready.';
+    else if(step.key==='lookup')meta='Searched Employee Directory, Keka HRMS and SAP S/4HANA.';
+    else if(step.key==='found'){meta=d.name+' &middot; ID '+d.empId+' &middot; match confidence 98%';chatText='Found the employee in <b>Keka</b> &mdash; '+d.name+' (ID '+d.empId+').';}
+    else if(step.key==='doc')meta='&ldquo;'+(d.attachment?d.attachment.name:'document')+'&rdquo; parsed &middot; 4 fields extracted.';
+    else if(step.key==='fetch')meta='Compliance requirements for '+d.country+' retrieved from Compliance Hub.';
+    else if(step.key==='agent'){d.selectedAgentLabel='Contractor Agent';meta='agent-eval';chatText='Checked available agents and picked the <b>Contractor Agent</b> for this job.';}
+    step.meta=meta;
+    agentMsgs.push({role:'bot',text:chatText});
+    renderChat('agent-chat',agentMsgs);
+    renderAgentRunPanel();
+    d.setupIdx++;
+    setTimeout(agentRunSetupStep,500);
+  });
+}
+function agentRunMockFields(d,idx){
+  const email=d.name.toLowerCase().replace(/[^a-z ]/g,'').trim().replace(/\s+/g,'.')+'@dhihyperlocal-mock.com';
+  const table={
+    0:{'Employee Name':d.name,'Employee ID':d.empId,'Country':d.country,'Client':'Dhi Hyperlocal','Contract Type':d.country==='India'?'PEO':'EOR'},
+    1:{'Billing Rate':'$9,500 / mo','Pay Rate':'$7,600 / mo','Margin %':'20%','Compliance Checklist':'6 / 6 verified'},
+    3:{'Contract Number':d.contractId,'Signatory Email':email,'Docuseal Status':'Sent &mdash; awaiting signature'},
+    5:{'Onboarding Checklist':'5 / 5 complete','Document Status':'Verified','Compliance Status':'Cleared'},
+    6:{'Bank Details':'On file (&bull;&bull;&bull;&bull;4821)','Compensation Mapping':'Mapped to '+d.country+' payroll structure','Tax Info':'Complete'}
+  };
+  return table[idx]||{};
+}
+function agentRunNarration(ev){
+  const map={
+    'Deal Created (Employee Created)':'Deal and employee record created.',
+    'Proposal Sent':'Commercial proposal drafted and compliance checklist completed.',
+    'Contract Sent':'Contract generated and sent for signature via Docuseal.',
+    'Onboarding':'Onboarding checklist completed &mdash; documents and access provisioned.',
+    'Ready for Payroll':'All payroll-required fields validated. Ready for the next payroll cycle.'
+  };
+  return '<b>'+ev.name+'</b> &mdash; '+(map[ev.name]||'completed.');
+}
+function agentRunJourneyStep(){
+  const d=agentRunData;if(!d)return;
+  if(d.journeyIdx>=d.journeySteps.length){agentRunFinish();return;}
+  const ev=d.journeySteps[d.journeyIdx];
+  const isApproval=(ev.chips||[]).indexOf('Human Required')>=0;
+  d.journeyState[d.journeyIdx]='active';
+  renderAgentRunPanel();
+  if(isApproval){
+    agentMsgs.push({role:'bot',text:'&#9208; This step needs approval before I can continue &mdash; <b>'+ev.name+'</b>. Here\'s everything gathered so far.'});
+    renderChat('agent-chat',agentMsgs);
+    return;
+  }
+  showTyping('agent-chat');
+  const idx=d.journeyIdx;
+  agentRunTickActivities(d,AGENT_RUN_JOURNEY_ACTIVITIES[idx],function(){
+    agentRunRevealFields(d,ev.name,agentRunMockFields(d,idx),function(){
+      hideTyping();
+      d.journeyState[idx]='done';
+      agentMsgs.push({role:'bot',text:agentRunNarration(ev)});
+      renderChat('agent-chat',agentMsgs);
+      renderAgentRunPanel();
+      d.journeyIdx++;
+      setTimeout(agentRunJourneyStep,600);
+    });
+  });
+}
+function agentRunAssignApprover(selectEl){
+  const d=agentRunData;if(!d||!selectEl||!selectEl.value)return;
+  d.approvals[d.journeyIdx]={personaId:selectEl.value,status:'assigned'};
+  renderAgentRunPanel();
+}
+function agentRunSimulateApproval(){
+  const d=agentRunData;if(!d)return;
+  const idx=d.journeyIdx;const appr=d.approvals[idx];if(!appr)return;
+  const persona=enterprisePersonas.find(function(p){return p.id===appr.personaId;});
+  const ev=d.journeySteps[idx];
+  appr.status='approved';
+  agentMsgs.push({role:'bot',text:'&#9989; <b>'+(persona?persona.name:'Approver')+'</b> approved &ldquo;'+ev.name+'&rdquo;. Continuing the journey&hellip;'});
+  renderChat('agent-chat',agentMsgs);
+  agentRunRevealFields(d,ev.name,{'Approver Name':persona?persona.name:'Approver','Approval Timestamp':'Just now'},function(){
+    d.journeyState[idx]='done';
+    d.journeyIdx++;
+    renderAgentRunPanel();
+    setTimeout(agentRunJourneyStep,600);
+  });
+}
+function agentRunFlatFields(d){
+  const out={};
+  d.fieldGroups.forEach(function(g){Object.assign(out,g.fields);});
+  return out;
+}
+function agentRunNowString(){
+  const now=new Date();
+  const pad=function(n){return n<10?'0'+n:''+n;};
+  return now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+}
+function agentRunBuildContractRow(d){
+  const f=agentRunFlatFields(d);
+  const maxId=contractsData.reduce(function(m,c){return Math.max(m,c.id);},0);
+  return {
+    id:maxId+1,
+    contractId:(f['Contract Number']||d.contractId).replace(/^CTR-/,''),
+    empName:d.name,empDesig:'Contractor',
+    country:d.country,type:f['Contract Type']||'EOR',
+    date:agentRunNowString(),status:'Ready for Payroll',
+    nationality:d.country,countryOfOp:d.country,workPermit:true,gender:'—',
+    email:f['Signatory Email']||'',contact:'—',dob:'—',
+    jobTitle:'Contractor',skill:'—',empDuration:'—',empType:f['Contract Type']||'EOR',
+    workSchedule:'40',payAmount:(f['Pay Rate']||'').replace(/[^0-9.]/g,'')||'0',currency:'USD',
+    jobDesc:'Created via Agent Mode',payFrequency:'Monthly',
+    commercial:{adtFee:'0',annualGross:'0',baseGross:'0',holidayBonus:'0',month13:'0',monthlyGrossNet:'0',monthlyInvoice:'0',monthlySalary12:'0',monthlySalary1392:'0',netPay:'0',socialPremAmt:'0',socialPremPct:'0',totalMonthlyGross:'0'},
+    complianceItems:[{item:'Contract Creation Journey',note:'Completed via Agent Mode',status:'Approved',doc:null}]
+  };
+}
+function agentRunFinish(){
+  const d=agentRunData;if(!d)return;
+  d.phase='done';
+  const row=agentRunBuildContractRow(d);
+  contractsData.unshift(row);
+  d.createdContractRowId=row.id;
+  agentMsgs.push({role:'bot',text:'&#127881; Contract created successfully for <b>'+d.name+'</b> ('+d.country+'). Contract ID: <b>'+row.contractId+'</b>. It\'s now live at the top of your Contracts list.'});
+  renderChat('agent-chat',agentMsgs);
+  renderAgentRunPanel();
+}
+function agentRunGoToContracts(){
+  closeAgent();
+  navigatePage('contracts');
+}
+function agentRunAwaitingApproval(d){
+  const idx=d.journeyIdx;
+  return d.phase==='journey'&&d.journeySteps[idx]&&(d.journeySteps[idx].chips||[]).indexOf('Human Required')>=0&&d.journeyState[idx]!=='done';
+}
+function agentRunActivityHTML(d){
+  return '<div class="agrun-activity"><span class="agrun-activity-dot"></span>'+(d.activity||'Working&hellip;')+'</div>';
+}
+function agentRunAgentEvalHTML(){
+  return '<div class="agrun-agent-eval">'
+    +'<div class="agrun-agent-eval-row selected">'
+    +'<span class="user-avatar-sm" style="width:26px;height:26px;font-size:9px;flex-shrink:0">CA</span>'
+    +'<div class="agrun-agent-eval-info"><div class="agrun-agent-eval-name">Contractor Agent</div><div class="agrun-agent-eval-desc">Contracts, onboarding &amp; compliance</div></div>'
+    +'<span class="agrun-agent-eval-badge">&#10003; Best match</span>'
+    +'</div>'
+    +'<div class="agrun-agent-eval-row skipped">'
+    +'<span class="user-avatar-sm" style="width:26px;height:26px;font-size:9px;flex-shrink:0;background:#eef1f5;color:#94a3b8">PA</span>'
+    +'<div class="agrun-agent-eval-info"><div class="agrun-agent-eval-name">Payroll Agent</div><div class="agrun-agent-eval-desc">Salary, deductions &amp; payslips</div></div>'
+    +'<span class="agrun-agent-eval-badge muted">Not needed here</span>'
+    +'</div>'
+    +'</div>';
+}
+function agentRunSetupRowHTML(d,step,state){
+  const dotCls=state==='done'?'run-done':(state==='active'?'run-current':'run-pending');
+  const dotContent=state==='done'?'&#10003;':(state==='active'?'<span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>':'&middot;');
+  let body;
+  if(state==='done'){
+    body=step.key==='agent'?agentRunAgentEvalHTML():('<div class="ai-timeline-card-desc">'+(step.meta||'Completed')+'</div>');
+  }else if(state==='active'){
+    body=agentRunActivityHTML(d);
+  }else{
+    body='<div class="ai-timeline-card-desc" style="color:#cbd5e1">Waiting&hellip;</div>';
+  }
+  return '<div class="ai-timeline-item"'+(state==='active'?' id="agrun-active"':'')+'>'
+    +'<div class="ai-timeline-dot '+dotCls+'">'+dotContent+'</div>'
+    +'<div class="ai-timeline-card" style="cursor:default">'
+    +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+step.label+'</span></div>'
+    +body
+    +'</div></div>';
+}
+// -- Collapsed one-line summary of the preparation phase once the journey itself is running, so the
+// journey steps get the visual focus. Click to expand the full preparation trail. --
+function agentRunSetupBlockHTML(d){
+  const rows=d.setupSteps.map(function(s,i){return agentRunSetupRowHTML(d,s,d.setupState[i]);}).join('');
+  if(d.phase==='setup')return rows;
+  if(d.setupExpanded){
+    return rows
+      +'<button class="agrun-linkbtn" onclick="agentRunToggleSetup()">Hide preparation steps &#9650;</button>';
+  }
+  return '<div class="ai-timeline-item">'
+    +'<div class="ai-timeline-dot run-done">&#10003;</div>'
+    +'<div class="ai-timeline-card agrun-setup-summary" onclick="agentRunToggleSetup()">'
+    +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">Preparation complete</span><span class="agrun-linktext">Show '+d.setupSteps.length+' steps &#9660;</span></div>'
+    +'<div class="ai-timeline-card-desc">'+d.name+' matched in Keka &middot; compliance for '+d.country+' fetched &middot; Contractor Agent selected</div>'
+    +'</div></div>';
+}
+// -- Compact key-value chips of what a step has captured so far; rendered inside the step card as fields land. --
+function agentRunKvRowHTML(d,group){
+  const keys=Object.keys(group.fields);
+  if(!keys.length)return '';
+  return '<div class="agrun-kv-row">'+keys.map(function(k){
+    return '<div class="agrun-kv'+(d.lastFilled===k?' just-filled':'')+'"><span>'+k+'</span><b>'+group.fields[k]+'</b></div>';
+  }).join('')+'</div>';
+}
+function agentRunApprovalWidgetHTML(d,ev,i){
+  const appr=d.approvals[i];
+  const candidates=enterprisePersonas.filter(function(p){return (p.function||'').indexOf('Approver')>=0;});
+  if(appr){
+    const persona=enterprisePersonas.find(function(p){return p.id===appr.personaId;});
+    return '<div class="ai-timeline-card-desc">'+ev.desc+'</div>'
+      +'<div class="agrun-approver-assigned">'
+      +'<span class="user-avatar-sm" style="width:26px;height:26px;font-size:10px">'+(persona?persona.initials:'?')+'</span>'
+      +'<div><div class="agrun-approver-name">'+(persona?persona.name:'Approver')+'</div><div class="agrun-approver-role">'+(persona?persona.label:'')+'</div></div>'
+      +'</div>'
+      +'<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="agentRunSimulateApproval()">Simulate approval as '+(persona?persona.name.split(' ')[0]:'approver')+'</button>';
+  }
+  const options='<option value="">Select an approver&hellip;</option>'+candidates.map(function(p){return '<option value="'+p.id+'">'+p.name+' &middot; '+p.label+'</option>';}).join('');
+  return '<div class="ai-timeline-card-desc">'+ev.desc+'</div>'
+    +'<div class="agrun-noconfig">&#9888; No approver is configured for this step yet.</div>'
+    +'<select class="form-input" id="agrun-approver-select-'+i+'" style="margin:8px 0">'+options+'</select>'
+    +'<button class="btn btn-secondary btn-sm" onclick="agentRunAssignApprover(document.getElementById(\'agrun-approver-select-'+i+'\'))">Assign approver &amp; continue</button>';
+}
+function agentRunJourneyRowHTML(d,ev,i){
+  const state=d.journeyState[i];
+  const isApproval=(ev.chips||[]).indexOf('Human Required')>=0;
+  const appr=d.approvals[i];
+  const dotCls=state==='done'?'run-done':(state==='active'?'run-current':'run-pending');
+  const dotContent=state==='done'?'&#10003;':(i+1);
+  const group=d.fieldGroups.find(function(g){return g.title===ev.name;});
+  const kv=group?agentRunKvRowHTML(d,group):'';
+  let body;
+  if(state==='done'){
+    body=kv+'<div class="ai-timeline-chips" style="margin-top:'+(kv?'10':'0')+'px">'+aiChipsCompact(ev.chips)+aiAgentBadgeHTML(ev.source)+'</div>';
+  }else if(state==='active'){
+    // Approval widget until approved; once approved (fields still revealing), show the live capture instead.
+    body=(isApproval&&!(appr&&appr.status==='approved'))
+      ?agentRunApprovalWidgetHTML(d,ev,i)
+      :(agentRunActivityHTML(d)+kv);
+  }else{
+    body='<div class="ai-timeline-card-desc" style="color:#cbd5e1">Waiting&hellip;</div>';
+  }
+  return '<div class="ai-timeline-item"'+(state==='active'?' id="agrun-active"':'')+'>'
+    +'<div class="ai-timeline-dot '+dotCls+'">'+dotContent+'</div>'
+    +'<div class="ai-timeline-card" style="cursor:default">'
+    +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+ev.name+'</span></div>'
+    +body
+    +'</div></div>';
+}
+// -- Contract document preview: a real-looking template that fills in live as journey steps complete. --
+function agentRunDocFieldHTML(fields,label,key){
+  const v=fields[key];
+  const flash=agentRunData&&agentRunData.lastFilled===key?' just-filled':'';
+  return '<div class="agrun-doc-field'+(v===undefined?' pending':flash)+'"><label>'+label+'</label><div>'+(v!==undefined?v:'&mdash;')+'</div></div>';
+}
+function buildAgentRunDocHTML(d){
+  const f=agentRunFlatFields(d);
+  const contractSentDone=d.journeyState[3]==='done';
+  const contractApprovedDone=d.journeyState[4]==='done';
+  const stamp=contractApprovedDone?{cls:'signed',label:'Signed'}:contractSentDone?{cls:'sent',label:'Sent for Signature'}:{cls:'draft',label:'Draft'};
+  const empLine=contractApprovedDone?(d.name+' &middot; signed'):(contractSentDone?'Sent &mdash; awaiting signature':'Pending');
+  return '<div class="agrun-doc">'
+    +'<div class="agrun-doc-stamp '+stamp.cls+'">'+stamp.label+'</div>'
+    +'<div class="agrun-doc-head"><div class="agrun-doc-brand"><img src="assets/Opendhilogo.png" alt="" onerror="this.style.display=\'none\'"><span>OpenDhi</span></div><div class="agrun-doc-num">'+(f['Contract Number']||d.contractId)+'</div></div>'
+    +'<div class="agrun-doc-title">Employment Contract</div>'
+    +'<div class="agrun-doc-sub">'+d.name+' &middot; '+d.country+'</div>'
+    +'<div class="agrun-doc-divider"></div>'
+    +'<div class="agrun-doc-grid">'
+    +agentRunDocFieldHTML(f,'Employee','Employee Name')
+    +agentRunDocFieldHTML(f,'Employee ID','Employee ID')
+    +agentRunDocFieldHTML(f,'Country','Country')
+    +agentRunDocFieldHTML(f,'Contract Type','Contract Type')
+    +agentRunDocFieldHTML(f,'Client','Client')
+    +agentRunDocFieldHTML(f,'Signatory Email','Signatory Email')
+    +'</div>'
+    +'<div class="agrun-doc-section"><div class="agrun-doc-section-title">Compensation</div><div class="agrun-doc-grid">'
+    +agentRunDocFieldHTML(f,'Billing Rate','Billing Rate')
+    +agentRunDocFieldHTML(f,'Pay Rate','Pay Rate')
+    +'</div></div>'
+    +'<div class="agrun-doc-section"><div class="agrun-doc-section-title">Signatures</div><div class="agrun-doc-sig-row">'
+    +'<div class="agrun-doc-sig"><span>Employer</span><div class="agrun-doc-sig-line">Dhi Hyperlocal</div></div>'
+    +'<div class="agrun-doc-sig"><span>Employee</span><div class="agrun-doc-sig-line">'+empLine+'</div></div>'
+    +'</div></div>'
+    +'</div>';
+}
+function agentRunProgressHTML(d){
+  const total=d.setupSteps.length+d.journeySteps.length;
+  const doneCount=d.setupState.filter(function(s){return s==='done';}).length+d.journeyState.filter(function(s){return s==='done';}).length;
+  const pct=Math.round(doneCount/total*100);
+  return '<div class="agrun-progress-track"><div class="agrun-progress-fill" style="width:'+pct+'%"></div></div>';
+}
+function agentRunStatsHTML(d){
+  const ai=d.journeySteps.filter(function(e){return (e.chips||[]).indexOf('AI Automated')>=0;}).length;
+  const human=d.journeySteps.length-ai;
+  const fields=Object.keys(agentRunFlatFields(d)).length;
+  return '<div class="agrun-stats">'
+    +'<div class="agrun-stat"><b>'+ai+'</b><span>steps automated</span></div>'
+    +'<div class="agrun-stat"><b>'+human+'</b><span>human approvals</span></div>'
+    +'<div class="agrun-stat"><b>'+fields+'</b><span>fields captured</span></div>'
+    +'</div>';
+}
+function buildAgentRunPanelHTML(){
+  const d=agentRunData;if(!d)return '';
+  const awaiting=agentRunAwaitingApproval(d);
+  const statusLabel=d.phase==='done'?'Completed':(awaiting?'Awaiting Approval':'In Progress');
+  const statusCls=d.phase==='done'?'approved':(awaiting?'unapproved':'pending');
+  const setupBlock=agentRunSetupBlockHTML(d);
+  const journeyRows=d.journeySteps.map(function(ev,i){return agentRunJourneyRowHTML(d,ev,i);}).join('');
+  const journeyLabel='<div class="agrun-phase-label">Journey &middot; Contract Creation</div>';
+  const cta=d.phase==='done'
+    ?'<div class="agrun-success-banner">&#127881; Contract <b>'+(agentRunFlatFields(d)['Contract Number']||d.contractId)+'</b> created successfully for <b>'+d.name+'</b> ('+d.country+').'
+      +'<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="agentRunGoToContracts()">View in Contracts <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="margin-left:4px;vertical-align:-2px"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+      +'</div>'
+      +agentRunStatsHTML(d)
+    :'';
+  const fillingBadge=d.lastFilled?'<span class="agrun-live-badge"><span class="agrun-activity-dot"></span>Filling&hellip;</span>':'';
+  return '<div class="agrun-wrap">'
+    +'<div class="agrun-header">'
+    +'<div><div class="agrun-title">Contract Creation Journey</div><div class="agrun-sub">'+d.name+' &middot; '+d.country+(d.selectedAgentLabel?' &middot; Running as <b>'+d.selectedAgentLabel+'</b>':'')+'</div></div>'
+    +'<span class="status-pill '+statusCls+'">'+statusLabel+'</span>'
+    +'</div>'
+    +agentRunProgressHTML(d)
+    +cta
+    +'<div class="agrun-body">'
+    +'<div class="agrun-timeline-col">'
+    +'<div class="agrun-phase-label">Preparation</div>'
+    +'<div class="ai-timeline" style="margin-bottom:18px">'+setupBlock+'</div>'
+    +journeyLabel
+    +'<div class="ai-timeline">'+journeyRows+'</div>'
+    +'</div>'
+    +'<div class="agrun-details-col">'
+    +'<div class="review-title" style="margin-bottom:12px;display:flex;align-items:center;gap:10px">Contract Preview'+fillingBadge+'</div>'
+    +buildAgentRunDocHTML(d)
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+function renderAgentRunPanel(){
+  const col=document.getElementById('form-col');if(!col||!agentRunData)return;
+  col.style.display='flex';
+  col.innerHTML=buildAgentRunPanelHTML();
+  // Keep the step the agent is working on in view as the timeline grows.
+  const act=document.getElementById('agrun-active');
+  if(act&&typeof act.scrollIntoView==='function')act.scrollIntoView({block:'nearest'});
+}
+
 // -- AI CONTRACT ASSISTANT (Contracts "+" flow, gated on the contract-creation journey being Active) --
 // -- Contract Creation Journey: persistent animated step bar (bound to aiJourneyEvents['contract-creation']) --
 function aiCtJourneyStage(){
@@ -7415,6 +7841,15 @@ function myTasksPendingCount(){
   if(portalRole==='entity-admin')return managerNotifyPending().length+journeyRequestsToAdminPending().length;
   return aiAllPendingRuns().length;
 }
+// -- Renders the requester's avatar, so it's clear at a glance who sent a request --
+function requesterAvatarHTML(requestedBy){
+  const p=requesterProfile(requestedBy);
+  return '<span class="user-avatar-sm req-avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0" title="'+p.name+(p.role?' · '+p.role:'')+'">'+p.initials+'</span>';
+}
+function requesterCaptionHTML(requestedBy){
+  const p=requesterProfile(requestedBy);
+  return '<div class="ea-req-requester">'+p.name+(p.role?' <span class="req-by-role">('+p.role+')</span>':'')+'</div>';
+}
 function buildEntityAdminMyTasksHTML(){
   const journeyReqs=entityRequests.filter(function(r){return r.type==='journey-request-to-admin';});
   const journeyRows=journeyReqs.map(function(r){
@@ -7422,7 +7857,7 @@ function buildEntityAdminMyTasksHTML(){
     const actions=isPending
       ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="forwardJourneyRequestToSuperAdmin(\''+r.id+'\')">Send to Super Admin</button><button class="sa-req-btn sa-req-reject" onclick="declineJourneyRequest(\''+r.id+'\')">Decline</button></div>'
       :'<span class="status-pill '+(r.status==='Forwarded'?'pending':statusClass(r.status))+'">'+r.status+'</span>';
-    return '<div class="ea-req-row" style="align-items:flex-start"><div><div class="ea-req-label">Activate &ldquo;'+r.label+'&rdquo;</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div></div>'+actions+'</div>';
+    return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">Activate &ldquo;'+r.label+'&rdquo;</div><div class="ea-req-time">'+r.timestamp+'</div></div></div>'+actions+'</div>';
   }).join('');
   const journeyBody=journeyReqs.length?journeyRows:'<div class="ea-req-empty">No journey requests right now &mdash; if your Entity User asks to unlock a journey, it\'ll show up here.</div>';
   const notes=entityRequests.filter(function(r){return r.type==='manager-notify';});
@@ -7431,7 +7866,7 @@ function buildEntityAdminMyTasksHTML(){
     const actions=isPending
       ?'<button class="sa-req-btn sa-req-approve" onclick="acknowledgeManagerNotify(\''+r.id+'\')">Mark as Reviewed</button>'
       :'<span class="status-pill approved">Reviewed</span>';
-    return '<div class="ea-req-row" style="align-items:flex-start"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div>'+(r.note?'<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5">'+r.note+'</div>':'')+'</div>'+actions+'</div>';
+    return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+'</div>'+(r.note?'<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5">'+r.note+'</div>':'')+'</div></div>'+actions+'</div>';
   }).join('');
   const noteBody=notes.length?noteRows:'<div class="ea-req-empty">No notes yet &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
   return '<div class="ai-exec-page">'
@@ -7444,7 +7879,7 @@ function buildEntityAdminMyTasksHTML(){
 function buildSuperAdminMyTasksHTML(){
   const pending=entityAccessRequestsPending();
   const rows=pending.map(function(r){
-    return '<div class="ea-req-row" style="cursor:pointer" onclick="viewAIClientFromRequest(\''+(r.clientId||'')+'\')"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+' &middot; '+r.entity+'</div></div>'
+    return '<div class="ea-req-row" style="cursor:pointer;align-items:flex-start" onclick="viewAIClientFromRequest(\''+(r.clientId||'')+'\')"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.entity+'</div></div></div>'
       +'<div class="sa-req-actions" onclick="event.stopPropagation()"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div></div>';
   }).join('');
   const body=pending.length?rows:'<div class="ea-req-empty">No pending requests right now &mdash; requests to enable a system, agent, or journey will show up here.</div>';
