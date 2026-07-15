@@ -1191,25 +1191,28 @@ const aiClientJourneys=[
 let aiClientJourneySeq=6;
 
 // -- Configure: Systems (full parity with reference config console) --
+// Category taxonomy is written in ADT's own workforce/journey vocabulary (Contracts, Compliance Hub, Payroll, Finance)
+// rather than generic SAP/ERP marketplace terms, so Systems reads as part of the H2R automation platform.
+const cfgApiCategories=['Master Data','Vendor & Contract Management','Operations & Fulfillment','Finance & Payroll Postings','Compliance & Documentation','Employee & Workforce Records','Other'];
 const cfgSystems=[
   {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
-      {name:'API_PRODUCT_SRV · Product',dir:'rw'},
-      {name:'API_BUSINESS_PARTNER · Supplier',dir:'rw'},
-      {name:'API_PURCHASEORDER_PROCESS',dir:'r'},
-      {name:'API_MATERIAL_DOCUMENT · GR',dir:'r'},
-      {name:'API_SUPPLIERINVOICE',dir:'r'}
+      {name:'API_PRODUCT_SRV · Product',dir:'rw',cat:'Master Data'},
+      {name:'API_BUSINESS_PARTNER · Supplier',dir:'rw',cat:'Master Data'},
+      {name:'API_PURCHASEORDER_PROCESS',dir:'r',cat:'Vendor & Contract Management'},
+      {name:'API_MATERIAL_DOCUMENT · GR',dir:'r',cat:'Operations & Fulfillment'},
+      {name:'API_SUPPLIERINVOICE',dir:'r',cat:'Finance & Payroll Postings'}
     ]},
   {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
-      {name:'SupplierMaster · Vendor',dir:'rw'},
-      {name:'PurchaseOrder · Read',dir:'r'},
-      {name:'GoodsReceipt · Read',dir:'r'}
+      {name:'SupplierMaster · Vendor',dir:'rw',cat:'Master Data'},
+      {name:'PurchaseOrder · Read',dir:'r',cat:'Vendor & Contract Management'},
+      {name:'GoodsReceipt · Read',dir:'r',cat:'Operations & Fulfillment'}
     ]},
   {id:'portal',name:'Vendor Portal',type:'3rd-party',method:'REST',endpoint:'https://vendors.vyoma.local/api/',auth:'OAuth 2.0',apis:12,lastTested:'2 days ago',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
-      {name:'VendorInvite · Onboarding',dir:'rw'},
-      {name:'VendorDocuments · Read',dir:'r'}
+      {name:'VendorInvite · Onboarding',dir:'rw',cat:'Vendor & Contract Management'},
+      {name:'VendorDocuments · Read',dir:'r',cat:'Compliance & Documentation'}
     ]}
 ];
 

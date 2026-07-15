@@ -4681,14 +4681,19 @@ function updateCfgApiDir(systemId,idx,dir){
   const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s||!s.apiList[idx])return;
   s.apiList[idx].dir=dir;
 }
+function updateCfgApiCat(systemId,idx,cat){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s||!s.apiList[idx])return;
+  s.apiList[idx].cat=cat;
+}
 function addCfgApiRow(systemId){
   const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s)return;
   const nameInp=document.getElementById('cfg-newapi-name');
   const dirSel=document.getElementById('cfg-newapi-dir');
+  const catSel=document.getElementById('cfg-newapi-cat');
   const name=nameInp?nameInp.value.trim():'';
   if(!name){alert('Please enter an API name.');nameInp&&nameInp.focus();return;}
   captureCfgSystemDraft();
-  s.apiList.push({name:name,dir:dirSel?dirSel.value:'r'});
+  s.apiList.push({name:name,dir:dirSel?dirSel.value:'r',cat:catSel?catSel.value:'Other'});
   navigatePage('cfg-system-detail');
 }
 function removeCfgApiRow(systemId,idx){
@@ -4745,17 +4750,37 @@ function buildCfgSystemDetailHTML(){
       +(s.lastTestResult==='fail'?'<div style="margin-top:10px;padding:11px 14px;border-radius:9px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:12px;line-height:1.6">Test failed &mdash; the endpoint looks incomplete or unreachable. Update the endpoint (Edit) and test again.</div>':'')
       +(s.lastTestResult==='ok'?'<div style="margin-top:10px;padding:11px 14px;border-radius:9px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:12px;line-height:1.6">Connection verified &mdash; the endpoint responded successfully.</div>':'')
       +'</div>';
-  const apiRows=(s.apiList.length?s.apiList.map(function(a,i){
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'
-      +'<div style="font-family:monospace;font-size:12.5px;font-weight:500;color:var(--navy)">'+a.name+'</div>'
-      +(editing
-        ?'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiDir(\''+s.id+'\','+i+',this.value)"><option value="r"'+(a.dir==='r'?' selected':'')+'>read</option><option value="rw"'+(a.dir==='rw'?' selected':'')+'>read + write</option></select><button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgApiRow(\''+s.id+'\','+i+')">Remove</button></div>'
-        :cfgApiDirBadge(a.dir))
-      +'</div>';
-  }).join(''):'<div style="padding:16px;font-size:12.5px;color:var(--gray)">No APIs added yet.</div>');
+  const apiCatHeader=function(cat){
+    return '<div style="padding:9px 16px;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;background:#f8fafc;border-bottom:1px solid var(--border)">'+cat+'</div>';
+  };
+  const apiRows=(s.apiList.length?(function(){
+    const grouped={};
+    s.apiList.forEach(function(a,i){
+      const cat=a.cat||'Other';
+      (grouped[cat]=grouped[cat]||[]).push({a:a,i:i});
+    });
+    const order=cfgApiCategories.filter(function(c){return grouped[c];});
+    Object.keys(grouped).forEach(function(c){if(order.indexOf(c)===-1)order.push(c);});
+    return order.map(function(cat){
+      const rows=grouped[cat].map(function(entry){
+        const a=entry.a,i=entry.i;
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'
+          +'<div style="font-family:monospace;font-size:12.5px;font-weight:500;color:var(--navy)">'+a.name+'</div>'
+          +(editing
+            ?'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
+              +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiCat(\''+s.id+'\','+i+',this.value)">'+cfgApiCategories.map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
+              +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiDir(\''+s.id+'\','+i+',this.value)"><option value="r"'+(a.dir==='r'?' selected':'')+'>read</option><option value="rw"'+(a.dir==='rw'?' selected':'')+'>read + write</option></select>'
+              +'<button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgApiRow(\''+s.id+'\','+i+')">Remove</button></div>'
+            :cfgApiDirBadge(a.dir))
+          +'</div>';
+      }).join('');
+      return apiCatHeader(cat)+rows;
+    }).join('');
+  })():'<div style="padding:16px;font-size:12.5px;color:var(--gray)">No APIs added yet.</div>');
   const addApiForm=editing
     ?'<div style="display:flex;gap:8px;padding:14px 16px;align-items:center;flex-wrap:wrap">'
       +'<input class="ep-form-input" id="cfg-newapi-name" placeholder="API name, e.g. API_PRODUCT_SRV" style="flex:1;min-width:220px">'
+      +'<select class="ep-form-select" id="cfg-newapi-cat" style="width:auto">'+cfgApiCategories.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'
       +'<select class="ep-form-select" id="cfg-newapi-dir" style="width:auto"><option value="r">read</option><option value="rw">read + write</option></select>'
       +'<button type="button" class="btn btn-secondary btn-sm" onclick="addCfgApiRow(\''+s.id+'\')">+ Add API</button>'
       +'</div>'
