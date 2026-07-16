@@ -97,7 +97,7 @@ const sidebarItems=[
     {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
     {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
     {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'},
-    {id:'operations-cockpit',label:'Operations Cockpit',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
+    {id:'operations-cockpit',label:'Operations Cockpit',roles:['entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
   ]},
   {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
   {id:'my-tasks',label:'My Tasks',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
@@ -572,7 +572,7 @@ const pageRoleMap={
   'cfg-overview':['super-admin'],'cfg-data-foundation':['super-admin'],'cfg-model-detail':['super-admin'],'cfg-model-add':['super-admin'],'cfg-system-add':['super-admin'],
   'cfg-systems':['super-admin','entity-admin'],'cfg-system-detail':['super-admin','entity-admin'],
   'cfg-context-journey':['super-admin','entity-admin'],'cfg-journey-detail':['super-admin','entity-admin'],
-  'cfg-agents':['super-admin','entity-admin'],'operations-cockpit':['super-admin','entity-admin'],
+  'cfg-agents':['super-admin','entity-admin'],'operations-cockpit':['entity-admin'],
   'all-users':['super-admin'],'settings':['super-admin']
 };
 function canAccessPage(pg,role){const allowed=pageRoleMap[pg];return !allowed||allowed.includes(role);}
@@ -601,7 +601,7 @@ function setPortalRole(role,force){
   showAiToast('Switched to '+portalRoleLabel(portalRole),'You are now viewing ADT as this role.');
 }
 
-// -- DASHBOARD TABS: every role sees "Employee Dashboard"; admin roles get one extra role-specific tab --
+// -- DASHBOARD TABS: Super Admin goes straight to its own dashboard (no tab bar); other admin/employee roles keep the tab switcher --
 function dashboardTabsForRole(role){
   if(role==='entity-user'){
     const map={
@@ -617,8 +617,8 @@ function dashboardTabsForRole(role){
     };
     return map[activePersonaId]||[{id:'employee',label:'Employee Dashboard'}];
   }
+  if(role==='super-admin')return [{id:'super-admin',label:'Opendhi Super Admin'}];
   const tabs=[{id:'employee',label:'Employee Dashboard'}];
-  if(role==='super-admin')tabs.push({id:'super-admin',label:'Opendhi Super Admin'});
   if(role==='entity-admin')tabs.push({id:'entity-admin',label:'Entity Admin'});
   return tabs;
 }
@@ -1221,11 +1221,6 @@ const cfgSystems=[
       {name:'SupplierMaster · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'PurchaseOrder · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
       {name:'GoodsReceipt · Service Confirmation',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'}
-    ]},
-  {id:'portal',name:'Vendor Portal',type:'3rd-party',method:'REST',endpoint:'https://vendors.vyoma.local/api/',auth:'OAuth 2.0',apis:12,lastTested:'2 days ago',status:'Connected',isDefault:true,activatedForEntity:false,
-    apiList:[
-      {name:'VendorInvite · Onboarding',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transactional'},
-      {name:'VendorDocuments · Compliance Docs',dir:'r',cat:'Others',sub:'Compliance & Documentation',type:'Transformational'}
     ]}
 ];
 

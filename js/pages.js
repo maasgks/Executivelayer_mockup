@@ -3994,7 +3994,7 @@ function buildAIExecutiveDashboardHTML(){
   const visibleCategories=cfgJourneyCategories.filter(function(c){
     return allAIJourneys.some(function(j){return j.category===c.id;});
   });
-  const showCategorySummary=portalRole!=='entity-user';
+  const showCategorySummary=portalRole==='super-admin';
   if(!showCategorySummary)cfgJourneyCategoryFilter='';
   if(cfgJourneyCategoryFilter&&!visibleCategories.some(function(c){return c.id===cfgJourneyCategoryFilter;}))cfgJourneyCategoryFilter='';
   const filteredAIJourneys=cfgJourneyCategoryFilter?allAIJourneys.filter(function(j){return j.category===cfgJourneyCategoryFilter;}):allAIJourneys;
@@ -4030,7 +4030,7 @@ function buildAIExecutiveDashboardHTML(){
     +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:720px">'+(persona?'Journeys routed to '+persona.label+' based on Enterprise Workflow ownership. Manual Mode stays available; Enable Agent uses the existing agentic workflow.':'Select and run the journeys enabled for this entity. Operational monitoring lives in Configure > Operations Cockpit.')+'</p></div>'
     +'<div style="display:flex;gap:8px;flex-shrink:0">'
     +'<button class="btn btn-secondary btn-sm" onclick="navigatePage(\'my-tasks\')">My Tasks'+(pendingCount?' <span class="badge" style="background:var(--orange);color:#fff;margin-left:6px">'+pendingCount+'</span>':'')+'</button>'
-    +(portalRole!=='entity-user'?'<button class="btn btn-secondary btn-sm" onclick="navigatePage(\'operations-cockpit\')">Operations Cockpit</button>':'')
+    +(portalRole==='entity-admin'?'<button class="btn btn-secondary btn-sm" onclick="navigatePage(\'operations-cockpit\')">Operations Cockpit</button>':'')
     +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" onclick="startAutomateJourneyPicker()">+ Create Your Journey</button>':'')
     +'</div>'
     +'</div>'
@@ -4574,12 +4574,17 @@ function cfgBackBtn(pg,label){return '<button class="ep-cancel-btn" style="margi
 // -- Configure: Overview --
 function cfgOverviewBodyHTML(){
   const tiles=[
-    ['cfg-systems','Systems',cfgSystems.length],
-    ['cfg-data-foundation','Data models',cfgModels.length],
-    ['cfg-context-journey','Journeys',cfgJourneys.length],
-    ['cfg-agents','AI agents',cfgAgents.length]
+    ['cfg-systems','Systems',cfgSystems.length,'Connected sources & APIs','blue','<circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/>'],
+    ['cfg-data-foundation','Data models',cfgModels.length,'Fields, mapping & rules','violet','<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8v-13"/><path d="M4.5 12c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8"/>'],
+    ['cfg-context-journey','Journeys',cfgJourneys.length,'Context & orchestration flows','teal','<circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6.5a4 4 0 0 1 4 4v0a4 4 0 0 1-4 4H8"/>'],
+    ['cfg-agents','AI agents',cfgAgents.length,'Autonomous & assisted agents','orange','<rect x="5" y="8" width="14" height="10" rx="3"/><circle cx="9.2" cy="13" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.8" cy="13" r="1.3" fill="currentColor" stroke="none"/><path d="M12 4.2v3.4M9.2 3.4h5.6"/>']
   ].map(function(t){
-    return '<div class="stat-card" style="cursor:pointer" onclick="navigatePage(\''+t[0]+'\')"><div class="stat-label"><span>'+t[1]+'</span></div><div class="stat-val">'+t[2]+'</div></div>';
+    return '<div class="cfg-hero-tile cfg-hero-'+t[4]+'" onclick="navigatePage(\''+t[0]+'\')">'
+      +'<div class="cfg-hero-toprow"><div class="cfg-hero-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+t[5]+'</svg></div>'
+      +'<div class="cfg-hero-val">'+t[2]+'</div></div>'
+      +'<div class="cfg-hero-label">'+t[1]+'</div>'
+      +'<div class="cfg-hero-sub"><span>'+t[3]+'</span><svg class="cfg-hero-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>'
+      +'</div>';
   }).join('');
   const activity=cfgRecentActivity.map(function(a){
     return '<div class="tr" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)">'
@@ -4587,7 +4592,7 @@ function cfgOverviewBodyHTML(){
       +'<div style="font-family:monospace;font-size:11.5px;color:var(--gray);white-space:nowrap">'+a.when+'</div>'
       +'</div>';
   }).join('');
-  return '<div class="stat-grid" style="margin-bottom:20px">'+tiles+'</div>'
+  return '<div class="cfg-hero-grid">'+tiles+'</div>'
     +'<div class="review-title" style="margin-bottom:12px">Recent activity</div>'
     +'<div class="ep-form-card" style="padding:0">'+activity+'</div>';
 }
@@ -5169,8 +5174,9 @@ function stepAgentToggleHTML(journeyId,idx){
   if(disabled)return '';
   return '<button class="agent-toggle small '+(on?'on':'')+(disabled?' disabled':'')+'" '+(disabled?'disabled':'onclick="event.stopPropagation();toggleJourneyStepAgent(\''+journeyId+'\','+idx+')"')+' title="'+(disabled?'Human approval steps always remain manual':'Enable Agent for this step')+'"><span class="agent-toggle-track"></span><span class="agent-toggle-label">'+(on?'On':'Off')+'</span></button>';
 }
-function journeyActivationBadgeHTML(journeyId,locked){
+function journeyActivationBadgeHTML(journeyId,locked,isRoadmap){
   if(locked)return '<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>';
+  if(isRoadmap)return '<span class="status-pill draft">Not Configured</span>';
   if(entityJourneyActivation[journeyId])return '<span class="status-pill active">Activated</span>';
   const state=journeyRequestState(journeyId);
   if(state==='awaiting-admin')return '<span class="status-pill pending">Requested</span>';
@@ -5191,23 +5197,26 @@ function buildCfgContextJourneyHTML(){
     +'</div>';
   const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px">Showing all journeys &mdash; click a category above to filter.</div>';
   const cards=filteredJourneys.length?filteredJourneys.map(function(j){
-    const locked=!!j.locked;
+    const isRoadmap=!!j.locked;
+    const locked=isRoadmap&&portalRole!=='super-admin';
+    const superAdminUnconfigured=isRoadmap&&portalRole==='super-admin';
     const canConfigure=!locked;
     const showJourneyActions=portalRole!=='super-admin';
-    return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+(locked?'':' onclick="viewCfgJourney(\''+j.id+'\')"')+'>'
+    const clickAttr=locked?'':(superAdminUnconfigured?' style="cursor:pointer" onclick="openLockedJourneyModal(\''+j.id+'\')"':' onclick="viewCfgJourney(\''+j.id+'\')"');
+    return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+clickAttr+'>'
       +'<div class="cfg-journey-main">'
-      +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked)+(!locked?journeyModeBadgeHTML(j.id):'')+'</div></div>'
+      +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked,superAdminUnconfigured)+(!locked?journeyModeBadgeHTML(j.id):'')+'</div></div>'
       +'<div class="ai-journey-desc cfg-journey-desc">'+j.desc+'</div>'
       +'<div class="cfg-journey-tags">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
       +'</div>'
-      +(canConfigure&&showJourneyActions?'<div class="cfg-journey-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openJourneySimulation(\''+j.id+'\')">Dry Run</button><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();selectedAIJourneyId=\''+j.id+'\';navigatePage(\'ai-active-automation\')">Runs</button></div>':'')
+      +(canConfigure&&showJourneyActions?'<div class="cfg-journey-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();selectedAIJourneyId=\''+j.id+'\';navigatePage(\'ai-active-automation\')">Runs</button></div>':'')
       +(locked?'':'<span class="cfg-journey-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
+  const showCatFilter=portalRole==='super-admin';
   return '<div class="ai-exec-page">'
     +cfgPageHead('Context & Journey','Pick a predefined business journey to see its steps and assign the agent and governance that runs each one.')
-    +catBoxes
-    +catInfo
+    +(showCatFilter?catBoxes+catInfo:'')
     +'<div style="display:flex;flex-direction:column;gap:16px">'+cards+'</div>'
     +'</div>';
 }
@@ -5219,7 +5228,7 @@ function cfgStepTypeTag(type){
 function buildCfgJourneyDetailHTML(){
   const j=cfgJourneys.find(function(x){return x.id===selectedCfgJourneyId;})||cfgJourneys[0];
   const agentOn=isJourneyAgentEnabled(j.id);
-  const detailActions=portalRole!=='super-admin'?'<div class="cfg-detail-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div><button class="btn btn-secondary btn-sm" onclick="openJourneySimulation(\''+j.id+'\')">Dry Run</button></div>':'';
+  const detailActions=portalRole!=='super-admin'?'<div class="cfg-detail-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div></div>':'';
   const timeline=j.steps.map(function(st,i){
     const key=j.id+'__'+i;
     const assign=cfgStepAssignments[key];
@@ -5260,8 +5269,7 @@ function buildCfgJourneyDetailHTML(){
     +'</div>';
   return '<div class="ai-exec-page ai-journey-detail-page">'
     +cfgBackBtn('cfg-context-journey','Context & Journey')
-    +'<div class="cfg-detail-hero"><div><div class="cfg-detail-title-row"><p>'+j.name+'</p>'+journeyActivationBadgeHTML(j.id,!!j.locked)+journeyModeBadgeHTML(j.id)+'</div><div class="cfg-detail-sub">'+j.desc+'</div></div>'+detailActions+'</div>'
-    +'<div class="dry-run-note"><strong>Dry Run</strong><span>Preview owners, manual steps, human approvals, required configs, blockers, and agent impact before starting or changing this journey.</span></div>'
+    +'<div class="cfg-detail-hero"><div><div class="cfg-detail-title-row"><p>'+j.name+'</p>'+journeyActivationBadgeHTML(j.id,!!j.locked&&portalRole!=='super-admin',!!j.locked&&portalRole==='super-admin')+journeyModeBadgeHTML(j.id)+'</div><div class="cfg-detail-sub">'+j.desc+'</div></div>'+detailActions+'</div>'
     +statGrid
     +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
     +buildAIResponsibilitySplitHTML(j.id)
@@ -5790,7 +5798,7 @@ function buildManualJourneyRunHTML(){
   const moduleLabel=manualModuleLabel(cur.modulePage);
   return '<div class="ai-exec-page manual-run-page">'
     +'<button class="ep-back" onclick="backFromManualJourneyRun()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back</button>'
-    +'<div class="manual-run-hero"><div><div class="manual-run-kicker"><span>'+run.runId+'</span><span>'+run.mode+'</span><span>'+run.status+'</span></div><div class="manual-run-title">'+(j.name||run.journeyId)+'</div><div class="manual-run-sub">'+run.subject+' · '+run.entity+' · Started '+run.startedAt+'</div></div><div class="manual-run-actions"><button class="btn btn-secondary btn-sm" onclick="openJourneySimulation(\''+run.journeyId+'\')">Dry Run</button><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Step Complete</button></div></div>'
+    +'<div class="manual-run-hero"><div><div class="manual-run-kicker"><span>'+run.runId+'</span><span>'+run.mode+'</span><span>'+run.status+'</span></div><div class="manual-run-title">'+(j.name||run.journeyId)+'</div><div class="manual-run-sub">'+run.subject+' · '+run.entity+' · Started '+run.startedAt+'</div></div><div class="manual-run-actions"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Step Complete</button></div></div>'
     +'<div class="manual-current-card"><div class="manual-current-head"><div><span class="manual-current-kicker">Current Step</span><div class="manual-current-title">'+cur.name+'</div></div><div class="manual-current-progress"><strong>'+progress+'%</strong><span>'+openExceptionCount+' open blocker'+(openExceptionCount===1?'':'s')+'</span></div></div>'
     +'<p class="manual-current-desc">'+cur.manualAction+'</p>'
     +'<div class="manual-current-foot"><div class="manual-current-meta"><span>'+(cur.ownerRole||'Entity Admin')+'</span><span class="dot">&middot;</span><span>'+moduleLabel+'</span><span class="dot">&middot;</span><span>SLA '+(cur.sla||'—')+'</span></div><div class="manual-current-actions"><button class="btn btn-secondary btn-sm" onclick="navigatePage(\''+(cur.modulePage||'dashboard')+'\')">Open '+moduleLabel+'</button><button class="btn btn-secondary btn-sm" onclick="raiseManualException(\''+run.runId+'\')">Raise Exception</button></div></div></div>'
@@ -7530,17 +7538,26 @@ function openLockedJourneyModal(journeyId){
   clearAllLockedToasts();
   const state=journeyRequestState(j.id);
   const lockIcon='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-  let cta;
-  if(portalRole==='entity-user'){
-    if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Sent to Entity Admin</button><div class="lj-modal-note">Your Entity Admin has been notified and will review this request.</div>';
-    else cta='<button class="btn btn-primary lj-modal-cta" onclick="requestJourneyFromEntityAdmin(\''+j.id+'\')">Notify Entity Admin</button><div class="lj-modal-note">Your Entity Admin will see this request in their tasks.</div>';
+  const gearIcon='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  let cta,icon,badge;
+  if(portalRole==='super-admin'){
+    icon=gearIcon;
+    badge='<span class="status-pill draft">Not Configured</span>';
+    cta='<button class="btn btn-primary lj-modal-cta" onclick="closeLockedJourneyModal();viewCfgJourney(\''+j.id+'\')">Configure this Journey</button><div class="lj-modal-note">Define steps, owners, and automation to bring this journey online.</div>';
   }else{
-    if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Pending in My Tasks</button><div class="lj-modal-note">An Entity User has already requested this — review and approve it in My Tasks.</div>';
-    else cta='<button class="btn btn-primary lj-modal-cta" onclick="activateJourneyAsAdmin(\''+j.id+'\')">Activate Journey</button><div class="lj-modal-note">You can activate this journey directly for your entity.</div>';
+    icon=lockIcon;
+    badge='<span class="ai-journey-lock-badge">'+lockIcon+'Locked</span>';
+    if(portalRole==='entity-user'){
+      if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Sent to Entity Admin</button><div class="lj-modal-note">Your Entity Admin has been notified and will review this request.</div>';
+      else cta='<button class="btn btn-primary lj-modal-cta" onclick="requestJourneyFromEntityAdmin(\''+j.id+'\')">Notify Entity Admin</button><div class="lj-modal-note">Your Entity Admin will see this request in their tasks.</div>';
+    }else{
+      if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Pending in My Tasks</button><div class="lj-modal-note">An Entity User has already requested this — review and approve it in My Tasks.</div>';
+      else cta='<button class="btn btn-primary lj-modal-cta" onclick="activateJourneyAsAdmin(\''+j.id+'\')">Activate Journey</button><div class="lj-modal-note">You can activate this journey directly for your entity.</div>';
+    }
   }
-  body.innerHTML='<div class="lj-modal-icon">'+lockIcon+'</div>'
+  body.innerHTML='<div class="lj-modal-icon">'+icon+'</div>'
     +'<div class="lj-modal-title">'+j.name+'</div>'
-    +'<div class="lj-modal-badges">'+cfgCategoryBadge(j.category)+'<span class="ai-journey-lock-badge">'+lockIcon+'Locked</span></div>'
+    +'<div class="lj-modal-badges">'+cfgCategoryBadge(j.category)+badge+'</div>'
     +'<div class="lj-modal-desc">'+j.desc+'</div>'
     +cta;
   overlay.classList.remove('hidden');
