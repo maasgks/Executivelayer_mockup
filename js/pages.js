@@ -1464,7 +1464,7 @@ function renderCtSidebar(){
       +'</tbody></table>';
   }else if(ctTab==='logs'){
     const logs=ctLogsData[c.id]||[];
-    const ctLogKey=(s)=>({Submitted:'default','Quotation Approved':'active','Proposal Sent':'active','Proposal Approved':'active','Contract Sent':'active','Contract Approved':'active',Inactive:'inactive'}[s]||'default');
+    const ctLogKey=(s)=>({Submitted:'default','Quotation Approved':'active','Proposal Sent':'active','Proposal Approved':'active','Contract Sent':'active','Contract Signed':'active','Contract Approved':'active',Inactive:'inactive'}[s]||'default');
     const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
     const clkSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
@@ -1944,7 +1944,7 @@ function buildContractsListingHTML(){
     +'<div class="lp-filter-bar-row">'
     +apCS('ct-f-country',countries,'','All Countries')
     +apCS('ct-f-type',types,'','All Types')
-    +apCS('ct-f-status',['Submitted','Quotation Approved','Proposal Sent','Proposal Approved','Contract Sent','Contract Approved','Inactive'],'','All Statuses')
+    +apCS('ct-f-status',['Submitted','Quotation Approved','Proposal Sent','Proposal Approved','Contract Sent','Contract Signed','Contract Approved','Inactive'],'','All Statuses')
     +'<input class="ct-search-input" placeholder="Search by name, ID..." type="text" style="height:34px;border-radius:20px">'
     +'<button class="lp-pill-reset">Reset</button>'
     +'<button class="lp-pill-search">Search</button>'
@@ -4089,13 +4089,13 @@ function buildOperationsCockpitHTML(){
     blocked:{title:'Blocked Runs',sub:'Exceptions that must be cleared',note:'Showing only runs with an open blocker, exception, or missing evidence before the journey can continue.'},
     high:{title:'High Priority Runs',sub:'Runs closest to breach or escalation',note:'Showing only high-priority runs so operators can act on escalation, owner, and next action first.'}
   }[cockpitRunFilter]||{};
-  const filterHeader=showFilters?('<div class="cockpit-filter-context"><div><strong>'+filterMeta.title+'</strong><span>'+filterMeta.note+'</span></div><em>'+filterMeta.sub+'</em></div>'):'';
+  const filterHeader=showFilters?('<div class="cockpit-filter-context'+(cockpitRunFilter==='blocked'?' cockpit-filter-context-blocked':'')+'"><div><strong>'+filterMeta.title+'</strong><span>'+filterMeta.note+'</span></div><em>'+filterMeta.sub+'</em></div>'):'';
   const filterBar=showFilters?('<div class="cockpit-filter-bar">'+runFilters.map(function(f){return '<button class="cockpit-filter-chip '+(cockpitRunFilter===f[0]?'active':'')+'" onclick="setCockpitRunFilter(\''+f[0]+'\')">'+f[1]+' <span>'+f[2]+'</span></button>';}).join('')+'</div>'):'';
   const slaPriorityLabel={High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'};
   const rows=filteredRuns.slice(0,8).map(function(r,idx){
     const c=cockpitRunComputed(r);
     const slaClass=r.slaRisk==='High'?'inactive':r.slaRisk==='Medium'?'unapproved':'active';
-    const progressBar=c.isBlockedRun?('<div class="cockpit-progress"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+((r.escalation&&r.escalation!=='None')?r.escalation:'No escalation')+'</span></div>'):'';
+    const progressBar=c.isBlockedRun?('<div class="cockpit-progress cockpit-progress-ex"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+((r.escalation&&r.escalation!=='None')?r.escalation:'No escalation')+'</span></div>'):'';
     const ownerName=manualStepOwnerName(c.st.ownerRole||r.ownerRole||'Entity Admin');
     const stepName=c.st.name||'this step';
     const isNotified=notifiedRunIds.has(r.runId);
@@ -4106,7 +4106,7 @@ function buildOperationsCockpitHTML(){
       ?'<button class="btn btn-secondary btn-sm cockpit-notify-btn notified" disabled>'+notifyIcon+'Notified</button>'
       :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\')">'+notifyIcon+'Send Notification</button>';
     return '<div class="cockpit-run-card" onclick="openCockpitRunSidebar(\''+r.runId+'\')">'
-      +'<div class="cockpit-run-head"><div class="cockpit-run-num">'+(idx+1)+'</div><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+r.runId+'</div><div class="cockpit-run-entity">'+(r.entity||'Dhi Hyperlocal')+'</div></div><span class="status-pill '+slaClass+'">'+(slaPriorityLabel[r.slaRisk]||r.slaRisk)+'</span></div>'
+      +'<div class="cockpit-run-head"><div class="cockpit-run-num">'+(idx+1)+'</div><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+r.runId+'</div><div class="cockpit-run-entity">'+(r.entity||'Dhi Hyperlocal')+'</div></div><span class="status-pill '+slaClass+(c.isBlockedRun?' cockpit-pill-ex':'')+'">'+(slaPriorityLabel[r.slaRisk]||r.slaRisk)+'</span></div>'
       +progressBar
       +'<div class="cockpit-run-mini-sub"><span>'+(r.subject||c.j.name||r.journeyId)+'</span>'+notifyBtn+'</div>'
       +'</div>';
@@ -4642,6 +4642,11 @@ function cfgApiDirBadge(dir){
     ?'<span class="badge" style="background:#f1f5f9;color:var(--navy)">read + write</span>'
     :'<span class="badge" style="background:#eff6ff;color:#2563eb">read</span>';
 }
+function cfgApiTypeBadge(type){
+  return type==='Transformational'
+    ?'<span class="badge" style="background:#f5f3ff;color:#7c3aed">Transactional</span>'
+    :'<span class="badge" style="background:#fff7ed;color:#c2410c">Transactional</span>';
+}
 function startCfgSystemEdit(){cfgSystemEditing=true;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
 function cancelCfgSystemEdit(){cfgSystemEditing=false;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
 function captureCfgSystemDraft(){
@@ -4684,16 +4689,34 @@ function updateCfgApiDir(systemId,idx,dir){
 function updateCfgApiCat(systemId,idx,cat){
   const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s||!s.apiList[idx])return;
   s.apiList[idx].cat=cat;
+  s.apiList[idx].sub=(cfgApiSubcats[cat]||['General'])[0];
+  navigatePage('cfg-system-detail');
+}
+function updateCfgApiSub(systemId,idx,sub){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s||!s.apiList[idx])return;
+  s.apiList[idx].sub=sub;
+}
+function updateCfgApiType(systemId,idx,type){
+  const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s||!s.apiList[idx])return;
+  s.apiList[idx].type=type;
+}
+function onCfgNewApiCatChange(cat){
+  const subSel=document.getElementById('cfg-newapi-sub');if(!subSel)return;
+  const opts=cfgApiSubcats[cat]||['General'];
+  subSel.innerHTML=opts.map(function(sc){return '<option value="'+sc+'">'+sc+'</option>';}).join('');
 }
 function addCfgApiRow(systemId){
   const s=cfgSystems.find(function(x){return x.id===systemId;});if(!s)return;
   const nameInp=document.getElementById('cfg-newapi-name');
   const dirSel=document.getElementById('cfg-newapi-dir');
   const catSel=document.getElementById('cfg-newapi-cat');
+  const subSel=document.getElementById('cfg-newapi-sub');
+  const typeSel=document.getElementById('cfg-newapi-type');
   const name=nameInp?nameInp.value.trim():'';
   if(!name){alert('Please enter an API name.');nameInp&&nameInp.focus();return;}
   captureCfgSystemDraft();
-  s.apiList.push({name:name,dir:dirSel?dirSel.value:'r',cat:catSel?catSel.value:'Other'});
+  const cat=catSel?catSel.value:'Others';
+  s.apiList.push({name:name,dir:dirSel?dirSel.value:'r',cat:cat,sub:subSel?subSel.value:(cfgApiSubcats[cat]||['General'])[0],type:typeSel?typeSel.value:'Transactional'});
   navigatePage('cfg-system-detail');
 }
 function removeCfgApiRow(systemId,idx){
@@ -4751,36 +4774,51 @@ function buildCfgSystemDetailHTML(){
       +(s.lastTestResult==='ok'?'<div style="margin-top:10px;padding:11px 14px;border-radius:9px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:12px;line-height:1.6">Connection verified &mdash; the endpoint responded successfully.</div>':'')
       +'</div>';
   const apiCatHeader=function(cat){
-    return '<div style="padding:9px 16px;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;background:#f8fafc;border-bottom:1px solid var(--border)">'+cat+'</div>';
+    return '<div style="padding:10px 16px;font-size:11.5px;font-weight:700;letter-spacing:.3px;color:var(--navy);background:#eef2f7;border-bottom:1px solid var(--border)">'+cat+'</div>';
+  };
+  const apiSubHeader=function(sub){
+    return '<div style="padding:7px 16px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;background:#f8fafc;border-bottom:1px solid var(--border)">'+sub+'</div>';
   };
   const apiRows=(s.apiList.length?(function(){
     const grouped={};
     s.apiList.forEach(function(a,i){
-      const cat=a.cat||'Other';
-      (grouped[cat]=grouped[cat]||[]).push({a:a,i:i});
+      const cat=a.cat||'Others';
+      const sub=a.sub||'General';
+      grouped[cat]=grouped[cat]||{};
+      (grouped[cat][sub]=grouped[cat][sub]||[]).push({a:a,i:i});
     });
     const order=cfgApiCategories.filter(function(c){return grouped[c];});
     Object.keys(grouped).forEach(function(c){if(order.indexOf(c)===-1)order.push(c);});
     return order.map(function(cat){
-      const rows=grouped[cat].map(function(entry){
-        const a=entry.a,i=entry.i;
-        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'
-          +'<div style="font-family:monospace;font-size:12.5px;font-weight:500;color:var(--navy)">'+a.name+'</div>'
-          +(editing
-            ?'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
-              +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiCat(\''+s.id+'\','+i+',this.value)">'+cfgApiCategories.map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
-              +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiDir(\''+s.id+'\','+i+',this.value)"><option value="r"'+(a.dir==='r'?' selected':'')+'>read</option><option value="rw"'+(a.dir==='rw'?' selected':'')+'>read + write</option></select>'
-              +'<button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgApiRow(\''+s.id+'\','+i+')">Remove</button></div>'
-            :cfgApiDirBadge(a.dir))
-          +'</div>';
+      const subGroups=grouped[cat];
+      const subOrder=(cfgApiSubcats[cat]||[]).filter(function(sc){return subGroups[sc];});
+      Object.keys(subGroups).forEach(function(sc){if(subOrder.indexOf(sc)===-1)subOrder.push(sc);});
+      const subBlocks=subOrder.map(function(sub){
+        const rows=subGroups[sub].map(function(entry){
+          const a=entry.a,i=entry.i;
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'
+            +'<div style="font-family:monospace;font-size:12.5px;font-weight:500;color:var(--navy)">'+a.name+'</div>'
+            +(editing
+              ?'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap">'
+                +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiCat(\''+s.id+'\','+i+',this.value)">'+cfgApiCategories.map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
+                +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiSub(\''+s.id+'\','+i+',this.value)">'+(cfgApiSubcats[cat]||['General']).map(function(sc){return '<option value="'+sc+'"'+(sc===sub?' selected':'')+'>'+sc+'</option>';}).join('')+'</select>'
+                +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiType(\''+s.id+'\','+i+',this.value)">'+cfgApiTypes.map(function(t){return '<option value="'+t+'"'+(t===a.type?' selected':'')+'>'+t+'</option>';}).join('')+'</select>'
+                +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiDir(\''+s.id+'\','+i+',this.value)"><option value="r"'+(a.dir==='r'?' selected':'')+'>read</option><option value="rw"'+(a.dir==='rw'?' selected':'')+'>read + write</option></select>'
+                +'<button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgApiRow(\''+s.id+'\','+i+')">Remove</button></div>'
+              :'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'+cfgApiTypeBadge(a.type)+cfgApiDirBadge(a.dir)+'</div>')
+            +'</div>';
+        }).join('');
+        return apiSubHeader(sub)+rows;
       }).join('');
-      return apiCatHeader(cat)+rows;
+      return apiCatHeader(cat)+subBlocks;
     }).join('');
   })():'<div style="padding:16px;font-size:12.5px;color:var(--gray)">No APIs added yet.</div>');
   const addApiForm=editing
     ?'<div style="display:flex;gap:8px;padding:14px 16px;align-items:center;flex-wrap:wrap">'
       +'<input class="ep-form-input" id="cfg-newapi-name" placeholder="API name, e.g. API_PRODUCT_SRV" style="flex:1;min-width:220px">'
-      +'<select class="ep-form-select" id="cfg-newapi-cat" style="width:auto">'+cfgApiCategories.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'
+      +'<select class="ep-form-select" id="cfg-newapi-cat" style="width:auto" onchange="onCfgNewApiCatChange(this.value)">'+cfgApiCategories.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'
+      +'<select class="ep-form-select" id="cfg-newapi-sub" style="width:auto">'+(cfgApiSubcats[cfgApiCategories[0]]||['General']).map(function(sc){return '<option value="'+sc+'">'+sc+'</option>';}).join('')+'</select>'
+      +'<select class="ep-form-select" id="cfg-newapi-type" style="width:auto">'+cfgApiTypes.map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('')+'</select>'
       +'<select class="ep-form-select" id="cfg-newapi-dir" style="width:auto"><option value="r">read</option><option value="rw">read + write</option></select>'
       +'<button type="button" class="btn btn-secondary btn-sm" onclick="addCfgApiRow(\''+s.id+'\')">+ Add API</button>'
       +'</div>'
@@ -5136,7 +5174,6 @@ function journeyActivationBadgeHTML(journeyId,locked){
   if(entityJourneyActivation[journeyId])return '<span class="status-pill active">Activated</span>';
   const state=journeyRequestState(journeyId);
   if(state==='awaiting-admin')return '<span class="status-pill pending">Requested</span>';
-  if(state==='awaiting-superadmin')return '<span class="status-pill pending">Pending Super Admin</span>';
   return '<span class="status-pill draft">Available</span>';
 }
 function cfgSetJourneyCategoryFilter(cat){
@@ -6038,6 +6075,62 @@ function aiPayrollUseEmployee(empId){
   navigatePage('ai-journey-run');
   aiRunFlowRunCurrentStep();
 }
+// -- Payroll run: the first 3 steps (Employee Fetch / Attendance Capture / Salary Calculation) render the
+// currently-running step's actual computed data (pulled from aiPayrollData) instead of a flat spinner line,
+// matching the detail cards shown in the Hire to Retire and Contract Creation journeys. --
+function buildAIPayrollStepDetailHTML(idx,d){
+  if(idx===0){
+    return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Fetching employee details&hellip;</div>'
+      +'<div class="review-grid" style="grid-template-columns:1fr">'
+      +aiDrawerRow('Employee ID',d.empId||'—')
+      +aiDrawerRow('Department',d.dept||'—')
+      +aiDrawerRow('Country',d.country||'—')
+      +aiDrawerRow('Email',d.email||'—')
+      +'</div>';
+  }
+  if(idx===1){
+    return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Capturing attendance records&hellip;</div>'
+      +'<div class="review-grid" style="grid-template-columns:1fr">'
+      +aiDrawerRow('Total Payable Days',d.totalDays||0)
+      +aiDrawerRow('Days Present',d.daysPresent||0)
+      +aiDrawerRow('Leave Days',d.leaveDays||0)
+      +aiDrawerRow('Overtime Hours',d.overtimeHours||0)
+      +'</div>';
+  }
+  if(idx===2){
+    return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Calculating gross and net salary&hellip;</div>'
+      +'<div class="review-grid" style="grid-template-columns:1fr">'
+      +aiDrawerRow('Gross Salary',aiMoney(d.gross))
+      +aiDrawerRow('Provident Fund',aiMoney(d.pf))
+      +aiDrawerRow('Professional Tax',aiMoney(d.pt))
+      +aiDrawerRow('ESI',aiMoney(d.esi))
+      +aiDrawerRow('Income Tax',aiMoney(d.tax))
+      +aiDrawerRow('Net Pay',aiMoney(d.net))
+      +'</div>';
+  }
+  return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>'+(aiRunFlows['payroll-creation'].steps[idx]||{}).running+'</div>';
+}
+function buildAIPayrollTimelineHTML(flow,cur,d){
+  return flow.steps.map(function(step,i){
+    let dotClass,body;
+    if(i<cur){
+      dotClass='run-done';
+      body='<div class="ai-timeline-card-desc">'+(step.skipNote||'Completed')+'</div>';
+    }else if(i===cur){
+      dotClass='run-current';
+      body=buildAIPayrollStepDetailHTML(i,d);
+    }else{
+      dotClass='run-pending';
+      body='<div class="ai-timeline-card-desc" style="color:#cbd5e1">Waiting&hellip;</div>';
+    }
+    return '<div class="ai-timeline-item">'
+      +'<div class="ai-timeline-dot '+dotClass+'">'+(i<cur?'&#10003;':(i+1))+'</div>'
+      +'<div class="ai-timeline-card" style="cursor:default">'
+      +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+step.label+'</span></div>'
+      +body
+      +'</div></div>';
+  }).join('');
+}
 function buildAIPayrollStageHTML(flow,j){
   const d=aiPayrollData||{};
   if(aiRunFlowStep===3)return buildAIPayrollApprovalHTML();
@@ -6047,7 +6140,7 @@ function buildAIPayrollStageHTML(flow,j){
     +'<button class="ep-back" onclick="aiRunFlowExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
     +'<div style="font-size:16px;font-weight:700;color:var(--navy);margin:14px 0 2px">Run Payroll</div>'
     +'<div style="font-size:12px;color:var(--gray);margin-bottom:18px">For <strong style="color:var(--navy)">'+(d.name||'Employee')+'</strong> &middot; '+(d.period||'June 2026')+'</div>'
-    +'<div class="ai-timeline">'+buildAIRunTimelineHTML(flow,aiRunFlowStep)+'</div>'
+    +'<div class="ai-timeline">'+buildAIPayrollTimelineHTML(flow,aiRunFlowStep,d)+'</div>'
     +'</div>';
 }
 function buildAIPayrollApprovalHTML(){
@@ -6163,28 +6256,6 @@ function buildAIProposalApprovalDataHTML(d,rec){
     +'</div>'
     +'<div class="review-grid" style="grid-template-columns:1fr;margin-top:4px">'+aiDrawerRow('Job Description',rec.jobDesc||'—')+'</div>'
     +'</div>'
-    +buildContractCommercialReviewSectionsHTML(rec)
-    +'</div>';
-}
-function buildAIContractApprovalDataHTML(rec){
-  rec=rec||{};
-  return '<div>'
-    +'<div style="margin-bottom:14px"><div style="font-size:14px;font-weight:700">Contract '+(rec.contractId||'—')+'</div><div style="font-size:11.5px;color:var(--gray);margin-top:2px">Details AI filled in for this contract — review before approving.</div></div>'
-    +'<div class="review-section"><div class="review-title">Parties &amp; Position</div><div class="review-grid">'
-    +aiDrawerRow('Employee',rec.empName||'—')
-    +aiDrawerRow('Designation',rec.empDesig||rec.jobTitle||'—')
-    +aiDrawerRow('Country',rec.country||'—')
-    +aiDrawerRow('Contract Type',rec.type||'—')
-    +aiDrawerRow('Employment Term',rec.empDuration||'—')
-    +aiDrawerRow('Work Schedule',rec.workSchedule||'—')
-    +'</div></div>'
-    +'<div class="review-section"><div class="review-title">Eligibility &amp; Personal Details</div><div class="review-grid">'
-    +aiDrawerRow('Nationality',rec.nationality||'—')
-    +aiDrawerRow('Work Permit',rec.workPermit?'Yes':'No')
-    +aiDrawerRow('Email',rec.email||'—')
-    +aiDrawerRow('Contact',rec.contact||'—')
-    +'</div></div>'
-    +'<div class="review-section"><div class="review-title">Job Description</div><div style="font-size:12.5px;font-weight:600;line-height:1.6">'+(rec.jobDesc||'—')+'</div></div>'
     +buildContractCommercialReviewSectionsHTML(rec)
     +'</div>';
 }
@@ -6906,13 +6977,13 @@ function aiCtJourneyStage(){
   if(page==='ai-proposal-created')return 1;
   if(page==='ai-proposal-waiting-approval')return 2;
   if(page==='ai-contract-document')return 3;
-  if(page==='ai-contract-waiting-approval')return 4;
-  if(page==='ai-onboarding-run')return 5;
-  if(page==='ai-journey-complete')return 6;
+  if(page==='ai-contract-awaiting-signature')return 4;
+  if(page==='ai-onboarding-run')return 6;
+  if(page==='ai-journey-complete')return 7;
   return -1;
 }
 function isAIContractWizardPage(pg){
-  return pg==='ai-contract-assistant'||pg==='ai-employee-created'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete';
+  return pg==='ai-contract-assistant'||pg==='ai-employee-created'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='ai-contract-document'||pg==='ai-contract-awaiting-signature'||pg==='ai-onboarding-run'||pg==='ai-journey-complete';
 }
 function aiCjShortLabel(name){return (name||'').replace(/\s*\([^)]*\)/g,'').trim();}
 function aiAgentBadgeHTML(sourceName){
@@ -7449,7 +7520,6 @@ function showLockedJourneyToast(journeyId,journeyName){
   stack.appendChild(el);
 }
 function journeyRequestState(journeyId){
-  if(entityRequests.some(function(r){return r.refId===journeyId&&r.type==='journey-activation'&&r.status==='Pending';}))return 'awaiting-superadmin';
   if(entityRequests.some(function(r){return r.refId===journeyId&&r.type==='journey-request-to-admin'&&r.status==='Pending';}))return 'awaiting-admin';
   return 'none';
 }
@@ -7463,12 +7533,10 @@ function openLockedJourneyModal(journeyId){
   let cta;
   if(portalRole==='entity-user'){
     if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Sent to Entity Admin</button><div class="lj-modal-note">Your Entity Admin has been notified and will review this request.</div>';
-    else if(state==='awaiting-superadmin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Pending Super Admin Approval</button><div class="lj-modal-note">Your Entity Admin has sent this to Super Admin for approval.</div>';
     else cta='<button class="btn btn-primary lj-modal-cta" onclick="requestJourneyFromEntityAdmin(\''+j.id+'\')">Notify Entity Admin</button><div class="lj-modal-note">Your Entity Admin will see this request in their tasks.</div>';
   }else{
-    if(state==='awaiting-superadmin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Request Already Sent</button><div class="lj-modal-note">Your Super Admin has been notified and will activate this journey once approved.</div>';
-    else if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Pending in My Tasks</button><div class="lj-modal-note">An Entity User has already requested this — review it in My Tasks to send it to Super Admin.</div>';
-    else cta='<button class="btn btn-primary lj-modal-cta" onclick="notifyAdminForJourney(\''+j.id+'\')">Request from Super Admin</button><div class="lj-modal-note">Super Admin will see this request in their tasks.</div>';
+    if(state==='awaiting-admin')cta='<button class="btn btn-secondary lj-modal-cta" disabled style="opacity:.6;cursor:default">Pending in My Tasks</button><div class="lj-modal-note">An Entity User has already requested this — review and approve it in My Tasks.</div>';
+    else cta='<button class="btn btn-primary lj-modal-cta" onclick="activateJourneyAsAdmin(\''+j.id+'\')">Activate Journey</button><div class="lj-modal-note">You can activate this journey directly for your entity.</div>';
   }
   body.innerHTML='<div class="lj-modal-icon">'+lockIcon+'</div>'
     +'<div class="lj-modal-title">'+j.name+'</div>'
@@ -7482,17 +7550,10 @@ function closeLockedJourneyModal(){
 }
 function requestJourneyFromEntityAdmin(journeyId){
   const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
-  createEntityRequest('journey-request-to-admin',j.id,j.name,'Requested from AI Executive — review and send to Super Admin to activate.');
+  createEntityRequest('journey-request-to-admin',j.id,j.name,'Requested from AI Executive — review and activate.');
   closeLockedJourneyModal();
   removeLockedToastsForJourney(journeyId);
   showAiToast('Request sent to Entity Admin','Your Entity Admin will review this request.');
-}
-function notifyAdminForJourney(journeyId){
-  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
-  createEntityRequest('journey-activation',j.id,j.name,portalRoleLabel(portalRole)+' requested activation from AI Executive.');
-  closeLockedJourneyModal();
-  removeLockedToastsForJourney(journeyId);
-  showAiToast('Request sent to Super Admin','Super Admin will be notified to activate "'+j.name+'".');
 }
 let notifyMgrCtx=null;
 function openNotifyManagerModal(managerName,contextLabel,refId){
@@ -7559,6 +7620,8 @@ function buildAIWaitingApprovalHTML(opts){
   const backLabel=opts.backLabel||'Back to AI Executive';
   const backAction=opts.backAction||"page='ai-executive';renderADTPage()";
   const showDataPanel=portalRole==='entity-user'&&!!opts.approvalPanelHTML;
+  const sidePanelHTML=showDataPanel?opts.approvalPanelHTML:opts.sidePanelHTML;
+  const showSidePanel=!!sidePanelHTML;
   const actionButtons=showDataPanel
     ?'<button class="btn btn-secondary" onclick="openNotifyManagerModal(\''+(opts.managerName||'')+'\',\''+(opts.noteContextLabel||'')+'\',\''+(opts.noteRefId||'')+'\')">Notify Entity Admin</button><button class="btn btn-success" onclick="'+opts.onApprove+'">Approve</button>'
     :'<button class="btn btn-success" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>';
@@ -7581,13 +7644,13 @@ function buildAIWaitingApprovalHTML(opts){
     +actionButtons
     +'</div>'
     +'</div>';
-  if(!showDataPanel){
+  if(!showSidePanel){
     return '<div class="ep-page" style="max-width:680px;margin:20px auto 0;text-align:center">'+card+'</div>';
   }
   return '<div class="ep-page" style="max-width:1040px;margin:20px auto 0">'
     +'<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">'
     +'<div style="flex:1 1 420px;text-align:center">'+card+'</div>'
-    +'<div style="flex:1 1 420px">'+opts.approvalPanelHTML+'</div>'
+    +'<div style="flex:1 1 420px">'+sidePanelHTML+'</div>'
     +'</div></div>';
 }
 function buildAIProposalWaitingApprovalHTML(){
@@ -7610,23 +7673,29 @@ function buildAIProposalWaitingApprovalHTML(){
     noteRefId:d.proposalId||''
   });
 }
-function buildAIContractWaitingApprovalHTML(){
+function buildAIContractAwaitingSignatureHTML(){
   const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
   const pd=aiProposalDraft||{};
+  const empName=rec.empName||pd.name||'the employee';
   if(pd.runId)aiUpsertRun('contract-creation',pd.runId,{client:pd.name,country:pd.country,contractType:pd.type,currentStepIdx:4,status:'Waiting for Approval',lastActivity:'Just now'});
+  const docPanel=buildAIContractDocCardHTML(rec,pd);
   return buildAIWaitingApprovalHTML({
-    description:'We\'ve notified <strong style="color:var(--navy)">'+aiOpsManager.name+'</strong> (Ops Manager) to review contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+(rec.empName||'')+'</strong>. Once approved, this journey will automatically continue to onboarding.',
-    entityUserDescription:'Contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+(rec.empName||'')+'</strong> is ready for your review. Approve it to continue to onboarding, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
+    backLabel:'Back to AI Executive',
+    backAction:"page='ai-executive';renderADTPage()",
+    description:'Contract <strong>'+(rec.contractId||'')+'</strong> has been countersigned by <strong style="color:var(--navy)">'+empName+'</strong> via Docuseal. We\'ve notified <strong style="color:var(--navy)">'+aiOpsManager.name+'</strong> (Ops Manager) to review the signed contract. Once approved, this journey will automatically continue to onboarding.',
+    entityUserDescription:'The signed contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+empName+'</strong> is ready for your review. Approve it to continue to onboarding, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
     timelineItems:[
       {label:'Contract Generated',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Signature Received',dotClass:'client',chips:[{cls:'ai-chip-client',label:'Client Action'}]},
       {label:'Waiting for '+aiOpsManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
       {label:'Onboarding (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
     ],
     onApprove:'aiSimulateContractApproval()',
-    approveLabel:'Simulate: '+aiOpsManager.name+' Approves',
-    approvalPanelHTML:buildAIContractApprovalDataHTML(rec),
+    approveLabel:'Approve',
+    approvalPanelHTML:docPanel,
+    sidePanelHTML:docPanel,
     managerName:aiOpsManager.name,
-    noteContextLabel:'Contract approval — '+(rec.empName||'Employee'),
+    noteContextLabel:'Contract approval — '+empName,
     noteRefId:rec.contractId||''
   });
 }
@@ -7644,7 +7713,7 @@ function aiSimulateContractApproval(){
         showAiToast(aiOpsManager.name+' approved the contract',rec.empName?'Onboarding for '+rec.empName+' is starting':'Onboarding is starting');
       }
     }
-    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:5,status:'In Progress',lastActivity:'Just now'});
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:6,status:'In Progress',lastActivity:'Just now'});
     page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
   },2000);
 }
@@ -7680,14 +7749,14 @@ function aiContractDocApprove(){
   aiContractEditMode=false;
   aiSendContractForApproval();
 }
-function buildAIContractDocumentHTML(){
-  const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
-  const d=aiProposalDraft||{};
+function buildAIContractDocCardHTML(rec,d,opts){
+  rec=rec||{};d=d||{};opts=opts||{};
   const now=aiFormatNow();
   const entity='ADT '+(rec.country||d.country||'Netherlands')+(rec.type==='PEO'?' PEO Services B.V.':' EOR Services B.V.');
-  return '<div style="padding:8px 0 24px">'
-    +'<div id="ai-contract-doc-actionbar">'+aiContractDocActionBarHTML()+'</div>'
-    +'<div class="adt-doc-page'+(aiContractEditMode?' adt-doc-editing':'')+'" id="ai-contract-doc-body"'+(aiContractEditMode?' contenteditable="true"':'')+'>'
+  const signed=!!(rec.signedAt||['Contract Signed','Contract Approved','Onboarding','Ready for Payroll'].indexOf(rec.status)>-1);
+  const sigLabel=signed?('Signed'+(rec.signedAt?' &middot; '+rec.signedAt:'')):'Pending';
+  return '<div class="adt-doc-page'+(opts.editing?' adt-doc-editing':'')+'"'+(opts.id?' id="'+opts.id+'"':'')+(opts.editing?' contenteditable="true"':'')+' style="position:relative">'
+    +(signed?'<div style="position:absolute;top:20px;right:20px;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:#f0fdf4;border:1px solid #86efac;color:#15803d;font-size:11px;font-weight:700;letter-spacing:.3px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>VERIFIED</div>':'')
     +'<div class="adt-doc-header">'
     +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Global Employment Platform</div></div>'
     +'<div><div class="adt-doc-title">EMPLOYMENT AGREEMENT</div><div class="adt-doc-meta">Contract No. '+(rec.contractId||'—')+'<br>Issued '+now.date+'</div></div>'
@@ -7717,25 +7786,47 @@ function buildAIContractDocumentHTML(){
     +'</div>'
     +'<div class="adt-doc-sig-row">'
     +'<div class="adt-doc-sig-block">For and on behalf of '+entity+'<div class="adt-doc-sig-label">Authorized Signatory &middot; '+now.date+'</div></div>'
-    +'<div class="adt-doc-sig-block">'+(rec.empName||d.name||'Employee')+'<div class="adt-doc-sig-label">Employee Signature &middot; Pending</div></div>'
-    +'</div>'
+    +'<div class="adt-doc-sig-block">'+(signed?'<div style="font-family:\'Segoe Script\',\'Brush Script MT\',\'Lucida Handwriting\',cursive;font-size:26px;line-height:1;color:#1e3a5f;margin:-10px 0 4px;transform:rotate(-2deg);transform-origin:left bottom">'+(rec.empName||d.name||'Employee')+'</div>':'')+(rec.empName||d.name||'Employee')+'<div class="adt-doc-sig-label">Employee Signature &middot; '+sigLabel+'</div></div>'
     +'</div>'
     +'</div>';
 }
+function buildAIContractDocumentHTML(){
+  const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
+  const d=aiProposalDraft||{};
+  return '<div style="padding:8px 0 24px">'
+    +'<div id="ai-contract-doc-actionbar">'+aiContractDocActionBarHTML()+'</div>'
+    +buildAIContractDocCardHTML(rec,d,{editing:aiContractEditMode,id:'ai-contract-doc-body'})
+    +'</div>';
+}
 function aiSendContractForApproval(){
-  const notifyName=portalRole==='entity-user'?'Entity Admin':aiOpsManager.name;
-  aiShowLoader('Sending for Signature&hellip;','Routing the contract to '+notifyName+' for approval');
+  const empName=(aiProposalDraft&&aiProposalDraft.name)||'the employee';
+  aiShowLoader('Sending for Signature&hellip;','Generating the contract and routing it to '+empName+' for countersignature via Docuseal');
   if(aiCreatedContractId){
     const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
     if(rec){
-      rec.status='Contract Sent';
       const now=aiFormatNow();
-      (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:'AI Contract Assistant',status:'Contract Sent',action:'Contract generated and sent to '+aiOpsManager.name+' ('+aiOpsManager.role+') for approval.'});
+      rec.status='Contract Sent';
+      (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:'AI Contract Assistant',status:'Contract Sent',action:'Contract generated and sent to '+empName+' for countersignature via Docuseal.'});
     }
   }
-  notifData.unshift({name:'Contract sent for approval — '+((aiProposalDraft&&aiProposalDraft.name)||''),cid:aiCreatedContractId||'',time:'Just now',pending:true});
-  showAiToast('Contract sent for signature',notifyName+' has been notified for approval');
-  setTimeout(function(){page='ai-contract-waiting-approval';renderADTPage();},2000);
+  setTimeout(function(){
+    aiShowLoader('Awaiting Client Signature&hellip;','Simulating '+empName+' opening the Docuseal link, reviewing the contract, and countersigning it&hellip;');
+    setTimeout(function(){
+      if(aiCreatedContractId){
+        const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
+        if(rec){
+          const now=aiFormatNow();
+          rec.status='Contract Signed';
+          rec.signedAt=now.date+' '+now.time;
+          (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:empName,status:'Contract Signed',action:empName+' countersigned via Docuseal.'});
+          (ctWorkflowData[aiCreatedContractId]=ctWorkflowData[aiCreatedContractId]||[]).unshift({title:'Signature Received',user:empName,date:now.date,time:now.time,description:empName+' countersigned the contract. Routing to '+aiOpsManager.name+' for final approval.'});
+        }
+      }
+      notifData.unshift({name:'Contract signed — pending approval for '+empName,cid:aiCreatedContractId||'',time:'Just now',pending:true});
+      showAiToast('Contract countersigned',empName+' has signed — routing to '+aiOpsManager.name+' for approval');
+      page='ai-contract-awaiting-signature';renderADTPage();
+    },2200);
+  },1500);
 }
 let aiCtOnboardingStep=-1;
 const aiCtOnboardingSteps=[
@@ -7758,7 +7849,7 @@ function aiCtRunOnboardingStep(){
       const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
       if(rec)rec.status='Ready for Payroll';
     }
-    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:6,status:'Completed',lastActivity:'Just now'});
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:7,status:'Completed',lastActivity:'Just now'});
     page='ai-journey-complete';renderADTPage();
     return;
   }
@@ -7766,11 +7857,68 @@ function aiCtRunOnboardingStep(){
     aiCtOnboardingStep++;
     navigatePage('ai-onboarding-run');
     aiCtRunOnboardingStep();
-  },1600);
+  },3200);
+}
+// -- Contract Creation onboarding: same 3-step timeline as before, but the currently-running step now
+// renders a detail card (documents checklist / country compliance rules / systems provisioned) instead of
+// a flat spinner line, matching the Hire to Retire journey's Compliance Checks / Leave Policy steps. --
+function aiCtOnboardingStepDetailHTML(idx,rec){
+  if(idx===0){
+    const docs=[
+      {label:'Government ID Proof',note:'Verified against submitted ID'},
+      {label:'Proof of Address',note:'Verified'},
+      {label:'Educational Certificates',note:'Verified'},
+      {label:'Bank Account Details',note:'Verified for payroll setup'},
+      {label:'Signed Employment Contract',note:'On file'}
+    ];
+    const rows=docs.map(function(d){return '<div class="ea-req-row"><div><div class="ea-req-label">'+d.label+'</div><div class="ea-req-time">'+d.note+'</div></div><span class="status-pill active">Verified</span></div>';}).join('');
+    return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Collecting onboarding documents&hellip;</div>'
+      +'<div class="ea-req-list">'+rows+'</div>';
+  }
+  if(idx===1){
+    const compliance=aiH2rCountryData[rec.country]||aiH2rCountryData['India'];
+    return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Fetching from Compliance Hub&hellip;</div>'
+      +'<div class="review-grid" style="grid-template-columns:1fr">'
+      +aiDrawerRow('Country Rate Rules',compliance.rateRules)
+      +aiDrawerRow('Statutory Requirements',compliance.statutory)
+      +aiDrawerRow('Tax Bands',compliance.taxBand)
+      +'</div>';
+  }
+  const systems=[
+    {label:'Email & Workspace',note:'Google Workspace account created'},
+    {label:'HRMS Access',note:'Provisioned in Keka'},
+    {label:'Payroll System',note:'Mapped to ADT Payroll'},
+    {label:'Collaboration Tools',note:'Slack invite sent'}
+  ];
+  const rows=systems.map(function(s){return '<div class="ea-req-row"><div><div class="ea-req-label">'+s.label+'</div><div class="ea-req-time">'+s.note+'</div></div><span class="status-pill active">Granted</span></div>';}).join('');
+  return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Provisioning system access&hellip;</div>'
+    +'<div class="ea-req-list">'+rows+'</div>';
+}
+function buildAICtOnboardingTimelineHTML(){
+  const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
+  return aiCtOnboardingSteps.map(function(step,i){
+    let dotClass,body;
+    if(i<aiCtOnboardingStep){
+      dotClass='run-done';
+      body='<div class="ai-timeline-card-desc">Completed</div>';
+    }else if(i===aiCtOnboardingStep){
+      dotClass='run-current';
+      body=aiCtOnboardingStepDetailHTML(i,rec);
+    }else{
+      dotClass='run-pending';
+      body='<div class="ai-timeline-card-desc" style="color:#cbd5e1">Waiting&hellip;</div>';
+    }
+    return '<div class="ai-timeline-item">'
+      +'<div class="ai-timeline-dot '+dotClass+'">'+(i<aiCtOnboardingStep?'&#10003;':(i+1))+'</div>'
+      +'<div class="ai-timeline-card" style="cursor:default">'
+      +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+step.label+'</span></div>'
+      +body
+      +'</div></div>';
+  }).join('');
 }
 function buildAIOnboardingRunHTML(){
   return '<div class="ep-page" style="max-width:680px;margin:0 auto">'
-    +'<div class="ai-timeline">'+buildAIRunTimelineHTML({steps:aiCtOnboardingSteps},aiCtOnboardingStep)+'</div>'
+    +'<div class="ai-timeline">'+buildAICtOnboardingTimelineHTML()+'</div>'
     +'</div>';
 }
 function buildAIJourneyCompleteHTML(){
@@ -7880,8 +8028,8 @@ function buildEntityAdminMyTasksHTML(){
   const journeyRows=journeyReqs.map(function(r){
     const isPending=r.status==='Pending';
     const actions=isPending
-      ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="forwardJourneyRequestToSuperAdmin(\''+r.id+'\')">Send to Super Admin</button><button class="sa-req-btn sa-req-reject" onclick="declineJourneyRequest(\''+r.id+'\')">Decline</button></div>'
-      :'<span class="status-pill '+(r.status==='Forwarded'?'pending':statusClass(r.status))+'">'+r.status+'</span>';
+      ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="approveJourneyRequestAsAdmin(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="declineJourneyRequest(\''+r.id+'\')">Decline</button></div>'
+      :'<span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span>';
     return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">Activate &ldquo;'+r.label+'&rdquo;</div><div class="ea-req-time">'+r.timestamp+'</div></div></div>'+actions+'</div>';
   }).join('');
   const journeyBody=journeyReqs.length?journeyRows:'<div class="ea-req-empty">No journey requests right now &mdash; if your Entity User asks to unlock a journey, it\'ll show up here.</div>';
@@ -7896,8 +8044,8 @@ function buildEntityAdminMyTasksHTML(){
   const noteBody=notes.length?noteRows:'<div class="ea-req-empty">No notes yet &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
   return '<div class="ai-exec-page">'
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Journey requests to review and forward, plus approvals your Entity User has flagged for a second opinion.</p>'
-    +'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Journey Requests</div><div class="setup-sub" style="margin-bottom:14px">Your Entity User is asking to unlock these &mdash; send to Super Admin to activate, or decline.</div><div class="ea-req-list">'+journeyBody+'</div></div>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Journey requests to review and approve, plus approvals your Entity User has flagged for a second opinion.</p>'
+    +'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Journey Requests</div><div class="setup-sub" style="margin-bottom:14px">Your Entity User is asking to unlock these &mdash; approve to activate immediately, or decline.</div><div class="ea-req-list">'+journeyBody+'</div></div>'
     +'<div class="setup-card"><div class="setup-title">Notes from Entity User</div><div class="setup-sub" style="margin-bottom:14px">Approvals flagged for your review &mdash; day-to-day journey approvals stay with whoever is running them.</div><div class="ea-req-list">'+noteBody+'</div></div>'
     +'</div>';
 }

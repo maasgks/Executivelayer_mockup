@@ -7,7 +7,7 @@
   if(page==='ai-proposal-created'){el.innerHTML=buildAIProposalCreatedHTML();aiScheduleAutoAdvance('ai-proposal-created',aiSendProposalForApproval,1300);return;}
   if(page==='ai-proposal-waiting-approval'){el.innerHTML=buildAIProposalWaitingApprovalHTML();return;}
   if(page==='ai-contract-document'){el.innerHTML=buildAIContractDocumentHTML();return;}
-  if(page==='ai-contract-waiting-approval'){el.innerHTML=buildAIContractWaitingApprovalHTML();return;}
+  if(page==='ai-contract-awaiting-signature'){el.innerHTML=buildAIContractAwaitingSignatureHTML();return;}
   if(page==='ai-onboarding-run'){el.innerHTML=buildAIOnboardingRunHTML();return;}
   if(page==='ai-journey-complete'){el.innerHTML=buildAIJourneyCompleteHTML();return;}
 }

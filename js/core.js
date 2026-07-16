@@ -1106,7 +1106,7 @@ const tmWorkflowData={
   6:[{title:'Team Deactivated',user:'Admin',date:'15 Jul 2025',time:'04:00:00 PM',description:'Local Admin team deactivated. Members reassigned.'},{title:'Team Activated',user:'Admin',date:'01 Jun 2025',time:'09:00:00 AM',description:'Local Admin team created for Netherlands entity.'}]
 };
 let tmSelectedId=null,tmTab='basic-details';
-const ctFlow=['Submitted','Quotation Approved','Proposal Sent','Proposal Approved','Contract Sent','Contract Approved','Onboarding','Ready for Payroll'];
+const ctFlow=['Submitted','Quotation Approved','Proposal Sent','Proposal Approved','Contract Sent','Contract Signed','Contract Approved','Onboarding','Ready for Payroll'];
 const contractsData=[
   {id:1,contractId:'94135',empName:'TestEmp Antar',empDesig:'Business Analyst',country:'Netherlands',type:'EOR',date:'2026-06-11 15:17:26',status:'Submitted',
    nationality:'India',countryOfOp:'Netherlands',workPermit:false,gender:'MALE',email:'antar@testemp.com',contact:'+91 9999999996',dob:'2010-01-01',jobTitle:'Business Analyst',skill:'JIRA',empDuration:'2026-06-11 – 2026-12-15',empType:'EOR',workSchedule:'7',payAmount:'100000',currency:'INR',jobDesc:'job desc',payFrequency:'Monthly',
@@ -1151,7 +1151,8 @@ const aiJourneyEvents={
     {name:'Deal Created (Employee Created)',chips:['AI Automated','Deal Desk','Employee'],source:'AI Prompt Parser',desc:"AI parses a natural-language prompt to create the deal and, if the person doesn't already exist, creates or matches the Employee record in the same step.",validation:'Employee name and ID are matched or created against existing records.',human:'None — fully automated.',failure:'Ambiguous name matches are flagged for manual employee selection.',next:'Proposal Sent',fields:['Employee Name','Employee ID','Country','Client','Contract Type']},
     {name:'Proposal Sent',chips:['AI Automated','Proposal'],source:'AI Contract Assistant',desc:'AI drafts commercial terms and compliance items, then sends the proposal for internal approval.',validation:'Commercial terms are validated against country rate rules.',human:'None — AI-supported drafting.',failure:'Missing rate data blocks the send and raises an exception.',next:'Proposal Approved',fields:['Billing Rate','Pay Rate','Margin %','Compliance Checklist']},
     {name:'Proposal Approved',chips:['Human Required','Approval Required'],source:'Deal Manager',desc:'Deal Manager reviews commercial terms and the compliance checklist, then approves the proposal.',validation:'Manual review sign-off is recorded.',human:'Required — Deal Manager approval.',failure:'Rejection routes back to Proposal Sent for correction.',next:'Contract Sent',fields:['Approver Name','Approval Timestamp']},
-    {name:'Contract Sent',chips:['AI Automated','Docuseal'],source:'AI + Docuseal',desc:'AI generates the contract from the approved proposal and sends it for signature via Docuseal.',validation:'Contract fields are auto-filled from the proposal and the signature request is tracked.',human:'None — AI assisted generation.',failure:'A signature bounce or timeout raises an exception for resend.',next:'Contract Approved',fields:['Contract Number','Signatory Email','Docuseal Status']},
+    {name:'Contract Sent',chips:['AI Automated','Docuseal'],source:'AI + Docuseal',desc:'AI generates the contract from the approved proposal and sends it for signature via Docuseal.',validation:'Contract fields are auto-filled from the proposal and the signature request is tracked.',human:'None — AI assisted generation.',failure:'A signature bounce or timeout raises an exception for resend.',next:'Signature Received',fields:['Contract Number','Signatory Email','Docuseal Status']},
+    {name:'Signature Received',chips:['Client Action'],source:'Employee (via Docuseal)',desc:'The employee countersigns the contract in Docuseal. Once received, the signed document routes to the Ops Manager for final approval.',validation:'Docuseal confirms the countersignature and timestamps it against the sent contract.',human:'External — completed by the employee, not an ADT team member.',failure:'A signature timeout or bounce reopens the contract for resend from Contract Sent.',next:'Contract Approved',fields:['Signature Status','Signed Timestamp','Docuseal Envelope ID']},
     {name:'Contract Approved',chips:['Human Required','Approval Required'],source:'Ops Manager',desc:'Ops Manager confirms the signed contract and marks it approved internally.',validation:'The signed document is verified against the contract terms.',human:'Required — Ops Manager approval.',failure:'A discrepancy sends the contract back for correction.',next:'Onboarding',fields:['Approver Name','Signed Document ID']},
     {name:'Onboarding',chips:['AI Automated','Onboarding'],source:'AI Onboarding Engine',desc:'AI runs the onboarding checklist — documents, compliance checks, system access provisioning.',validation:'All onboarding checklist items are marked complete.',human:'None — fully automated.',failure:'A missing document flags an exception for HR follow-up.',next:'Ready for Payroll',fields:['Onboarding Checklist','Document Status','Compliance Status']},
     {name:'Ready for Payroll',chips:['AI Automated','Payroll'],source:'AI Payroll Readiness Check',desc:'AI validates that all payroll-required fields are complete and marks the employee ready for the next payroll cycle.',validation:'Bank details, tax info, and compensation mapping are all present.',human:'None — fully automated.',failure:'Incomplete payroll data blocks readiness and raises an exception.',next:'Journey Complete — Ready for Payroll',fields:['Bank Details','Compensation Mapping','Tax Info']}
@@ -1184,35 +1185,48 @@ const aiClients=[
 const aiClientJourneys=[
   {id:'cj-1',clientId:'dhi-hyperlocal',journeyId:'contract-creation',status:'Active',builtOn:'01 Jul 2026',scope:[]},
   {id:'cj-2',clientId:'dhi-hyperlocal',journeyId:'payroll-creation',status:'Active',builtOn:'02 Jul 2026',scope:[]},
-  {id:'cj-3',clientId:'vantage-freight',journeyId:'contract-creation',status:'Active',builtOn:'22 Jun 2026',scope:[null,null,null,null,null,{mode:'manual'}]},
+  {id:'cj-3',clientId:'vantage-freight',journeyId:'contract-creation',status:'Active',builtOn:'22 Jun 2026',scope:[null,null,null,null,null,null,{mode:'manual'}]},
   {id:'cj-4',clientId:'norrbridge-logistics',journeyId:'h2r-lifecycle',status:'Draft',builtOn:'28 Jun 2026',scope:[]},
   {id:'cj-5',clientId:'kaira-textiles',journeyId:'payroll-creation',status:'Active',builtOn:'15 Jun 2026',scope:[null,null,null,null,{mode:'manual'}]}
 ];
 let aiClientJourneySeq=6;
 
 // -- Configure: Systems (full parity with reference config console) --
-// Category taxonomy is written in ADT's own workforce/journey vocabulary (Contracts, Compliance Hub, Payroll, Finance)
-// rather than generic SAP/ERP marketplace terms, so Systems reads as part of the H2R automation platform.
-const cfgApiCategories=['Master Data','Vendor & Contract Management','Operations & Fulfillment','Finance & Payroll Postings','Compliance & Documentation','Employee & Workforce Records','Other'];
+// Dhi ADT is an EOR/global-payroll platform, not a supply-chain business, so there's no genuine
+// Order-to-Cash flow here — these client-side ERPs (SAP/Infor) treat Dhi ADT as their staffing
+// *vendor*, so "Procure to Pay" reflects the client's own AP process for paying Dhi ADT (PO ->
+// service confirmation -> invoice), alongside Hire to Retire (workforce/org master sync) and
+// Finance & Payroll Postings (GL). Each API is tagged Transactional (business documents/events)
+// vs Transformational (master/reference data consumed by Data Foundation).
+const cfgApiCategories=['Procure to Pay','Hire to Retire','Finance & Payroll Postings','Others'];
+const cfgApiSubcats={
+  'Procure to Pay':['Vendor & Service Master','Purchasing','Service Confirmation & Invoicing'],
+  'Hire to Retire':['Employee & Org Master','Time & Attendance'],
+  'Finance & Payroll Postings':['GL Postings'],
+  'Others':['Compliance & Documentation','General']
+};
+const cfgApiTypes=['Transactional','Transformational'];
 const cfgSystems=[
   {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
-      {name:'API_PRODUCT_SRV · Product',dir:'rw',cat:'Master Data'},
-      {name:'API_BUSINESS_PARTNER · Supplier',dir:'rw',cat:'Master Data'},
-      {name:'API_PURCHASEORDER_PROCESS',dir:'r',cat:'Vendor & Contract Management'},
-      {name:'API_MATERIAL_DOCUMENT · GR',dir:'r',cat:'Operations & Fulfillment'},
-      {name:'API_SUPPLIERINVOICE',dir:'r',cat:'Finance & Payroll Postings'}
+      {name:'API_BUSINESS_PARTNER · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
+      {name:'API_PRODUCT_SRV · Service Item Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
+      {name:'API_PURCHASEORDER_PROCESS · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
+      {name:'API_SRVENTRYSHEET_SRV · Service Confirmation',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'},
+      {name:'API_SUPPLIERINVOICE · Vendor Invoice',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'},
+      {name:'API_COSTCENTER · Cost Center Master',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'},
+      {name:'API_GLACCOUNTLINEITEM · GL Posting',dir:'r',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
   {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
-      {name:'SupplierMaster · Vendor',dir:'rw',cat:'Master Data'},
-      {name:'PurchaseOrder · Read',dir:'r',cat:'Vendor & Contract Management'},
-      {name:'GoodsReceipt · Read',dir:'r',cat:'Operations & Fulfillment'}
+      {name:'SupplierMaster · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
+      {name:'PurchaseOrder · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
+      {name:'GoodsReceipt · Service Confirmation',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'}
     ]},
   {id:'portal',name:'Vendor Portal',type:'3rd-party',method:'REST',endpoint:'https://vendors.vyoma.local/api/',auth:'OAuth 2.0',apis:12,lastTested:'2 days ago',status:'Connected',isDefault:true,activatedForEntity:false,
     apiList:[
-      {name:'VendorInvite · Onboarding',dir:'rw',cat:'Vendor & Contract Management'},
-      {name:'VendorDocuments · Read',dir:'r',cat:'Compliance & Documentation'}
+      {name:'VendorInvite · Onboarding',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transactional'},
+      {name:'VendorDocuments · Compliance Docs',dir:'r',cat:'Others',sub:'Compliance & Documentation',type:'Transformational'}
     ]}
 ];
 
@@ -1279,13 +1293,22 @@ function acknowledgeManagerNotify(id){
   renderADTPage();
   showAiToast('Marked as reviewed','You\'ve acknowledged this note from your Entity User.');
 }
-// -- Two-hop journey activation: Entity User asks Entity Admin, Entity Admin forwards to Super Admin --
-function forwardJourneyRequestToSuperAdmin(id){
+// -- Journey activation: Entity User asks Entity Admin, and Entity Admin approves directly (no Super Admin hop) --
+function approveJourneyRequestAsAdmin(id){
   const req=entityRequests.find(function(r){return r.id===id&&r.type==='journey-request-to-admin';});if(!req||req.status!=='Pending')return;
-  req.status='Forwarded';
-  createEntityRequest('journey-activation',req.refId,req.label,'Requested by '+req.requestedBy+' via AI Executive; forwarded by '+portalRoleLabel(portalRole)+'.');
+  req.status='Approved';
+  entityJourneyActivation[req.refId]=true;
   renderADTPage();
-  showAiToast('Sent to Super Admin','"'+req.label+'" has been forwarded for approval.');
+  showAiToast('Journey Activated','"'+req.label+'" has been activated.');
+}
+// -- Entity Admin can also activate a locked journey directly from the AI Executive card, no request needed --
+function activateJourneyAsAdmin(journeyId){
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
+  entityJourneyActivation[journeyId]=true;
+  closeLockedJourneyModal();
+  removeLockedToastsForJourney(journeyId);
+  renderADTPage();
+  showAiToast('Journey Activated','"'+j.name+'" is now active for your entity.');
 }
 function declineJourneyRequest(id){
   const req=entityRequests.find(function(r){return r.id===id&&r.type==='journey-request-to-admin';});if(!req||req.status!=='Pending')return;
@@ -1295,12 +1318,13 @@ function declineJourneyRequest(id){
 }
 
 const cfgJourneys=[
-  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['7 steps','Deal Desk, Contracts'],
+  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['8 steps','Deal Desk, Contracts'],
     steps:[
       {name:'Create Deal & Employee Record',src:'AI Prompt Parser',type:'src'},
       {name:'Send Proposal',src:'AI Contract Assistant',type:'src'},
       {name:'Proposal Approval',src:'Deal Manager',type:'rule'},
       {name:'Send Contract for Signature',src:'AI + Docuseal',type:'src'},
+      {name:'Signature Received',src:'Employee (via Docuseal)',type:'src'},
       {name:'Contract Approval',src:'Ops Manager',type:'rule'},
       {name:'Run Onboarding',src:'AI Onboarding Engine',type:'src'},
       {name:'Check Payroll Readiness',src:'AI Payroll Readiness Check',type:'src'}
@@ -1364,6 +1388,7 @@ const manualJourneyStepCatalog={
     {name:'Proposal Approved',ownerRole:'Deal Manager',modulePage:'my-tasks',manualAction:'Approve or reject proposal terms with comments.',sla:'4h',agentCapable:false,approvalRequired:true},
     {name:'Client Acceptance',ownerRole:'Account Manager',modulePage:'contracts',manualAction:'Send proposal, track acceptance, and record client response.',sla:'8h',agentCapable:true},
     {name:'Contract Generated & Sent',ownerRole:'Legal / Contracts Manager',modulePage:'contracts',manualAction:'Generate contract, validate clauses, and send for signature.',sla:'4h',agentCapable:true},
+    {name:'Signature Received',ownerRole:'Legal / Contracts Manager',modulePage:'contracts',manualAction:'Track the Docuseal countersignature request and confirm the employee has signed before routing for approval.',sla:'48h',agentCapable:true,exceptionType:'Signature timeout or bounce'},
     {name:'Signed Contract Approved',ownerRole:'Ops Manager',modulePage:'my-tasks',manualAction:'Verify signed contract against approved proposal and approve readiness.',sla:'4h',agentCapable:false,approvalRequired:true},
     {name:'Onboarding',ownerRole:'HR',modulePage:'direct',manualAction:'Run onboarding checklist, documents, reminders, and employee setup manually.',sla:'8h',agentCapable:true},
     {name:'Payroll Readiness',ownerRole:'HR',modulePage:'payroll',manualAction:'Validate bank details, tax ID, compensation mapping, and pay frequency manually.',sla:'4h',agentCapable:true,exceptionType:'Incomplete bank details'}
@@ -1394,7 +1419,7 @@ const manualJourneyStepCatalog={
   ]
 };
 const cfgToManualStepIndexMap={
-  'contract-creation':[0,2,3,5,6,7,8],
+  'contract-creation':[0,2,3,5,6,7,8,9],
   'payroll-creation':[0,1,2,3,4,7],
   'h2r-lifecycle':[0,3,6,7,11]
 };
