@@ -177,58 +177,113 @@ function buildPersonaDashboardHTML(){
     +'</div>';
 }
 
-// -- ENTITY ADMIN DASHBOARD TAB: governance stats for this entity, not the shared employee view --
+// -- ENTITY ADMIN DASHBOARD: pending Requests/Notes rendered as a vertical list of cards, ranked by urgency --
+function entityRequestUrgency(r){
+  const actionable=r.type==='journey-request-to-admin'||r.type==='manager-notify';
+  const t=Date.parse(r.timestamp);
+  const ageHrs=isNaN(t)?0:Math.min((Date.now()-t)/3600000,500);
+  return (actionable?1000:0)+ageHrs;
+}
+// dot color is a property of the request itself (urgency), not its position in the stack — so promoting a card to front never changes its color
+function eaUrgencyDotClass(r){
+  const u=entityRequestUrgency(r);
+  if(u>=1000)return 'ea-dot-high';
+  if(u>=72)return 'ea-dot-medium';
+  return 'ea-dot-low';
+}
+function eaStackOpen(id,stackKey){
+  const el=document.getElementById('ea-stack-card-'+stackKey+'-'+id);
+  if(el)el.classList.add('tearing');
+  setTimeout(function(){navigatePage('my-tasks');},220);
+}
+function eaReqPinHTML(stackKey){
+  if(stackKey!=='requests')return '';
+  return '<div class="ea-req-pin" title="Go to My Tasks" onclick="openMyTasksFromDashboard(event)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></div>';
+}
+function buildEaRequestStackHTML(stackKey,title,sub,items,cardHTML,emptyText){
+  const pin=eaReqPinHTML(stackKey);
+  const hostClass='setup-card'+(pin?' ea-req-pin-host':'');
+  if(!items.length)return '<div class="'+hostClass+'">'+pin+'<div class="setup-title" style="margin-bottom:0">'+title+'</div><div class="setup-sub" style="margin-bottom:0">'+sub+'</div><div class="ea-req-empty">'+emptyText+'</div></div>';
+  const sorted=items.slice().sort(function(a,b){return entityRequestUrgency(b)-entityRequestUrgency(a);});
+  const capped=sorted.slice(0,5);
+  const extra=sorted.length-capped.length;
+  const domIdFor=function(r){return 'ea-stack-card-'+stackKey+'-'+r.id;};
+  const cards=capped.map(function(r){
+    const dot='<span class="ea-stack-dot '+eaUrgencyDotClass(r)+'"></span>';
+    return '<div class="ea-req-card" id="'+domIdFor(r)+'" onclick="eaStackOpen(\''+r.id+'\',\''+stackKey+'\')">'+cardHTML(r,dot)+'</div>';
+  }).join('');
+  return '<div class="'+hostClass+'">'+pin
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="setup-title" style="margin-bottom:0">'+title+'</div><button class="btn btn-secondary btn-sm" onclick="navigatePage(\'my-tasks\')">View All</button></div>'
+    +'<div class="setup-sub" style="margin-bottom:16px">'+sub+'</div>'
+    +'<div class="ea-req-vlist">'+cards+'</div>'
+    +(extra>0?'<div class="ea-stack-more" onclick="navigatePage(\'my-tasks\')">+'+extra+' more in My Tasks</div>':'')
+    +'</div>';
+}
+function openMyTasksFromDashboard(e){
+  if(e)e.stopPropagation();
+  myTasksBackTo='dashboard';
+  navigatePage('my-tasks');
+}
+function eaReqCardHTML(r,dot){
+  const label=r.type==='journey-request-to-admin'?'Activate &ldquo;'+r.label+'&rdquo;':r.label;
+  return dot
+    +'<div class="ea-stack-issue">'+label+'</div>'
+    +'<div class="ea-stack-meta"><div class="ea-stack-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-stack-time">'+r.timestamp+'</div></div>';
+}
+function eaNoteCardHTML(r,dot){
+  return dot
+    +'<div class="ea-stack-issue">'+r.label+'</div>'
+    +'<div class="ea-stack-meta"><div class="ea-stack-who"><div class="ea-req-requester">'+r.requestedBy+'</div></div><div class="ea-stack-time">'+r.timestamp+'</div></div>';
+}
 function buildEntityAdminDashboardHTML(){
   const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
   const sysActive=cfgSystems.filter(s=>s.isDefault&&s.activatedForEntity).length;
   const jyTotal=aiJourneys.length;
-  const jyActive=Object.values(entityJourneyActivation).filter(Boolean).length;
-  const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify'&&r.type!=='journey-request-to-admin');
-  const pending=visibleRequests.filter(r=>r.status==='Pending').length;
-  const sysRows=cfgSystems.filter(s=>s.isDefault).map(function(s){
-    const active=!!s.activatedForEntity;
-    return `<div class="ea-req-row" style="cursor:pointer" onclick="viewCfgSystem('${s.id}')"><div><div class="ea-req-label">${s.name}</div><div class="ea-req-time">${s.type} &middot; ${s.method}</div></div><span class="status-pill ${active?'active':'draft'}">${active?'Activated':'Not Activated'}</span></div>`;
-  }).join('');
-  const jyRows=aiJourneys.map(function(j){
-    const active=!!entityJourneyActivation[j.id];
-    return `<div class="ea-req-row" style="cursor:pointer" onclick="viewCfgJourney('${j.id}')"><div><div class="ea-req-label">${j.name}</div><div class="ea-req-time">${j.category}</div></div><span class="status-pill ${active?'active':'draft'}">${active?'Activated':'Locked'}</span></div>`;
-  }).join('');
-  const reqRows=visibleRequests.slice(0,8).map(r=>`<div class="ea-req-row"><div><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp}</div></div><span class="status-pill ${statusClass(r.status)}">${r.status}</span></div>`).join('');
-  const reqBody=visibleRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — activate a system or journey to see status here.</div>';
-  const notifyEntries=entityRequests.filter(r=>r.type==='manager-notify');
-  const notifyRows=notifyEntries.slice(0,8).map(r=>`<div class="ea-req-row" style="flex-direction:column;align-items:flex-start;gap:4px"><div class="ea-req-label">${r.label}</div><div class="ea-req-time">${r.timestamp} &middot; ${r.requestedBy}</div><div style="font-size:12.5px;color:var(--navy);line-height:1.5">${r.note}</div></div>`).join('');
-  const notifyBody=notifyEntries.length?notifyRows:'<div class="ea-req-empty">No notes yet — your Entity Users will show up here if they escalate an approval.</div>';
+  const jyActive=jyTotal;
+  const entityScopedRequests=entityRequests.filter(r=>r.clientId==='dhi-hyperlocal'&&r.type!=='manager-notify');
+  const sentToSuperAdmin=entityScopedRequests.filter(r=>r.type!=='journey-request-to-admin');
+  const pending=sentToSuperAdmin.filter(r=>r.status==='Pending').length;
+  const pendingRequests=entityScopedRequests.filter(r=>r.status==='Pending');
+  const notifyEntries=entityRequests.filter(r=>r.type==='manager-notify'&&r.clientId==='dhi-hyperlocal');
+  const pendingNotes=notifyEntries.filter(r=>r.status==='Pending');
   return `
     <p style="font-size:14px;font-weight:600;margin-bottom:4px">Entity Admin</p>
     <p style="font-size:12px;color:var(--gray);margin-bottom:20px">Your entity's automation overview — systems, journeys, and requests.</p>
     <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
-      <div class="stat-card"><div class="stat-label"><span>Systems Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg></div></div><div class="stat-val">${sysActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${sysTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Default systems in use</div></div>
-      <div class="stat-card"><div class="stat-label"><span>Journeys Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg></div></div><div class="stat-val">${jyActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${jyTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Available in AI Executive</div></div>
-      <div class="stat-card"><div class="stat-label"><span>Pending Requests</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div><div class="stat-val" style="${pending?'color:var(--orange)':''}">${pending}</div><div class="stat-sub" style="color:var(--gray)">Awaiting Super Admin approval</div></div>
+      <div class="stat-card ea-hero-stat cfg-hero-blue" onclick="openEntitySystemsModal()"><div class="stat-label"><span>Systems Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg></div></div><div class="stat-val">${sysActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${sysTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Default systems in use</div></div>
+      <div class="stat-card ea-hero-stat cfg-hero-teal" onclick="openEntityJourneysModal()"><div class="stat-label"><span>Journeys Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg></div></div><div class="stat-val">${jyActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${jyTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Available in AI Executive</div></div>
+      <div class="stat-card ea-hero-stat cfg-hero-orange"><div class="stat-label"><span>Pending Requests</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div><div class="stat-val" style="${pending?'color:var(--orange)':''}">${pending}</div><div class="stat-sub" style="color:var(--gray)">Awaiting Super Admin approval</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-      <div class="setup-card" style="margin-bottom:0">
-        <div class="setup-title">Systems</div>
-        <div class="setup-sub" style="margin-bottom:14px">Default systems available to activate for your entity</div>
-        <div class="ea-req-list">${sysRows}</div>
-      </div>
-      <div class="setup-card" style="margin-bottom:0">
-        <div class="setup-title">Journeys</div>
-        <div class="setup-sub" style="margin-bottom:14px">AI Executive journeys unlocked for your entity</div>
-        <div class="ea-req-list">${jyRows}</div>
-      </div>
-    </div>
-    <div class="setup-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="setup-title" style="margin-bottom:0">Your Requests</div>${pending?'<span class="status-pill pending">'+pending+' Pending</span>':''}</div>
-      <div class="setup-sub" style="margin-bottom:14px">Systems and journeys you've asked Super Admin to activate</div>
-      <div class="ea-req-list">${reqBody}</div>
-    </div>
-    <div class="setup-card">
-      <div class="setup-title">Notes from Entity User</div>
-      <div class="setup-sub" style="margin-bottom:14px">Approvals your team has flagged for your attention</div>
-      <div class="ea-req-list">${notifyBody}</div>
+    <div class="ea-stack-cols">
+      ${buildEaRequestStackHTML('requests','Your Requests',"Systems and journeys you've asked Super Admin to activate, plus journeys your Entity Users have asked you to activate",pendingRequests,eaReqCardHTML,'No requests yet — activate a system or journey to see status here.')}
+      ${buildEaRequestStackHTML('notes','Notes from Entity User','Approvals your team has flagged for your attention',pendingNotes,eaNoteCardHTML,'No notes yet — your Entity Users will show up here if they escalate an approval.')}
     </div>
   `;
+}
+function openEntitySystemsModal(){
+  const rows=cfgSystems.filter(s=>s.isDefault).map(function(s){
+    const active=!!s.activatedForEntity;
+    return `<div class="ea-req-row" style="cursor:pointer" onclick="closeCtModal();viewCfgSystem('${s.id}')"><div><div class="ea-req-label">${s.name}</div><div class="ea-req-time">${s.type} &middot; ${s.method}</div></div><span class="status-pill ${active?'active':'draft'}">${active?'Activated':'Not Activated'}</span></div>`;
+  }).join('');
+  document.getElementById('ct-modal-overlay').innerHTML=
+    '<div class="ct-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">Systems</span><button class="ct-modal-close" onclick="closeCtModal()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'<div class="setup-sub" style="margin-bottom:14px">Default systems available to activate for your entity</div>'
+    +'<div class="ea-req-list">'+rows+'</div>'
+    +'</div>';
+  document.getElementById('ct-modal-overlay').style.display='flex';
+}
+function openEntityJourneysModal(){
+  const rows=aiJourneys.map(function(j){
+    return `<div class="ea-req-row" style="cursor:pointer" onclick="closeCtModal();viewCfgJourney('${j.id}')"><div><div class="ea-req-label">${j.name}</div><div class="ea-req-time">${j.category}</div></div><span class="status-pill active">Activated</span></div>`;
+  }).join('');
+  document.getElementById('ct-modal-overlay').innerHTML=
+    '<div class="ct-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">Journeys</span><button class="ct-modal-close" onclick="closeCtModal()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'<div class="setup-sub" style="margin-bottom:14px">AI Executive journeys unlocked for your entity</div>'
+    +'<div class="ea-req-list">'+rows+'</div>'
+    +'</div>';
+  document.getElementById('ct-modal-overlay').style.display='flex';
 }
 
 // -- SUPER ADMIN DASHBOARD TAB: the Configure > Overview snapshot plus items needing this role's action --
@@ -3799,14 +3854,14 @@ function aiStepResponsibility(chips){
   return{label:'Agent',cls:'ai'};
 }
 
-function viewAIJourney(id){
+function viewAIJourney(id,backTo){
   if(!activePersonaCanAccessJourney(id)){
     selectedAIJourneyId=activePersonaJourneyIds()[0]||'contract-creation';
     navigatePage('ai-executive');
     showAiToast('Journey hidden for this role','Only journeys owned by '+portalRoleLabel(portalRole)+' are available here.');
     return;
   }
-  selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;aiRunStatusFilter='';navigatePage('ai-journey-detail');
+  selectedAIJourneyId=id;aiEventDrawerIdx=-1;aiJourneyDetailSelectedStage=-1;aiRunStatusFilter='';aiJourneyDetailBackPage=backTo||null;navigatePage('ai-journey-detail');
 }
 function startAutomateJourney(id){aiAutomateSkipPicker=true;aiAutomateResumeOrStart(id);navigatePage('ai-automate-form');}
 function startAutomateJourneyPicker(){selectedAIJourneyId=null;aiAutomateSkipPicker=false;aiAutomateStep=0;aiAutomateFormData={};navigatePage('ai-automate-form');}
@@ -4046,53 +4101,44 @@ function buildOperationsCockpitPageHTML(){
     +buildOperationsCockpitHTML()
     +'</div>';
 }
+function cockpitRunNeedsAttention(r){
+  return r.status==='Blocked'||(r.exceptions||[]).some(function(e){return e.status==='Open';})||(r.status==='Waiting Approval'&&r.blockedReason&&r.blockedReason!=='None');
+}
+function cockpitRunOwnerDepartment(r){
+  const steps=manualJourneySteps(r.journeyId);
+  const st=steps[r.currentStepIdx]||{};
+  const owner=st.ownerRole||r.ownerRole||'Entity Admin';
+  return cockpitDeptById(manualStepOwnerDeptId(owner)).name;
+}
+function cockpitQueueItems(activeRuns){
+  const items=[];
+  activeRuns.forEach(function(r){
+    const openEx=(r.exceptions||[]).filter(function(e){return e.status==='Open';});
+    if(openEx.length){
+      openEx.forEach(function(e,i){
+        items.push({run:r,kind:'exception',idx:i,title:e.type,resolution:e.suggestedResolution});
+      });
+    }else if(cockpitRunNeedsAttention(r)){
+      const c=cockpitRunComputed(r);
+      const ownerName=manualStepOwnerName(c.st.ownerRole||r.ownerRole||'Entity Admin');
+      items.push({run:r,kind:'approval',idx:-1,title:(r.blockedReason&&r.blockedReason!=='None')?r.blockedReason:'Approval required',resolution:'Waiting on '+ownerName+' to review and approve.'});
+    }
+  });
+  items.sort(function(a,b){
+    const rank={High:0,Medium:1,Low:2};
+    return (rank[a.run.slaRisk]||3)-(rank[b.run.slaRisk]||3);
+  });
+  return items;
+}
 function buildOperationsCockpitHTML(){
   const activeRuns=manualJourneyRuns.filter(function(r){return r.status!=='Completed';}).concat(aiAllPendingRuns().map(function(x){
     return {runId:x.run.runId,journeyId:x.journey.id,subject:x.run.client,entity:'Dhi Hyperlocal',mode:'Agent',currentStepIdx:x.run.currentStepIdx,status:x.run.status,slaRisk:x.run.status==='Exception'?'High':'Medium',blockedReason:x.run.exceptionNote||'Approval required',escalation:x.run.status==='Exception'?'Entity Admin in 2h':'None',manualHours:0,agentEstimateHours:0,exceptions:x.run.status==='Exception'?[{type:'Agent exception',ownerRole:'Entity Admin',status:'Open',suggestedResolution:x.run.exceptionNote||'Review run detail.'}]:[],audit:['Agentic run tracked from existing automation flow']};
   }));
-  const highRisk=activeRuns.filter(function(r){return r.slaRisk==='High';}).length;
-  const runNeedsAttention=function(r){
-    return r.status==='Blocked'||(r.exceptions||[]).some(function(e){return e.status==='Open';})||(r.status==='Waiting Approval'&&r.blockedReason&&r.blockedReason!=='None');
-  };
-  const blocked=activeRuns.filter(runNeedsAttention).length;
-  const runOwnerDepartment=function(r){
-    const steps=manualJourneySteps(r.journeyId);
-    const st=steps[r.currentStepIdx]||{};
-    const owner=st.ownerRole||r.ownerRole||'Entity Admin';
-    return cockpitDeptById(manualStepOwnerDeptId(owner)).name;
-  };
-  const departments=activeRuns.reduce(function(list,r){
-    const d=runOwnerDepartment(r);
-    if(list.indexOf(d)<0)list.push(d);
-    return list;
-  },[]);
+  const blocked=activeRuns.filter(cockpitRunNeedsAttention).length;
   const openExceptionCount=activeRuns.reduce(function(sum,r){return sum+(r.exceptions||[]).filter(function(e){return e.status==='Open';}).length;},0);
-  const runFilters=[
-    ['all','All',activeRuns.length],
-    ['manual','Manual',activeRuns.filter(function(r){return r.mode==='Manual';}).length],
-    ['agent','Agent',activeRuns.filter(function(r){return r.mode==='Agent'||r.mode==='Hybrid';}).length],
-    ['blocked','Blocked',blocked],
-    ['high','High Priority',highRisk]
-  ];
-  const filteredRuns=activeRuns.filter(function(r){
-    if(cockpitRunFilter==='manual')return r.mode==='Manual';
-    if(cockpitRunFilter==='agent')return r.mode==='Agent'||r.mode==='Hybrid';
-    if(cockpitRunFilter==='blocked')return runNeedsAttention(r);
-    if(cockpitRunFilter==='high')return r.slaRisk==='High';
-    return true;
-  });
-  const showFilters=cockpitShowExceptionQueue;
-  const filterMeta={
-    all:{title:'All Active Runs',sub:'Every journey currently in motion',note:'Showing all live manual, hybrid, and agentic runs with the owner and next action needed.'},
-    manual:{title:'Manual Runs',sub:'Human-owned execution queue',note:'Showing journeys where users must complete the current step through mapped module screens.'},
-    agent:{title:'Agent / Hybrid Runs',sub:'Automation and human handoff queue',note:'Showing runs where agent-capable work is active, with any human handoff still visible.'},
-    blocked:{title:'Blocked Runs',sub:'Exceptions that must be cleared',note:'Showing only runs with an open blocker, exception, or missing evidence before the journey can continue.'},
-    high:{title:'High Priority Runs',sub:'Runs closest to breach or escalation',note:'Showing only high-priority runs so operators can act on escalation, owner, and next action first.'}
-  }[cockpitRunFilter]||{};
-  const filterHeader=showFilters?('<div class="cockpit-filter-context'+(cockpitRunFilter==='blocked'?' cockpit-filter-context-blocked':'')+'"><div><strong>'+filterMeta.title+'</strong><span>'+filterMeta.note+'</span></div><em>'+filterMeta.sub+'</em></div>'):'';
-  const filterBar=showFilters?('<div class="cockpit-filter-bar">'+runFilters.map(function(f){return '<button class="cockpit-filter-chip '+(cockpitRunFilter===f[0]?'active':'')+'" onclick="setCockpitRunFilter(\''+f[0]+'\')">'+f[1]+' <span>'+f[2]+'</span></button>';}).join('')+'</div>'):'';
-  const slaPriorityLabel={High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'};
-  const rows=filteredRuns.slice(0,8).map(function(r,idx){
+
+  // --- Active Journey Runs (unchanged) — reached via the "Active Runs" stat card ---
+  const rows=activeRuns.slice(0,8).map(function(r,idx){
     const c=cockpitRunComputed(r);
     const slaClass=r.slaRisk==='High'?'inactive':r.slaRisk==='Medium'?'unapproved':'active';
     const progressBar=c.isBlockedRun?('<div class="cockpit-progress cockpit-progress-ex"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+((r.escalation&&r.escalation!=='None')?r.escalation:'No escalation')+'</span></div>'):'';
@@ -4105,53 +4151,100 @@ function buildOperationsCockpitHTML(){
     const notifyBtn=isNotified
       ?'<button class="btn btn-secondary btn-sm cockpit-notify-btn notified" disabled>'+notifyIcon+'Notified</button>'
       :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\')">'+notifyIcon+'Send Notification</button>';
+    const slaPriorityLabel={High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'};
     return '<div class="cockpit-run-card" onclick="openCockpitRunSidebar(\''+r.runId+'\')">'
       +'<div class="cockpit-run-head"><div class="cockpit-run-num">'+(idx+1)+'</div><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+r.runId+'</div><div class="cockpit-run-entity">'+(r.entity||'Dhi Hyperlocal')+'</div></div><span class="status-pill '+slaClass+(c.isBlockedRun?' cockpit-pill-ex':'')+'">'+(slaPriorityLabel[r.slaRisk]||r.slaRisk)+'</span></div>'
       +progressBar
       +'<div class="cockpit-run-mini-sub"><span>'+(r.subject||c.j.name||r.journeyId)+'</span>'+notifyBtn+'</div>'
       +'</div>';
-  }).join('')||'<div class="cockpit-empty-state">No active runs match this filter.</div>';
+  }).join('')||'<div class="cockpit-empty-state">No active runs right now.</div>';
+  const activeRunsPanel='<div class="listing-card dash-panel cockpit-run-panel"><div class="dash-panel-head"><div>Active Journey Runs</div><span>Live operator queue</span></div><div class="cockpit-run-list">'+rows+'</div></div>';
+
   const sidebarRun=cockpitSidebarRunId?activeRuns.find(function(r){return r.runId===cockpitSidebarRunId;}):null;
   const sidebarOverlay=sidebarRun?('<div class="ts-overlay"><div class="ts-overlay-bg" onclick="closeCockpitRunSidebar()"></div><div class="ts-overlay-panel">'+buildCockpitRunSidebarHTML(sidebarRun)+'</div></div>'):'';
-  const exceptionSourceRuns=activeRuns.filter(function(r){
-    if(cockpitRunFilter==='manual')return r.mode==='Manual';
-    if(cockpitRunFilter==='agent')return r.mode==='Agent'||r.mode==='Hybrid';
-    if(cockpitRunFilter==='high')return r.slaRisk==='High';
+
+  // --- Exception-First Queue — the view reached via the "Exceptions & Blockers" stat card ---
+  const allItems=cockpitQueueItems(activeRuns);
+  const highRisk=allItems.filter(function(x){return x.run.slaRisk==='High';}).length;
+  const runFilters=[
+    ['all','All',allItems.length],
+    ['manual','Manual',allItems.filter(function(x){return x.run.mode==='Manual';}).length],
+    ['agent','Agent & Hybrid',allItems.filter(function(x){return x.run.mode==='Agent'||x.run.mode==='Hybrid';}).length],
+    ['high','High Priority',highRisk]
+  ];
+  const filteredItems=allItems.filter(function(x){
+    if(cockpitRunFilter==='manual')return x.run.mode==='Manual';
+    if(cockpitRunFilter==='agent')return x.run.mode==='Agent'||x.run.mode==='Hybrid';
+    if(cockpitRunFilter==='high')return x.run.slaRisk==='High';
     return true;
   });
-  const allOpenExceptions=exceptionSourceRuns.reduce(function(list,r){
-    (r.exceptions||[]).forEach(function(e,i){if(e.status==='Open')list.push({run:r,ex:e,idx:i});});
+  const filterMeta={
+    all:{title:'All Open Items',sub:'Exceptions and approvals blocking a journey',note:'Every open exception and pending approval across manual, hybrid, and agentic runs — highest severity first.'},
+    manual:{title:'Manual Queue',sub:'Human-owned exceptions and approvals',note:'Open items on manually-run journeys that need direct action from the owning team.'},
+    agent:{title:'Agent & Hybrid Queue',sub:'Automation handoffs needing a human',note:'Open items where an agent hit a blocker or approval gate and handed off to a human owner.'},
+    high:{title:'High Priority',sub:'Closest to SLA breach or escalation',note:'Only high-risk items, so the owning teams can act before escalation triggers.'}
+  }[cockpitRunFilter]||{};
+  const filterHeader='<div class="cockpit-filter-context"><div><strong>'+filterMeta.title+'</strong><span>'+filterMeta.note+'</span></div><em>'+filterMeta.sub+'</em></div>';
+  const filterBar='<div class="cockpit-filter-bar">'+runFilters.map(function(f){return '<button class="cockpit-filter-chip '+(cockpitRunFilter===f[0]?'active':'')+'" onclick="setCockpitRunFilter(\''+f[0]+'\')">'+f[1]+' <span>'+f[2]+'</span></button>';}).join('')+'</div>';
+  const severityGroup=function(label,cls,list){
+    if(!list.length)return '';
+    return '<div class="cockpit-ex-group"><div class="cockpit-ex-group-head '+cls+'"><span class="cockpit-ex-group-dot"></span>'+label+'<span>'+list.length+'</span></div><div class="cockpit-ex-list">'+list.map(cockpitExceptionCardHTML).join('')+'</div></div>';
+  };
+  const groupsHTML=filteredItems.length
+    ?severityGroup('High Priority','high',filteredItems.filter(function(x){return x.run.slaRisk==='High';}))
+      +severityGroup('Medium Priority','medium',filteredItems.filter(function(x){return x.run.slaRisk==='Medium';}))
+      +severityGroup('Low Priority','low',filteredItems.filter(function(x){return x.run.slaRisk!=='High'&&x.run.slaRisk!=='Medium';}))
+    :('<div class="cockpit-empty-state cockpit-empty-clear"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><strong>All clear</strong><span>No open exceptions or approvals'+(cockpitRunFilter==='all'?'':' in this filter')+'. Journeys are running smoothly.</span></div></div>');
+  const queuePanel='<div class="listing-card dash-panel cockpit-queue-panel"><div class="dash-panel-head"><div>Exception-First Queue</div><span>'+filteredItems.length+' open &middot; ranked by severity</span></div>'+filterHeader+filterBar+groupsHTML+'</div>';
+
+  const departments=activeRuns.reduce(function(list,r){
+    if(!cockpitRunNeedsAttention(r))return list;
+    const d=cockpitRunOwnerDepartment(r);
+    if(list.indexOf(d)<0)list.push(d);
     return list;
   },[]);
-  const exceptionRows=allOpenExceptions.map(function(x){
-    const sev=x.run.slaRisk==='High'?'High':'Medium';
-    const isManual=String(x.run.runId).indexOf('MAN-')===0;
-    const dept=runOwnerDepartment(x.run);
-    const resolveAction=isManual
-      ?'openExceptionResolver(\''+x.run.runId+'\','+x.idx+')'
-      :'openExceptionResolver(\''+x.run.runId+'\','+x.idx+',\''+x.run.journeyId+'\')';
-    return '<div class="cockpit-ex-card">'
-      +'<div class="cockpit-ex-left"><span class="cockpit-ex-indicator '+sev.toLowerCase()+'"></span><div><div class="cockpit-ex-title">'+x.ex.type+'</div><div class="cockpit-ex-meta"><span>'+x.run.runId+'</span><span>'+x.run.mode+'</span><span class="cockpit-ex-dept" onclick="event.stopPropagation();openCockpitDepartmentDetail(\''+dept.toLowerCase()+'\')">'+dept+'</span><span>'+sev+' priority</span></div><div class="cockpit-ex-resolution">'+x.ex.suggestedResolution+'</div></div></div>'
-      +'<button class="btn btn-secondary btn-sm cockpit-ex-btn" onclick="'+resolveAction+'">'+(isManual?'Resolve':'Review &amp; Resolve')+'</button>'
-      +'</div>';
-  }).join('')||'<div class="cockpit-empty-state">No open exceptions'+(cockpitRunFilter==='all'?'':' in this filter')+'.</div>';
-  const deptStat='<div class="stat-card cockpit-stat-clickable" onclick="openCockpitDepartmentOverview()"><div class="stat-label"><span>Departments</span></div><div class="stat-val">'+cockpitDepartmentDirectory.length+'</div><div class="stat-sub">Click to view department ownership</div></div>';
   const activeRunsStat='<div class="stat-card cockpit-stat-clickable" onclick="openCockpitRunsView()"><div class="stat-label"><span>Active Runs</span></div><div class="stat-val">'+activeRuns.length+'</div><div class="stat-sub">Manual, agentic, and hybrid</div></div>';
+  const deptStat='<div class="stat-card cockpit-stat-clickable" onclick="openCockpitDepartmentOverview()"><div class="stat-label"><span>Departments</span></div><div class="stat-val">'+cockpitDepartmentDirectory.length+'</div><div class="stat-sub">Click to view department ownership</div></div>';
   const exceptionsStat='<div class="stat-card cockpit-stat-clickable" onclick="openCockpitExceptionsView()"><div class="stat-label"><span>Exceptions & Blockers</span></div><div class="stat-val" style="color:#dc2626">'+(openExceptionCount||blocked)+'</div><div class="stat-sub">Open issues needing resolution</div></div>';
-  const activeRunsPanel='<div class="listing-card dash-panel cockpit-run-panel"><div class="dash-panel-head"><div>Active Journey Runs</div><span>Live operator queue</span></div>'+filterHeader+filterBar+'<div class="cockpit-run-list">'+rows+'</div></div>';
-  const exceptionQueuePanel='<div class="listing-card dash-panel cockpit-side-panel"><div class="dash-panel-head"><div>Exception-First Queue</div><span>'+allOpenExceptions.length+' open &middot; owner + resolution</span></div><div class="cockpit-ex-list">'+exceptionRows+'</div></div>';
   const mainContent=cockpitDepartmentView==='overview'
     ?buildCockpitDepartmentOverviewHTML()
     :cockpitDepartmentView==='detail'
       ?buildCockpitDepartmentDetailHTML()
       :cockpitShowExceptionQueue
-        ?'<div class="dash-two-col cockpit-panels">'+activeRunsPanel+exceptionQueuePanel+'</div>'
+        ?queuePanel
         :activeRunsPanel;
   return '<div class="cockpit-wrap">'
     +'<div class="stat-grid dash-stat-grid cockpit-stats stat-grid-3">'+activeRunsStat+deptStat+exceptionsStat+'</div>'
     +mainContent
     +'</div>'
     +sidebarOverlay;
+}
+function cockpitExceptionCardHTML(x){
+  const r=x.run;
+  const sev=r.slaRisk==='High'?'High':r.slaRisk==='Medium'?'Medium':'Low';
+  const isManual=String(r.runId).indexOf('MAN-')===0;
+  const dept=cockpitRunOwnerDepartment(r);
+  const isException=x.kind==='exception';
+  const resolveAction=isException
+    ?(isManual?'openExceptionResolver(\''+r.runId+'\','+x.idx+')':'openExceptionResolver(\''+r.runId+'\','+x.idx+',\''+r.journeyId+'\')')
+    :'openCockpitRun(\''+r.runId+'\',\''+r.journeyId+'\')';
+  const resolveLabel=isException?(isManual?'Resolve':'Review &amp; Resolve'):'Review &amp; Approve';
+  const kindTag=isException?'':'<span class="cockpit-ex-kind">Approval</span>';
+  const escalationTag=(r.escalation&&r.escalation!=='None')?'<span class="cockpit-ex-escalation">Escalates: '+r.escalation+'</span>':'';
+  const c=cockpitRunComputed(r);
+  const ownerName=manualStepOwnerName(c.st.ownerRole||r.ownerRole||'Entity Admin');
+  const stepName=c.st.name||'this step';
+  const isNotified=notifiedRunIds.has(r.runId);
+  const notifyIcon=isNotified
+    ?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"/></svg>'
+    :'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+  const notifyBtn=isNotified
+    ?'<button class="btn btn-secondary btn-sm cockpit-notify-btn notified" disabled>'+notifyIcon+'Notified</button>'
+    :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\')">'+notifyIcon+'Notify Owner</button>';
+  return '<div class="cockpit-ex-card" onclick="openCockpitRunSidebar(\''+r.runId+'\')">'
+    +'<div class="cockpit-ex-left"><span class="cockpit-ex-indicator '+sev.toLowerCase()+'"></span><div><div class="cockpit-ex-title">'+x.title+kindTag+'</div><div class="cockpit-ex-meta"><span>'+r.runId+'</span><span>'+r.mode+'</span><span class="cockpit-ex-dept" onclick="event.stopPropagation();openCockpitDepartmentDetail(\''+dept.toLowerCase()+'\')">'+dept+'</span><span>'+(r.subject||'—')+'</span>'+escalationTag+'</div><div class="cockpit-ex-resolution">'+x.resolution+'</div></div></div>'
+    +'<div class="cockpit-ex-actions">'+notifyBtn+'<button class="btn btn-primary btn-sm cockpit-ex-btn" onclick="event.stopPropagation();'+resolveAction+'">'+resolveLabel+'</button></div>'
+    +'</div>';
 }
 function cockpitRunComputed(r){
   const j=aiJourneys.find(function(x){return x.id===r.journeyId;})||cfgJourneys.find(function(x){return x.id===r.journeyId;})||{};
@@ -4191,7 +4284,7 @@ function openCockpitRunSidebar(runId){cockpitSidebarRunId=runId;renderADTPage();
 function closeCockpitRunSidebar(){cockpitSidebarRunId=null;renderADTPage();}
 function openCockpitDepartmentOverview(){cockpitDepartmentView='overview';renderADTPage();}
 function openCockpitRunsView(){cockpitDepartmentView='';cockpitRunFilter='all';cockpitShowExceptionQueue=false;cockpitSidebarRunId=null;renderADTPage();}
-function openCockpitExceptionsView(){cockpitDepartmentView='';cockpitRunFilter='blocked';cockpitShowExceptionQueue=true;cockpitSidebarRunId=null;renderADTPage();}
+function openCockpitExceptionsView(){cockpitDepartmentView='';cockpitRunFilter='all';cockpitShowExceptionQueue=true;cockpitSidebarRunId=null;renderADTPage();}
 function openCockpitDepartmentDetail(id){selectedCockpitDepartmentId=id;cockpitDepartmentView='detail';renderADTPage();}
 function closeCockpitDepartmentView(){cockpitDepartmentView='';renderADTPage();}
 function cockpitDeptById(id){return cockpitDepartmentDirectory.find(function(d){return d.id===id;})||cockpitDepartmentDirectory[0];}
@@ -4408,7 +4501,10 @@ function buildAIJourneyDetailHTML(){
     :j.status==='Draft'
       ?'<div class="ai-draft-pending"><span class="ai-draft-pending-text"><span class="ai-draft-pending-dot"></span>Draft pending &mdash; automation setup isn\'t finished yet.</span><button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Continue Automating Journey</button></div>'
       :'<button class="btn btn-primary btn-sm" onclick="startAutomateJourney(\''+j.id+'\')">Automate This Journey</button>';
-  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="navigatePage(\'ai-executive\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> All Journeys</button>'
+  const backToCfg=aiJourneyDetailBackPage==='cfg-context-journey';
+  const backLabel=backToCfg?'Back to Context & Journey':'All Journeys';
+  const backAction=backToCfg?"navigatePage('cfg-context-journey')":"navigatePage('ai-executive')";
+  const mainContent='<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="'+backAction+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+backLabel+'</button>'
     +'<div style="margin-bottom:28px"><p style="font-size:17px;font-weight:700;margin-bottom:6px">'+j.name+'</p><p style="font-size:12.5px;color:var(--gray);margin:0;max-width:680px;line-height:1.6">'+j.desc+'</p></div>'
     +'<div class="ep-form-card" style="margin-bottom:28px;padding:20px 22px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">'
@@ -5209,7 +5305,7 @@ function buildCfgContextJourneyHTML(){
       +'<div class="ai-journey-desc cfg-journey-desc">'+j.desc+'</div>'
       +'<div class="cfg-journey-tags">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
       +'</div>'
-      +(canConfigure&&showJourneyActions?'<div class="cfg-journey-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();selectedAIJourneyId=\''+j.id+'\';navigatePage(\'ai-active-automation\')">Runs</button></div>':'')
+      +(canConfigure&&showJourneyActions?'<div class="cfg-journey-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,false)+'</div></div>':'')
       +(locked?'':'<span class="cfg-journey-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
@@ -8021,10 +8117,10 @@ function entityAccessRequestsPending(){
   return entityRequests.filter(function(r){return r.type!=='manager-notify'&&r.type!=='journey-request-to-admin'&&r.status==='Pending';});
 }
 function managerNotifyPending(){
-  return entityRequests.filter(function(r){return r.type==='manager-notify'&&r.status==='Pending';});
+  return entityRequests.filter(function(r){return r.type==='manager-notify'&&r.status==='Pending'&&r.clientId==='dhi-hyperlocal';});
 }
 function journeyRequestsToAdminPending(){
-  return entityRequests.filter(function(r){return r.type==='journey-request-to-admin'&&r.status==='Pending';});
+  return entityRequests.filter(function(r){return r.type==='journey-request-to-admin'&&r.status==='Pending'&&r.clientId==='dhi-hyperlocal';});
 }
 function myTasksPendingCount(){
   if(portalRole==='super-admin')return entityAccessRequestsPending().length;
@@ -8041,7 +8137,7 @@ function requesterCaptionHTML(requestedBy){
   return '<div class="ea-req-requester">'+p.name+(p.role?' <span class="req-by-role">('+p.role+')</span>':'')+'</div>';
 }
 function buildEntityAdminMyTasksHTML(){
-  const journeyReqs=entityRequests.filter(function(r){return r.type==='journey-request-to-admin';});
+  const journeyReqs=entityRequests.filter(function(r){return r.type==='journey-request-to-admin'&&r.clientId==='dhi-hyperlocal';});
   const journeyRows=journeyReqs.map(function(r){
     const isPending=r.status==='Pending';
     const actions=isPending
@@ -8050,7 +8146,12 @@ function buildEntityAdminMyTasksHTML(){
     return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">Activate &ldquo;'+r.label+'&rdquo;</div><div class="ea-req-time">'+r.timestamp+'</div></div></div>'+actions+'</div>';
   }).join('');
   const journeyBody=journeyReqs.length?journeyRows:'<div class="ea-req-empty">No journey requests right now &mdash; if your Entity User asks to unlock a journey, it\'ll show up here.</div>';
-  const notes=entityRequests.filter(function(r){return r.type==='manager-notify';});
+  const sentReqs=entityRequests.filter(function(r){return r.clientId==='dhi-hyperlocal'&&r.type!=='manager-notify'&&r.type!=='journey-request-to-admin';});
+  const sentRows=sentReqs.map(function(r){
+    return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+'</div></div></div><span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span></div>';
+  }).join('');
+  const sentBody=sentReqs.length?sentRows:'<div class="ea-req-empty">No requests yet &mdash; activate a system or journey to see status here.</div>';
+  const notes=entityRequests.filter(function(r){return r.type==='manager-notify'&&r.clientId==='dhi-hyperlocal';});
   const noteRows=notes.map(function(r){
     const isPending=r.status==='Pending';
     const actions=isPending
@@ -8059,10 +8160,13 @@ function buildEntityAdminMyTasksHTML(){
     return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+'</div>'+(r.note?'<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5">'+r.note+'</div>':'')+'</div></div>'+actions+'</div>';
   }).join('');
   const noteBody=notes.length?noteRows:'<div class="ea-req-empty">No notes yet &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
+  const backBtn=myTasksBackTo==='dashboard'?'<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'dashboard\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back to Dashboard</button>':'';
   return '<div class="ai-exec-page">'
+    +backBtn
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Journey requests to review and approve, plus approvals your Entity User has flagged for a second opinion.</p>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Journey requests to review and approve, requests you\'ve sent to Super Admin, plus approvals your Entity User has flagged for a second opinion.</p>'
     +'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Journey Requests</div><div class="setup-sub" style="margin-bottom:14px">Your Entity User is asking to unlock these &mdash; approve to activate immediately, or decline.</div><div class="ea-req-list">'+journeyBody+'</div></div>'
+    +'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Your Requests to Super Admin</div><div class="setup-sub" style="margin-bottom:14px">Systems and journeys you\'ve asked Super Admin to activate for your entity.</div><div class="ea-req-list">'+sentBody+'</div></div>'
     +'<div class="setup-card"><div class="setup-title">Notes from Entity User</div><div class="setup-sub" style="margin-bottom:14px">Approvals flagged for your review &mdash; day-to-day journey approvals stay with whoever is running them.</div><div class="ea-req-list">'+noteBody+'</div></div>'
     +'</div>';
 }
@@ -8260,7 +8364,7 @@ function buildAIRunDetailHTML(){
   if(aiRunDetailBackTo==='my-tasks'){backLabel='Back to My Tasks';backAction="navigatePage('my-tasks')";}
   else if(aiRunDetailBackTo==='operations-cockpit'){backLabel='Back to Operations Cockpit';backAction="navigatePage('operations-cockpit')";}
   else if(aiRunDetailBackTo==='ai-active-automation'){backLabel='Back to '+j.name+' Automation';backAction="navigatePage('ai-active-automation')";}
-  else{backLabel='Back to '+j.name;backAction="viewAIJourney('"+j.id+"')";}
+  else{backLabel='Back to '+j.name;backAction="viewAIJourney('"+j.id+"'"+(aiJourneyDetailBackPage?",'"+aiJourneyDetailBackPage+"'":'')+")";}
   const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="'+backAction+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+backLabel+'</button>'
     +'<p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+' &mdash; '+run.client+'</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">'+run.country+' &middot; '+run.contractType+' &middot; Run ID '+run.runId+' &middot; <span class="status-pill '+aiRunStatusPillClass(run.status)+'">'+run.status+'</span></p>'

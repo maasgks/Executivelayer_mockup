@@ -66,6 +66,7 @@ const aiH2rCountryData={
 };
 let selectedAIRunId='RUN-2001';
 let aiRunDetailBackTo=null;
+let myTasksBackTo=null;
 let aiClientSelectedId=null,aiClientTab='journeys';
 let liveRunSeq=9000;
 let aiJourneyDetailSelectedStage=-1;
@@ -175,7 +176,7 @@ function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -580,6 +581,7 @@ function defaultPageForRole(role){return role==='entity-user'?'ai-executive':'da
 
 function navigatePage(pg){
   const resolved=canAccessPage(pg,portalRole)?pg:defaultPageForRole(portalRole);
+  if(resolved!=='my-tasks')myTasksBackTo=null;
   page=resolved;
   if(view==='adt'){renderADTPage();return;}
   if(view==='agent-active'){showAgentModule(resolved);return;}
@@ -1206,7 +1208,7 @@ const cfgApiSubcats={
 };
 const cfgApiTypes=['Transactional','Transformational'];
 const cfgSystems=[
-  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:false,
+  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'API_BUSINESS_PARTNER · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'API_PRODUCT_SRV · Service Item Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
@@ -1216,7 +1218,7 @@ const cfgSystems=[
       {name:'API_COSTCENTER · Cost Center Master',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'},
       {name:'API_GLACCOUNTLINEITEM · GL Posting',dir:'r',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
-  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:false,
+  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'SupplierMaster · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'PurchaseOrder · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
@@ -1356,6 +1358,7 @@ let selectedManualRunId='MAN-1001';
 let selectedSimulationJourneyId='contract-creation';
 let manualJourneyBackPage='operations-cockpit';
 let journeySimulationBackPage='cfg-context-journey';
+let aiJourneyDetailBackPage=null;
 let cockpitRunFilter='all';
 let cockpitShowExceptionQueue=false;
 let cockpitSidebarRunId=null;
