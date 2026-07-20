@@ -1,4 +1,4 @@
-﻿// -- DASHBOARD: tab bar + per-role tab dispatch --
+// -- DASHBOARD: tab bar + per-role tab dispatch --
 function buildDashboardTabsHTML(){
   const tabs=dashboardTabsForRole(portalRole);
   if(tabs.length<2)return '';
@@ -49,12 +49,70 @@ function buildPersonaRoleDashboardHTML(tab){
 function dashHeader(title,sub){
   return '<div class="dash-ref"><div class="dash-ref-title">'+title+'</div><div class="dash-ref-sub">'+sub+'</div>';
 }
+
+// -- MANUAL MODE: live run cards reused on persona dashboards (same visual language as Operations Cockpit) --
+function manualRunCardHTML(r,opts){
+  opts=opts||{};
+  const c=cockpitRunComputed(r);
+  const slaClass=r.slaRisk==='High'?'inactive':r.slaRisk==='Medium'?'unapproved':'active';
+  const slaPriorityLabel={High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'};
+  const progressBar='<div class="cockpit-progress"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+(c.st.name||'Current step')+'</span></div>';
+  const actionBtn=opts.actionBtn?opts.actionBtn(r):'';
+  return '<div class="cockpit-run-card" onclick="openManualRunPreviewModal(\''+r.runId+'\')">'
+    +'<div class="cockpit-run-head"><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+r.runId+'</div><div class="cockpit-run-entity">'+(r.entity||'Dhi Hyperlocal')+'</div></div><span class="status-pill '+slaClass+'">'+(slaPriorityLabel[r.slaRisk]||r.slaRisk)+'</span></div>'
+    +progressBar
+    +'<div class="cockpit-run-mini-sub"><span>'+(r.subject||c.j.name||r.journeyId)+'</span>'+actionBtn+'</div>'
+    +'</div>';
+}
+function manualRunListPanelHTML(title,runs,emptyText,opts){
+  const body=runs.length
+    ?'<div class="cockpit-run-list">'+runs.map(function(r){return manualRunCardHTML(r,opts);}).join('')+'</div>'
+    :'<div class="cockpit-empty-state">'+emptyText+'</div>';
+  return '<div class="listing-card dash-panel"><div class="dash-panel-head"><div>'+title+'</div><span>Live</span></div>'+body+'</div>';
+}
+function buildMyCreatedRunsPanelHTML(personaId){
+  const runs=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.createdBy===personaId;});
+  return manualRunListPanelHTML('My Contract Journeys',runs,'No contract journeys created yet.');
+}
+function buildComplianceLiveQueuePanelHTML(){
+  const runs=manualJourneyRuns.filter(function(r){
+    if(r.journeyId!=='contract-creation'||r.status==='Completed')return false;
+    const st=manualJourneySteps(r.journeyId)[r.currentStepIdx];
+    return st&&st.ownerRole==='Compliance Officer';
+  });
+  const actionBtn=function(r){return '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openComplianceResolveModal(\''+r.runId+'\')">Mark Complete</button>';};
+  return manualRunListPanelHTML('Pending Compliance Checks',runs,'No contract journeys waiting on Compliance.',{actionBtn:actionBtn});
+}
+function buildHRLiveRunsPanelHTML(){
+  const runs=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.currentStepIdx>=8&&r.status!=='Completed';});
+  return manualRunListPanelHTML('Contract Journeys Ready for HR',runs,'No contract journeys have reached HR yet.');
+}
+// -- MANUAL MODE: "My Tasks" panel of manual-journey runs currently waiting on the active persona, across Contract Creation / Payroll Creation / H2R Lifecycle. Complements (does not replace) any journey-specific Dashboard queue panel, e.g. buildComplianceLiveQueuePanelHTML. --
+function myPendingManualRuns(personaId){
+  return manualJourneyRuns.filter(function(r){
+    if(r.status==='Completed')return false;
+    const st=manualJourneySteps(r.journeyId)[r.currentStepIdx];
+    return st&&manualStepOwnerPersonaId(st.ownerRole)===personaId;
+  });
+}
+function openMyManualTask(runId){
+  const run=getManualRun(runId);if(!run)return;
+  const step=manualJourneySteps(run.journeyId)[run.currentStepIdx];
+  if(step&&step.modulePage==='compliance'){openComplianceResolveModal(runId);return;}
+  selectedManualRunId=runId;manualJourneyBackPage='my-tasks';page='manual-journey-run';renderADTPage();
+}
+function buildMyPendingManualTasksHTML(){
+  const runs=myPendingManualRuns(activePersonaId);
+  const actionBtn=function(r){return '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openMyManualTask(\''+r.runId+'\')">Open</button>';};
+  return manualRunListPanelHTML('Journeys Waiting On You',runs,'No manual-journey steps are waiting on you right now.',{actionBtn:actionBtn});
+}
 function buildHRDashboardHTML(){
   return dashHeader('HR Dashboard','Overview of your workforce and HR operations.')
     +'<div class="stat-grid dash-stat-grid">'+dashStat('Total Employees','148','Across 6 departments')+dashStat('On Leave Today','12','8% attendance','green')+dashStat('Birthdays Today','5','Send wishes')+dashStat('Pending Requests','8','Review now','orange')+dashStat('Payroll Status','Ready','Current cycle is on track','green')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Onboarding Pending','7','Employees awaiting setup','orange')+dashStat('Document Verification Pending','9','Documents awaiting review','orange')+'</div>'
     +'<div class="dash-actions">'+dashAction('Add Employee','Onboard a new team member',dashIcoUser)+dashAction('Upload Policy','Share company policies',dashIcoDoc)+dashAction('Add Holiday','Create company holidays',dashIcoDoc)+'</div>'
     +'<div class="dash-two-col">'+dashTable('Leave Requests',['Employee','Leave Type','Date','Status'],[['Ramesh Patel','Sick Leave','20 May',statusMini('Pending','pending')],['Priya Sharma','Casual Leave','22 May',statusMini('Approved','approved')],['Aishi Verma','Earned Leave','23-25 May',statusMini('Approved','approved')],['Arjun Desai','Sick Leave','28 May',statusMini('Pending','pending')]],'View all')+dashTable('Holidays',['Date','Holiday','Type'],[['09','Ugadi','Registered'],['14','Telangana Formation Day','Registered'],['18','Good Friday','Relaxed'],['22','Eid-ul-Fitr','Relaxed'],['01','May Day','National']], 'View calendar')+'</div>'
-    +dashTable('Birthdays & Anniversaries',['Person','Event','Date','Department'],[['Ramesh Patel','Birthday','18 May','HR'],['Ashirwad Koul','Birthday','16 May','Operations'],['Chishan Sirangi','1 yr anniversary','15 May','Finance'],['Gojendra Singh','Birthday','23 May','Compliance']], 'View more')+'</div>';
+    +dashTable('Birthdays & Anniversaries',['Person','Event','Date','Department'],[['Ramesh Patel','Birthday','18 May','HR'],['Ashirwad Koul','Birthday','16 May','Operations'],['Chishan Sirangi','1 yr anniversary','15 May','Finance'],['Gojendra Singh','Birthday','23 May','Compliance']], 'View more')
+    +buildHRLiveRunsPanelHTML()+'</div>';
 }
 function buildReportingManagerDashboardHTML(p){
   return dashHeader('Team Dashboard','Track your direct reports, approvals, and team performance.')
@@ -79,7 +137,8 @@ function buildComplianceDashboardHTML(){
     +'<div class="stat-grid dash-stat-grid">'+dashStat('Contract Compliance','18','5 blocking payroll readiness','orange')+dashStat('Compliance Hub Items','26','9 require review','orange')+dashStat('Assigned Support Items','7','3 high priority','orange')+dashStat('Payment Compliance','5','5 pending issues','orange')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Document Verification Pending','9','Documents awaiting review','orange')+dashStat('Expiring Documents','5','Expiring in next 30 days','orange')+'</div>'
     +'<div class="dash-actions">'+dashAction('Review Contracts','Check missing clauses, signatures, and document readiness',dashIcoDoc)+dashAction('Compliance Hub','Manage statutory, policy, and document compliance items',dashIcoShield)+'</div>'
     +'<div class="dash-two-col">'+dashTable('Contract Compliance Queue',['Employee','Contract Issue','Status','Action'],[['Ramesh Patel','Missing signature',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Priya Sharma','Work permit pending',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Arjun Desai','Clause update required',statusMini('Needs Review','pending'),statusMini('Open','draft')],['Aishi Verma','Contract verified',statusMini('Ready','approved'),statusMini('View','draft')]],'View all')+dashTable('Compliance Hub Items',['Item','Category','Due','Status'],[['Employee KYC review','Documents','Today',statusMini('Pending','pending')],['Local tax registration','Payroll','24 May',statusMini('Blocking','rejected')],['Policy acknowledgment','Policy','26 May',statusMini('Pending','pending')],['Statutory filing check','Entity','31 May',statusMini('Ready','approved')]],'Open hub')+'</div>'
-    +dashTable('Assigned Support Items',['Item','Description','Tag'],[['Payroll blocked by missing Tax ID','John Doe payroll readiness is blocked until Tax ID verification is completed.','Payroll Compliance'],['Work permit document pending','Thijs Verbeek has a pending work authorization document for review.','Contract Compliance']], 'View assigned')+'</div>';
+    +dashTable('Assigned Support Items',['Item','Description','Tag'],[['Payroll blocked by missing Tax ID','John Doe payroll readiness is blocked until Tax ID verification is completed.','Payroll Compliance'],['Work permit document pending','Thijs Verbeek has a pending work authorization document for review.','Contract Compliance']], 'View assigned')
+    +buildComplianceLiveQueuePanelHTML()+'</div>';
 }
 function buildOpsDashboardHTML(){
   return dashHeader('Opendhi Ops Admin Dashboard','Track contract pipeline, active contracts, compliance items, and pending entities across the selected entity.')
@@ -98,7 +157,8 @@ function buildSalesDashboardHTML(p,tab){
   return dashHeader(isManager?'Deal Approvals Dashboard':'Deal Desk Dashboard',isManager?'Review proposal approvals, exceptions, and team deal movement.':'Track owned deals, proposals, client acceptance, and contract creation work.')
     +'<div class="stat-grid dash-stat-grid">'+dashStat('Open Deals','8','Owned by this role')+dashStat('Proposal Drafts','3','Ready for review','orange')+dashStat('Client Responses','5','Awaiting acceptance','orange')+dashStat('Exceptions','1','Needs attention','red')+'</div>'
     +'<div class="dash-actions">'+dashAction('Create Proposal','Draft commercial terms with compliance checks',dashIcoDoc)+dashAction(isManager?'Approve Proposal':'Send Proposal',isManager?'Review margin and compliance checklist':'Send approved proposal to client',dashIcoDoc)+'</div>'
-    +dashTable(isManager?'Proposal Approval Queue':'Deal Pipeline',['Deal','Client','Step','Status'],[['PRO-5820','Rashi Singh','Proposal Approved',statusMini(isManager?'Approval Required':'Waiting','pending')],['PRO-5821','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['PRO-5822','Emma Schmidt','Ready for Payroll',statusMini('Complete','approved')]],'View all')+'</div>';
+    +dashTable(isManager?'Proposal Approval Queue':'Deal Pipeline',['Deal','Client','Step','Status'],[['PRO-5820','Rashi Singh','Proposal Approved',statusMini(isManager?'Approval Required':'Waiting','pending')],['PRO-5821','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['PRO-5822','Emma Schmidt','Ready for Payroll',statusMini('Complete','approved')]],'View all')
+    +(isManager?'':buildMyCreatedRunsPanelHTML(p.id))+'</div>';
 }
 function buildContractsAdminDashboardHTML(){
   return dashHeader('Contracts Dashboard','Generate contracts, monitor signatures, and resolve legal document exceptions.')
@@ -133,6 +193,7 @@ function personaOwnedRunItems(persona){
   };
   Object.keys(aiAutomationRuns).forEach(function(jid){
     const journey=aiJourneys.find(function(j){return j.id===jid;});
+    
     const events=aiJourneyEvents[jid]||[];
     (aiAutomationRuns[jid]||[]).forEach(function(run){
       const event=events[Math.min(run.currentStepIdx,events.length-1)];
@@ -197,13 +258,13 @@ function eaStackOpen(id,stackKey){
   setTimeout(function(){navigatePage('my-tasks');},220);
 }
 function eaReqPinHTML(stackKey){
-  if(stackKey!=='requests')return '';
-  return '<div class="ea-req-pin" title="Go to My Tasks" onclick="openMyTasksFromDashboard(event)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></div>';
+  return '';
 }
 function buildEaRequestStackHTML(stackKey,title,sub,items,cardHTML,emptyText){
   const pin=eaReqPinHTML(stackKey);
-  const hostClass='setup-card'+(pin?' ea-req-pin-host':'');
-  if(!items.length)return '<div class="'+hostClass+'">'+pin+'<div class="setup-title" style="margin-bottom:0">'+title+'</div><div class="setup-sub" style="margin-bottom:0">'+sub+'</div><div class="ea-req-empty">'+emptyText+'</div></div>';
+  const hostClass='setup-card ea-notice-card'+(pin?' ea-req-pin-host':'');
+  const clip='<div class="ea-notice-hole"></div>';
+  if(!items.length)return '<div class="'+hostClass+'">'+clip+pin+'<div class="setup-title" style="margin-bottom:0">'+title+'</div><div class="setup-sub" style="margin-bottom:0">'+sub+'</div><div class="ea-req-empty">'+emptyText+'</div></div>';
   const sorted=items.slice().sort(function(a,b){return entityRequestUrgency(b)-entityRequestUrgency(a);});
   const capped=sorted.slice(0,5);
   const extra=sorted.length-capped.length;
@@ -212,7 +273,7 @@ function buildEaRequestStackHTML(stackKey,title,sub,items,cardHTML,emptyText){
     const dot='<span class="ea-stack-dot '+eaUrgencyDotClass(r)+'"></span>';
     return '<div class="ea-req-card" id="'+domIdFor(r)+'" onclick="eaStackOpen(\''+r.id+'\',\''+stackKey+'\')">'+cardHTML(r,dot)+'</div>';
   }).join('');
-  return '<div class="'+hostClass+'">'+pin
+  return '<div class="'+hostClass+'">'+clip+pin
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="setup-title" style="margin-bottom:0">'+title+'</div><button class="btn btn-secondary btn-sm" onclick="navigatePage(\'my-tasks\')">View All</button></div>'
     +'<div class="setup-sub" style="margin-bottom:16px">'+sub+'</div>'
     +'<div class="ea-req-vlist">'+cards+'</div>'
@@ -221,19 +282,25 @@ function buildEaRequestStackHTML(stackKey,title,sub,items,cardHTML,emptyText){
 }
 function openMyTasksFromDashboard(e){
   if(e)e.stopPropagation();
-  myTasksBackTo='dashboard';
   navigatePage('my-tasks');
+}
+function eaStackTimeHTML(timestamp){
+  const s=String(timestamp||'');
+  const idx=s.indexOf(',');
+  const date=idx<0?s:s.slice(0,idx).trim();
+  const time=idx<0?'':s.slice(idx+1).trim();
+  return '<div class="ea-stack-time"><div class="ea-stack-date">'+date+'</div>'+(time?'<div class="ea-stack-clock">'+time+'</div>':'')+'</div>';
 }
 function eaReqCardHTML(r,dot){
   const label=r.type==='journey-request-to-admin'?'Activate &ldquo;'+r.label+'&rdquo;':r.label;
   return dot
     +'<div class="ea-stack-issue">'+label+'</div>'
-    +'<div class="ea-stack-meta"><div class="ea-stack-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-stack-time">'+r.timestamp+'</div></div>';
+    +'<div class="ea-stack-meta"><div class="ea-stack-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div>'+eaStackTimeHTML(r.timestamp)+'</div>';
 }
 function eaNoteCardHTML(r,dot){
   return dot
     +'<div class="ea-stack-issue">'+r.label+'</div>'
-    +'<div class="ea-stack-meta"><div class="ea-stack-who"><div class="ea-req-requester">'+r.requestedBy+'</div></div><div class="ea-stack-time">'+r.timestamp+'</div></div>';
+    +'<div class="ea-stack-meta"><div class="ea-stack-who"><div class="ea-req-requester">'+r.requestedBy+'</div></div>'+eaStackTimeHTML(r.timestamp)+'</div>';
 }
 function buildEntityAdminDashboardHTML(){
   const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
@@ -290,20 +357,29 @@ function openEntityJourneysModal(){
 function buildSuperAdminDashboardHTML(){
   const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify'&&r.type!=='journey-request-to-admin');
   const pendingCount=visibleRequests.filter(r=>r.status==='Pending').length;
-  const rows=visibleRequests.slice(0,8).map(function(r){
+  const reqRows=visibleRequests.slice(0,8).map(function(r){
     const actions=r.status==='Pending'
       ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div>'
       :'<span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span>';
-    return '<div class="ea-req-row"><div><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.requestedBy+'</div></div>'+actions+'</div>';
+    return '<div class="ea-req-row"><div class="ea-req-main"><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.requestedBy+'</div></div><div class="ea-req-when">'+eaStackTimeHTML(r.timestamp)+'</div>'+actions+'</div>';
   }).join('');
-  const body=visibleRequests.length?rows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
+  const reqBody=visibleRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
+  const activityRows=cfgRecentActivity.map(function(a){
+    return '<div class="ea-req-row"><div><div class="ea-req-label">'+a.title+'</div><div class="ea-req-time">'+a.sub+'</div></div><div style="font-family:monospace;font-size:11px;color:var(--gray);white-space:nowrap;flex-shrink:0">'+a.when+'</div></div>';
+  }).join('');
+  const activityBody=cfgRecentActivity.length?activityRows:'<div class="ea-req-empty">No recent activity yet.</div>';
   return '<div class="ai-exec-page">'
     +cfgPageHead('Opendhi Super Admin','Full platform oversight — systems, data models, journeys, and agents across every entity.')
-    +cfgOverviewBodyHTML()
+    +cfgHeroTilesHTML()
     +'<div class="setup-card" style="margin-top:24px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="setup-title">Action Required</div>'+(pendingCount?'<span class="status-pill pending">'+pendingCount+' Pending</span>':'')+'</div>'
     +'<div class="setup-sub" style="margin-bottom:14px">Activation requests from Entity Admins and Entity Users awaiting your review</div>'
-    +'<div class="ea-req-list">'+body+'</div>'
+    +'<div class="ea-req-list">'+reqBody+'</div>'
+    +'</div>'
+    +'<div class="setup-card" style="margin-top:20px">'
+    +'<div class="setup-title" style="margin-bottom:4px">Recent Activity</div>'
+    +'<div class="setup-sub" style="margin-bottom:14px">Latest configuration changes across systems, data models, journeys, and agents</div>'
+    +'<div class="ea-req-list">'+activityBody+'</div>'
     +'</div></div>';
 }
 
@@ -1592,9 +1668,10 @@ function renderCtSidebar(){
 }
 var peoStep=0;
 var peoData={};
+var manualContractFormData={};
 function peoGoStep(s){peoStep=s;page='contract-peo';renderADTPage();}
-function peoNext(){aiCaptureCurrentStep();peoStep=Math.min(2,peoStep+1);if(aiAssistedFlow)aiCtPushStepMessage(peoStep);page='contract-peo';renderADTPage();}
-function peoBack(){aiCaptureCurrentStep();if(peoStep===0){peoStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
+function peoNext(){aiCaptureCurrentStep();captureManualContractStep();peoStep=Math.min(2,peoStep+1);if(aiAssistedFlow)aiCtPushStepMessage(peoStep);page='contract-peo';renderADTPage();}
+function peoBack(){aiCaptureCurrentStep();captureManualContractStep();if(peoStep===0){peoStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{peoStep--;page='contract-peo';renderADTPage();}}
 var eorStep=0;
 function eorGoStep(s){eorStep=s;page='contract-eor';renderADTPage();}
 function aiCaptureCurrentStep(){
@@ -1614,8 +1691,45 @@ function aiCaptureCurrentStep(){
   if(typeEl)aiWizardFormData.employeeType=typeEl.textContent;
   merge('probation',gv('peo-prob'));merge('notice',gv('peo-notice'));
 }
-function eorNext(){aiCaptureCurrentStep();eorStep=Math.min(2,eorStep+1);if(aiAssistedFlow)aiCtPushStepMessage(eorStep);page='contract-eor';renderADTPage();}
-function eorBack(){aiCaptureCurrentStep();if(eorStep===0){eorStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
+function captureManualContractStep(){
+  if(aiAssistedFlow)return;
+  const gv=function(id){const el=document.getElementById(id);return el?el.value:undefined;};
+  const merge=function(k,v){if(v!==undefined&&v!=='')manualContractFormData[k]=v;};
+  merge('fname',gv('peo-fname'));merge('lname',gv('peo-lname'));merge('gender',gv('peo-gender'));
+  merge('email',gv('peo-email'));merge('mobile',gv('peo-mobile'));merge('dob',gv('peo-dob'));
+  merge('address',gv('peo-address'));merge('country',gv('peo-work-country'));merge('nationality',gv('peo-nationality'));
+  const wpEl=document.querySelector('.peo-wp-radio.selected span');
+  if(wpEl)manualContractFormData.workPermit=wpEl.textContent.indexOf('has work permit')!==-1;
+  merge('jobTitle',gv('peo-jobtitle'));merge('skill',gv('peo-skill'));merge('jobDesc',gv('peo-jobdesc'));
+  merge('fromDate',gv('peo-from'));merge('toDate',gv('peo-to'));merge('hours',gv('peo-hours'));merge('pay',gv('peo-pay'));
+  const termEl=document.querySelector('.peo-radio-term.selected span');
+  if(termEl)manualContractFormData.employmentTerm=termEl.textContent;
+  const typeEl=document.querySelector('.peo-radio-emptype.selected span');
+  if(typeEl)manualContractFormData.employeeType=typeEl.textContent;
+  merge('probation',gv('peo-prob'));merge('notice',gv('peo-notice'));
+}
+function eorNext(){aiCaptureCurrentStep();captureManualContractStep();eorStep=Math.min(2,eorStep+1);if(aiAssistedFlow)aiCtPushStepMessage(eorStep);page='contract-eor';renderADTPage();}
+function eorBack(){aiCaptureCurrentStep();captureManualContractStep();if(eorStep===0){eorStep=0;page=aiAssistedFlow?'ai-contract-assistant':'contract-type-select';renderADTPage();}else{eorStep--;page='contract-eor';renderADTPage();}}
+function submitManualContractDeal(type){
+  captureManualContractStep();
+  const d=manualContractFormData;
+  const fullName=((d.fname||'')+' '+(d.lname||'')).trim()||'New Employee';
+  const creatorId=portalRole==='entity-user'?activePersonaId:'account-manager';
+  const run={
+    runId:'MAN-'+(manualRunSeq++),journeyId:'contract-creation',subject:fullName,entity:'Dhi Hyperlocal',mode:'Manual',
+    currentStepIdx:1,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',
+    manualHours:.8,agentEstimateHours:0,createdBy:creatorId,exceptions:[],
+    audit:['Deal & Employee Record completed by Account Manager for '+fullName+' ('+type+')']
+  };
+  manualJourneyRuns.unshift(run);
+  const firstStep=manualJourneySteps('contract-creation')[run.currentStepIdx];
+  const firstOwnerId=firstStep&&manualStepOwnerPersonaId(firstStep.ownerRole);
+  if(firstOwnerId)pushRunNotification(run.runId,firstOwnerId,'"'+firstStep.name+'" is waiting on you for '+fullName+'.');
+  manualContractFormData={};peoStep=0;eorStep=0;
+  selectedManualRunId=run.runId;manualJourneyBackPage='contracts';page='manual-journey-run';
+  renderADTPage();
+  showAiToast('Journey started',fullName+"'s contract journey ("+run.runId+') is now at '+(firstStep?firstStep.name:'the next step')+'.');
+}
 function buildEORContractHTML(){return buildContractFormHTML('EOR',eorStep);}
 function buildPEOContractHTML(){return buildContractFormHTML('PEO',peoStep);}
 function peoSelectRadio(groupClass,clickedEl){
@@ -1889,8 +2003,7 @@ function buildContractFormHTML(type,step,splitMode){
   const isLast=isAssistedReview||step===2;
   const goBack=type==='PEO'?'peoBack()':'eorBack()';
   const goNext=type==='PEO'?'peoNext()':'eorNext()';
-  const resetNav=type==='PEO'?'peoStep=0;page=\'contracts\';renderADTPage()':'eorStep=0;page=\'contracts\';renderADTPage()';
-  const finalAction=aiAssistedFlow?'aiSubmitAssistedContract(\''+type+'\')':resetNav;
+  const finalAction=aiAssistedFlow?'aiSubmitAssistedContract(\''+type+'\')':'submitManualContractDeal(\''+type+'\')';
   const footer='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px">'
     +'<button class="ep-cancel-btn" style="border-radius:99px;display:inline-flex;align-items:center;gap:6px" onclick="'+goBack+'"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Back</button>'
     +'<button class="ep-save-btn" style="padding:9px 28px;border-radius:99px" onclick="'+(isLast?finalAction:goNext)+'">'+( isLast?(aiAssistedFlow?'Create Proposal':'Submit Contract'):'Next')+'</button>'
@@ -4456,6 +4569,77 @@ function applyManualExceptionResolution(runId,idx){
   closeCtModal();
 }
 
+// -- MANUAL MODE: jump a non-owning viewer straight to the persona who owns the run's current step, landing on this exact run (not that persona's last-visited page) --
+function jumpToStepOwner(runId){
+  const run=getManualRun(runId);if(!run)return;
+  const step=manualJourneySteps(run.journeyId)[run.currentStepIdx];if(!step)return;
+  const personaId=manualStepOwnerPersonaId(step.ownerRole);if(!personaId)return;
+  setActivePersona(personaId);
+  selectedManualRunId=run.runId;
+  page='manual-journey-run';
+  renderADTPage();
+}
+// -- MANUAL MODE: run preview modal, reused from any dashboard (same ct-modal shell + cockpit sidebar field styling) --
+function openManualRunPreviewModal(runId){
+  const run=getManualRun(runId);if(!run)return;
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  const c=cockpitRunComputed(run);
+  const slaClass=run.slaRisk==='High'?'inactive':run.slaRisk==='Medium'?'unapproved':'active';
+  const progressBar='<div class="cockpit-progress"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+(run.status||'')+'</span></div>';
+  const fieldsData=[['Journey',(c.j&&c.j.name)||run.journeyId],['Employee',run.subject||'—'],['Current step',c.st.name||'—'],['Owner',c.st.ownerRole||'—'],['Mode',run.mode],['Status',run.status]];
+  const fields=fieldsData.map(function(item){return '<div class="cockpit-sb-field"><span class="cockpit-sb-flabel">'+item[0]+'</span><span class="cockpit-sb-fval">'+item[1]+'</span></div>';}).join('');
+  overlay.innerHTML='<div class="ct-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">'+run.runId+' &middot; <span class="status-pill '+slaClass+'">'+(run.slaRisk||'')+' Priority</span></span><button class="ct-modal-close" onclick="closeCtModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +progressBar
+    +'<div style="margin-top:10px">'+fields+'</div>'
+    +(c.next?'<p class="cockpit-sb-note" style="margin-top:12px">'+c.next+'</p>':'')
+    +'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px"><button class="btn btn-secondary" onclick="closeCtModal()">Close</button><button class="btn btn-primary" onclick="closeCtModal();selectedManualRunId=\''+run.runId+'\';manualJourneyBackPage=page||\'dashboard\';page=\'manual-journey-run\';renderADTPage();">Open Full Run</button></div>'
+    +'</div>';
+  overlay.style.display='flex';
+}
+
+// -- MANUAL MODE: compliance-step completion modal, opened from the Compliance Dashboard/My Tasks live queue and from the run page's "Open Compliance Hub" action. Handles any step that lives on the 'compliance' module (Contract Creation's Compliance Check, H2R's Work Permit Check / Country Compliance Fetch), building its checklist from the step's own manualAction text. --
+function complianceChecklistItems(step){
+  const raw=(step&&step.manualAction)||'';
+  const clean=raw.replace(/^Open Compliance Hub,?\s*/i,'').replace(/\s*in Compliance Hub\.?$/i,'').replace(/\.$/,'').trim();
+  if(!clean)return ['Confirm '+((step&&step.name)||'this step').toLowerCase()+' is complete'];
+  const verbMatch=/^(check|collect|review|verify|validate)\b/i.exec(clean);
+  const pastTense={check:'Checked',collect:'Collected',review:'Reviewed',verify:'Verified',validate:'Validated'}[verbMatch?verbMatch[1].toLowerCase():'check']||'Checked';
+  const body=verbMatch?clean.slice(verbMatch[0].length).trim():clean;
+  const parts=body.split(/,\s*|\s+and\s+/i).map(function(s){return s.replace(/^and\s+/i,'').trim();}).filter(Boolean);
+  return (parts.length?parts:[clean]).map(function(p){return pastTense+' '+p;});
+}
+function openComplianceResolveModal(runId){
+  const run=getManualRun(runId);if(!run)return;
+  const step=manualJourneySteps(run.journeyId)[run.currentStepIdx]||{};
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  const checklistItems=complianceChecklistItems(step);
+  const checklistHTML=checklistItems.map(function(t){return '<label><input type="checkbox" class="compliance-resolve-check"> '+t+'</label>';}).join('');
+  overlay.innerHTML='<div class="ct-modal manual-res-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr"><span class="ct-modal-title">Complete '+(step.name||'Compliance Check')+'</span><button class="ct-modal-close" onclick="closeCtModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'<div class="manual-res-body">'
+    +'<div class="manual-res-issue"><div><span>Employee</span><strong>'+(run.subject||'—')+'</strong><p>'+run.runId+' &middot; '+(step.name||'Compliance Check')+'</p></div><div><span>SLA</span><strong>'+(step.sla||'—')+'</strong><p>'+(step.manualAction||'')+'</p></div></div>'
+    +'<div class="manual-res-confirm"><div class="manual-res-section-title">Completion checklist</div>'
+    +checklistHTML
+    +'<textarea id="compliance-resolve-note" placeholder="Add a compliance note, source reference, or approval comment"></textarea>'
+    +'</div></div>'
+    +'<div class="manual-res-footer"><div>Marking this complete advances the journey and notifies the next owner.</div><button class="btn btn-secondary" onclick="closeCtModal()">Cancel</button><button class="btn btn-primary" onclick="confirmComplianceResolve(\''+runId+'\')">Mark '+(step.name||'Compliance Check')+' Complete</button></div>'
+    +'</div>';
+  overlay.style.display='flex';
+}
+function confirmComplianceResolve(runId){
+  const checks=[].slice.call(document.querySelectorAll('.compliance-resolve-check'));
+  const checked=checks.filter(function(x){return x.checked;}).length;
+  if(checked<checks.length){
+    if(typeof showAiToast==='function')showAiToast('Checklist incomplete','Confirm every compliance check before marking this step complete.');
+    return;
+  }
+  const noteEl=document.getElementById('compliance-resolve-note');
+  const note=noteEl?noteEl.value.trim():'';
+  resolveComplianceStepFromDashboard(runId,note);
+  closeCtModal();
+}
+
 function buildAIResponsibilitySplitHTML(journeyId){
   const events=aiJourneyEvents[journeyId]||[];
   const aiEvents=events.filter(function(e){return e.chips.includes('AI Automated');});
@@ -4668,8 +4852,8 @@ function cfgPageHead(title,sub){return '<div style="margin-bottom:20px"><p style
 function cfgBackBtn(pg,label){return '<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="navigatePage(\''+pg+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+label+'</button>';}
 
 // -- Configure: Overview --
-function cfgOverviewBodyHTML(){
-  const tiles=[
+function cfgHeroTilesHTML(){
+  return '<div class="cfg-hero-grid">'+[
     ['cfg-systems','Systems',cfgSystems.length,'Connected sources & APIs','blue','<circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/>'],
     ['cfg-data-foundation','Data models',cfgModels.length,'Fields, mapping & rules','violet','<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8v-13"/><path d="M4.5 12c0 1.55 3.36 2.8 7.5 2.8s7.5-1.25 7.5-2.8"/>'],
     ['cfg-context-journey','Journeys',cfgJourneys.length,'Context & orchestration flows','teal','<circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 6h6.5a4 4 0 0 1 4 4v0a4 4 0 0 1-4 4H8"/>'],
@@ -4681,16 +4865,20 @@ function cfgOverviewBodyHTML(){
       +'<div class="cfg-hero-label">'+t[1]+'</div>'
       +'<div class="cfg-hero-sub"><span>'+t[3]+'</span><svg class="cfg-hero-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>'
       +'</div>';
-  }).join('');
-  const activity=cfgRecentActivity.map(function(a){
+  }).join('')+'</div>';
+}
+function cfgActivityRowsHTML(){
+  return cfgRecentActivity.map(function(a){
     return '<div class="tr" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)">'
       +'<div><div style="font-size:13.5px;font-weight:500;color:var(--navy)">'+a.title+'</div><div style="font-size:12px;color:var(--gray);margin-top:3px">'+a.sub+'</div></div>'
       +'<div style="font-family:monospace;font-size:11.5px;color:var(--gray);white-space:nowrap">'+a.when+'</div>'
       +'</div>';
   }).join('');
-  return '<div class="cfg-hero-grid">'+tiles+'</div>'
+}
+function cfgOverviewBodyHTML(){
+  return cfgHeroTilesHTML()
     +'<div class="review-title" style="margin-bottom:12px">Recent activity</div>'
-    +'<div class="ep-form-card" style="padding:0">'+activity+'</div>';
+    +'<div class="ep-form-card" style="padding:0">'+cfgActivityRowsHTML()+'</div>';
 }
 function buildCfgOverviewHTML(){
   return '<div class="ai-exec-page">'
@@ -4897,8 +5085,14 @@ function buildCfgSystemDetailHTML(){
       const subBlocks=subOrder.map(function(sub){
         const rows=subGroups[sub].map(function(entry){
           const a=entry.a,i=entry.i;
+          const nameParts=a.name.split(' · ');
+          const apiCode=nameParts[0],apiLabel=nameParts.slice(1).join(' · ');
+          const nameHTML='<div style="min-width:0">'
+            +(apiLabel?'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:3px">'+apiLabel+'</div>':'')
+            +'<div style="display:inline-block;font-family:monospace;font-size:10.5px;font-weight:500;color:#64748b;background:#f1f5f9;border-radius:4px;padding:2px 7px;letter-spacing:.2px">'+apiCode+'</div>'
+            +'</div>';
           return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'
-            +'<div style="font-family:monospace;font-size:12.5px;font-weight:500;color:var(--navy)">'+a.name+'</div>'
+            +nameHTML
             +(editing
               ?'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap">'
                 +'<select class="ep-form-select" style="width:auto;padding:6px 10px" onchange="updateCfgApiCat(\''+s.id+'\','+i+',this.value)">'+cfgApiCategories.map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
@@ -4924,7 +5118,6 @@ function buildCfgSystemDetailHTML(){
       +'<button type="button" class="btn btn-secondary btn-sm" onclick="addCfgApiRow(\''+s.id+'\')">+ Add API</button>'
       +'</div>'
     :'';
-  const removeSection=editing?'':'<div style="margin-top:22px"><button type="button" class="ep-cancel-btn" style="color:#dc2626;border-color:#fca5a5" onclick="confirmRemoveCfgSystem(\''+s.id+'\')">Remove system</button></div>';
   return '<div class="ai-exec-page">'
     +cfgBackBtn('cfg-systems','Systems')
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap"><div>'+heading+'</div>'+actionBtns+'</div>'
@@ -4932,7 +5125,6 @@ function buildCfgSystemDetailHTML(){
     +connectionBlock
     +'<div class="review-title" style="margin-bottom:12px">Available APIs'+(editing?'':' &middot; released')+'</div>'
     +'<div class="ep-form-card" style="padding:0">'+apiRows+addApiForm+'</div>'
-    +removeSection
     +'</div>';
 }
 function cancelCfgSystemAdd(){navigatePage('cfg-systems');}
@@ -5301,7 +5493,7 @@ function buildCfgContextJourneyHTML(){
     const clickAttr=locked?'':(superAdminUnconfigured?' style="cursor:pointer" onclick="openLockedJourneyModal(\''+j.id+'\')"':' onclick="viewCfgJourney(\''+j.id+'\')"');
     return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+clickAttr+'>'
       +'<div class="cfg-journey-main">'
-      +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked,superAdminUnconfigured)+(!locked?journeyModeBadgeHTML(j.id):'')+'</div></div>'
+      +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked,superAdminUnconfigured)+(!locked&&portalRole!=='super-admin'?journeyModeBadgeHTML(j.id):'')+'</div></div>'
       +'<div class="ai-journey-desc cfg-journey-desc">'+j.desc+'</div>'
       +'<div class="cfg-journey-tags">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
       +'</div>'
@@ -5365,7 +5557,7 @@ function buildCfgJourneyDetailHTML(){
     +'</div>';
   return '<div class="ai-exec-page ai-journey-detail-page">'
     +cfgBackBtn('cfg-context-journey','Context & Journey')
-    +'<div class="cfg-detail-hero"><div><div class="cfg-detail-title-row"><p>'+j.name+'</p>'+journeyActivationBadgeHTML(j.id,!!j.locked&&portalRole!=='super-admin',!!j.locked&&portalRole==='super-admin')+journeyModeBadgeHTML(j.id)+'</div><div class="cfg-detail-sub">'+j.desc+'</div></div>'+detailActions+'</div>'
+    +'<div class="cfg-detail-hero"><div><div class="cfg-detail-title-row"><p>'+j.name+'</p>'+journeyActivationBadgeHTML(j.id,!!j.locked&&portalRole!=='super-admin',!!j.locked&&portalRole==='super-admin')+(portalRole!=='super-admin'?journeyModeBadgeHTML(j.id):'')+'</div><div class="cfg-detail-sub">'+j.desc+'</div></div>'+detailActions+'</div>'
     +statGrid
     +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
     +buildAIResponsibilitySplitHTML(j.id)
@@ -5885,20 +6077,30 @@ function buildManualJourneyRunHTML(){
   }).join('');
   const evidence=buildEvidencePackHTML(run,cur,run.currentStepIdx);
   const exceptions=(run.exceptions||[]).map(function(e,i){return {e:e,i:i};}).filter(function(x){return x.e.status==='Open';}).map(function(x){
-    return '<div class="manual-exception-card"><div><div class="cell-primary">'+x.e.type+'</div><div class="cell-sub">'+x.e.ownerRole+'</div><p>'+x.e.suggestedResolution+'</p></div><button class="btn btn-secondary btn-sm" onclick="openManualExceptionResolver(\''+run.runId+'\','+x.i+')">Resolve</button></div>';
+    const exOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(x.e.ownerRole);
+    const exAction=exOwner
+      ?'<button class="btn btn-secondary btn-sm" onclick="openManualExceptionResolver(\''+run.runId+'\','+x.i+')">Resolve</button>'
+      :'<div class="manual-waiting-note">Waiting on <strong>'+x.e.ownerRole+'</strong></div>';
+    return '<div class="manual-exception-card"><div><div class="cell-primary">'+x.e.type+'</div><div class="cell-sub">'+x.e.ownerRole+'</div><p>'+x.e.suggestedResolution+'</p></div>'+exAction+'</div>';
   }).join('')||'<div class="manual-empty-note">No open exceptions on this run.</div>';
   const audit=(run.audit||[]).map(function(a){return '<div class="audit-line"><span class="audit-dot"></span><div class="audit-copy"><strong>Run event</strong>'+a+'</div></div>';}).join('');
   const progress=run.status==='Completed'?100:Math.min(100,Math.round(((run.currentStepIdx||0)+1)/Math.max(steps.length,1)*100));
   const openExceptionCount=(run.exceptions||[]).filter(function(e){return e.status==='Open';}).length;
   const stepsCompletedLabel=(run.status==='Completed'?steps.length:(run.currentStepIdx||0))+' of '+steps.length;
   const moduleLabel=manualModuleLabel(cur.modulePage);
+  const isOwner=run.status==='Completed'||portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(cur.ownerRole);
+  const openHubAction=cur.modulePage==='compliance'?"openComplianceResolveModal('"+run.runId+"')":"navigatePage('"+(cur.modulePage||'dashboard')+"')";
+  const heroActions=(run.status!=='Completed'&&isOwner)?'<button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Step Complete</button>':'';
+  const currentActions=run.status==='Completed'?''
+    :isOwner
+      ?'<button class="btn btn-secondary btn-sm btn-glow-green" onclick="'+openHubAction+'">Open '+moduleLabel+'</button><button class="btn btn-secondary btn-sm" onclick="raiseManualException(\''+run.runId+'\')">Raise Exception</button>'
+      :'<div class="manual-waiting-note">Waiting on <strong>'+(cur.ownerRole||'the owning role')+'</strong></div><button class="btn btn-secondary btn-sm" onclick="jumpToStepOwner(\''+run.runId+'\')">Switch to '+(cur.ownerRole||'owner')+' &amp; Open</button>';
   return '<div class="ai-exec-page manual-run-page">'
     +'<button class="ep-back" onclick="backFromManualJourneyRun()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back</button>'
-    +'<div class="manual-run-hero"><div><div class="manual-run-kicker"><span>'+run.runId+'</span><span>'+run.mode+'</span><span>'+run.status+'</span></div><div class="manual-run-title">'+(j.name||run.journeyId)+'</div><div class="manual-run-sub">'+run.subject+' · '+run.entity+' · Started '+run.startedAt+'</div></div><div class="manual-run-actions"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Step Complete</button></div></div>'
+    +'<div class="manual-run-hero"><div><div class="manual-run-kicker"><span>'+run.runId+'</span><span>'+run.mode+'</span><span>'+run.status+'</span></div><div class="manual-run-title">'+(j.name||run.journeyId)+'</div><div class="manual-run-sub">'+run.subject+' · '+run.entity+' · Started '+run.startedAt+'</div></div><div class="manual-run-actions">'+heroActions+'</div></div>'
     +'<div class="manual-current-card"><div class="manual-current-head"><div><span class="manual-current-kicker">Current Step</span><div class="manual-current-title">'+cur.name+'</div></div><div class="manual-current-progress"><strong>'+progress+'%</strong><span>'+openExceptionCount+' open blocker'+(openExceptionCount===1?'':'s')+'</span></div></div>'
     +'<p class="manual-current-desc">'+cur.manualAction+'</p>'
-    +'<div class="manual-current-foot"><div class="manual-current-meta"><span>'+(cur.ownerRole||'Entity Admin')+'</span><span class="dot">&middot;</span><span>'+moduleLabel+'</span><span class="dot">&middot;</span><span>SLA '+(cur.sla||'—')+'</span></div><div class="manual-current-actions"><button class="btn btn-secondary btn-sm" onclick="navigatePage(\''+(cur.modulePage||'dashboard')+'\')">Open '+moduleLabel+'</button><button class="btn btn-secondary btn-sm" onclick="raiseManualException(\''+run.runId+'\')">Raise Exception</button></div></div></div>'
-    +'<div class="stat-grid dash-stat-grid stat-grid-3">'+dashStat('SLA Risk',run.slaRisk,run.blockedReason,run.slaRisk==='High'?'red':run.slaRisk==='Medium'?'orange':'green')+dashStat('Steps Completed',stepsCompletedLabel,'Across this journey run')+dashStat('Agent Savings',saved+'h','Potential on this run','green')+'</div>'
+    +'<div class="manual-current-foot"><div class="manual-current-meta"><span>'+(cur.ownerRole||'Entity Admin')+'</span><span class="dot">&middot;</span><span>'+moduleLabel+'</span><span class="dot">&middot;</span><span>SLA '+(cur.sla||'—')+'</span></div><div class="manual-current-actions">'+currentActions+'</div></div></div>'
     +'<div class="dash-two-col manual-run-grid"><div class="listing-card dash-panel manual-steps-panel"><div class="dash-panel-head"><div>Journey Steps</div><span>Manual / Agent mode per step</span></div><div class="manual-panel-body">'+timeline+'</div></div><div class="manual-run-side"><div class="listing-card dash-panel manual-evidence-panel"><div class="dash-panel-head"><div>Step-Level Evidence Pack</div><span>Trust layer</span></div><div class="manual-panel-body">'+evidence+'</div></div><div class="listing-card dash-panel manual-exceptions-panel"><div class="dash-panel-head"><div>Exceptions</div><span>Exception-first queue</span></div><div class="manual-panel-body">'+exceptions+'</div></div><div class="listing-card dash-panel manual-audit-panel"><div class="dash-panel-head"><div>Audit Trail</div><span>Immutable story</span></div><div class="manual-panel-body">'+audit+'</div></div></div></div>'
     +'</div>';
 }
@@ -8089,7 +8291,7 @@ function viewAIActiveAutomation(journeyId){
   selectedAIJourneyId=journeyId;navigatePage('ai-active-automation');
 }
 function viewAIRun(runId){selectedAIRunId=runId;aiRunDetailBackTo=page;navigatePage('ai-run-detail');}
-function viewAIRunTask(runId,journeyId){selectedAIJourneyId=journeyId;selectedAIRunId=runId;aiRunDetailBackTo='my-tasks';navigatePage('ai-run-detail');}
+function viewAIRunTask(runId,journeyId){navigatePage('my-tasks');openMyTaskAction(runId,journeyId);}
 
 // -- Cross-journey pending-task tracking: live-run flows (H2R/Payroll/Contract) upsert into aiAutomationRuns here --
 function aiUpsertRun(journeyId,runId,patch){
@@ -8125,7 +8327,7 @@ function journeyRequestsToAdminPending(){
 function myTasksPendingCount(){
   if(portalRole==='super-admin')return entityAccessRequestsPending().length;
   if(portalRole==='entity-admin')return managerNotifyPending().length+journeyRequestsToAdminPending().length;
-  return aiAllPendingRuns().length;
+  return aiAllPendingRuns().length+myPendingManualRuns(activePersonaId).length;
 }
 // -- Renders the requester's avatar, so it's clear at a glance who sent a request --
 function requesterAvatarHTML(requestedBy){
@@ -8143,12 +8345,12 @@ function buildEntityAdminMyTasksHTML(){
     const actions=isPending
       ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="approveJourneyRequestAsAdmin(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="declineJourneyRequest(\''+r.id+'\')">Decline</button></div>'
       :'<span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span>';
-    return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">Activate &ldquo;'+r.label+'&rdquo;</div><div class="ea-req-time">'+r.timestamp+'</div></div></div>'+actions+'</div>';
+    return '<div class="ea-task-row"><div class="ea-task-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-task-what"><div class="ea-task-label">Activate &ldquo;'+r.label+'&rdquo;</div></div><div class="ea-task-when">'+r.timestamp+'</div><div class="ea-task-actions">'+actions+'</div></div>';
   }).join('');
-  const journeyBody=journeyReqs.length?journeyRows:'<div class="ea-req-empty">No journey requests right now &mdash; if your Entity User asks to unlock a journey, it\'ll show up here.</div>';
+  const journeyCard=journeyReqs.length?'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Journey Requests</div><div class="setup-sub" style="margin-bottom:14px">Your Entity User is asking to unlock these &mdash; approve to activate immediately, or decline.</div><div class="ea-req-list">'+journeyRows+'</div></div>':'';
   const sentReqs=entityRequests.filter(function(r){return r.clientId==='dhi-hyperlocal'&&r.type!=='manager-notify'&&r.type!=='journey-request-to-admin';});
   const sentRows=sentReqs.map(function(r){
-    return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+'</div></div></div><span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span></div>';
+    return '<div class="ea-task-row"><div class="ea-task-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-task-what"><div class="ea-task-label">'+r.label+'</div></div><div class="ea-task-when">'+r.timestamp+'</div><div class="ea-task-actions"><span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span></div></div>';
   }).join('');
   const sentBody=sentReqs.length?sentRows:'<div class="ea-req-empty">No requests yet &mdash; activate a system or journey to see status here.</div>';
   const notes=entityRequests.filter(function(r){return r.type==='manager-notify'&&r.clientId==='dhi-hyperlocal';});
@@ -8157,36 +8359,109 @@ function buildEntityAdminMyTasksHTML(){
     const actions=isPending
       ?'<button class="sa-req-btn sa-req-approve" onclick="acknowledgeManagerNotify(\''+r.id+'\')">Mark as Reviewed</button>'
       :'<span class="status-pill approved">Reviewed</span>';
-    return '<div class="ea-req-row" style="align-items:flex-start"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+'</div>'+(r.note?'<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5">'+r.note+'</div>':'')+'</div></div>'+actions+'</div>';
+    return '<div class="ea-task-row"><div class="ea-task-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-task-what"><div class="ea-task-label">'+r.label+'</div>'+(r.note?'<div class="ea-task-note" style="color:var(--navy)">'+r.note+'</div>':'')+'</div><div class="ea-task-when">'+r.timestamp+'</div><div class="ea-task-actions">'+actions+'</div></div>';
   }).join('');
   const noteBody=notes.length?noteRows:'<div class="ea-req-empty">No notes yet &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
-  const backBtn=myTasksBackTo==='dashboard'?'<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="navigatePage(\'dashboard\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> Back to Dashboard</button>':'';
   return '<div class="ai-exec-page">'
-    +backBtn
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Journey requests to review and approve, requests you\'ve sent to Super Admin, plus approvals your Entity User has flagged for a second opinion.</p>'
-    +'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Journey Requests</div><div class="setup-sub" style="margin-bottom:14px">Your Entity User is asking to unlock these &mdash; approve to activate immediately, or decline.</div><div class="ea-req-list">'+journeyBody+'</div></div>'
+    +journeyCard
     +'<div class="setup-card" style="margin-bottom:16px"><div class="setup-title">Your Requests to Super Admin</div><div class="setup-sub" style="margin-bottom:14px">Systems and journeys you\'ve asked Super Admin to activate for your entity.</div><div class="ea-req-list">'+sentBody+'</div></div>'
     +'<div class="setup-card"><div class="setup-title">Notes from Entity User</div><div class="setup-sub" style="margin-bottom:14px">Approvals flagged for your review &mdash; day-to-day journey approvals stay with whoever is running them.</div><div class="ea-req-list">'+noteBody+'</div></div>'
     +'</div>';
 }
 function buildSuperAdminMyTasksHTML(){
   const pending=entityAccessRequestsPending();
+  if(mtReqSelectedId&&!pending.some(function(r){return r.id===mtReqSelectedId;}))mtReqSelectedId=null;
   const rows=pending.map(function(r){
-    return '<div class="ea-req-row" style="cursor:pointer;align-items:flex-start" onclick="viewAIClientFromRequest(\''+(r.clientId||'')+'\')"><div style="display:flex;gap:10px;align-items:flex-start;min-width:0">'+requesterAvatarHTML(r.requestedBy)+'<div style="min-width:0">'+requesterCaptionHTML(r.requestedBy)+'<div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.timestamp+' &middot; '+r.entity+'</div></div></div>'
-      +'<div class="sa-req-actions" onclick="event.stopPropagation()"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div></div>';
+    return '<div class="ea-task-row" id="mt-req-row-'+r.id+'"'+(mtReqSelectedId===r.id?' style="background:#fff8f0"':'')+'><div class="ea-task-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-task-what"><div class="ea-task-label">'+r.label+'</div><div class="ea-task-note">'+r.entity+'</div></div><div class="ea-task-when">'+r.timestamp+'</div>'
+      +'<div class="ea-task-actions sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="openMyTaskDetail(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div></div>';
   }).join('');
   const body=pending.length?rows:'<div class="ea-req-empty">No pending requests right now &mdash; requests to enable a system, agent, or journey will show up here.</div>';
+  const sbInner=mtReqSelectedId?renderMyTaskDetailPanel(mtReqSelectedId):'';
   return '<div class="ai-exec-page">'
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Requests from Entity Admins and Entity Users to enable a system, agent, or journey &mdash; waiting on your approval.</p>'
-    +'<div class="setup-card"><div class="ea-req-list">'+body+'</div></div>'
+    +'<div class="lp-split-wrap"><div class="lp-split-main"><div class="setup-card" style="border:none;border-radius:0;box-shadow:none"><div class="ea-req-list">'+body+'</div></div></div>'
+    +'<div class="lp-split-sb'+(mtReqSelectedId?' open':'')+'" id="mt-req-sb"><div class="lp-isb" id="mt-req-sb-inner">'+sbInner+'</div></div>'
+    +'</div></div>';
+}
+// -- SUPER ADMIN: My Tasks — read-only snapshot of a client's built journeys, for context before approving a new request --
+function renderClientJourneysContextHTML(clientId){
+  const journeys=aiClientJourneys.filter(function(cj){return cj.clientId===clientId;});
+  if(!journeys.length)return '<div class="ea-req-empty">No journeys have been built for this client yet.</div>';
+  return journeys.map(function(cj){
+    const j=aiJourneys.find(function(x){return x.id===cj.journeyId;});if(!j)return '';
+    const events=aiJourneyEvents[cj.journeyId]||[];
+    const rows=events.map(function(e,i){
+      return '<div class="ai-scope-row ai-scope-row-manual"><div class="ai-scope-name"><div class="ai-scope-name-text">'+(i+1)+'. '+e.name+'</div><div class="ai-timeline-chips">'+aiChips(e.chips)+'</div></div></div>';
+    }).join('');
+    return '<div class="ep-form-card" style="margin-bottom:14px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:10px"><div style="font-size:14px;font-weight:700;color:var(--navy)">'+j.name+'</div><span class="status-pill '+(cj.status==='Active'?'active':'draft')+'">'+cj.status+'</span></div>'
+      +'<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">Built '+cj.builtOn+' &middot; '+events.length+' steps &middot; '+j.category+'</div>'
+      +'<div class="ai-scope-table">'+rows+'</div>'
+      +'</div>';
+  }).join('');
+}
+// -- SUPER ADMIN: My Tasks — slide-in detail panel for a single access request, tabbed like the AI Executive client sidebar --
+function renderMyTaskDetailPanel(reqId){
+  const r=entityRequests.find(function(x){return x.id===reqId;});
+  if(!r)return '';
+  const c=aiClients.find(function(x){return x.id===r.clientId;});
+  const tabs=[{id:'journeys',label:'Journeys'},{id:'request',label:'Request (1)'}];
+  const tabBar='<div class="lp-isb-tabbar">'
+    +'<button class="lp-isb-nav-btn" onclick="scrollTabRow(\'left\',\'mt-isb-tabs\')" title="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
+    +'<div class="lp-isb-tabs" id="mt-isb-tabs">'+tabs.map(function(t){return '<button class="lp-isb-tab'+(mtReqTab===t.id?' active':'')+'" onclick="mtReqNavTab(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'
+    +'<button class="lp-isb-nav-btn nav-right" onclick="scrollTabRow(\'right\',\'mt-isb-tabs\')" title="Scroll right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeMyTaskDetail()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
     +'</div>';
+  const header='<div style="padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy)">'+(c?c.name:r.entity)+'</div>'
+    +(c?'<div style="font-size:12px;color:var(--gray);margin-top:3px">'+c.country+' &middot; '+c.plan+' Plan &middot; '+c.employees+' employees</div>':'')
+    +'</div>';
+  let body;
+  if(mtReqTab==='journeys'){
+    body=renderClientJourneysContextHTML(r.clientId);
+  }else{
+    const infoCard='<div class="ep-form-card">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+requesterAvatarHTML(r.requestedBy)+'<div>'+requesterCaptionHTML(r.requestedBy)+'<div style="font-size:11.5px;color:var(--gray);margin-top:2px">'+r.timestamp+'</div></div></div>'
+      +'<div class="review-grid" style="grid-template-columns:1fr">'
+      +'<div class="review-row"><div class="rr-label">Request</div><div class="rr-val" style="white-space:normal">'+r.label+'</div></div>'
+      +'<div class="review-row"><div class="rr-label">Entity</div><div class="rr-val" style="white-space:normal">'+r.entity+'</div></div>'
+      +(r.note?'<div class="review-row"><div class="rr-label">Note</div><div class="rr-val" style="white-space:normal;font-weight:500">'+r.note+'</div></div>':'')
+      +'</div></div>';
+    const actionPanel='<div class="ep-form-card" style="margin-top:14px">'
+      +'<div style="font-size:11.5px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Current Action Required</div>'
+      +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:18px">Approving activates this immediately for '+r.entity+'. Reject if it needs more information first.</div>'
+      +'<button class="btn btn-success" style="width:100%;justify-content:center;margin-bottom:8px" onclick="approveEntityRequest(\''+r.id+'\');closeMyTaskDetail()">Approve</button>'
+      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="rejectEntityRequest(\''+r.id+'\');closeMyTaskDetail()">Reject</button>'
+      +'</div>';
+    body=infoCard+actionPanel;
+  }
+  return tabBar+'<div class="lp-isb-body">'+header+body+'</div>';
+}
+function mtReqNavTab(tab){
+  mtReqTab=tab;
+  const inner=document.getElementById('mt-req-sb-inner');
+  if(inner)inner.innerHTML=renderMyTaskDetailPanel(mtReqSelectedId);
+}
+function openMyTaskDetail(reqId){
+  mtReqSelectedId=reqId;
+  mtReqTab='journeys';
+  const sb=document.getElementById('mt-req-sb');if(sb)sb.classList.add('open');
+  const inner=document.getElementById('mt-req-sb-inner');if(inner)inner.innerHTML=renderMyTaskDetailPanel(reqId);
+  document.querySelectorAll('.ea-task-row').forEach(function(row){row.style.background=row.id==='mt-req-row-'+reqId?'#fff8f0':'';});
+}
+function closeMyTaskDetail(){
+  mtReqSelectedId=null;
+  const sb=document.getElementById('mt-req-sb');if(sb)sb.classList.remove('open');
+  document.querySelectorAll('.ea-task-row').forEach(function(row){row.style.background='';});
 }
 function buildMyTasksPageHTML(){
   if(portalRole==='super-admin')return buildSuperAdminMyTasksHTML();
   if(portalRole==='entity-admin')return buildEntityAdminMyTasksHTML();
   const items=aiAllPendingRuns();
+  if(mtTaskSelectedRunId&&!items.some(function(it){return it.run.runId===mtTaskSelectedRunId;}))mtTaskSelectedRunId=null;
   const mtDotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const rows=items.map(function(it){
     const r=it.run,j=it.journey;
@@ -8194,48 +8469,130 @@ function buildMyTasksPageHTML(){
     const step=events[Math.min(r.currentStepIdx,events.length-1)];
     const isException=r.status==='Exception';
     const actionText=isException?(r.exceptionNote||'This run is blocked and needs review.'):('Waiting on: '+(step?step.name:'Review'));
-    const menu='<div class="ct-action-wrap">'
-      +'<button class="lp-action-btn" onclick="toggleMtAction(\''+r.runId+'\',event)" title="Actions">'+mtDotsIco+'</button>'
-      +'<div class="ct-action-menu" id="mt-ctm-'+r.runId+'">'
-      +'<div class="ct-act-item" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">View &amp; Act</div>'
-      +'<div class="ct-act-item" onclick="viewAIActiveAutomation(\''+j.id+'\')">View All Runs</div>'
-      +'<div class="ct-act-item" onclick="viewAIJourney(\''+j.id+'\')">View Journey</div>'
-      +'</div></div>';
-    return '<tr style="cursor:pointer" onclick="viewAIRunTask(\''+r.runId+'\',\''+j.id+'\')">'
+    return '<tr class="lp-row mt-run-row'+(mtTaskSelectedRunId===r.runId?' lp-row-selected':'')+'" id="mt-run-row-'+r.runId+'" style="cursor:pointer" onclick="openMyTaskAction(\''+r.runId+'\',\''+j.id+'\')">'
       +'<td><div class="cell-primary">'+j.name+'</div><div class="cell-sub">'+r.runId+'</div></td>'
       +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+(r.country||'')+(r.contractType?' &middot; '+r.contractType:'')+'</div></td>'
       +'<td>'+actionText+'</td>'
       +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
       +'<td class="cell-sub">'+r.lastActivity+'</td>'
-      +'<td onclick="event.stopPropagation()">'+menu+'</td>'
+      +'<td onclick="event.stopPropagation()"><button class="lp-action-btn" onclick="openMyTaskAction(\''+r.runId+'\',\''+j.id+'\')" title="Open task">'+mtDotsIco+'</button></td>'
       +'</tr>';
   }).join('');
   const body=items.length
-    ?'<div class="listing-card" style="overflow-x:hidden"><table class="listing-table ai-run-table mt-table"><thead><tr><th>Journey</th><th>Client</th><th>Action Needed</th><th>Status</th><th>Last Activity</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-    :'<div class="listing-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:40px">No pending tasks right now &mdash; journeys you run will show up here if they need your approval or attention.</div>';
+    ?'<table class="listing-table ai-run-table mt-table lp-table"><thead><tr><th>Journey</th><th>Client</th><th>Action Needed</th><th>Status</th><th>Last Activity</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    :'<div style="text-align:center;color:var(--gray);font-size:12.5px;padding:40px">No pending tasks right now &mdash; journeys you run will show up here if they need your approval or attention.</div>';
+  const sbInner=mtTaskSelectedRunId?renderMyTaskActionPanel(mtTaskSelectedRunId,items.find(function(it){return it.run.runId===mtTaskSelectedRunId;}).journey.id):'';
   return '<div class="ai-exec-page">'
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Every journey run across Contract Creation, Payroll, and Hire to Retire that is waiting on your approval or needs attention.</p>'
-    +body
+    +'<div style="margin-bottom:20px">'+buildMyPendingManualTasksHTML()+'</div>'
+    +'<div class="lp-split-wrap"><div class="lp-split-main"><div class="listing-card" style="border:none;border-radius:0;box-shadow:none;overflow-x:hidden">'+body+'</div></div>'
+    +'<div class="lp-split-sb'+(mtTaskSelectedRunId?' open':'')+'" id="mt-task-sb"><div class="lp-isb" id="mt-task-sb-inner">'+sbInner+'</div></div>'
+    +'</div>'
     +'</div>';
 }
-function toggleMtAction(id,e){
-  if(e)e.stopPropagation();
-  document.querySelectorAll('.ct-action-menu').forEach(function(m){if(m.id!=='mt-ctm-'+id)m.classList.remove('open');});
-  const m=document.getElementById('mt-ctm-'+id);if(!m)return;
-  const willOpen=!m.classList.contains('open');
-  m.classList.toggle('open');
-  if(willOpen&&e){
-    const wrap=e.target.closest('.ct-action-wrap');
-    const anchor=wrap?wrap.getBoundingClientRect():null;
-    if(anchor){
-      const menuH=m.offsetHeight;
-      const spaceBelow=window.innerHeight-anchor.bottom-8;
-      m.style.right=(window.innerWidth-anchor.right)+'px';m.style.left='auto';
-      if(spaceBelow>=menuH){m.style.top=(anchor.bottom+5)+'px';m.style.bottom='auto';}
-      else{m.style.bottom=(window.innerHeight-anchor.top+5)+'px';m.style.top='auto';}
-    }
+// -- ENTITY USER: My Tasks — slide-in task panel for a single run, sectioned into Action Needed / Journey Steps / Backend Activity --
+function renderMyTaskActionPanel(runId,journeyId){
+  const j=aiJourneys.find(function(x){return x.id===journeyId;});
+  if(!j)return '';
+  const runs=aiAutomationRuns[journeyId]||[];
+  const run=runs.find(function(r){return r.runId===runId;});
+  if(!run)return '';
+  const events=aiJourneyEvents[journeyId]||[];
+  const topbar='<div class="lp-isb-tabbar"><div style="flex:1;display:flex;align-items:center;padding:0 16px;font-size:13px;font-weight:600;color:var(--navy)">Task Details</div>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeMyTaskAction()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'</div>';
+  const summary='<div style="padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-size:16px;font-weight:700;color:var(--navy)">'+j.name+' &mdash; '+run.client+'</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-top:3px">'+(run.country||'')+(run.contractType?' &middot; '+run.contractType:'')+' &middot; Run ID '+run.runId+'</div>'
+    +'<div style="margin-top:8px"><span class="status-pill '+aiRunStatusPillClass(run.status)+'">'+run.status+'</span></div>'
+    +'</div>';
+
+  const currentEvent=events[Math.min(run.currentStepIdx,events.length-1)];
+  const nextEvent=events[run.currentStepIdx+1];
+  const laterEvent=events[run.currentStepIdx+2];
+  let actionBody;
+  if(run.status==='Exception'){
+    actionBody='<div style="font-size:12.5px;color:var(--navy);line-height:1.6;margin-bottom:18px">'+(run.exceptionNote||'This run is blocked and needs review.')+'</div>'
+      +'<button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="mtResolveException(\''+run.runId+'\',\''+journeyId+'\')">Resolve Exception &amp; Continue</button>'
+      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="openAIEventDrawer(\''+journeyId+'\','+run.currentStepIdx+')">View Event Details</button>';
+  }else if(run.status==='Waiting for Approval'){
+    const aiSummary='AI has completed '+aiRunCounts(run,journeyId).aiCompleted+' events for '+run.client+' as part of the '+j.name+'. '+(currentEvent?currentEvent.name+' is required before the journey can continue.':'Review is required before the journey can continue.');
+    actionBody='<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">'+(currentEvent?currentEvent.name:'Review pre-filled data')+'</div>'
+      +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:18px">'+aiSummary+'</div>'
+      +'<button class="btn btn-secondary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="openAIEventDrawer(\''+journeyId+'\','+run.currentStepIdx+')">Review Data</button>'
+      +'<button class="btn btn-success" style="width:100%;justify-content:center;margin-bottom:8px" onclick="mtApproveRunStep(\''+run.runId+'\',\''+journeyId+'\')">Approve and Continue</button>'
+      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="mtRejectRunStep(\''+run.runId+'\',\''+journeyId+'\')">Reject / Send for Correction</button>';
+  }else if(run.status==='Completed'){
+    actionBody='<div style="font-size:12.5px;color:var(--gray);line-height:1.6">All '+events.length+' events completed. '+run.client+' &mdash; '+j.name+' finished successfully.</div>';
+  }else{
+    actionBody='<div style="font-size:12.5px;color:var(--gray);line-height:1.6">AI or the client is currently working on <strong style="color:var(--navy)">'+(currentEvent?currentEvent.name:'this step')+'</strong>. No action is needed right now &mdash; check back shortly.</div>';
   }
+  const actionSection='<div class="ep-form-card" style="margin-bottom:14px">'
+    +'<div class="ep-form-title">Action Needed</div>'+actionBody
+    +'</div>';
+
+  const timeline=events.map(function(e,i){
+    const st=aiRunStepStatus(run,i);
+    const icon=st==='done'?'&#10003;':st==='current'?'&#8987;':st==='exception'?'!':'&#9675;';
+    return '<div class="ai-timeline-item">'
+      +'<div class="ai-timeline-dot run-'+st+'">'+icon+'</div>'
+      +'<div class="ai-timeline-card" onclick="openAIEventDrawer(\''+journeyId+'\','+i+')">'
+      +'<div class="ai-timeline-card-head"><span class="ai-timeline-card-title">'+(i+1)+'. '+e.name+'</span></div>'
+      +(st==='exception'?'<div class="ai-timeline-card-desc" style="color:#dc2626">'+(run.exceptionNote||'This step needs attention.')+'</div>':'<div class="ai-timeline-card-desc">'+e.desc+'</div>')
+      +'<div class="ai-timeline-chips">'+aiChipsCompact(e.chips)+'</div>'
+      +'</div></div>';
+  }).join('');
+  const stepsSection='<div class="ep-form-card" style="margin-bottom:14px"><div class="ep-form-title">Journey Steps</div><div class="ai-timeline" style="margin-top:14px">'+timeline+'</div></div>';
+
+  const backendRow=function(label,ev,isCurrent){
+    if(!ev)return '';
+    const st=aiBackendStatusFor(ev,isCurrent,run.status);
+    return '<div class="review-row"><div class="rr-label">'+label+'</div><div class="rr-val" style="display:flex;align-items:center;gap:8px;white-space:normal"><span>'+ev.source+'</span><span class="ai-chip '+aiBackendChipClass(st)+'">'+st+'</span></div></div>';
+  };
+  const backendSection='<div class="ep-form-card">'
+    +'<div class="ep-form-title">Backend Activity</div>'
+    +'<div class="review-grid" style="grid-template-columns:1fr">'
+    +backendRow('Current',currentEvent,true)
+    +backendRow('Next',nextEvent,false)
+    +backendRow('Later',laterEvent,false)
+    +'</div></div>';
+
+  return topbar+'<div class="lp-isb-body">'+summary+actionSection+stepsSection+backendSection+'</div>';
+}
+function mtTaskRefresh(runId,journeyId){
+  navigatePage('my-tasks');
+  const stillPending=aiAllPendingRuns().some(function(it){return it.run.runId===runId;});
+  if(stillPending)openMyTaskAction(runId,journeyId);
+}
+function mtApproveRunStep(runId,journeyId){
+  const runs=aiAutomationRuns[journeyId]||[];
+  const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
+  aiShowLoader('Continuing Journey&hellip;','Applying approval and running the next automated events for '+run.client,document.getElementById('mt-task-sb-inner'));
+  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';mtTaskRefresh(runId,journeyId);},2000);
+}
+function mtRejectRunStep(runId,journeyId){
+  const runs=aiAutomationRuns[journeyId]||[];
+  const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
+  aiShowLoader('Sending Back for Correction&hellip;',run.client,document.getElementById('mt-task-sb-inner'));
+  setTimeout(function(){run.lastActivity='Just now';mtTaskRefresh(runId,journeyId);},1700);
+}
+function mtResolveException(runId,journeyId){
+  const runs=aiAutomationRuns[journeyId]||[];
+  const run=runs.find(function(r){return r.runId===runId;});if(!run)return;
+  aiShowLoader('Re-validating&hellip;','Re-checking data for '+run.client+' after correction',document.getElementById('mt-task-sb-inner'));
+  setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';mtTaskRefresh(runId,journeyId);},2000);
+}
+function openMyTaskAction(runId,journeyId){
+  mtTaskSelectedRunId=runId;
+  const sb=document.getElementById('mt-task-sb');if(sb)sb.classList.add('open');
+  const inner=document.getElementById('mt-task-sb-inner');if(inner)inner.innerHTML=renderMyTaskActionPanel(runId,journeyId);
+  document.querySelectorAll('.mt-run-row').forEach(function(row){row.classList.toggle('lp-row-selected',row.id==='mt-run-row-'+runId);});
+}
+function closeMyTaskAction(){
+  mtTaskSelectedRunId=null;
+  const sb=document.getElementById('mt-task-sb');if(sb)sb.classList.remove('open');
+  document.querySelectorAll('.mt-run-row').forEach(function(row){row.classList.remove('lp-row-selected');});
 }
 
 function buildAIActiveAutomationHTML(){

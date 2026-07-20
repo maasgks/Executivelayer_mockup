@@ -29,6 +29,7 @@ const enterprisePersonas=[
 ];
 function getActivePersona(){return enterprisePersonas.find(function(p){return p.id===activePersonaId;})||enterprisePersonas[0];}
 function personaByLabel(label){return enterprisePersonas.find(function(p){return p.label===label;});}
+function manualStepOwnerPersonaId(ownerRole){const p=personaByLabel(ownerRole);return p?p.id:null;}
 // -- Resolve a "requestedBy" string (e.g. "HR" or "Priya Nair (Entity Admin)") into a displayable profile --
 function requesterProfile(requestedBy){
   const persona=personaByLabel(requestedBy);
@@ -46,8 +47,7 @@ function activePersonaCanAccessJourney(journeyId){
 }
 function setActivePersona(id){
   if(!enterprisePersonas.some(function(p){return p.id===id;}))return;
-  activePersonaId=id;
-  setPortalRole('entity-user',true);
+  setPortalRole('entity-user',true,id);
 }
 const aiH2rOffboardSteps=[
   {label:'Access Revocation',running:'Revoking system access…',type:'ai'},
@@ -66,7 +66,11 @@ const aiH2rCountryData={
 };
 let selectedAIRunId='RUN-2001';
 let aiRunDetailBackTo=null;
-let myTasksBackTo=null;
+let navStack=[];
+let personaSessionState={};
+function currentSessionKey(){return portalRole==='entity-user'?'entity-user:'+activePersonaId:portalRole;}
+let mtReqSelectedId=null,mtReqTab='journeys';
+let mtTaskSelectedRunId=null;
 let aiClientSelectedId=null,aiClientTab='journeys';
 let liveRunSeq=9000;
 let aiJourneyDetailSelectedStage=-1;
@@ -316,8 +320,9 @@ function buildSidebar(id,collapsed,activePg){
     const d=document.createElement('button');
     d.type='button';
     d.className='sb-item'+(item.id===activePg?' active':'')+(item.id==='ai-executive'?' sb-item-ai':'');
-    d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.label+'</span>';
-    d.title=item.label;
+    const badgeCount=item.id==='my-tasks'&&typeof myTasksPendingCount==='function'?myTasksPendingCount():0;
+    d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.label+'</span>'+(badgeCount?'<span class="sb-item-badge">'+badgeCount+'</span>':'');
+    d.title=item.label+(badgeCount?' ('+badgeCount+' pending)':'');
     d.onclick=item.placeholder?()=>{}:()=>{activeSidebarItem=item.id;navigatePage(item.id);};
     el.appendChild(d);
   });
@@ -332,15 +337,50 @@ const notifData=[
   {name:'Your contract is created',cid:'321',time:'5 hrs ago',pending:false},
   {name:'Your Invoice is ready for review',cid:'675',time:'1 day ago',pending:true}
 ];
-function toggleNotif(e){if(e)e.stopPropagation();notifOpen=!notifOpen;renderNotif();}
+let notifBellSeenKeys={};
+function notifRelevantList(){
+  return notifData.filter(function(n){return !n.forPersona||(portalRole==='entity-user'&&activePersonaId===n.forPersona);});
+}
+function notifPendingCount(){return notifRelevantList().filter(function(n){return n.pending;}).length;}
+function renderNotifBadge(){
+  const btn=document.getElementById('notif-trigger');if(!btn)return;
+  let badge=btn.querySelector('.tb-notif-badge');
+  const count=notifBellSeenKeys[currentSessionKey()]?0:notifPendingCount();
+  if(count>0){
+    if(!badge){badge=document.createElement('span');badge.className='tb-notif-badge';btn.appendChild(badge);}
+    badge.textContent=count>9?'9+':String(count);
+  }else if(badge){badge.remove();}
+}
+function toggleNotif(e){
+  if(e)e.stopPropagation();
+  notifOpen=!notifOpen;
+  if(notifOpen)notifBellSeenKeys[currentSessionKey()]=true;
+  renderNotif();
+  renderNotifBadge();
+}
+function markAllNotifsRead(){
+  notifRelevantList().forEach(function(n){n.pending=false;});
+  renderNotif();
+  renderNotifBadge();
+}
 function renderNotif(){
   const el=document.getElementById('notif-pop');if(!el)return;
   if(!notifOpen){el.classList.add('hidden');return;}
   el.classList.remove('hidden');
-  const list=notifShowUnread?notifData.filter(n=>n.pending):notifData;
+  const list=notifData.filter(function(n){
+    if(notifShowUnread&&!n.pending)return false;
+    if(n.forPersona&&!(portalRole==='entity-user'&&activePersonaId===n.forPersona))return false;
+    return true;
+  });
   el.innerHTML=`<div class="np-head"><div class="np-title">Notifications</div><div class="np-actions"><button class="np-iconbtn" title="Refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="np-iconbtn" onclick="toggleNotif()" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
-  <div class="np-controls"><button class="np-mark">Mark all as read</button><div class="np-toggle-row"><span>Only Show Unread</span><button class="np-switch ${notifShowUnread?'on':''}" onclick="event.stopPropagation();notifShowUnread=!notifShowUnread;renderNotif()"></button></div></div>
-  <div class="np-list">${list.map(n=>`<div class="np-item"><div class="np-avatar">N</div><div class="np-body"><div class="np-row1"><div class="np-text">${n.name}</div><div class="np-time">${n.time}</div></div><div class="np-row2">Contract ID - ${n.cid}${n.pending?'<span class="np-pending">Pending</span>':''}</div></div></div>`).join('')||'<div style="padding:24px;text-align:center;color:var(--gray);font-size:12px">No unread notifications</div>'}</div>`;
+  <div class="np-controls"><button class="np-mark" onclick="event.stopPropagation();markAllNotifsRead()">Mark all as read</button><div class="np-toggle-row"><span>Only Show Unread</span><button class="np-switch ${notifShowUnread?'on':''}" onclick="event.stopPropagation();notifShowUnread=!notifShowUnread;renderNotif()"></button></div></div>
+  <div class="np-list">${list.map(n=>`<div class="np-item${n.runId?' np-item-clickable':''}"${n.runId?` onclick="toggleNotif();openManualRunPreviewModal('${n.runId}')" style="cursor:pointer"`:''}><div class="np-avatar">N</div><div class="np-body"><div class="np-row1"><div class="np-text">${n.name}</div><div class="np-time">${n.time}</div></div><div class="np-row2">Contract ID - ${n.cid}${n.pending?'<span class="np-pending">Pending</span>':''}</div></div></div>`).join('')||'<div style="padding:24px;text-align:center;color:var(--gray);font-size:12px">No unread notifications</div>'}</div>`;
+}
+function pushRunNotification(runId,forPersonaId,message){
+  notifData.unshift({name:message,cid:runId,time:'Just now',pending:true,forPersona:forPersonaId,runId:runId});
+  if(forPersonaId)delete notifBellSeenKeys['entity-user:'+forPersonaId];
+  if(notifOpen)renderNotif();
+  renderNotifBadge();
 }
 document.getElementById('notif-pop')?.addEventListener('click',e=>e.stopPropagation());
 document.addEventListener('click',e=>{if(notifOpen&&!e.target.closest('#notif-pop')&&!e.target.closest('#notif-trigger')){notifOpen=false;renderNotif();}});
@@ -581,23 +621,42 @@ function defaultPageForRole(role){return role==='entity-user'?'ai-executive':'da
 
 function navigatePage(pg){
   const resolved=canAccessPage(pg,portalRole)?pg:defaultPageForRole(portalRole);
-  if(resolved!=='my-tasks')myTasksBackTo=null;
+  if(resolved!==page){
+    if(view==='adt'&&navStack.length&&navStack[navStack.length-1]===resolved){
+      navStack.pop();
+    }else if(view==='adt'){
+      navStack.push(page);
+    }
+  }
   page=resolved;
   if(view==='adt'){renderADTPage();return;}
   if(view==='agent-active'){showAgentModule(resolved);return;}
 }
+function goBackPage(){
+  if(!navStack.length)return;
+  page=navStack.pop();
+  renderADTPage();
+}
 
 function portalRoleLabel(r){return r==='super-admin'?'Super Admin':r==='entity-admin'?'Entity Admin':getActivePersona().label;}
 function portalRoleInitials(r){return r==='super-admin'?'SA':r==='entity-admin'?'EA':getActivePersona().initials;}
-function setPortalRole(role,force){
+function setPortalRole(role,force,personaId){
   if(role==='entity-user'&&!activePersonaId)activePersonaId='hr';
-  if(role===portalRole&&!force)return;
+  const sameRole=role===portalRole&&!force;
+  const samePersona=role!=='entity-user'||personaId===undefined||personaId===activePersonaId;
+  if(sameRole&&samePersona)return;
+  personaSessionState[currentSessionKey()]={page:page,dashboardTab:dashboardTab,navStack:navStack.slice()};
   portalRole=role;
+  if(role==='entity-user')activePersonaId=personaId||activePersonaId||'hr';
   userDDMode='main';
-  dashboardTab='employee';
   closeAllHdrDD();
   if(view!=='adt'){stopAmThreeJS();showView('adt');}
-  page=defaultPageForRole(portalRole);
+  const saved=personaSessionState[currentSessionKey()];
+  if(saved){
+    page=saved.page;dashboardTab=saved.dashboardTab;navStack=saved.navStack.slice();
+  }else{
+    dashboardTab='employee';page=defaultPageForRole(portalRole);navStack=[];
+  }
   renderADTPage();
   renderUserDD();
   showAiToast('Switched to '+portalRoleLabel(portalRole),'You are now viewing ADT as this role.');
@@ -991,7 +1050,14 @@ function markApFormDirty(){}
 function cancelAddPolicy(){selectedEmps=new Set();apFilterType='';apFilterValue='';page='leave-policies';renderADTPage();}
 function resetLpFilters(){lpFilterField='';lpFilterStatus='';lpCurrentPage=1;renderADTPage();}
 function lpGoToPage(n){lpCurrentPage=n;renderADTPage();}
-function addListingItem(pg){if(pg==='contracts'){const j=aiJourneys.find(x=>x.id==='contract-creation');aiAssistedFlow=false;aiContractPrefill=null;aiCtAnimatedStage=-1;aiCtPendingEmpType='';aiCtJourneyEmployee=null;page=(j&&j.status==='Active')?'ai-contract-assistant':'contract-type-select';renderADTPage();}else if(pg==='teams'){page='team-add';renderADTPage();}else if(pg==='all-leaves'){page='leave-add';renderADTPage();}}
+function addListingItem(pg){
+  if(pg==='contracts'){
+    const creatorId=portalRole==='entity-user'?activePersonaId:'account-manager';
+    const existingRun=manualJourneyRuns.find(function(r){return r.journeyId==='contract-creation'&&r.createdBy===creatorId&&r.status!=='Completed';});
+    if(existingRun){selectedManualRunId=existingRun.runId;manualJourneyBackPage='contracts';page='manual-journey-run';renderADTPage();return;}
+    aiAssistedFlow=false;aiContractPrefill=null;aiCtAnimatedStage=-1;aiCtPendingEmpType='';aiCtJourneyEmployee=null;page=isJourneyAgentEnabled('contract-creation')?'ai-contract-assistant':'contract-type-select';renderADTPage();
+  }else if(pg==='teams'){page='team-add';renderADTPage();}else if(pg==='all-leaves'){page='leave-add';renderADTPage();}
+}
 
 // -- DIRECT EMPLOYEE PAGE --
 const directEmpData=[
@@ -1245,10 +1311,10 @@ let cfgModelDraft=null;
 
 // -- Configure: Context & Journey (ADT's real business journeys — same set as AI Executive) --
 const cfgJourneyCategories=[
-  {id:'O2C',name:'Order to Cash',desc:"From a customer deal/order through fulfillment, invoicing, and collecting payment."},
-  {id:'P2P',name:'Procure to Pay',desc:'From requisitioning goods/services from a vendor through purchase order, receipt, and paying the invoice.'},
-  {id:'H2R',name:'Hire to Retire',desc:'The full employee lifecycle: hiring, onboarding, payroll, benefits, leave, compliance, through offboarding.'},
-  {id:'F2A',name:'Finance to Accounting',desc:'Financial transactions flowing into the general ledger, reconciliation, close, and reporting.'}
+  {id:'O2C',name:'Order to Cash',desc:"From customer order through fulfillment, invoicing, and payment collection."},
+  {id:'P2P',name:'Procure to Pay',desc:'From requisitioning through purchase order, receipt, and invoice payment.'},
+  {id:'H2R',name:'Hire to Retire',desc:'Full employee lifecycle: hiring, payroll, benefits, leave, offboarding.'},
+  {id:'F2A',name:'Finance to Accounting',desc:'Financial transactions into the ledger — reconciliation, close, reporting.'}
 ];
 let cfgJourneyCategoryFilter='';
 // P2P and F2A have no journeys built out yet — locked for entity-facing roles until they do; Super Admin can still browse/author into them.
@@ -1426,7 +1492,7 @@ function cfgManualStepIndex(journeyId,cfgIdx){
 }
 function cfgManualStep(journeyId,cfgIdx){return manualJourneySteps(journeyId)[cfgManualStepIndex(journeyId,cfgIdx)]||{};}
 const manualJourneyRuns=[
-  {runId:'MAN-1001',journeyId:'contract-creation',subject:'Rashi Singh',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:1,status:'Blocked',slaRisk:'High',blockedReason:'Netherlands work permit rule missing in Compliance Hub',escalation:'Entity Admin in 1h',startedAt:'Today 09:10 AM',manualHours:3.2,agentEstimateHours:.4,exceptions:[{type:'Missing compliance rule',ownerRole:'Compliance Officer',status:'Open',suggestedResolution:'Add Netherlands work permit rule or attach override evidence.'}],audit:['Deal record created by Account Manager','Compliance Hub opened 4 times','Exception raised for missing work permit rule']},
+  {runId:'MAN-1001',journeyId:'contract-creation',subject:'Rashi Singh',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:1,status:'Blocked',slaRisk:'High',blockedReason:'Netherlands work permit rule missing in Compliance Hub',escalation:'Entity Admin in 1h',startedAt:'Today 09:10 AM',manualHours:3.2,agentEstimateHours:.4,createdBy:'account-manager',exceptions:[{type:'Missing compliance rule',ownerRole:'Compliance Officer',status:'Open',suggestedResolution:'Add Netherlands work permit rule or attach override evidence.'}],audit:['Deal record created by Account Manager','Compliance Hub opened 4 times','Exception raised for missing work permit rule']},
   {runId:'MAN-1002',journeyId:'payroll-creation',subject:'Anika Shah',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:2,status:'Active',slaRisk:'Medium',blockedReason:'Timesheet and leave totals need reconciliation',escalation:'None',startedAt:'Today 10:35 AM',manualHours:2.4,agentEstimateHours:.3,exceptions:[{type:'Timesheet discrepancy',ownerRole:'HR',status:'Open',suggestedResolution:'Reconcile 22 present days with 2 approved leave days before salary calculation.'}],audit:['Payroll run initiated manually','Timesheet module visited 3 times','Attendance days entered manually']},
   {runId:'MAN-1003',journeyId:'h2r-lifecycle',subject:'Sofia Romano',entity:'Dhi Hyperlocal',mode:'Hybrid',currentStepIdx:7,status:'Waiting Approval',slaRisk:'Low',blockedReason:'HR Manager approval required for leave-policy deviation',escalation:'None',startedAt:'Yesterday 04:20 PM',manualHours:5.1,agentEstimateHours:1.2,exceptions:[],audit:['Employee record created','Compliance profile attached','Leave policy deviation routed to HR Manager']}
 ];
@@ -1510,7 +1576,12 @@ function completeManualStep(runId){
   const st=steps[run.currentStepIdx];
   if(st)run.audit.unshift(st.name+' completed by '+st.ownerRole);
   run.manualHours+=(st&&st.sla==='Ongoing')?0:.8;
-  if(run.currentStepIdx<steps.length-1){run.currentStepIdx++;run.status='Active';run.slaRisk=run.currentStepIdx%3===0?'Medium':'Low';}
+  if(run.currentStepIdx<steps.length-1){
+    run.currentStepIdx++;run.status='Active';run.slaRisk=run.currentStepIdx%3===0?'Medium':'Low';
+    const nextStep=steps[run.currentStepIdx];
+    const nextPersonaId=nextStep&&manualStepOwnerPersonaId(nextStep.ownerRole);
+    if(nextPersonaId)pushRunNotification(run.runId,nextPersonaId,'"'+nextStep.name+'" is waiting on you for '+run.subject+'.');
+  }
   else{run.status='Completed';run.slaRisk='Low';run.blockedReason='None';}
   renderADTPage();
 }
@@ -1535,6 +1606,17 @@ function resolveManualException(runId,idx,resolution){
   run.audit.unshift('Exception resolved: '+run.exceptions[idx].type+' via '+title+((resolution&&resolution.note)?' - '+resolution.note:''));
   if(!run.exceptions.some(function(e){return e.status==='Open';})){run.status='Active';run.blockedReason='None';run.slaRisk='Low';run.escalation='None';}
   renderADTPage();
+}
+function resolveComplianceStepFromDashboard(runId,note){
+  const run=getManualRun(runId);if(!run)return;
+  const beforeIdx=run.currentStepIdx;
+  if(note)run.audit.unshift('Compliance note: '+note);
+  completeManualStep(runId);
+  if(run.currentStepIdx!==beforeIdx){
+    const stepName=(manualJourneySteps(run.journeyId)[run.currentStepIdx]||{}).name||'the next step';
+    if(run.createdBy)pushRunNotification(run.runId,run.createdBy,'Compliance Check complete for '+run.subject+' — now at "'+stepName+'".');
+    if(typeof showAiToast==='function')showAiToast('Compliance Check resolved',run.subject+' has moved to the next step.');
+  }
 }
 
 // -- Configure: Agents — one per AI-driven step across Contract Creation / Payroll Creation / H2R Lifecycle --

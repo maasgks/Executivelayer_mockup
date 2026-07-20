@@ -11,7 +11,23 @@
   if(page==='ai-onboarding-run'){el.innerHTML=buildAIOnboardingRunHTML();return;}
   if(page==='ai-journey-complete'){el.innerHTML=buildAIJourneyCompleteHTML();return;}
 }
+// Pages that already render their own dedicated "back" UI inside their content -- skip the generic bar there to avoid a duplicate.
+const PAGES_WITH_OWN_BACK_UI=new Set(['dashboard','cfg-system-detail','cfg-model-detail','cfg-journey-detail','ai-journey-detail','ai-run-detail','cost-calculator']);
+function injectPageBackBar(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  if(!navStack.length||PAGES_WITH_OWN_BACK_UI.has(page))return;
+  const target=navStack[navStack.length-1];
+  const bar=document.createElement('div');
+  bar.className='page-back-bar';
+  bar.innerHTML='<button class="page-back-btn" onclick="goBackPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> '+getPageTitle(target)+'</button>';
+  el.insertBefore(bar,el.firstChild);
+}
 function renderPageContent(id){
+  renderPageContentImpl(id);
+  injectPageBackBar(id);
+}
+function renderPageContentImpl(id){
   const el=document.getElementById(id);
   if(!el)return;
   if(isAIContractWizardPage(page)){
@@ -84,6 +100,7 @@ function renderADTPage(){
   const ccBtn=document.getElementById('tb-cost-calc-btn');
   if(ccBtn)ccBtn.style.display=page==='contracts'?'':'none';
   buildSidebar('adt-sidebar',adtSidebarCollapsed,getSidebarActivePage(page));
+  renderNotifBadge();
   const sidebar=document.getElementById('adt-sidebar');
   if(sidebar)sidebar.style.display=page==='cost-calculator'?'none':'';
   renderPageContent('adt-content');
