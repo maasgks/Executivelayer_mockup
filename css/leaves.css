@@ -13,9 +13,13 @@
 .lp-isb-nav-btn{width:30px;border:none;background:transparent;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#94a3b8;padding:0;transition:background .15s,color .15s;border-right:1px solid var(--border)}
 .lp-isb-nav-btn.nav-right{border-right:none;border-left:1px solid var(--border)}
 .lp-isb-nav-btn:hover{background:#f8fafc;color:var(--orange)}
-.lp-isb-tab{padding:0 16px;align-self:stretch;border:1.5px solid transparent;border-radius:4px;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray);font-family:inherit;transition:.15s;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;margin:0 4px}
+.lp-isb-tab{position:relative;padding:0 16px;align-self:stretch;border:1.5px solid transparent;border-radius:4px;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray);font-family:inherit;transition:.15s;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;margin:0 4px}
 .lp-isb-tab.active{color:var(--orange);border-color:var(--orange);font-weight:600}
 .lp-isb-tab:hover:not(.active){color:var(--navy)}
+.lp-isb-tab--pending{background:#fff7ed;border-color:#fed7aa;color:#b45309;font-weight:600}
+.lp-isb-tab--pending:hover:not(.active){color:#b45309}
+.lp-isb-tab--pending.active{background:#fff7ed;border-color:var(--orange)}
+.lp-isb-tab-badge{position:absolute;top:2px;right:2px;width:7px;height:7px;border-radius:50%;background:#f97316;box-shadow:0 0 0 2px #fff}
 .lp-isb-right{display:flex;align-items:center;gap:5px;padding:0 10px;border-left:1px solid var(--border);flex-shrink:0}
 .lp-isb-close{width:26px;height:26px;border:none;background:#f1f5f9;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--gray);transition:.15s;padding:0}
 .lp-isb-close:hover{background:#e2e8f0;color:var(--navy)}

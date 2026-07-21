@@ -5,6 +5,7 @@ let view='adt',mode='agent',page='dashboard',agent='contractor',adtSidebarCollap
 let portalRole='super-admin',userDDMode='main';
 let activePersonaId='hr';
 let dashboardTab='employee';
+let salesOpenDealsOpen=false;
 let aiContractPrefill=null,aiAssistedFlow=false,aiCtNotFoundOpen=false,aiProposalDraft=null,aiCtChatMsgs=[],aiWizardFormData={},aiCreatedContractId=null;
 const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
 const aiOpsManager={name:'Priya Nair',role:'Ops Manager',initials:'PN'};
@@ -105,7 +106,7 @@ const sidebarItems=[
     {id:'operations-cockpit',label:'Operations Cockpit',roles:['entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
   ]},
   {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
-  {id:'my-tasks',label:'My Tasks',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
+  {id:'my-tasks',label:'My Tasks',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
   {dropdown:'Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',children:[
     {id:'direct',label:'Direct Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
     {id:'global',label:'Global Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
@@ -1052,9 +1053,7 @@ function resetLpFilters(){lpFilterField='';lpFilterStatus='';lpCurrentPage=1;ren
 function lpGoToPage(n){lpCurrentPage=n;renderADTPage();}
 function addListingItem(pg){
   if(pg==='contracts'){
-    const creatorId=portalRole==='entity-user'?activePersonaId:'account-manager';
-    const existingRun=manualJourneyRuns.find(function(r){return r.journeyId==='contract-creation'&&r.createdBy===creatorId&&r.status!=='Completed';});
-    if(existingRun){selectedManualRunId=existingRun.runId;manualJourneyBackPage='contracts';page='manual-journey-run';renderADTPage();return;}
+    // -- "Create Contract" always starts a fresh manual-step wizard under Contracts, even if this persona has an older in-progress deal — that in-progress deal stays reachable from Open Deals / My Tasks, it just doesn't hijack the create action. --
     aiAssistedFlow=false;aiContractPrefill=null;aiCtAnimatedStage=-1;aiCtPendingEmpType='';aiCtJourneyEmployee=null;page=isJourneyAgentEnabled('contract-creation')?'ai-contract-assistant':'contract-type-select';renderADTPage();
   }else if(pg==='teams'){page='team-add';renderADTPage();}else if(pg==='all-leaves'){page='leave-add';renderADTPage();}
 }
@@ -1066,6 +1065,54 @@ const directEmpData=[
   {id:3,name:'Anika Shah',empId:'EMP003',dept:'Engineering',branch:'Mumbai',jobTitle:'Developer',joinDate:'05 Jun 2024',desc:'Contract employee',contact:'+91 7777777777',email:'anika@testemp.com',status:'Active'},
   {id:4,name:'Rahul Mehta',empId:'EMP004',dept:'Product',branch:'Delhi',jobTitle:'Product Manager',joinDate:'--',desc:'--',contact:'--',email:'rahul@testemp.com',status:'Inactive'},
 ];
+// -- When a contract-creation run reaches Onboarding, the employee needs a real Direct Employee row for HR to work from — pulled from the linked contract, pinned to the top via onboardingRunId until HR marks the step complete. --
+function ensureDirectEmpForOnboarding(run){
+  if(directEmpData.some(function(e){return e.onboardingRunId===run.runId;}))return;
+  const c=run.contractRecordId?contractsData.find(function(x){return x.id===run.contractRecordId;}):null;
+  const nextId=directEmpData.reduce(function(m,e){return Math.max(m,e.id);},0)+1;
+  directEmpData.unshift({
+    id:nextId,name:run.subject,empId:'EMP0'+String(nextId).padStart(2,'0'),
+    dept:(c&&c.jobTitle&&/java|engineer|developer/i.test(c.jobTitle))?'Engineering':'Operations',
+    branch:(c&&c.countryOfOp)||'Hyderabad',jobTitle:(c&&c.jobTitle)||'—',joinDate:'--',
+    desc:c?(c.empType+' employee'):'New employee',contact:(c&&c.contact)||'--',email:(c&&c.email)||'--',
+    status:'Active',onboardingRunId:run.runId
+  });
+}
+function manualLinkedRunForEmployee(empId){
+  const emp=directEmpData.find(function(e){return e.id===empId;});
+  if(!emp||!emp.onboardingRunId)return null;
+  const run=getManualRun(emp.onboardingRunId);
+  if(!run||run.status==='Completed')return null;
+  const curStep=manualJourneySteps(run.journeyId)[run.currentStepIdx];
+  return (curStep&&curStep.name==='Onboarding')?run:null;
+}
+// -- PAYROLL PAGE (per-employee readiness, separate from the generic payroll-cycle listing) --
+const payrollEmpData=[
+  {id:1,name:'Testemp Antar',empId:'EMP001',country:'India',jobTitle:'Software Engineer',payFrequency:'Monthly',currency:'INR',grossPay:'100000',bankStatus:'Verified',taxIdStatus:'Verified',status:'Active'},
+  {id:2,name:'Anika Shah',empId:'EMP003',country:'Netherlands',jobTitle:'Developer',payFrequency:'Monthly',currency:'EUR',grossPay:'6200',bankStatus:'Verified',taxIdStatus:'Verified',status:'Active'}
+];
+const prLogsData={},prWorkflowData={};
+let prSelectedId=null,prTab='basic-details';
+// -- When a contract-creation run reaches Payroll Readiness (the final step), the employee needs a real Payroll row for HR to validate bank/tax/compensation — pulled from the linked contract, pinned to the top via readinessRunId until HR marks the step complete. --
+function ensurePayrollEmpForReadiness(run){
+  if(payrollEmpData.some(function(e){return e.readinessRunId===run.runId;}))return;
+  const c=run.contractRecordId?contractsData.find(function(x){return x.id===run.contractRecordId;}):null;
+  const nextId=payrollEmpData.reduce(function(m,e){return Math.max(m,e.id);},0)+1;
+  payrollEmpData.unshift({
+    id:nextId,name:run.subject,empId:'EMP0'+String(nextId).padStart(2,'0'),
+    country:(c&&c.countryOfOp)||'—',jobTitle:(c&&c.jobTitle)||'—',
+    payFrequency:(c&&c.payFrequency)||'Monthly',currency:(c&&c.currency)||'—',grossPay:(c&&c.payAmount)||'—',
+    bankStatus:'Pending',taxIdStatus:'Pending',status:'Pending',readinessRunId:run.runId
+  });
+}
+function manualLinkedRunForPayrollEmp(empId){
+  const emp=payrollEmpData.find(function(e){return e.id===empId;});
+  if(!emp||!emp.readinessRunId)return null;
+  const run=getManualRun(emp.readinessRunId);
+  if(!run||run.status==='Completed')return null;
+  const curStep=manualJourneySteps(run.journeyId)[run.currentStepIdx];
+  return (curStep&&curStep.name==='Payroll Readiness')?run:null;
+}
 const deLogsData={
   1:[
     {date:'10 Jun 2025',time:'03:30:00 PM',user:'Admin',status:'Updated',action:'Job title updated to Software Engineer'},
@@ -1204,7 +1251,7 @@ const ctWorkflowData={
   3:[{title:'Contract Inactive',user:'Admin',date:'2026-06-06',time:'14:07:35',description:'Contract for Deepak Singh set to Inactive.'}],
   4:[{title:'Proposal Sent',user:'Admin',date:'2026-06-06',time:'12:34:17',description:'EOR proposal sent to Rajdeep Singh.'},{title:'Contract Submitted',user:'Admin',date:'2026-06-06',time:'11:00:00',description:'EOR contract submitted for review.'}]
 };
-let ctSelectedId=null,ctTab='basic-details';
+let ctSelectedId=null,ctTab='basic-details',ctCommercialEditMode=false;
 
 // -- AI EXECUTIVE MODULE --
 const aiJourneys=[
@@ -1492,10 +1539,39 @@ function cfgManualStepIndex(journeyId,cfgIdx){
 }
 function cfgManualStep(journeyId,cfgIdx){return manualJourneySteps(journeyId)[cfgManualStepIndex(journeyId,cfgIdx)]||{};}
 const manualJourneyRuns=[
-  {runId:'MAN-1001',journeyId:'contract-creation',subject:'Rashi Singh',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:1,status:'Blocked',slaRisk:'High',blockedReason:'Netherlands work permit rule missing in Compliance Hub',escalation:'Entity Admin in 1h',startedAt:'Today 09:10 AM',manualHours:3.2,agentEstimateHours:.4,createdBy:'account-manager',exceptions:[{type:'Missing compliance rule',ownerRole:'Compliance Officer',status:'Open',suggestedResolution:'Add Netherlands work permit rule or attach override evidence.'}],audit:['Deal record created by Account Manager','Compliance Hub opened 4 times','Exception raised for missing work permit rule']},
+  {runId:'MAN-1001',journeyId:'contract-creation',subject:'Rashi Singh',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:1,status:'Blocked',slaRisk:'High',blockedReason:'Netherlands work permit rule missing in Compliance Hub',escalation:'Entity Admin in 1h',startedAt:'Today 09:10 AM',manualHours:3.2,agentEstimateHours:.4,createdBy:'account-manager',contractRecordId:2,exceptions:[{type:'Missing compliance rule',ownerRole:'Compliance Officer',status:'Open',suggestedResolution:'Add Netherlands work permit rule or attach override evidence.'}],audit:['Deal record created by Account Manager','Compliance Hub opened 4 times','Exception raised for missing work permit rule']},
   {runId:'MAN-1002',journeyId:'payroll-creation',subject:'Anika Shah',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:2,status:'Active',slaRisk:'Medium',blockedReason:'Timesheet and leave totals need reconciliation',escalation:'None',startedAt:'Today 10:35 AM',manualHours:2.4,agentEstimateHours:.3,exceptions:[{type:'Timesheet discrepancy',ownerRole:'HR',status:'Open',suggestedResolution:'Reconcile 22 present days with 2 approved leave days before salary calculation.'}],audit:['Payroll run initiated manually','Timesheet module visited 3 times','Attendance days entered manually']},
   {runId:'MAN-1003',journeyId:'h2r-lifecycle',subject:'Sofia Romano',entity:'Dhi Hyperlocal',mode:'Hybrid',currentStepIdx:7,status:'Waiting Approval',slaRisk:'Low',blockedReason:'HR Manager approval required for leave-policy deviation',escalation:'None',startedAt:'Yesterday 04:20 PM',manualHours:5.1,agentEstimateHours:1.2,exceptions:[],audit:['Employee record created','Compliance profile attached','Leave policy deviation routed to HR Manager']}
 ];
+// -- PERSISTENCE: contracts and their journeys are created live during a demo/simulation, so they need to survive a refresh instead of resetting to the seed data every time. Snapshot the mutable arrays to localStorage after every render and rehydrate them before the first render. --
+const APP_STATE_KEY='opendhi_mockup_state_v1';
+function persistAppState(){
+  try{
+    localStorage.setItem(APP_STATE_KEY,JSON.stringify({
+      contractsData:contractsData,manualJourneyRuns:manualJourneyRuns,
+      ctLogsData:ctLogsData,ctWorkflowData:ctWorkflowData,
+      directEmpData:directEmpData,notifData:notifData,
+      manualRunSeq:manualRunSeq,liveRunSeq:liveRunSeq
+    }));
+  }catch(e){}
+}
+function loadAppState(){
+  try{
+    const raw=localStorage.getItem(APP_STATE_KEY);
+    if(!raw)return;
+    const s=JSON.parse(raw);
+    const replaceArray=function(arr,saved){if(Array.isArray(saved)){arr.length=0;saved.forEach(function(x){arr.push(x);});}};
+    const replaceObject=function(obj,saved){if(saved&&typeof saved==='object'){Object.keys(obj).forEach(function(k){delete obj[k];});Object.assign(obj,saved);}};
+    replaceArray(contractsData,s.contractsData);
+    replaceArray(manualJourneyRuns,s.manualJourneyRuns);
+    replaceArray(directEmpData,s.directEmpData);
+    replaceArray(notifData,s.notifData);
+    replaceObject(ctLogsData,s.ctLogsData);
+    replaceObject(ctWorkflowData,s.ctWorkflowData);
+    if(typeof s.manualRunSeq==='number')manualRunSeq=s.manualRunSeq;
+    if(typeof s.liveRunSeq==='number')liveRunSeq=s.liveRunSeq;
+  }catch(e){}
+}
 function manualJourneySteps(journeyId){return manualJourneyStepCatalog[journeyId]||[];}
 const manualModulePageLabels={contracts:'Contracts',compliance:'Compliance Hub','my-tasks':'My Tasks',direct:'Direct Employee',payroll:'Payroll','all-timesheet':'All Timesheet',payments:'Payments',payheads:'Payheads','leave-policies':'Leave Policies'};
 function manualModuleLabel(pageId){return manualModulePageLabels[pageId]||getPageTitle(pageId)||pageId;}
@@ -1518,6 +1594,10 @@ function manualStepOwnerName(ownerRole){
   return (exact||dept.admin).name;
 }
 function getManualRun(runId){return manualJourneyRuns.find(function(r){return r.runId===runId;});}
+// -- MANUAL MODE: which Contracts-sidebar tab a contract-creation step's "act on this" surface lives on, so My Tasks/queue "Open" actions land the owner on the right tab of the real record instead of a generic run page. --
+const manualStepTabMap={'Deal & Employee Record':'basic-details','Compliance Check':'compliance','Proposal Drafted':'commercial-terms','Proposal Approved':'commercial-terms','Client Acceptance':'workflow','Contract Generated & Sent':'workflow','Signature Received':'workflow','Signed Contract Approved':'workflow'};
+function ctTabForManualStep(step){return (step&&manualStepTabMap[step.name])||null;}
+function manualLinkedRunForContract(contractId){return manualJourneyRuns.find(function(r){return r.contractRecordId===contractId&&r.status!=='Completed';});}
 function isJourneyAgentEnabled(journeyId){return !!journeyAgentEnabled[journeyId];}
 function isStepAgentEnabled(journeyId,idx){
   const step=manualJourneySteps(journeyId)[idx];
@@ -1581,8 +1661,24 @@ function completeManualStep(runId){
     const nextStep=steps[run.currentStepIdx];
     const nextPersonaId=nextStep&&manualStepOwnerPersonaId(nextStep.ownerRole);
     if(nextPersonaId)pushRunNotification(run.runId,nextPersonaId,'"'+nextStep.name+'" is waiting on you for '+run.subject+'.');
+    if(run.journeyId==='contract-creation'&&nextStep&&nextStep.name==='Onboarding')ensureDirectEmpForOnboarding(run);
+    if(run.journeyId==='contract-creation'&&nextStep&&nextStep.name==='Payroll Readiness')ensurePayrollEmpForReadiness(run);
   }
   else{run.status='Completed';run.slaRisk='Low';run.blockedReason='None';}
+  if(st){
+    const now=new Date();
+    const dateStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+    const timeStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+    if(run.contractRecordId){
+      (ctLogsData[run.contractRecordId]=ctLogsData[run.contractRecordId]||[]).unshift({date:dateStr,time:timeStr,user:st.ownerRole,status:run.status,action:st.name+' completed by '+st.ownerRole+' for '+run.subject+'.'});
+      (ctWorkflowData[run.contractRecordId]=ctWorkflowData[run.contractRecordId]||[]).unshift({title:st.name+' Completed',user:st.ownerRole,date:dateStr,time:timeStr,description:st.ownerRole+' completed "'+st.name+'" for '+run.subject+'.'});
+    }
+    const payrollEmp=payrollEmpData.find(function(e){return e.readinessRunId===run.runId;});
+    if(payrollEmp){
+      (prLogsData[payrollEmp.id]=prLogsData[payrollEmp.id]||[]).unshift({date:dateStr,time:timeStr,user:st.ownerRole,status:run.status,action:st.name+' completed by '+st.ownerRole+' for '+run.subject+'.'});
+      (prWorkflowData[payrollEmp.id]=prWorkflowData[payrollEmp.id]||[]).unshift({title:st.name+' Completed',user:st.ownerRole,date:dateStr,time:timeStr,description:st.ownerRole+' completed "'+st.name+'" for '+run.subject+'.'});
+    }
+  }
   renderADTPage();
 }
 function raiseManualException(runId){

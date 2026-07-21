@@ -21,6 +21,14 @@ function dashStat(label,val,sub,kind){
   const color=kind==='green'?'#16a34a':kind==='red'?'#dc2626':kind==='orange'?'var(--orange)':'var(--navy)';
   return '<div class="stat-card"><div class="stat-label"><span>'+label+'</span></div><div class="stat-val" style="color:'+color+'">'+val+'</div><div class="stat-sub">'+(sub||'')+'</div></div>';
 }
+// -- Interactive stat card: same hero-tile treatment as Super Admin/Entity Admin dashboards. pageId is optional — omit it when no matching page exists yet, and the card renders without a click action. customClick (raw JS, e.g. to pre-set a filter before navigating) overrides the plain navigatePage(pageId) call when given. --
+function dashStatNav(label,val,sub,kind,icon,pageId,customClick){
+  const colorClass=kind==='green'?'cfg-hero-green':kind==='red'?'cfg-hero-red':kind==='orange'?'cfg-hero-orange':'cfg-hero-blue';
+  const valColor=kind==='green'?'#16a34a':kind==='red'?'#dc2626':kind==='orange'?'var(--orange)':'var(--navy)';
+  const click=customClick?' onclick="'+customClick+'"':pageId?' onclick="navigatePage(\''+pageId+'\')"':'';
+  const staticClass=(pageId||customClick)?'':' dash-stat-static';
+  return '<div class="stat-card ea-hero-stat '+colorClass+staticClass+'"'+click+'><div class="stat-label"><span>'+label+'</span><div class="stat-icon">'+icon+'</div></div><div class="stat-val" style="color:'+valColor+'">'+val+'</div><div class="stat-sub">'+(sub||'')+'</div></div>';
+}
 function dashAction(title,sub,icon){
   return '<div class="dash-action-card"><div class="dash-action-icon">'+(icon||'')+'</div><div><div class="dash-action-title">'+title+'</div><div class="dash-action-sub">'+sub+'</div></div></div>';
 }
@@ -32,6 +40,8 @@ const dashIcoDoc='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const dashIcoUser='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 const dashIcoMoney='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
 const dashIcoShield='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+const dashIcoCalendar='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+const dashIcoAlert='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 function buildPersonaRoleDashboardHTML(tab){
   const p=getActivePersona();
   if(tab==='hr')return buildHRDashboardHTML();
@@ -58,7 +68,8 @@ function manualRunCardHTML(r,opts){
   const slaPriorityLabel={High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'};
   const progressBar='<div class="cockpit-progress"><span style="width:'+c.progress+'%"></span></div><div class="cockpit-progress-meta"><span>'+c.progress+'% complete</span><span>'+(c.st.name||'Current step')+'</span></div>';
   const actionBtn=opts.actionBtn?opts.actionBtn(r):'';
-  return '<div class="cockpit-run-card" onclick="openManualRunPreviewModal(\''+r.runId+'\')">'
+  const cardClick=opts.cardClick?opts.cardClick(r):("openManualRunPreviewModal('"+r.runId+"')");
+  return '<div class="cockpit-run-card" onclick="'+cardClick+'">'
     +'<div class="cockpit-run-head"><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+r.runId+'</div><div class="cockpit-run-entity">'+(r.entity||'Dhi Hyperlocal')+'</div></div><span class="status-pill '+slaClass+'">'+(slaPriorityLabel[r.slaRisk]||r.slaRisk)+'</span></div>'
     +progressBar
     +'<div class="cockpit-run-mini-sub"><span>'+(r.subject||c.j.name||r.journeyId)+'</span>'+actionBtn+'</div>'
@@ -72,7 +83,9 @@ function manualRunListPanelHTML(title,runs,emptyText,opts){
 }
 function buildMyCreatedRunsPanelHTML(personaId){
   const runs=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.createdBy===personaId;});
-  return manualRunListPanelHTML('My Contract Journeys',runs,'No contract journeys created yet.');
+  // -- Jump straight into the ongoing journey run, not the preview modal — this is "my open deals," so one click should land on the live journey. --
+  const cardClick=function(r){return "selectedManualRunId='"+r.runId+"';manualJourneyBackPage=page||'ai-executive';page='manual-journey-run';renderADTPage();";};
+  return manualRunListPanelHTML('Open Deals',runs,'No open deals yet — create a contract to start one.',{cardClick:cardClick});
 }
 function buildComplianceLiveQueuePanelHTML(){
   const runs=manualJourneyRuns.filter(function(r){
@@ -80,7 +93,7 @@ function buildComplianceLiveQueuePanelHTML(){
     const st=manualJourneySteps(r.journeyId)[r.currentStepIdx];
     return st&&st.ownerRole==='Compliance Officer';
   });
-  const actionBtn=function(r){return '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openComplianceResolveModal(\''+r.runId+'\')">Mark Complete</button>';};
+  const actionBtn=function(r){return '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openComplianceHubForRun(\''+r.runId+'\')">Mark Complete</button>';};
   return manualRunListPanelHTML('Pending Compliance Checks',runs,'No contract journeys waiting on Compliance.',{actionBtn:actionBtn});
 }
 function buildHRLiveRunsPanelHTML(){
@@ -98,17 +111,43 @@ function myPendingManualRuns(personaId){
 function openMyManualTask(runId){
   const run=getManualRun(runId);if(!run)return;
   const step=manualJourneySteps(run.journeyId)[run.currentStepIdx];
-  if(step&&step.modulePage==='compliance'){openComplianceResolveModal(runId);return;}
+  if(step&&step.modulePage==='compliance'){openComplianceHubForRun(runId);return;}
+  const tab=ctTabForManualStep(step);
+  if(run.journeyId==='contract-creation'&&run.contractRecordId&&tab&&contractsData.some(function(c){return c.id===run.contractRecordId;})){
+    navigatePage('contracts');
+    openCtSidebar(run.contractRecordId,tab);
+    return;
+  }
+  if(step&&step.modulePage==='direct'){
+    const emp=directEmpData.find(function(e){return e.onboardingRunId===runId;});
+    if(emp){navigatePage('direct');openDeSidebar(emp.id);return;}
+  }
+  if(step&&step.modulePage==='payroll'){
+    const emp=payrollEmpData.find(function(e){return e.readinessRunId===runId;});
+    if(emp){navigatePage('payroll');openPrSidebar(emp.id);return;}
+  }
   selectedManualRunId=runId;manualJourneyBackPage='my-tasks';page='manual-journey-run';renderADTPage();
 }
 function buildMyPendingManualTasksHTML(){
   const runs=myPendingManualRuns(activePersonaId);
+  // -- Blockers/approvals on runs I own get the same exception card + Resolve action Entity Admin uses in Ops Cockpit (no Notify button here — I am the owner, not someone to nudge). Runs with nothing to resolve yet keep the plain progress card. --
+  const queueItems=cockpitQueueItems(runs);
+  const flagged={};
+  queueItems.forEach(function(x){flagged[x.run.runId]=true;});
+  const plainRuns=runs.filter(function(r){return !flagged[r.runId];});
+  const exceptionsHTML=queueItems.map(function(x){
+    return exceptionQueueCardHTML(x,{hideNotify:true,flagNotified:true,hideDeptLink:true,cardClick:"openManualRunPreviewModal('"+x.run.runId+"')"});
+  }).join('');
   const actionBtn=function(r){return '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openMyManualTask(\''+r.runId+'\')">Open</button>';};
-  return manualRunListPanelHTML('Journeys Waiting On You',runs,'No manual-journey steps are waiting on you right now.',{actionBtn:actionBtn});
+  const plainHTML=plainRuns.length?'<div class="cockpit-run-list">'+plainRuns.map(function(r){return manualRunCardHTML(r,{actionBtn:actionBtn});}).join('')+'</div>':'';
+  const body=(exceptionsHTML||plainHTML)
+    ?(exceptionsHTML?'<div class="cockpit-ex-list" style="margin-bottom:'+(plainHTML?'14px':'0')+'">'+exceptionsHTML+'</div>':'')+plainHTML
+    :'<div class="cockpit-empty-state">No manual-journey steps are waiting on you right now.</div>';
+  return '<div class="listing-card dash-panel"><div class="dash-panel-head"><div>Journeys Waiting On You</div><span>Live</span></div>'+body+'</div>';
 }
 function buildHRDashboardHTML(){
   return dashHeader('HR Dashboard','Overview of your workforce and HR operations.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Total Employees','148','Across 6 departments')+dashStat('On Leave Today','12','8% attendance','green')+dashStat('Birthdays Today','5','Send wishes')+dashStat('Pending Requests','8','Review now','orange')+dashStat('Payroll Status','Ready','Current cycle is on track','green')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Onboarding Pending','7','Employees awaiting setup','orange')+dashStat('Document Verification Pending','9','Documents awaiting review','orange')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Total Employees','148','Across 6 departments',null,dashIcoUser,'direct')+dashStatNav('On Leave Today','12','8% attendance','green',dashIcoCalendar,'all-leaves')+dashStatNav('Birthdays Today','5','Send wishes',null,dashIcoCalendar)+dashStatNav('Pending Requests','8','Review now','orange',dashIcoDoc,'all-leaves')+dashStatNav('Payroll Status','Ready','Current cycle is on track','green',dashIcoMoney,'payroll')+dashStatNav('Payroll Blockers','4','Resolve before payroll run','orange',dashIcoMoney,'payroll')+dashStatNav('Onboarding Pending','7','Employees awaiting setup','orange',dashIcoUser)+dashStatNav('Document Verification Pending','9','Documents awaiting review','orange',dashIcoShield,'compliance')+'</div>'
     +'<div class="dash-actions">'+dashAction('Add Employee','Onboard a new team member',dashIcoUser)+dashAction('Upload Policy','Share company policies',dashIcoDoc)+dashAction('Add Holiday','Create company holidays',dashIcoDoc)+'</div>'
     +'<div class="dash-two-col">'+dashTable('Leave Requests',['Employee','Leave Type','Date','Status'],[['Ramesh Patel','Sick Leave','20 May',statusMini('Pending','pending')],['Priya Sharma','Casual Leave','22 May',statusMini('Approved','approved')],['Aishi Verma','Earned Leave','23-25 May',statusMini('Approved','approved')],['Arjun Desai','Sick Leave','28 May',statusMini('Pending','pending')]],'View all')+dashTable('Holidays',['Date','Holiday','Type'],[['09','Ugadi','Registered'],['14','Telangana Formation Day','Registered'],['18','Good Friday','Relaxed'],['22','Eid-ul-Fitr','Relaxed'],['01','May Day','National']], 'View calendar')+'</div>'
     +dashTable('Birthdays & Anniversaries',['Person','Event','Date','Department'],[['Ramesh Patel','Birthday','18 May','HR'],['Ashirwad Koul','Birthday','16 May','Operations'],['Chishan Sirangi','1 yr anniversary','15 May','Finance'],['Gojendra Singh','Birthday','23 May','Compliance']], 'View more')
@@ -116,59 +155,63 @@ function buildHRDashboardHTML(){
 }
 function buildReportingManagerDashboardHTML(p){
   return dashHeader('Team Dashboard','Track your direct reports, approvals, and team performance.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('My Team','12','Direct reports')+dashStat('Present Today','9','75% of team','green')+dashStat('Pending Approvals','6','Items waiting for action','orange')+dashStat('On Leave Today','2','Utkarsh, Ashneet')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('My Team','12','Direct reports',null,dashIcoUser)+dashStatNav('Present Today','9','75% of team','green',dashIcoCalendar,'all-timesheet')+dashStatNav('Pending Approvals','6','Items waiting for action','orange',dashIcoDoc,'my-tasks')+dashStatNav('On Leave Today','2','Utkarsh, Ashneet',null,dashIcoCalendar,'all-leaves')+'</div>'
     +'<div class="dash-actions">'+dashAction('Approve Leaves','Review pending leave requests',dashIcoDoc)+dashAction('Approve Expenses','Manage expense claim approvals',dashIcoMoney)+'</div>'
     +'<div class="dash-two-col">'+dashTable('Team Leave Requests',['Employee','Leave Type','Duration','Days','Action'],[['Utkarsh Shukla','Casual Leave','15 - 16 May','2',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['Ashneet Kaur','Sick Leave','18 May','1',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['Sneha Kulkarni','Earned Leave','22 - 23 May','2',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')]],'View all')+dashTable('Pending Expense Claims',['Employee','Amount','Category','Status'],[['Diksha Kumari','Rs 2,400','Travel',statusMini('Pending','pending')],['Pardeep Verga','Rs 850','Office Supplies',statusMini('Pending','pending')],['Deepak Joshi','Rs 5,200','Software',statusMini('Pending','pending')]],'View all')+'</div></div>';
 }
 function buildSalesTeamDashboardHTML(){
   return dashHeader('Sales Team Dashboard','Track deal desk throughput, proposal approvals, and commercial exceptions.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Team Deals','18','Across Deal Desk')+dashStat('Proposals Pending','5','Awaiting manager review','orange')+dashStat('Client Responses','7','Due this week','orange')+dashStat('Margin Exceptions','2','Need approval','red')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Team Deals','18','Across Deal Desk',null,dashIcoUser,'contracts')+dashStatNav('Proposals Pending','5','Awaiting manager review','orange',dashIcoDoc)+dashStatNav('Client Responses','7','Due this week','orange',dashIcoDoc)+dashStatNav('Margin Exceptions','2','Need approval','red',dashIcoAlert)+'</div>'
     +'<div class="dash-actions">'+dashAction('Review Proposal Queue','Check commercial terms and margin policy',dashIcoDoc)+dashAction('Reassign Deal','Move stalled work within Deal Desk',dashIcoUser)+'</div>'
-    +'<div class="dash-two-col">'+dashTable('Deal Desk Queue',['Owner','Client','Current Step','Status'],[['Arjun Vaidya','Rashi Singh','Proposal Approval',statusMini('Approval Required','pending')],['Arjun Vaidya','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['Neha Sharma','Emma Schmidt','Contract Sent',statusMini('In Progress','pending')]],'View all')+dashTable('Proposal Approval Queue',['Proposal','Client','Margin','Action'],[['PRO-5820','Rashi Singh','18%',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['PRO-5824','Nora Kim','Deviation',statusMini('Review','pending')],['PRO-5829','Owen Brooks','21%',statusMini('Approve','approved')]],'View all')+'</div></div>';
+    +'<div class="dash-two-col">'+dashTable('Deal Desk Queue',['Owner','Client','Current Step','Status'],[['Arjun Vaidya','Rashi Singh','Proposal Approval',statusMini('Approval Required','pending')],['Arjun Vaidya','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['Neha Sharma','Emma Schmidt','Contract Sent',statusMini('In Progress','pending')]],'<span style="cursor:pointer" onclick="navigatePage(\'contracts\')">View all</span>')+dashTable('Proposal Approval Queue',['Proposal','Client','Margin','Action'],[['PRO-5820','Rashi Singh','18%',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['PRO-5824','Nora Kim','Deviation',statusMini('Review','pending')],['PRO-5829','Owen Brooks','21%',statusMini('Approve','approved')]],'View all')+'</div></div>';
 }
 function buildFinanceApprovalDashboardHTML(){
   return dashHeader('Finance Approval Dashboard','Review payroll calculations, disbursements, invoice payments, and financial controls.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Payroll Approvals','6','Waiting for sign-off','orange')+dashStat('Disbursement Authorisations','3','Due today','orange')+dashStat('Upcoming Payments','Rs 18.4L','Due in next 7 days')+dashStat('Payment Compliance','5','Issues flagged','orange')+dashStat('Total Invoiced','Rs 14.3L','This month')+dashStat('Pending Invoices','7','Awaiting client payment','orange')+dashStat('Paid Invoices','43','Cleared this cycle','green')+dashStat('Overdue Invoices','2','Past due date','red')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Payroll Approvals','6','Waiting for sign-off','orange',dashIcoMoney,'payroll')+dashStatNav('Disbursement Authorisations','3','Due today','orange',dashIcoMoney,'payroll')+dashStatNav('Upcoming Payments','Rs 18.4L','Due in next 7 days',null,dashIcoMoney,'payments')+dashStatNav('Payment Compliance','5','Issues flagged','orange',dashIcoShield,'compliance')+dashStatNav('Total Invoiced','Rs 14.3L','This month',null,dashIcoMoney,'payments')+dashStatNav('Pending Invoices','7','Awaiting client payment','orange',dashIcoMoney,'payments')+dashStatNav('Paid Invoices','43','Cleared this cycle','green',dashIcoMoney,'payments')+dashStatNav('Overdue Invoices','2','Past due date','red',dashIcoAlert,'payments')+'</div>'
     +'<div class="dash-actions">'+dashAction('Approve Payroll','Review salary calculations',dashIcoMoney)+dashAction('Authorise Disbursement','Release approved payroll funds',dashIcoMoney)+dashAction('Payment Reports','Trends, summaries, and cycle analytics',dashIcoDoc)+dashAction('Contract Billing','View rates, cycles, and billing status',dashIcoDoc)+'</div>'
     +'<div class="dash-two-col">'+dashTable('Payroll Approval Queue',['Run ID','Employee','Net Pay','Action'],[['RUN-3001','Testemp Antar','Rs 82,400',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['RUN-3002','Anika Shah','Rate mismatch',statusMini('Review','pending')],['RUN-4104','Sofia Romano','Final settlement',statusMini('Review','pending')]],'View all')+dashTable('Paid Invoices',['Invoice ID','Entity','Amount','Paid On'],[['INV-2038','Dhi Hyperlocal','Rs 2,75,000','12 May'],['INV-2031','Dhi Hyperlocal','Rs 1,85,000','08 May'],['INV-2027','ADT Singapore Pte.','Rs 3,40,000','02 May']], 'View all paid')+'</div></div>';
 }
 function buildComplianceDashboardHTML(){
   return dashHeader('Opendhi Compliance Admin Dashboard','Monitor contract compliance, compliance hub items, payment compliance, and assigned support tasks.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Contract Compliance','18','5 blocking payroll readiness','orange')+dashStat('Compliance Hub Items','26','9 require review','orange')+dashStat('Assigned Support Items','7','3 high priority','orange')+dashStat('Payment Compliance','5','5 pending issues','orange')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Document Verification Pending','9','Documents awaiting review','orange')+dashStat('Expiring Documents','5','Expiring in next 30 days','orange')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contract Compliance','18','5 blocking payroll readiness','orange',dashIcoDoc,'contracts')+dashStatNav('Compliance Hub Items','26','9 require review','orange',dashIcoShield,'compliance')+dashStatNav('Assigned Support Items','7','3 high priority','orange',dashIcoDoc,'support-tickets')+dashStatNav('Payment Compliance','5','5 pending issues','orange',dashIcoShield,'compliance')+dashStatNav('Payroll Blockers','4','Resolve before payroll run','orange',dashIcoMoney,'payroll')+dashStatNav('Document Verification Pending','9','Documents awaiting review','orange',dashIcoShield,'compliance')+dashStatNav('Expiring Documents','5','Expiring in next 30 days','orange',dashIcoShield,'compliance')+'</div>'
     +'<div class="dash-actions">'+dashAction('Review Contracts','Check missing clauses, signatures, and document readiness',dashIcoDoc)+dashAction('Compliance Hub','Manage statutory, policy, and document compliance items',dashIcoShield)+'</div>'
+    +buildComplianceLiveQueuePanelHTML()
     +'<div class="dash-two-col">'+dashTable('Contract Compliance Queue',['Employee','Contract Issue','Status','Action'],[['Ramesh Patel','Missing signature',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Priya Sharma','Work permit pending',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Arjun Desai','Clause update required',statusMini('Needs Review','pending'),statusMini('Open','draft')],['Aishi Verma','Contract verified',statusMini('Ready','approved'),statusMini('View','draft')]],'View all')+dashTable('Compliance Hub Items',['Item','Category','Due','Status'],[['Employee KYC review','Documents','Today',statusMini('Pending','pending')],['Local tax registration','Payroll','24 May',statusMini('Blocking','rejected')],['Policy acknowledgment','Policy','26 May',statusMini('Pending','pending')],['Statutory filing check','Entity','31 May',statusMini('Ready','approved')]],'Open hub')+'</div>'
     +dashTable('Assigned Support Items',['Item','Description','Tag'],[['Payroll blocked by missing Tax ID','John Doe payroll readiness is blocked until Tax ID verification is completed.','Payroll Compliance'],['Work permit document pending','Thijs Verbeek has a pending work authorization document for review.','Contract Compliance']], 'View assigned')
-    +buildComplianceLiveQueuePanelHTML()+'</div>';
+    +'</div>';
 }
 function buildOpsDashboardHTML(){
   return dashHeader('Opendhi Ops Admin Dashboard','Track contract pipeline, active contracts, compliance items, and pending entities across the selected entity.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Active Contracts','25','Across all entities','green')+dashStat('Active People','148','Direct + EOR/PEO','green')+dashStat('Compliance Items','14','3 due soon','orange')+dashStat('Pending Entities','3','Awaiting setup','orange')+dashStat('Ready for Payroll','25','Cleared this cycle','green')+dashStat('Payroll Status','Ready','Current cycle is on track','green')+dashStat('Payroll Blockers','4','Resolve before payroll run','orange')+dashStat('Setup Progress','82%','Entity setup completion','green')+'</div>'
-    +'<div class="listing-card dash-panel"><div class="dash-panel-head"><div>Contract Pipeline</div><span>View all contracts</span></div><div class="stat-grid dash-stat-grid">'+dashStat('Proposal Sent','8','Pending client action','orange')+dashStat('Proposal Approved','5','Client approved','green')+dashStat('Contract Sent','6','Awaiting countersign','orange')+dashStat('Contract Approved','3','Signed & approved','green')+'</div></div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Active Contracts','25','Across all entities','green',dashIcoDoc,'contracts')+dashStatNav('Active People','148','Direct + EOR/PEO','green',dashIcoUser)+dashStatNav('Compliance Items','14','3 due soon','orange',dashIcoShield,'compliance')+dashStatNav('Pending Entities','3','Awaiting setup','orange',dashIcoAlert)+dashStatNav('Ready for Payroll','25','Cleared this cycle','green',dashIcoMoney,'payroll')+dashStatNav('Payroll Status','Ready','Current cycle is on track','green',dashIcoMoney,'payroll')+dashStatNav('Payroll Blockers','4','Resolve before payroll run','orange',dashIcoMoney,'payroll')+dashStatNav('Setup Progress','82%','Entity setup completion','green',dashIcoShield)+'</div>'
+    +'<div class="listing-card dash-panel"><div class="dash-panel-head"><div>Contract Pipeline</div><span>View all contracts</span></div><div class="stat-grid dash-stat-grid">'+dashStatNav('Proposal Sent','8','Pending client action','orange',dashIcoDoc,'contracts')+dashStatNav('Proposal Approved','5','Client approved','green',dashIcoDoc,'contracts')+dashStatNav('Contract Sent','6','Awaiting countersign','orange',dashIcoDoc,'contracts')+dashStatNav('Contract Approved','3','Signed & approved','green',dashIcoDoc,'contracts')+'</div></div>'
     +'<div class="dash-two-col">'+dashTable('Active Contracts',['Contract','Country','Type','Stage'],[['Netherlands EOR - Anika','Netherlands','EOR',statusMini('Ready for Payroll','approved')],['India Contractor - Rahul','India','Contractor',statusMini('Ready for Payroll','approved')],['UK EOR - Owen','United Kingdom','EOR',statusMini('Contract Sent','pending')],['Germany PEO - Nora','Germany','PEO',statusMini('Proposal Sent','rejected')]],'View all')+dashTable('Compliance Items',['Item','Category','Blocking','Status'],[['Employee KYC Review','Documents','Yes',statusMini('Pending','rejected')],['Work Authorization','Statutory','Yes',statusMini('Evidence Uploaded','pending')],['Tax Registration','Payroll','Yes',statusMini('Pending','rejected')],['Policy Acknowledgement','Policy','No',statusMini('Completed','approved')]],'View all')+'</div></div>';
 }
 function buildOpsApprovalsDashboardHTML(){
   return dashHeader('Ops Approvals Dashboard','Review signed contracts, discrepancies, readiness gates, and operational exceptions.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Contract Reviews','3','Waiting for Ops approval','orange')+dashStat('Discrepancies','1','Needs correction','red')+dashStat('Ready for HR','5','Approved handoffs','green')+dashStat('SLA Risk','0','No overdue approvals','green')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contract Reviews','3','Waiting for Ops approval','orange',dashIcoDoc,'contracts')+dashStatNav('Discrepancies','1','Needs correction','red',dashIcoAlert,'contracts')+dashStatNav('Ready for HR','5','Approved handoffs','green',dashIcoUser)+dashStatNav('SLA Risk','0','No overdue approvals','green',dashIcoShield)+'</div>'
     +'<div class="dash-actions">'+dashAction('Approve Signed Contract','Verify countersigned contract against approved proposal',dashIcoDoc)+dashAction('Send Back for Correction','Route discrepancy to Legal / Contracts',dashIcoShield)+'</div>'
     +'<div class="dash-two-col">'+dashTable('Signed Contract Approval Queue',['Employee','Country','Contract','Action'],[['Rashi Singh','Netherlands','EOR Contract',statusMini('Approve','approved')+' '+statusMini('Discrepancy','rejected')],['Rajdeep Singh','Netherlands','EOR Contract',statusMini('Review','pending')],['Emma Schmidt','Germany','EOR Contract',statusMini('Approve','approved')]],'View all')+dashTable('Operational Exceptions',['Run','Issue','Owner','Status'],[['RUN-2002','Signed document mismatch','Legal',statusMini('Exception','rejected')],['RUN-2011','Missing onboarding evidence','HR',statusMini('Pending','pending')],['RUN-2017','Payroll readiness blocked','HR',statusMini('Review','pending')]],'View all')+'</div></div>';
 }
+function toggleOpenDealsPanel(){
+  salesOpenDealsOpen=!salesOpenDealsOpen;
+  renderADTPage();
+}
 function buildSalesDashboardHTML(p,tab){
   const isManager=tab==='sales-approvals';
+  const openDealsCount=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.createdBy===p.id;}).length;
   return dashHeader(isManager?'Deal Approvals Dashboard':'Deal Desk Dashboard',isManager?'Review proposal approvals, exceptions, and team deal movement.':'Track owned deals, proposals, client acceptance, and contract creation work.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Open Deals','8','Owned by this role')+dashStat('Proposal Drafts','3','Ready for review','orange')+dashStat('Client Responses','5','Awaiting acceptance','orange')+dashStat('Exceptions','1','Needs attention','red')+'</div>'
-    +'<div class="dash-actions">'+dashAction('Create Proposal','Draft commercial terms with compliance checks',dashIcoDoc)+dashAction(isManager?'Approve Proposal':'Send Proposal',isManager?'Review margin and compliance checklist':'Send approved proposal to client',dashIcoDoc)+'</div>'
-    +dashTable(isManager?'Proposal Approval Queue':'Deal Pipeline',['Deal','Client','Step','Status'],[['PRO-5820','Rashi Singh','Proposal Approved',statusMini(isManager?'Approval Required':'Waiting','pending')],['PRO-5821','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['PRO-5822','Emma Schmidt','Ready for Payroll',statusMini('Complete','approved')]],'View all')
-    +(isManager?'':buildMyCreatedRunsPanelHTML(p.id))+'</div>';
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Open Deals',String(openDealsCount),'Owned by this role',null,dashIcoDoc,null,'toggleOpenDealsPanel()')+dashStatNav('Proposal Drafts','3','Ready for review','orange',dashIcoDoc)+dashStatNav('Client Responses','5','Awaiting acceptance','orange',dashIcoUser)+dashStatNav('Exceptions','1','Needs attention','red',dashIcoAlert)+'</div>'
+    +(isManager||!salesOpenDealsOpen?'':buildMyCreatedRunsPanelHTML(p.id))+'</div>';
 }
 function buildContractsAdminDashboardHTML(){
   return dashHeader('Contracts Dashboard','Generate contracts, monitor signatures, and resolve legal document exceptions.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Contracts Sent','6','Awaiting signature','orange')+dashStat('Signature Pending','4','Client countersign')+dashStat('Bounced Requests','1','Needs resend','red')+dashStat('Templates Used','3','This week')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contracts Sent','6','Awaiting signature','orange',dashIcoDoc,'contracts')+dashStatNav('Signature Pending','4','Client countersign',null,dashIcoDoc,'contracts')+dashStatNav('Bounced Requests','1','Needs resend','red',dashIcoAlert,'contracts')+dashStatNav('Templates Used','3','This week',null,dashIcoDoc,'contract-templates')+'</div>'
     +'<div class="dash-actions">'+dashAction('Generate Contract','Create employment contract from approved proposal',dashIcoDoc)+dashAction('Resend Signature','Retry bounced Docuseal request',dashIcoDoc)+'</div>'
     +dashTable('Contract Queue',['Employee','Country','Document','Status'],[['Anika Shah','Netherlands','EOR Contract',statusMini('Sent','pending')],['Rahul Mehta','India','Contractor Agreement',statusMini('Signed','approved')],['Nora Kim','Germany','PEO Contract',statusMini('Bounced','rejected')]],'View all')+'</div>';
 }
 function buildITAdminDashboardHTML(){
   return dashHeader('IT Systems Dashboard','Provision access, revoke accounts, and resolve system readiness blockers.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStat('Access Requests','9','Awaiting provisioning','orange')+dashStat('Revocations','2','Due today','red')+dashStat('Provisioning SLA','96%','Within target','green')+dashStat('Blocked','1','Needs admin action','orange')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Access Requests','9','Awaiting provisioning','orange',dashIcoUser)+dashStatNav('Revocations','2','Due today','red',dashIcoAlert)+dashStatNav('Provisioning SLA','96%','Within target','green',dashIcoShield)+dashStatNav('Blocked','1','Needs admin action','orange',dashIcoAlert)+'</div>'
     +'<div class="dash-actions">'+dashAction('Provision Access','Grant systems for new joiners',dashIcoUser)+dashAction('Revoke Access','Complete offboarding checklist',dashIcoShield)+'</div>'
     +dashTable('Systems Queue',['Employee','Request','System','Status'],[['Sofia Romano','New hire access','HRMS + Payroll',statusMini('Pending','pending')],['Lucas Dubois','Offboarding','Email + SSO',statusMini('Due Today','rejected')],['James Wilson','Role change','ERP',statusMini('In Progress','pending')]],'View all')+'</div>';
 }
@@ -421,7 +464,8 @@ function renderDeSidebar(){
   let body='';
   if(deTab==='basic-details'){
     const editBtn='<button class="ep-save-btn" style="padding:5px 14px;font-size:12px;display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>';
-    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+emp.name+'</span>'+editBtn+'</div>'
+    body=deOnboardingBannerHTML(emp)
+      +'<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+emp.name+'</span>'+editBtn+'</div>'
       +'<div class="lp-sb-detail-grid">'
       +fc(iP,'Name',v(emp.name))+fc(iB,'Department',v(emp.dept))
       +fc(iI,'Employee ID',v(emp.empId))+fc(iPin,'Branch',v(emp.branch))
@@ -599,16 +643,24 @@ function renderDeSidebar(){
 }
 function buildDirectListingHTML(){
   const d='<span style="color:#9ca3af">--</span>';
-  const rows=directEmpData.map((e,i)=>'<tr class="de-row'+(deSelectedId===e.id?' lp-row-selected':'')+'" id="de-row-'+e.id+'" style="cursor:pointer" onclick="openDeSidebar('+e.id+')">'
+  // -- Employees waiting on HR for onboarding (see ensureDirectEmpForOnboarding) pin to the top with a notification dot, same "needs action" treatment used on the Contracts sidebar tabs. --
+  const sortedEmps=directEmpData.slice().sort(function(a,b){
+    return (manualLinkedRunForEmployee(a.id)?0:1)-(manualLinkedRunForEmployee(b.id)?0:1);
+  });
+  const rows=sortedEmps.map((e,i)=>{
+    const pendingRun=manualLinkedRunForEmployee(e.id);
+    const nameCell=e.name+(pendingRun?'<span class="de-onboard-badge" title="Onboarding pending"></span>':'');
+    return '<tr class="de-row'+(deSelectedId===e.id?' lp-row-selected':'')+(pendingRun?' de-row--pending':'')+'" id="de-row-'+e.id+'" style="cursor:pointer" onclick="openDeSidebar('+e.id+')">'
     +'<td style="color:var(--gray);font-size:13px">'+(i+1)+'</td>'
-    +'<td style="font-weight:600;color:var(--navy)">'+e.name+'</td>'
+    +'<td style="font-weight:600;color:var(--navy)">'+nameCell+'</td>'
     +'<td>'+(e.empId||d)+'</td>'
     +'<td>'+(e.dept||d)+'</td>'
     +'<td>'+(e.branch||d)+'</td>'
     +'<td>'+(e.jobTitle||d)+'</td>'
     +'<td><span class="lp-status-badge '+e.status.toLowerCase()+'">'+e.status+'</span></td>'
     +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openDeSidebar('+e.id+')"><svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg></button></td>'
-    +'</tr>').join('');
+    +'</tr>';
+  }).join('');
   const sbInner=deSelectedId?renderDeSidebar():'';
   return '<div class="lp-page">'
     +'<div class="lp-filter-bar"><div class="lp-filter-bar-label">Select Filter</div>'
@@ -626,6 +678,127 @@ function buildDirectListingHTML(){
     +'</div></div>'
     +'<div class="lp-split-sb'+(deSelectedId?' open':'')+'" id="de-split-sb"><div class="lp-isb" id="de-isb-inner">'+sbInner+'</div></div>'
     +'</div></div>';
+}
+// -- PAYROLL PAGE (per-employee readiness list + sidebar, same shape as Direct Employee) --
+function openPrSidebar(id){
+  prSelectedId=id;prTab='basic-details';
+  const sb=document.getElementById('pr-split-sb');if(sb)sb.classList.add('open');
+  const inner=document.getElementById('pr-isb-inner');if(inner)inner.innerHTML=renderPrSidebar();
+  document.querySelectorAll('.pr-row').forEach(r=>r.classList.toggle('lp-row-selected',r.id==='pr-row-'+id));
+}
+function closePrSidebar(){
+  prSelectedId=null;
+  const sb=document.getElementById('pr-split-sb');if(sb)sb.classList.remove('open');
+  document.querySelectorAll('.pr-row').forEach(r=>r.classList.remove('lp-row-selected'));
+}
+function navPrTab(tab){prTab=tab;const inner=document.getElementById('pr-isb-inner');if(inner){inner.innerHTML=renderPrSidebar();requestAnimationFrame(function(){const nt=document.getElementById('pr-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
+function resetPrFilters(){prSelectedId=null;renderADTPage();}
+function prReadinessBannerHTML(emp){
+  const run=manualLinkedRunForPayrollEmp(emp.id);if(!run)return '';
+  const steps=manualJourneySteps(run.journeyId);
+  const curStep=steps[run.currentStepIdx];
+  if(!curStep||curStep.name!=='Payroll Readiness')return '';
+  const j=aiJourneys.find(function(x){return x.id===run.journeyId;})||cfgJourneys.find(function(x){return x.id===run.journeyId;})||{};
+  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(run.currentStepIdx+1)+' of '+steps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+  const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
+  const action=isOwner
+    ?'<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Payroll Readiness Complete</button></div>'
+    :'<div class="manual-waiting-note">Waiting on <strong>'+curStep.ownerRole+'</strong></div>';
+  return '<div class="ep-form-card" style="margin-bottom:16px">'+contextLine+action+'</div>';
+}
+function buildPayrollListingHTML(){
+  const d='<span style="color:#9ca3af">--</span>';
+  const sortedEmps=payrollEmpData.slice().sort(function(a,b){
+    return (manualLinkedRunForPayrollEmp(a.id)?0:1)-(manualLinkedRunForPayrollEmp(b.id)?0:1);
+  });
+  const rows=sortedEmps.map((e,i)=>{
+    const pendingRun=manualLinkedRunForPayrollEmp(e.id);
+    const nameCell=e.name+(pendingRun?'<span class="de-onboard-badge" title="Payroll readiness pending"></span>':'');
+    return '<tr class="pr-row'+(prSelectedId===e.id?' lp-row-selected':'')+(pendingRun?' de-row--pending':'')+'" id="pr-row-'+e.id+'" style="cursor:pointer" onclick="openPrSidebar('+e.id+')">'
+    +'<td style="color:var(--gray);font-size:13px">'+(i+1)+'</td>'
+    +'<td style="font-weight:600;color:var(--navy)">'+nameCell+'</td>'
+    +'<td>'+(e.empId||d)+'</td>'
+    +'<td>'+(e.country||d)+'</td>'
+    +'<td>'+(e.payFrequency||d)+'</td>'
+    +'<td>'+(e.currency&&e.grossPay?(e.currency+' '+e.grossPay):d)+'</td>'
+    +'<td><span class="lp-status-badge '+e.status.toLowerCase()+'">'+e.status+'</span></td>'
+    +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openPrSidebar('+e.id+')"><svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg></button></td>'
+    +'</tr>';
+  }).join('');
+  const sbInner=prSelectedId?renderPrSidebar():'';
+  return '<div class="lp-page">'
+    +'<div class="lp-filter-bar"><div class="lp-filter-bar-label">Select Filter</div>'
+    +'<div class="lp-filter-bar-row">'
+    +apCS('pr-f-country',['Netherlands','India','Germany','Spain','United Kingdom'],'','Country')
+    +apCS('pr-f-status',['Active','Pending','Inactive'],'','Status')
+    +'<button class="lp-pill-reset" onclick="resetPrFilters()">Reset</button>'
+    +'<button class="lp-pill-search">Search</button>'
+    +'</div></div>'
+    +'<div class="lp-split-wrap"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
+    +'<table class="lp-table"><thead><tr>'
+    +'<th>SR. NO</th><th>NAME</th><th>EMPLOYEE ID</th><th>COUNTRY</th><th>PAY FREQUENCY</th><th>GROSS PAY</th><th>STATUS</th><th>ACTION</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +'</div></div>'
+    +'<div class="lp-split-sb'+(prSelectedId?' open':'')+'" id="pr-split-sb"><div class="lp-isb" id="pr-isb-inner">'+sbInner+'</div></div>'
+    +'</div></div>';
+}
+function renderPrSidebar(){
+  const emp=payrollEmpData.find(e=>e.id===prSelectedId);if(!emp)return '';
+  const tabs=[{id:'basic-details',label:'Basic Details'},{id:'readiness',label:'Payroll Readiness'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
+  const pendingTab=manualLinkedRunForPayrollEmp(emp.id)?'readiness':null;
+  const tabBar='<div class="lp-isb-tabbar">'
+    +'<button class="lp-isb-nav-btn" onclick="scrollTabRow(\'left\',\'pr-isb-tabs\')" title="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
+    +'<div class="lp-isb-tabs" id="pr-isb-tabs">'+tabs.map(t=>'<button class="lp-isb-tab'+(prTab===t.id?' active':'')+(pendingTab===t.id?' lp-isb-tab--pending':'')+'" onclick="navPrTab(\''+t.id+'\')">'+t.label+(pendingTab===t.id?'<span class="lp-isb-tab-badge" title="Action needed"></span>':'')+'</button>').join('')+'</div>'
+    +'<button class="lp-isb-nav-btn nav-right" onclick="scrollTabRow(\'right\',\'pr-isb-tabs\')" title="Scroll right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closePrSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'</div>';
+  const d='<span style="color:#9ca3af">--</span>';
+  const v=(x)=>x&&x!=='--'?x:d;
+  const iP='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const iGlobe='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+  const iBag='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>';
+  const iClock='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  const iDollar='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const iCheck='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+  const fc=(ico,label,val)=>'<div class="lp-sb-field-card"><div class="lp-sb-field-icon">'+ico+'</div><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+label+'</div><div class="lp-sb-field-value">'+val+'</div></div></div>';
+  let body='';
+  if(prTab==='basic-details'){
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+emp.name+'</span></div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iP,'Name',v(emp.name))+fc(iGlobe,'Country',v(emp.country))
+      +fc(iBag,'Job Title',v(emp.jobTitle))+fc(iClock,'Pay Frequency',v(emp.payFrequency))
+      +fc(iDollar,'Gross Pay',v(emp.currency&&emp.grossPay!=='—'?(emp.currency+' '+emp.grossPay):null))
+      +'</div>';
+  }else if(prTab==='readiness'){
+    const statusPill=(s)=>'<span class="lp-status-badge '+(s==='Verified'?'active':'pending')+'">'+s+'</span>';
+    body=prReadinessBannerHTML(emp)
+      +'<div class="lp-sb-view-header"><span class="lp-sb-section-title">Payroll Readiness Checklist</span></div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iCheck,'Bank Details',statusPill(emp.bankStatus||'Pending'))
+      +fc(iCheck,'Tax ID',statusPill(emp.taxIdStatus||'Pending'))
+      +fc(iClock,'Pay Frequency Confirmed',statusPill(emp.payFrequency?'Verified':'Pending'))
+      +fc(iDollar,'Compensation Mapping',statusPill(emp.grossPay&&emp.grossPay!=='—'?'Verified':'Pending'))
+      +'</div>';
+  }else if(prTab==='logs'){
+    const logs=prLogsData[emp.id]||[];
+    const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const clkSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    body=logs.length
+      ?'<div class="lp-logs-timeline">'+logs.map((l,i)=>'<div class="lp-log-row">'
+          +'<div class="lp-log-avatar-col"><div class="lp-log-avatar lp-log-avatar--active">'+personSvg+'</div>'+(i<logs.length-1?'<div class="lp-log-connector"></div>':'')+'</div>'
+          +'<div class="lp-log-card"><div class="lp-log-status-row"><span class="lp-log-dot lp-log-dot--active"></span><span class="lp-log-status-text lp-log-status-text--active">'+l.status+'</span></div>'
+          +'<div class="lp-log-meta-row"><span class="lp-log-meta-item">'+personSvg+'<span>'+l.user+'</span></span>'+(l.date?'<span class="lp-log-meta-item">'+calSvg+'<span>'+l.date+'</span></span>':'')+(l.time?'<span class="lp-log-meta-item">'+clkSvg+'<span>'+l.time+'</span></span>':'')+'</div>'
+          +'<div class="lp-log-comment-row"><span class="lp-log-comment-label">Comment:</span>'+l.action+'</div>'
+          +'</div></div>').join('')+'</div>'
+      :'<div class="lp-logs-empty">No activity logs yet.</div>';
+  }else if(prTab==='workflow'){
+    const wf=prWorkflowData[emp.id]||[];
+    body=wf.length
+      ?'<div class="lp-wf-wrap">'+wf.map((w,i)=>'<div class="lp-wf-row"><div class="lp-wf-dot-col"><div class="lp-wf-dot"></div>'+(i<wf.length-1?'<div class="lp-wf-connector"></div>':'')+'</div><div class="lp-wf-card"><div class="lp-wf-title">'+w.title+'</div><div class="lp-wf-meta-row"><span class="lp-wf-meta-item">'+w.user+'</span>'+(w.date?'<span class="lp-wf-meta-item">'+w.date+'</span>':'')+'</div><div class="lp-wf-desc"><span class="lp-wf-desc-label">Description:</span><span class="lp-wf-desc-text">'+w.description+'</span></div></div></div>').join('')+'</div>'
+      :'<div class="lp-wf-empty">No workflow configured.</div>';
+  }
+  return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
 function openGeSidebar(id){
   geSelectedId=id;geTab='basic-details';
@@ -1471,18 +1644,31 @@ function ctToggleStatFilter(v){
   renderADTPage();
 }
 function openCtSidebar(id,tab,pendingStatus){
-  ctSelectedId=id;ctTab=tab||'basic-details';
+  ctSelectedId=id;ctTab=tab||'basic-details';ctCommercialEditMode=false;
   if(pendingStatus)window._ctPendingStatus=pendingStatus;else delete window._ctPendingStatus;
   const sb=document.getElementById('ct-split-sb');if(sb)sb.classList.add('open');
   const inner=document.getElementById('ct-isb-inner');if(inner)inner.innerHTML=renderCtSidebar();
   document.querySelectorAll('.ct-row').forEach(r=>r.classList.toggle('lp-row-selected',r.id==='ct-row-'+id));
 }
 function closeCtSidebar(){
-  ctSelectedId=null;delete window._ctPendingStatus;
+  ctSelectedId=null;ctCommercialEditMode=false;delete window._ctPendingStatus;
   const sb=document.getElementById('ct-split-sb');if(sb)sb.classList.remove('open');
   document.querySelectorAll('.ct-row').forEach(r=>r.classList.remove('lp-row-selected'));
 }
-function navCtTab(tab){ctTab=tab;const inner=document.getElementById('ct-isb-inner');if(inner){inner.innerHTML=renderCtSidebar();requestAnimationFrame(function(){const nt=document.getElementById('ct-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
+function refreshCtSidebar(){
+  const inner=document.getElementById('ct-isb-inner');
+  if(inner)inner.innerHTML=renderCtSidebar();
+}
+function navCtTab(tab){ctTab=tab;ctCommercialEditMode=false;const inner=document.getElementById('ct-isb-inner');if(inner){inner.innerHTML=renderCtSidebar();requestAnimationFrame(function(){const nt=document.getElementById('ct-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
+function saveCtCommercialEdit(){
+  const c=contractsData.find(x=>x.id===ctSelectedId);if(!c)return;
+  ['adtFee','annualGross','baseGross','holidayBonus','month13','monthlyGrossNet','monthlyInvoice','monthlySalary12','monthlySalary1392','netPay','socialPremAmt','socialPremPct','totalMonthlyGross'].forEach(function(key){
+    const el=document.getElementById('ctcm-'+key);
+    if(el)c.commercial[key]=el.value;
+  });
+  ctCommercialEditMode=false;
+  refreshCtSidebar();
+}
 function pmToggleStatFilter(v){
   pmInvoiceStatusFilter=pmInvoiceStatusFilter===v?'':v;
   pmSelectedId=null;
@@ -1526,9 +1712,12 @@ function closeCtModal(){document.getElementById('ct-modal-overlay').style.displa
 function renderCtSidebar(){
   const c=contractsData.find(x=>x.id===ctSelectedId);if(!c)return '';
   const tabs=[{id:'basic-details',label:'Basic Details'},{id:'commercial-terms',label:'Commercial Terms'},{id:'compliance',label:'Compliance'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
+  // -- Badge the tab a linked journey run is currently waiting on, so the pending action is visible without opening the tab. --
+  const pendingRun=manualLinkedRunForContract(c.id);
+  const pendingTabId=pendingRun?ctTabForManualStep(manualJourneySteps(pendingRun.journeyId)[pendingRun.currentStepIdx]):null;
   const tabBar='<div class="lp-isb-tabbar">'
     +'<button class="lp-isb-nav-btn" onclick="scrollTabRow(\'left\',\'ct-isb-tabs\')" title="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
-    +'<div class="lp-isb-tabs" id="ct-isb-tabs">'+tabs.map(t=>'<button class="lp-isb-tab'+(ctTab===t.id?' active':'')+'" onclick="navCtTab(\''+t.id+'\')">'+t.label+'</button>').join('')+'</div>'
+    +'<div class="lp-isb-tabs" id="ct-isb-tabs">'+tabs.map(t=>'<button class="lp-isb-tab'+(ctTab===t.id?' active':'')+(pendingTabId===t.id?' lp-isb-tab--pending':'')+'" onclick="navCtTab(\''+t.id+'\')">'+t.label+(pendingTabId===t.id?'<span class="lp-isb-tab-badge" title="Action needed"></span>':'')+'</button>').join('')+'</div>'
     +'<button class="lp-isb-nav-btn nav-right" onclick="scrollTabRow(\'right\',\'ct-isb-tabs\')" title="Scroll right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>'
     +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeCtSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
     +'</div>';
@@ -1550,7 +1739,8 @@ function renderCtSidebar(){
   if(ctTab==='basic-details'){
     const editBtn='<button class="ep-save-btn" style="padding:5px 14px;font-size:12px;display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>';
     const wpVal=c.workPermit?'Yes':'No';
-    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+c.empName+'</span>'+editBtn+'</div>'
+    body=manualStepBannerHTML(c,'basic-details')
+      +'<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+c.empName+'</span>'+editBtn+'</div>'
       +'<div class="lp-sb-detail-grid">'
       +fc(iGlobe,'Nationality',v(c.nationality))+fc(iGlobe,'Country of Operation',v(c.countryOfOp))
       +fc(iCheck,'Work Permit',wpVal)+fc(iUser,'Name',v(c.empName))
@@ -1563,24 +1753,44 @@ function renderCtSidebar(){
       +fc(iClock,'Pay Frequency',v(c.payFrequency))
       +'</div>';
   }else if(ctTab==='commercial-terms'){
-    const editBtn='<button class="ep-save-btn" style="padding:5px 14px;font-size:12px;display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>';
     const cm=c.commercial;
-    const cf=(l,val)=>'<div class="lp-sb-field-card"><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+l+'</div><div class="lp-sb-field-value">'+(val||dv)+'</div></div></div>';
-    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">Commercial Terms</span>'+editBtn+'</div>'
-      +'<div class="lp-sb-detail-grid">'
-      +cf('Adt Monthly Management Fee',cm.adtFee)+cf('Annual Gross Salary',cm.annualGross)
-      +cf('Base Gross Salary',cm.baseGross)+cf('Holiday Bonus Accrued',cm.holidayBonus)
-      +cf('Month 13 Accrued',cm.month13)+cf('Monthly Gross Salary Net',cm.monthlyGrossNet)
-      +cf('Monthly Invoice Value',cm.monthlyInvoice)+cf('Monthly Salary 12',cm.monthlySalary12)
-      +cf('Monthly Salary 1392',cm.monthlySalary1392)+cf('Net Pay',cm.netPay)
-      +cf('Social Premiums Amount',cm.socialPremAmt)+cf('Social Premiums Pct',cm.socialPremPct)
-      +cf('Total Monthly Gross Salary',cm.totalMonthlyGross)
-      +'</div>';
+    if(ctCommercialEditMode){
+      const ef=(key,label)=>'<div class="lp-sb-field"><label>'+label+'</label><input class="ep-form-input" id="ctcm-'+key+'" value="'+(cm[key]||'')+'"></div>';
+      body=manualStepBannerHTML(c,'commercial-terms')
+        +'<div class="lp-sb-view-header"><span class="lp-sb-section-title">Commercial Terms</span></div>'
+        +'<div class="lp-sb-edit-form"><div class="lp-sb-edit-section"><div class="lp-sb-form-grid">'
+        +ef('adtFee','Adt Monthly Management Fee')+ef('annualGross','Annual Gross Salary')
+        +ef('baseGross','Base Gross Salary')+ef('holidayBonus','Holiday Bonus Accrued')
+        +ef('month13','Month 13 Accrued')+ef('monthlyGrossNet','Monthly Gross Salary Net')
+        +ef('monthlyInvoice','Monthly Invoice Value')+ef('monthlySalary12','Monthly Salary 12')
+        +ef('monthlySalary1392','Monthly Salary 1392')+ef('netPay','Net Pay')
+        +ef('socialPremAmt','Social Premiums Amount')+ef('socialPremPct','Social Premiums Pct')
+        +ef('totalMonthlyGross','Total Monthly Gross Salary')
+        +'</div><div class="lp-sb-form-actions">'
+        +'<button class="ep-cancel-btn" onclick="ctCommercialEditMode=false;refreshCtSidebar()">Cancel</button>'
+        +'<button class="ep-save-btn" onclick="saveCtCommercialEdit()">Save</button>'
+        +'</div></div></div>';
+    }else{
+      const editBtn='<button class="ep-save-btn" style="padding:5px 14px;font-size:12px;display:flex;align-items:center;gap:5px" onclick="ctCommercialEditMode=true;refreshCtSidebar()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>';
+      const cf=(l,val)=>'<div class="lp-sb-field-card"><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+l+'</div><div class="lp-sb-field-value">'+(val||dv)+'</div></div></div>';
+      body=manualStepBannerHTML(c,'commercial-terms')
+        +'<div class="lp-sb-view-header"><span class="lp-sb-section-title">Commercial Terms</span>'+editBtn+'</div>'
+        +'<div class="lp-sb-detail-grid">'
+        +cf('Adt Monthly Management Fee',cm.adtFee)+cf('Annual Gross Salary',cm.annualGross)
+        +cf('Base Gross Salary',cm.baseGross)+cf('Holiday Bonus Accrued',cm.holidayBonus)
+        +cf('Month 13 Accrued',cm.month13)+cf('Monthly Gross Salary Net',cm.monthlyGrossNet)
+        +cf('Monthly Invoice Value',cm.monthlyInvoice)+cf('Monthly Salary 12',cm.monthlySalary12)
+        +cf('Monthly Salary 1392',cm.monthlySalary1392)+cf('Net Pay',cm.netPay)
+        +cf('Social Premiums Amount',cm.socialPremAmt)+cf('Social Premiums Pct',cm.socialPremPct)
+        +cf('Total Monthly Gross Salary',cm.totalMonthlyGross)
+        +'</div>';
+    }
   }else if(ctTab==='compliance'){
     const thS='padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--navy);background:#f8fafc;border-bottom:1px solid var(--border)';
     const tdS='padding:10px 12px;font-size:13px;color:var(--navy);border-bottom:1px solid #f1f5f9';
     const upIco='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
-    body='<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden">'
+    const itemsTable='<div class="ep-form-title" style="margin:0 0 10px">Compliance Items</div>'
+      +'<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden">'
       +'<thead><tr>'
       +'<th style="'+thS+'">S.NO</th><th style="'+thS+'">Compliance Item</th><th style="'+thS+'">Note</th><th style="'+thS+'">Status</th><th style="'+thS+'">Documents</th><th style="'+thS+'">ACTION</th>'
       +'</tr></thead>'
@@ -1593,6 +1803,33 @@ function renderCtSidebar(){
         +'<td style="'+tdS+'"><button style="border:none;background:none;cursor:pointer;color:var(--navy);padding:0" title="Upload">'+upIco+'</button></td>'
         +'</tr>').join('')
       +'</tbody></table>';
+    // -- If this contract has a live journey run currently sitting on a compliance-type step, surface the action here instead of the standalone modal, gated to whoever owns that step. --
+    const linkedRun=manualJourneyRuns.find(function(r){return r.contractRecordId===c.id&&r.status!=='Completed';});
+    let actionSection='';
+    if(linkedRun){
+      const linkedSteps=manualJourneySteps(linkedRun.journeyId);
+      const curStep=linkedSteps[linkedRun.currentStepIdx];
+      if(curStep&&curStep.modulePage==='compliance'){
+        const j=aiJourneys.find(function(x){return x.id===linkedRun.journeyId;})||cfgJourneys.find(function(x){return x.id===linkedRun.journeyId;})||{};
+        const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(linkedRun.currentStepIdx+1)+' of '+linkedSteps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+        const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
+        if(isOwner){
+          actionSection='<div class="ep-form-card" style="margin-bottom:16px">'
+            +'<div class="ep-form-title" style="margin-bottom:4px">Compliance Checklist</div>'
+            +contextLine
+            +complianceActionPanelHTML(linkedRun,curStep)
+            +'<div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="confirmComplianceResolve(\''+linkedRun.runId+'\')">Mark '+curStep.name+' Complete</button></div>'
+            +'</div>';
+        }else{
+          actionSection='<div class="ep-form-card" style="margin-bottom:16px">'
+            +'<div class="ep-form-title" style="margin-bottom:4px">Compliance Checklist</div>'
+            +contextLine
+            +'<div class="manual-waiting-note">Waiting on <strong>'+curStep.ownerRole+'</strong></div>'
+            +'</div>';
+        }
+      }
+    }
+    body=actionSection+itemsTable;
   }else if(ctTab==='logs'){
     const logs=ctLogsData[c.id]||[];
     const ctLogKey=(s)=>({Submitted:'default','Quotation Approved':'active','Proposal Sent':'active','Proposal Approved':'active','Contract Sent':'active','Contract Signed':'active','Contract Approved':'active',Inactive:'inactive'}[s]||'default');
@@ -1655,14 +1892,14 @@ function renderCtSidebar(){
     const wf=ctWorkflowData[c.id]||[];
     const wfPersonSvg='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     const wfCalSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-    body=wf.length
+    body=manualStepBannerHTML(c,'workflow')+(wf.length
       ?'<div class="lp-wf-wrap">'+wf.map((w,i)=>'<div class="lp-wf-row">'
           +'<div class="lp-wf-dot-col"><div class="lp-wf-dot"></div>'+(i<wf.length-1?'<div class="lp-wf-connector"></div>':'')+'</div>'
           +'<div class="lp-wf-card"><div class="lp-wf-title">'+w.title+'</div>'
           +'<div class="lp-wf-meta-row"><span class="lp-wf-meta-item">'+wfPersonSvg+'<span>'+w.user+'</span></span>'+(w.date?'<span class="lp-wf-meta-item">'+wfCalSvg+'<span>'+w.date+'</span></span>':'')+(w.time?'<span class="lp-wf-meta-sep">|</span><span>'+w.time+'</span>':'')+'</div>'
           +'<div class="lp-wf-desc"><span class="lp-wf-desc-label">Description:</span><span class="lp-wf-desc-text">'+w.description+'</span></div>'
           +'</div></div>').join('')+'</div>'
-      :'<div class="lp-wf-empty">No workflow configured.</div>';
+      :'<div class="lp-wf-empty">No workflow configured.</div>');
   }
   return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
@@ -1715,13 +1952,33 @@ function submitManualContractDeal(type){
   const d=manualContractFormData;
   const fullName=((d.fname||'')+' '+(d.lname||'')).trim()||'New Employee';
   const creatorId=portalRole==='entity-user'?activePersonaId:'account-manager';
+  const creatorPersona=enterprisePersonas.find(function(p){return p.id===creatorId;});
+  const creatorLabel=creatorPersona?creatorPersona.label:'Account Manager';
   const run={
     runId:'MAN-'+(manualRunSeq++),journeyId:'contract-creation',subject:fullName,entity:'Dhi Hyperlocal',mode:'Manual',
     currentStepIdx:1,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',
     manualHours:.8,agentEstimateHours:0,createdBy:creatorId,exceptions:[],
-    audit:['Deal & Employee Record completed by Account Manager for '+fullName+' ('+type+')']
+    audit:['Deal & Employee Record completed by '+creatorLabel+' for '+fullName+' ('+type+')']
   };
   manualJourneyRuns.unshift(run);
+  const newContractId=contractsData.reduce(function(m,c){return Math.max(m,c.id);},0)+1;
+  const now=aiFormatNow();
+  const from=d.fromDate||now.date;
+  const contractRow={
+    id:newContractId,contractId:String(90000+Math.floor(Math.random()*9999)),
+    empName:fullName,empDesig:d.jobTitle||'—',country:d.country||'—',type:type,date:now.date+' '+now.time,status:'Submitted',
+    nationality:d.nationality||d.country||'India',countryOfOp:d.country||'—',workPermit:d.workPermit===true,
+    gender:(d.gender||'').toUpperCase()||'—',email:d.email||'—',contact:d.mobile||'—',dob:d.dob||'—',
+    jobTitle:d.jobTitle||'—',skill:d.skill||'—',empDuration:from+(d.toDate?' – '+d.toDate:''),
+    empType:type,workSchedule:d.hours||'—',payAmount:d.pay||'—',currency:'INR',jobDesc:d.jobDesc||'—',payFrequency:'Monthly',
+    commercial:aiGenCommercial(d.pay),
+    complianceItems:[{item:type+' '+(d.country||'')+' Proposal',note:'Optional',status:'Pending',doc:null}],
+    manualRunId:run.runId
+  };
+  contractsData.unshift(contractRow);
+  run.contractRecordId=newContractId;
+  ctLogsData[newContractId]=[{date:now.date,time:now.time,user:creatorLabel,status:'Submitted',action:'Deal & Employee Record completed manually for '+fullName+' ('+type+').'}];
+  ctWorkflowData[newContractId]=[{title:'Deal & Employee Record Completed',user:creatorLabel,date:now.date,time:now.time,description:creatorLabel+' created the deal and employee record for '+fullName+'.'}];
   const firstStep=manualJourneySteps('contract-creation')[run.currentStepIdx];
   const firstOwnerId=firstStep&&manualStepOwnerPersonaId(firstStep.ownerRole);
   if(firstOwnerId)pushRunNotification(run.runId,firstOwnerId,'"'+firstStep.name+'" is waiting on you for '+fullName+'.');
@@ -2067,8 +2324,14 @@ function buildContractTypeSelectHTML(){
     +'</div>'
     +'</div>';
 }
+function ctComplianceBadge(c){
+  const items=c.complianceItems||[];
+  if(!items.length)return '<span style="color:#9ca3af">--</span>';
+  const typeMap={Pending:'pending',Approved:'approved',Inactive:'rejected',Blocking:'rejected'};
+  const worst=items.some(i=>i.status==='Blocking')?'Blocking':items.some(i=>i.status==='Inactive')?'Inactive':items.some(i=>i.status==='Pending')?'Pending':'Approved';
+  return statusMini(worst+(items.length>1?' ('+items.length+')':''),typeMap[worst]||'pending');
+}
 function buildContractsListingHTML(){
-  const d='<span style="color:#9ca3af">--</span>';
   const proposalPending=contractsData.filter(c=>c.status==='Proposal Sent').length;
   const contractPending=contractsData.filter(c=>c.status==='Contract Sent').length;
   const countries=[...new Set(contractsData.map(c=>c.country))];
@@ -2087,18 +2350,26 @@ function buildContractsListingHTML(){
       return '<div class="ct-act-item '+cls+'" '+click+'><span class="ct-act-step '+stepCls+'">'+checkIco+'</span>'+step+'</div>';
     }).join('');
     const btnLabel=c.status.length>12?c.status.slice(0,10)+'…':c.status;
-    const actionBtn='<div class="ct-action-wrap">'
-      +'<button class="ct-action-btn" onclick="toggleCtAction('+c.id+',event)"><span>'+btnLabel+'</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>'
-      +'<button class="ct-dots-btn" onclick="openCtSidebar('+c.id+',\'basic-details\');event.stopPropagation()">'+dotsIco+'</button>'
-      +'<div class="ct-action-menu" id="ctm-'+c.id+'">'+menuItems+'</div>'
-      +'</div>';
+    // -- Rows created through the persona-gated journey (c.manualRunId) can only progress through that flow, not the free-form status dropdown below, so show a read-only current-step readout instead. --
+    const linkedRun=c.manualRunId?getManualRun(c.manualRunId):null;
+    const linkedStep=linkedRun?(manualJourneySteps(linkedRun.journeyId)[linkedRun.currentStepIdx]||{}):null;
+    const actionBtn=linkedRun
+      ?'<div class="ct-action-wrap" style="display:flex;align-items:center;gap:8px;justify-content:flex-end">'
+        +'<div style="text-align:right"><div class="cell-primary" style="font-size:12.5px">'+(linkedRun.status==='Completed'?'Completed':(linkedStep.name||linkedRun.status))+'</div>'+(linkedRun.status==='Completed'?'':'<div class="cell-sub">'+(linkedStep.ownerRole||'')+'</div>')+'</div>'
+        +'<button class="ct-dots-btn" onclick="openCtSidebar('+c.id+',\'basic-details\');event.stopPropagation()">'+dotsIco+'</button>'
+        +'</div>'
+      :'<div class="ct-action-wrap">'
+        +'<button class="ct-action-btn" onclick="toggleCtAction('+c.id+',event)"><span>'+btnLabel+'</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>'
+        +'<button class="ct-dots-btn" onclick="openCtSidebar('+c.id+',\'basic-details\');event.stopPropagation()">'+dotsIco+'</button>'
+        +'<div class="ct-action-menu" id="ctm-'+c.id+'">'+menuItems+'</div>'
+        +'</div>';
     return '<tr class="ct-row'+(ctSelectedId===c.id?' lp-row-selected':'')+'" id="ct-row-'+c.id+'" style="cursor:pointer" onclick="openCtSidebar('+c.id+')">'
       +'<td style="color:#6b7280;font-size:13px">'+(ctIdx+1)+'</td>'
       +'<td style="font-weight:600;color:var(--navy)">'+c.contractId+'</td>'
       +'<td><div style="font-weight:600;color:var(--navy)">'+c.empName+'</div><div style="font-size:11px;color:#9ca3af">'+c.empDesig+'</div></td>'
       +'<td>'+c.country+'</td>'
       +'<td>'+c.type+'</td>'
-      +'<td>'+d+'</td>'
+      +'<td>'+ctComplianceBadge(c)+'</td>'
       +'<td style="font-size:12px;color:#64748b">'+c.date+'</td>'
       +'<td>'+ctStatusBadge(c.status)+'</td>'
       +'<td onclick="event.stopPropagation()">'+actionBtn+'</td>'
@@ -4263,7 +4534,7 @@ function buildOperationsCockpitHTML(){
       :'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
     const notifyBtn=isNotified
       ?'<button class="btn btn-secondary btn-sm cockpit-notify-btn notified" disabled>'+notifyIcon+'Notified</button>'
-      :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\')">'+notifyIcon+'Send Notification</button>';
+      :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\',\''+(c.st.ownerRole||'')+'\')">'+notifyIcon+'Send Notification</button>';
     const slaPriorityLabel={High:'High Priority',Medium:'Medium Priority',Low:'Low Priority'};
     return '<div class="cockpit-run-card" onclick="openCockpitRunSidebar(\''+r.runId+'\')">'
       +'<div class="cockpit-run-head"><div class="cockpit-run-num">'+(idx+1)+'</div><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+r.runId+'</div><div class="cockpit-run-entity">'+(r.entity||'Dhi Hyperlocal')+'</div></div><span class="status-pill '+slaClass+(c.isBlockedRun?' cockpit-pill-ex':'')+'">'+(slaPriorityLabel[r.slaRisk]||r.slaRisk)+'</span></div>'
@@ -4332,7 +4603,9 @@ function buildOperationsCockpitHTML(){
     +'</div>'
     +sidebarOverlay;
 }
-function cockpitExceptionCardHTML(x){
+// -- Shared "exception/approval needs action" card. Ops Cockpit (Entity Admin, opts default) shows Notify + Resolve for everyone's blockers; My Tasks (opts.hideNotify, the owner's own view) shows just Resolve, since notifying yourself makes no sense, plus a "New" flag when the item arrived via a notify-owner nudge. --
+function exceptionQueueCardHTML(x,opts){
+  opts=opts||{};
   const r=x.run;
   const sev=r.slaRisk==='High'?'High':r.slaRisk==='Medium'?'Medium':'Low';
   const isManual=String(r.runId).indexOf('MAN-')===0;
@@ -4351,14 +4624,20 @@ function cockpitExceptionCardHTML(x){
   const notifyIcon=isNotified
     ?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"/></svg>'
     :'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
-  const notifyBtn=isNotified
+  const notifyBtn=opts.hideNotify?'':(isNotified
     ?'<button class="btn btn-secondary btn-sm cockpit-notify-btn notified" disabled>'+notifyIcon+'Notified</button>'
-    :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\')">'+notifyIcon+'Notify Owner</button>';
-  return '<div class="cockpit-ex-card" onclick="openCockpitRunSidebar(\''+r.runId+'\')">'
-    +'<div class="cockpit-ex-left"><span class="cockpit-ex-indicator '+sev.toLowerCase()+'"></span><div><div class="cockpit-ex-title">'+x.title+kindTag+'</div><div class="cockpit-ex-meta"><span>'+r.runId+'</span><span>'+r.mode+'</span><span class="cockpit-ex-dept" onclick="event.stopPropagation();openCockpitDepartmentDetail(\''+dept.toLowerCase()+'\')">'+dept+'</span><span>'+(r.subject||'—')+'</span>'+escalationTag+'</div><div class="cockpit-ex-resolution">'+x.resolution+'</div></div></div>'
+    :'<button class="btn btn-secondary btn-sm cockpit-notify-btn" onclick="event.stopPropagation();notifyRunOwner(\''+r.runId+'\',\''+ownerName+'\',\''+stepName+'\',\''+(c.st.ownerRole||'')+'\')">'+notifyIcon+'Notify Owner</button>');
+  const newFlag=(opts.flagNotified&&isNotified)?'<span class="cockpit-ex-new-flag">New</span>':'';
+  const deptEl=opts.hideDeptLink
+    ?'<span class="cockpit-ex-dept">'+dept+'</span>'
+    :'<span class="cockpit-ex-dept" onclick="event.stopPropagation();openCockpitDepartmentDetail(\''+dept.toLowerCase()+'\')">'+dept+'</span>';
+  const cardClick=opts.cardClick||('openCockpitRunSidebar(\''+r.runId+'\')');
+  return '<div class="cockpit-ex-card" onclick="'+cardClick+'">'
+    +'<div class="cockpit-ex-left"><span class="cockpit-ex-indicator '+sev.toLowerCase()+'"></span><div><div class="cockpit-ex-title">'+newFlag+x.title+kindTag+'</div><div class="cockpit-ex-meta"><span>'+r.runId+'</span><span>'+r.mode+'</span>'+deptEl+'<span>'+(r.subject||'—')+'</span>'+escalationTag+'</div><div class="cockpit-ex-resolution">'+x.resolution+'</div></div></div>'
     +'<div class="cockpit-ex-actions">'+notifyBtn+'<button class="btn btn-primary btn-sm cockpit-ex-btn" onclick="event.stopPropagation();'+resolveAction+'">'+resolveLabel+'</button></div>'
     +'</div>';
 }
+function cockpitExceptionCardHTML(x){return exceptionQueueCardHTML(x);}
 function cockpitRunComputed(r){
   const j=aiJourneys.find(function(x){return x.id===r.journeyId;})||cfgJourneys.find(function(x){return x.id===r.journeyId;})||{};
   const steps=manualJourneySteps(r.journeyId);
@@ -4609,23 +4888,36 @@ function complianceChecklistItems(step){
   const parts=body.split(/,\s*|\s+and\s+/i).map(function(s){return s.replace(/^and\s+/i,'').trim();}).filter(Boolean);
   return (parts.length?parts:[clean]).map(function(p){return pastTense+' '+p;});
 }
+// -- Shared checklist+note body reused by both the standalone modal and the Contracts sidebar's Compliance tab, so confirmComplianceResolve() works verbatim in either surface. --
+function complianceActionPanelHTML(run,step){
+  const checklistItems=complianceChecklistItems(step);
+  const checklistHTML=checklistItems.map(function(t){return '<label><input type="checkbox" class="compliance-resolve-check"> '+t+'</label>';}).join('');
+  return '<div class="manual-res-issue"><div><span>Employee</span><strong>'+(run.subject||'—')+'</strong><p>'+run.runId+' &middot; '+(step.name||'Compliance Check')+'</p></div><div><span>SLA</span><strong>'+(step.sla||'—')+'</strong><p>'+(step.manualAction||'')+'</p></div></div>'
+    +'<div class="manual-res-confirm"><div class="manual-res-section-title">Completion checklist</div>'
+    +checklistHTML
+    +'<textarea id="compliance-resolve-note" placeholder="Add a compliance note, source reference, or approval comment"></textarea>'
+    +'</div>';
+}
 function openComplianceResolveModal(runId){
   const run=getManualRun(runId);if(!run)return;
   const step=manualJourneySteps(run.journeyId)[run.currentStepIdx]||{};
   const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
-  const checklistItems=complianceChecklistItems(step);
-  const checklistHTML=checklistItems.map(function(t){return '<label><input type="checkbox" class="compliance-resolve-check"> '+t+'</label>';}).join('');
   overlay.innerHTML='<div class="ct-modal manual-res-modal" onclick="event.stopPropagation()">'
     +'<div class="ct-modal-hdr"><span class="ct-modal-title">Complete '+(step.name||'Compliance Check')+'</span><button class="ct-modal-close" onclick="closeCtModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
-    +'<div class="manual-res-body">'
-    +'<div class="manual-res-issue"><div><span>Employee</span><strong>'+(run.subject||'—')+'</strong><p>'+run.runId+' &middot; '+(step.name||'Compliance Check')+'</p></div><div><span>SLA</span><strong>'+(step.sla||'—')+'</strong><p>'+(step.manualAction||'')+'</p></div></div>'
-    +'<div class="manual-res-confirm"><div class="manual-res-section-title">Completion checklist</div>'
-    +checklistHTML
-    +'<textarea id="compliance-resolve-note" placeholder="Add a compliance note, source reference, or approval comment"></textarea>'
-    +'</div></div>'
+    +'<div class="manual-res-body">'+complianceActionPanelHTML(run,step)+'</div>'
     +'<div class="manual-res-footer"><div>Marking this complete advances the journey and notifies the next owner.</div><button class="btn btn-secondary" onclick="closeCtModal()">Cancel</button><button class="btn btn-primary" onclick="confirmComplianceResolve(\''+runId+'\')">Mark '+(step.name||'Compliance Check')+' Complete</button></div>'
     +'</div>';
   overlay.style.display='flex';
+}
+// -- Routes "act on this compliance step" to the real Contracts record when one is linked (Contract Creation), falling back to the standalone modal for journeys with no linked listing yet (H2R). --
+function openComplianceHubForRun(runId){
+  const run=getManualRun(runId);if(!run)return;
+  if(run.journeyId==='contract-creation'&&run.contractRecordId&&contractsData.some(function(c){return c.id===run.contractRecordId;})){
+    navigatePage('contracts');
+    openCtSidebar(run.contractRecordId,'compliance');
+  }else{
+    openComplianceResolveModal(runId);
+  }
 }
 function confirmComplianceResolve(runId){
   const checks=[].slice.call(document.querySelectorAll('.compliance-resolve-check'));
@@ -6075,7 +6367,7 @@ function buildManualJourneyRunHTML(){
       +'<div class="manual-step-mode">'+mode+'</div>'
       +'</div>';
   }).join('');
-  const evidence=buildEvidencePackHTML(run,cur,run.currentStepIdx);
+  const evidence=buildEvidencePackHTML(run,steps,run.currentStepIdx);
   const exceptions=(run.exceptions||[]).map(function(e,i){return {e:e,i:i};}).filter(function(x){return x.e.status==='Open';}).map(function(x){
     const exOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(x.e.ownerRole);
     const exAction=exOwner
@@ -6089,7 +6381,14 @@ function buildManualJourneyRunHTML(){
   const stepsCompletedLabel=(run.status==='Completed'?steps.length:(run.currentStepIdx||0))+' of '+steps.length;
   const moduleLabel=manualModuleLabel(cur.modulePage);
   const isOwner=run.status==='Completed'||portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(cur.ownerRole);
-  const openHubAction=cur.modulePage==='compliance'?"openComplianceResolveModal('"+run.runId+"')":"navigatePage('"+(cur.modulePage||'dashboard')+"')";
+  const curCtTab=ctTabForManualStep(cur);
+  const linkedDeEmp=cur.modulePage==='direct'?directEmpData.find(function(e){return e.onboardingRunId===run.runId;}):null;
+  const linkedPrEmp=cur.modulePage==='payroll'?payrollEmpData.find(function(e){return e.readinessRunId===run.runId;}):null;
+  const openHubAction=cur.modulePage==='compliance'?"openComplianceHubForRun('"+run.runId+"')"
+    :(run.contractRecordId&&curCtTab&&contractsData.some(function(c){return c.id===run.contractRecordId;}))?"navigatePage('contracts');openCtSidebar("+run.contractRecordId+",'"+curCtTab+"')"
+    :linkedDeEmp?"navigatePage('direct');openDeSidebar("+linkedDeEmp.id+")"
+    :linkedPrEmp?"navigatePage('payroll');openPrSidebar("+linkedPrEmp.id+")"
+    :"navigatePage('"+(cur.modulePage||'dashboard')+"')";
   const heroActions=(run.status!=='Completed'&&isOwner)?'<button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Step Complete</button>':'';
   const currentActions=run.status==='Completed'?''
     :isOwner
@@ -6104,10 +6403,44 @@ function buildManualJourneyRunHTML(){
     +'<div class="dash-two-col manual-run-grid"><div class="listing-card dash-panel manual-steps-panel"><div class="dash-panel-head"><div>Journey Steps</div><span>Manual / Agent mode per step</span></div><div class="manual-panel-body">'+timeline+'</div></div><div class="manual-run-side"><div class="listing-card dash-panel manual-evidence-panel"><div class="dash-panel-head"><div>Step-Level Evidence Pack</div><span>Trust layer</span></div><div class="manual-panel-body">'+evidence+'</div></div><div class="listing-card dash-panel manual-exceptions-panel"><div class="dash-panel-head"><div>Exceptions</div><span>Exception-first queue</span></div><div class="manual-panel-body">'+exceptions+'</div></div><div class="listing-card dash-panel manual-audit-panel"><div class="dash-panel-head"><div>Audit Trail</div><span>Immutable story</span></div><div class="manual-panel-body">'+audit+'</div></div></div></div>'
     +'</div>';
 }
-function buildEvidencePackHTML(run,step,idx){
-  const before=idx%2===0?'Not captured':'Pending validation';
-  const after=idx%2===0?'Captured manually':'Awaiting correction';
-  return '<div class="evidence-grid">'
+// -- Same "linked journey run is on this step" banner the Compliance tab already shows, generalized to any Contracts-sidebar tab that a manual step maps to (see manualStepTabMap), so acting on Basic Details / Commercial Terms / Workflow also advances the linked run. --
+function manualStepBannerHTML(c,tabId){
+  const linkedRun=manualLinkedRunForContract(c.id);if(!linkedRun)return '';
+  const linkedSteps=manualJourneySteps(linkedRun.journeyId);
+  const curStep=linkedSteps[linkedRun.currentStepIdx];
+  if(!curStep||ctTabForManualStep(curStep)!==tabId)return '';
+  const j=aiJourneys.find(function(x){return x.id===linkedRun.journeyId;})||cfgJourneys.find(function(x){return x.id===linkedRun.journeyId;})||{};
+  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(linkedRun.currentStepIdx+1)+' of '+linkedSteps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+  const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
+  const action=isOwner
+    ?'<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+linkedRun.runId+'\')">Mark '+curStep.name+' Complete</button></div>'
+    :'<div class="manual-waiting-note">Waiting on <strong>'+curStep.ownerRole+'</strong></div>';
+  return '<div class="ep-form-card" style="margin-bottom:16px">'+contextLine+action+'</div>';
+}
+// -- Same journey-context banner as manualStepBannerHTML, for the Direct Employee sidebar's Onboarding-pending row (see ensureDirectEmpForOnboarding). --
+function deOnboardingBannerHTML(emp){
+  const run=manualLinkedRunForEmployee(emp.id);if(!run)return '';
+  const steps=manualJourneySteps(run.journeyId);
+  const curStep=steps[run.currentStepIdx];
+  if(!curStep||curStep.name!=='Onboarding')return '';
+  const j=aiJourneys.find(function(x){return x.id===run.journeyId;})||cfgJourneys.find(function(x){return x.id===run.journeyId;})||{};
+  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(run.currentStepIdx+1)+' of '+steps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+  const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
+  const action=isOwner
+    ?'<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Onboarding Complete</button></div>'
+    :'<div class="manual-waiting-note">Waiting on <strong>'+curStep.ownerRole+'</strong></div>';
+  return '<div class="ep-form-card" style="margin-bottom:16px">'+contextLine+action+'</div>';
+}
+function buildEvidencePackHTML(run,steps,currentStepIdx){
+  const completedIdx=run.status==='Completed'?steps.length-1:currentStepIdx-1;
+  if(completedIdx<0){
+    return '<div class="manual-empty-note">No evidence captured yet &mdash; complete the current step to generate its evidence record.</div>';
+  }
+  const step=steps[completedIdx]||{};
+  const before=completedIdx%2===0?'Not captured':'Pending validation';
+  const after=completedIdx%2===0?'Captured manually':'Awaiting correction';
+  return '<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">Evidence for: <strong style="color:var(--navy)">'+step.name+'</strong></div>'
+    +'<div class="evidence-grid">'
     +'<div class="evidence-item"><div class="evidence-label">Source data</div><div class="evidence-value">'+run.subject+' · '+run.entity+'</div></div>'
     +'<div class="evidence-item"><div class="evidence-label">Documents used</div><div class="evidence-value">Contract, timesheet, compliance report</div></div>'
     +'<div class="evidence-item"><div class="evidence-label">Rule/check applied</div><div class="evidence-value">'+(step.exceptionType||'Standard validation')+'</div></div>'
@@ -6157,8 +6490,9 @@ function buildJourneySimulationHTML(){
 // -- AI Executive: live run flows for activated journeys (Create Employee / Run Payroll) --
 function aiJourneyCTA(j){
   const mode=journeyModeLabel(j.id);
-  if(mode==='Manual Mode'||mode==='Hybrid')return {label:(mode==='Hybrid'?'Start Hybrid Run':'Start Manual Run'),action:"startManualJourneyRun('"+j.id+"')"};
+  // -- Contract Creation's first step *is* capturing the real deal/employee details, so it always opens the real contract form (whatever name gets typed in becomes the run's subject) rather than the generic placeholder-subject manual-run starter used by other journeys. --
   if(j.id==='contract-creation')return {label:'Create Contract',action:"addListingItem('contracts')"};
+  if(mode==='Manual Mode'||mode==='Hybrid')return {label:(mode==='Hybrid'?'Start Hybrid Run':'Start Manual Run'),action:"startManualJourneyRun('"+j.id+"')"};
   if(aiRunFlows[j.id])return {label:aiRunFlows[j.id].entryLabel,action:"startAIJourneyRun('"+j.id+"')"};
   return null;
 }
@@ -7748,6 +8082,18 @@ function aiSubmitAssistedContract(type){
   ctLogsData[newId]=[{date:now.date,time:now.time,user:'AI Contract Assistant',status:'Submitted',action:'Contract created via AI Contract Assistant for '+fullName+'.'}];
   ctWorkflowData[newId]=[{title:'Contract Created by AI',user:'AI Contract Assistant',date:now.date,time:now.time,description:'AI compiled the proposal and contract data from the conversation for '+fullName+'.'}];
   aiCreatedContractId=newId;
+  // -- Agent-Mode contract creation used to only touch contractsData/aiAutomationRuns, so it never showed up as an "Open Deal" (that panel reads manualJourneyRuns). Log a run here too so both paths stay in sync. --
+  const dealCreatorId=portalRole==='entity-user'?activePersonaId:'account-manager';
+  const dealCreatorPersona=enterprisePersonas.find(function(pn){return pn.id===dealCreatorId;});
+  const dealCreatorLabel=dealCreatorPersona?dealCreatorPersona.label:'Account Manager';
+  const dealRun={
+    runId:'MAN-'+(manualRunSeq++),journeyId:'contract-creation',subject:fullName,entity:'Dhi Hyperlocal',mode:'Agent Enabled',
+    currentStepIdx:1,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',
+    manualHours:0,agentEstimateHours:.8,createdBy:dealCreatorId,contractRecordId:newId,exceptions:[],
+    audit:['Deal & Employee Record completed via AI Contract Assistant by '+dealCreatorLabel+' for '+fullName+' ('+type+')']
+  };
+  manualJourneyRuns.unshift(dealRun);
+  record.manualRunId=dealRun.runId;
   aiProposalDraft={
     proposalId:genProposalId(),
     name:fullName,
@@ -7767,8 +8113,10 @@ function aiScheduleAutoAdvance(expectedPage,fn,delay){
   _aiAutoAdvanceTimer=setTimeout(function(){_aiAutoAdvanceTimer=null;if(page===expectedPage)fn();},delay||1800);
 }
 let _runNotifyTimer=null;
-function notifyRunOwner(runId,ownerName,stepName){
+function notifyRunOwner(runId,ownerName,stepName,ownerRole){
   notifiedRunIds.add(runId);
+  const ownerPersonaId=ownerRole?manualStepOwnerPersonaId(ownerRole):null;
+  if(ownerPersonaId)pushRunNotification(runId,ownerPersonaId,'"'+stepName+'" needs your attention — nudged by an admin.');
   const overlay=document.getElementById('run-notify-overlay');const desc=document.getElementById('run-notify-desc');
   if(overlay&&desc){
     desc.textContent='Sent notification to '+ownerName+' — owner of '+stepName+'.';

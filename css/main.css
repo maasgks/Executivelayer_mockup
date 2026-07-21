@@ -242,8 +242,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .stat-card.ea-hero-stat:active{transform:translateY(-1px)}
 .stat-card.ea-hero-stat .stat-icon{transition:transform .22s ease}
 .stat-card.ea-hero-stat:hover .stat-icon{transform:scale(1.1) rotate(-4deg)}
-.stat-card.ea-hero-stat.cfg-hero-blue .stat-icon,.stat-card.ea-hero-stat.cfg-hero-teal .stat-icon,.stat-card.ea-hero-stat.cfg-hero-orange .stat-icon{background:var(--tile-accent-bg);color:var(--tile-accent)}
-.stat-card.ea-hero-stat.cfg-hero-blue .stat-icon svg,.stat-card.ea-hero-stat.cfg-hero-teal .stat-icon svg,.stat-card.ea-hero-stat.cfg-hero-orange .stat-icon svg{stroke:var(--tile-accent)}
+.stat-card.ea-hero-stat.cfg-hero-blue .stat-icon,.stat-card.ea-hero-stat.cfg-hero-teal .stat-icon,.stat-card.ea-hero-stat.cfg-hero-orange .stat-icon,.stat-card.ea-hero-stat.cfg-hero-violet .stat-icon,.stat-card.ea-hero-stat.cfg-hero-green .stat-icon,.stat-card.ea-hero-stat.cfg-hero-red .stat-icon{background:var(--tile-accent-bg);color:var(--tile-accent)}
+.stat-card.ea-hero-stat.cfg-hero-blue .stat-icon svg,.stat-card.ea-hero-stat.cfg-hero-teal .stat-icon svg,.stat-card.ea-hero-stat.cfg-hero-orange .stat-icon svg,.stat-card.ea-hero-stat.cfg-hero-violet .stat-icon svg,.stat-card.ea-hero-stat.cfg-hero-green .stat-icon svg,.stat-card.ea-hero-stat.cfg-hero-red .stat-icon svg{stroke:var(--tile-accent)}
+.stat-card.ea-hero-stat.dash-stat-static{cursor:default}
 .stat-label{font-size:12px;color:var(--gray);font-weight:500;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start}
 .stat-icon{width:34px;height:34px;border-radius:8px;background:rgba(222,121,9,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .stat-icon svg{width:17px;height:17px;stroke:var(--orange);fill:none}
@@ -270,6 +271,8 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .cfg-hero-violet{--tile-accent:#7c3aed;--tile-accent-bg:rgba(124,58,237,.1)}
 .cfg-hero-teal{--tile-accent:#0d9488;--tile-accent-bg:rgba(13,148,136,.1)}
 .cfg-hero-orange{--tile-accent:var(--orange);--tile-accent-bg:var(--ol)}
+.cfg-hero-green{--tile-accent:#16a34a;--tile-accent-bg:rgba(22,163,74,.1)}
+.cfg-hero-red{--tile-accent:#dc2626;--tile-accent-bg:rgba(220,38,38,.1)}
 @media(max-width:980px){.cfg-hero-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.cfg-hero-grid{grid-template-columns:1fr}}
 .persona-dash{max-width:1280px}
@@ -726,6 +729,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .lp-no{color:#dc2626;font-weight:600}
 .lp-dash{color:#9ca3af}
 .lp-status-badge{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid transparent;white-space:nowrap;min-width:68px}
+.de-row--pending{background:#fff7ed}
+.de-row--pending:hover{background:#ffedd5}
+.de-onboard-badge{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f97316;margin-left:7px;vertical-align:middle;box-shadow:0 0 0 3px #fff7ed}
 .lp-status-badge.active{background:#f0fdf4;color:#16a34a;border-color:#86efac}
 .lp-status-badge.inactive{background:#fff0f0;color:#dc2626;border-color:#fca5a5}
 .lp-status-badge.approved{background:#f0fdf4;color:#16a34a;border-color:#86efac}
@@ -1664,6 +1670,7 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .cockpit-ex-indicator.low{background:#5a9a6d}
 .cockpit-ex-title{font-size:12.5px;font-weight:900;color:var(--navy);line-height:1.35;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .cockpit-ex-kind{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#5b8def;background:#f5f9ff;border:1px solid #e3edfc;border-radius:999px;padding:2px 7px}
+.cockpit-ex-new-flag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:var(--orange);border-radius:999px;padding:2px 7px}
 .cockpit-ex-meta{display:flex;flex-wrap:wrap;gap:6px;font-size:10.5px;color:#64748b;margin-bottom:6px}
 .cockpit-ex-meta span{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;background:#f8fafc;border:1px solid #eef2f7}
 .cockpit-ex-dept{cursor:pointer;font-weight:800;color:#b66430;background:#fdf3e7!important;border-color:#f5d9ab!important;transition:.15s}
