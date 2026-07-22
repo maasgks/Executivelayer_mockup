@@ -76,16 +76,17 @@ function manualRunCardHTML(r,opts){
     +'</div>';
 }
 function manualRunListPanelHTML(title,runs,emptyText,opts){
+  opts=opts||{};
   const body=runs.length
     ?'<div class="cockpit-run-list">'+runs.map(function(r){return manualRunCardHTML(r,opts);}).join('')+'</div>'
     :'<div class="cockpit-empty-state">'+emptyText+'</div>';
-  return '<div class="listing-card dash-panel"><div class="dash-panel-head"><div>'+title+'</div><span>Live</span></div>'+body+'</div>';
+  return '<div class="listing-card dash-panel'+(opts.bare?' cockpit-run-panel':'')+'"><div class="dash-panel-head"><div>'+title+'</div></div>'+body+'</div>';
 }
 function buildMyCreatedRunsPanelHTML(personaId){
   const runs=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.createdBy===personaId;});
   // -- Jump straight into the ongoing journey run, not the preview modal — this is "my open deals," so one click should land on the live journey. --
   const cardClick=function(r){return "selectedManualRunId='"+r.runId+"';manualJourneyBackPage=page||'ai-executive';page='manual-journey-run';renderADTPage();";};
-  return manualRunListPanelHTML('Open Deals',runs,'No open deals yet — create a contract to start one.',{cardClick:cardClick});
+  return manualRunListPanelHTML('Open Deals',runs,'No open deals yet — create a contract to start one.',{cardClick:cardClick,bare:true});
 }
 function buildComplianceLiveQueuePanelHTML(){
   const runs=manualJourneyRuns.filter(function(r){
@@ -143,7 +144,7 @@ function buildMyPendingManualTasksHTML(){
   const body=(exceptionsHTML||plainHTML)
     ?(exceptionsHTML?'<div class="cockpit-ex-list" style="margin-bottom:'+(plainHTML?'14px':'0')+'">'+exceptionsHTML+'</div>':'')+plainHTML
     :'<div class="cockpit-empty-state">No manual-journey steps are waiting on you right now.</div>';
-  return '<div class="listing-card dash-panel"><div class="dash-panel-head"><div>Journeys Waiting On You</div><span>Live</span></div>'+body+'</div>';
+  return '<div class="dash-panel cockpit-run-panel"><div class="dash-panel-head"><div>Journeys Waiting On You</div></div>'+body+'</div>';
 }
 function buildHRDashboardHTML(){
   return dashHeader('HR Dashboard','Overview of your workforce and HR operations.')
@@ -160,10 +161,10 @@ function buildReportingManagerDashboardHTML(p){
     +'<div class="dash-two-col">'+dashTable('Team Leave Requests',['Employee','Leave Type','Duration','Days','Action'],[['Utkarsh Shukla','Casual Leave','15 - 16 May','2',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['Ashneet Kaur','Sick Leave','18 May','1',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['Sneha Kulkarni','Earned Leave','22 - 23 May','2',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')]],'View all')+dashTable('Pending Expense Claims',['Employee','Amount','Category','Status'],[['Diksha Kumari','Rs 2,400','Travel',statusMini('Pending','pending')],['Pardeep Verga','Rs 850','Office Supplies',statusMini('Pending','pending')],['Deepak Joshi','Rs 5,200','Software',statusMini('Pending','pending')]],'View all')+'</div></div>';
 }
 function buildSalesTeamDashboardHTML(){
+  const queues=dashTable('Proposal Approval Queue',['Proposal','Client','Margin','Action'],[['PRO-5820','Rashi Singh','18%',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['PRO-5824','Nora Kim','Deviation',statusMini('Review','pending')],['PRO-5829','Owen Brooks','21%',statusMini('Approve','approved')]],'View all');
   return dashHeader('Sales Team Dashboard','Track deal desk throughput, proposal approvals, and commercial exceptions.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Team Deals','18','Across Deal Desk',null,dashIcoUser,'contracts')+dashStatNav('Proposals Pending','5','Awaiting manager review','orange',dashIcoDoc)+dashStatNav('Client Responses','7','Due this week','orange',dashIcoDoc)+dashStatNav('Margin Exceptions','2','Need approval','red',dashIcoAlert)+'</div>'
-    +'<div class="dash-actions">'+dashAction('Review Proposal Queue','Check commercial terms and margin policy',dashIcoDoc)+dashAction('Reassign Deal','Move stalled work within Deal Desk',dashIcoUser)+'</div>'
-    +'<div class="dash-two-col">'+dashTable('Deal Desk Queue',['Owner','Client','Current Step','Status'],[['Arjun Vaidya','Rashi Singh','Proposal Approval',statusMini('Approval Required','pending')],['Arjun Vaidya','Rajdeep Singh','Client Acceptance',statusMini('Exception','rejected')],['Neha Sharma','Emma Schmidt','Contract Sent',statusMini('In Progress','pending')]],'<span style="cursor:pointer" onclick="navigatePage(\'contracts\')">View all</span>')+dashTable('Proposal Approval Queue',['Proposal','Client','Margin','Action'],[['PRO-5820','Rashi Singh','18%',statusMini('Approve','approved')+' '+statusMini('Reject','rejected')],['PRO-5824','Nora Kim','Deviation',statusMini('Review','pending')],['PRO-5829','Owen Brooks','21%',statusMini('Approve','approved')]],'View all')+'</div></div>';
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Team Deals','18','Across Deal Desk',null,dashIcoUser,'contracts')+dashStatNav('Proposals Pending','5','Awaiting manager review','orange',dashIcoDoc,null,'toggleSalesTeamQueuePanel()')+dashStatNav('Client Responses','7','Due this week','orange',dashIcoDoc)+dashStatNav('Margin Exceptions','2','Need approval','red',dashIcoAlert)+'</div>'
+    +(salesTeamQueueOpen?queues:'')+'</div>';
 }
 function buildFinanceApprovalDashboardHTML(){
   return dashHeader('Finance Approval Dashboard','Review payroll calculations, disbursements, invoice payments, and financial controls.')
@@ -173,11 +174,13 @@ function buildFinanceApprovalDashboardHTML(){
 }
 function buildComplianceDashboardHTML(){
   return dashHeader('Opendhi Compliance Admin Dashboard','Monitor contract compliance, compliance hub items, payment compliance, and assigned support tasks.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contract Compliance','18','5 blocking payroll readiness','orange',dashIcoDoc,'contracts')+dashStatNav('Compliance Hub Items','26','9 require review','orange',dashIcoShield,'compliance')+dashStatNav('Assigned Support Items','7','3 high priority','orange',dashIcoDoc,'support-tickets')+dashStatNav('Payment Compliance','5','5 pending issues','orange',dashIcoShield,'compliance')+dashStatNav('Payroll Blockers','4','Resolve before payroll run','orange',dashIcoMoney,'payroll')+dashStatNav('Document Verification Pending','9','Documents awaiting review','orange',dashIcoShield,'compliance')+dashStatNav('Expiring Documents','5','Expiring in next 30 days','orange',dashIcoShield,'compliance')+'</div>'
-    +'<div class="dash-actions">'+dashAction('Review Contracts','Check missing clauses, signatures, and document readiness',dashIcoDoc)+dashAction('Compliance Hub','Manage statutory, policy, and document compliance items',dashIcoShield)+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contract Compliance','18','5 blocking payroll readiness','orange',dashIcoDoc,null,'toggleComplianceContractQueuePanel()')+dashStatNav('Compliance Hub Items','26','9 require review','orange',dashIcoShield,null,'toggleComplianceHubItemsPanel()')+dashStatNav('Assigned Support Items','7','3 high priority','orange',dashIcoDoc,null,'toggleComplianceSupportItemsPanel()')+dashStatNav('Payment Compliance','5','5 pending issues','orange',dashIcoShield,'compliance')+dashStatNav('Payroll Blockers','4','Resolve before payroll run','orange',dashIcoMoney,'payroll')+dashStatNav('Document Verification Pending','9','Documents awaiting review','orange',dashIcoShield,'compliance')+dashStatNav('Expiring Documents','5','Expiring in next 30 days','orange',dashIcoShield,'compliance')+'</div>'
     +buildComplianceLiveQueuePanelHTML()
-    +'<div class="dash-two-col">'+dashTable('Contract Compliance Queue',['Employee','Contract Issue','Status','Action'],[['Ramesh Patel','Missing signature',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Priya Sharma','Work permit pending',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Arjun Desai','Clause update required',statusMini('Needs Review','pending'),statusMini('Open','draft')],['Aishi Verma','Contract verified',statusMini('Ready','approved'),statusMini('View','draft')]],'View all')+dashTable('Compliance Hub Items',['Item','Category','Due','Status'],[['Employee KYC review','Documents','Today',statusMini('Pending','pending')],['Local tax registration','Payroll','24 May',statusMini('Blocking','rejected')],['Policy acknowledgment','Policy','26 May',statusMini('Pending','pending')],['Statutory filing check','Entity','31 May',statusMini('Ready','approved')]],'Open hub')+'</div>'
-    +dashTable('Assigned Support Items',['Item','Description','Tag'],[['Payroll blocked by missing Tax ID','John Doe payroll readiness is blocked until Tax ID verification is completed.','Payroll Compliance'],['Work permit document pending','Thijs Verbeek has a pending work authorization document for review.','Contract Compliance']], 'View assigned')
+    +(complianceContractQueueOpen||complianceHubItemsOpen?'<div class="dash-two-col">'
+      +(complianceContractQueueOpen?dashTable('Contract Compliance Queue',['Employee','Contract Issue','Status','Action'],[['Ramesh Patel','Missing signature',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Priya Sharma','Work permit pending',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Arjun Desai','Clause update required',statusMini('Needs Review','pending'),statusMini('Open','draft')],['Aishi Verma','Contract verified',statusMini('Ready','approved'),statusMini('View','draft')]],'View all'):'')
+      +(complianceHubItemsOpen?dashTable('Compliance Hub Items',['Item','Category','Due','Status'],[['Employee KYC review','Documents','Today',statusMini('Pending','pending')],['Local tax registration','Payroll','24 May',statusMini('Blocking','rejected')],['Policy acknowledgment','Policy','26 May',statusMini('Pending','pending')],['Statutory filing check','Entity','31 May',statusMini('Ready','approved')]],'Open hub'):'')
+      +'</div>':'')
+    +(complianceSupportItemsOpen?dashTable('Assigned Support Items',['Item','Description','Tag'],[['Payroll blocked by missing Tax ID','John Doe payroll readiness is blocked until Tax ID verification is completed.','Payroll Compliance'],['Work permit document pending','Thijs Verbeek has a pending work authorization document for review.','Contract Compliance']], 'View assigned'):'')
     +'</div>';
 }
 function buildOpsDashboardHTML(){
@@ -244,7 +247,8 @@ function personaOwnedRunItems(persona){
       const approvalOwner=event&&event.chips&&event.chips.indexOf('Approval Required')>=0;
       const exceptionOwner=run.status==='Exception'&&(owner===persona.id||persona.id==='hr-manager'||persona.id==='finance-approver');
       const waitingOwner=run.status==='Waiting for Approval'&&owner===persona.id&&approvalOwner;
-      if(waitingOwner||exceptionOwner)items.push({run:run,journey:journey,event:event});
+      const directlyNotified=notifiedRunOwners[run.runId]===persona.id&&(run.status==='Exception'||run.status==='Waiting for Approval');
+      if(waitingOwner||exceptionOwner||directlyNotified)items.push({run:run,journey:journey,event:event});
     });
   });
   return items;
@@ -306,8 +310,7 @@ function eaReqPinHTML(stackKey){
 function buildEaRequestStackHTML(stackKey,title,sub,items,cardHTML,emptyText){
   const pin=eaReqPinHTML(stackKey);
   const hostClass='setup-card ea-notice-card'+(pin?' ea-req-pin-host':'');
-  const clip='<div class="ea-notice-hole"></div>';
-  if(!items.length)return '<div class="'+hostClass+'">'+clip+pin+'<div class="setup-title" style="margin-bottom:0">'+title+'</div><div class="setup-sub" style="margin-bottom:0">'+sub+'</div><div class="ea-req-empty">'+emptyText+'</div></div>';
+  if(!items.length)return '';
   const sorted=items.slice().sort(function(a,b){return entityRequestUrgency(b)-entityRequestUrgency(a);});
   const capped=sorted.slice(0,5);
   const extra=sorted.length-capped.length;
@@ -316,7 +319,7 @@ function buildEaRequestStackHTML(stackKey,title,sub,items,cardHTML,emptyText){
     const dot='<span class="ea-stack-dot '+eaUrgencyDotClass(r)+'"></span>';
     return '<div class="ea-req-card" id="'+domIdFor(r)+'" onclick="eaStackOpen(\''+r.id+'\',\''+stackKey+'\')">'+cardHTML(r,dot)+'</div>';
   }).join('');
-  return '<div class="'+hostClass+'">'+clip+pin
+  return '<div class="'+hostClass+'">'+pin
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="setup-title" style="margin-bottom:0">'+title+'</div><button class="btn btn-secondary btn-sm" onclick="navigatePage(\'my-tasks\')">View All</button></div>'
     +'<div class="setup-sub" style="margin-bottom:16px">'+sub+'</div>'
     +'<div class="ea-req-vlist">'+cards+'</div>'
@@ -362,13 +365,18 @@ function buildEntityAdminDashboardHTML(){
     <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
       <div class="stat-card ea-hero-stat cfg-hero-blue" onclick="openEntitySystemsModal()"><div class="stat-label"><span>Systems Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg></div></div><div class="stat-val">${sysActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${sysTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Default systems in use</div></div>
       <div class="stat-card ea-hero-stat cfg-hero-teal" onclick="openEntityJourneysModal()"><div class="stat-label"><span>Journeys Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg></div></div><div class="stat-val">${jyActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${jyTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Available in AI Executive</div></div>
-      <div class="stat-card ea-hero-stat cfg-hero-orange"><div class="stat-label"><span>Pending Requests</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div><div class="stat-val" style="${pending?'color:var(--orange)':''}">${pending}</div><div class="stat-sub" style="color:var(--gray)">Awaiting Super Admin approval</div></div>
+      <div class="stat-card ea-hero-stat cfg-hero-yellow"><div class="stat-label"><span>Pending Requests</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div><div class="stat-val" style="${pending?'color:#b45309':''}">${pending}</div><div class="stat-sub" style="color:var(--gray)">Awaiting Super Admin approval</div></div>
     </div>
-    <div class="ea-stack-cols">
-      ${buildEaRequestStackHTML('requests','Your Requests',"Systems and journeys you've asked Super Admin to activate, plus journeys your Entity Users have asked you to activate",pendingRequests,eaReqCardHTML,'No requests yet — activate a system or journey to see status here.')}
-      ${buildEaRequestStackHTML('notes','Notes from Entity User','Approvals your team has flagged for your attention',pendingNotes,eaNoteCardHTML,'No notes yet — your Entity Users will show up here if they escalate an approval.')}
-    </div>
+    ${buildEaStackColsHTML(pendingRequests,pendingNotes)}
   `;
+}
+function buildEaStackColsHTML(pendingRequests,pendingNotes){
+  const cards=[
+    buildEaRequestStackHTML('requests','Your Requests',"Systems and journeys you've asked Super Admin to activate, plus journeys your Entity Users have asked you to activate",pendingRequests,eaReqCardHTML,'No requests yet — activate a system or journey to see status here.'),
+    buildEaRequestStackHTML('notes','Notes from Entity User','Approvals your team has flagged for your attention',pendingNotes,eaNoteCardHTML,'No notes yet — your Entity Users will show up here if they escalate an approval.')
+  ].filter(Boolean);
+  if(!cards.length)return '';
+  return '<div class="ea-stack-cols'+(cards.length===1?' ea-stack-cols-solo':'')+'">'+cards.join('')+'</div>';
 }
 function openEntitySystemsModal(){
   const rows=cfgSystems.filter(s=>s.isDefault).map(function(s){
@@ -404,11 +412,11 @@ function buildSuperAdminDashboardHTML(){
     const actions=r.status==='Pending'
       ?'<div class="sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="approveEntityRequest(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div>'
       :'<span class="status-pill '+statusClass(r.status)+'">'+r.status+'</span>';
-    return '<div class="ea-req-row"><div class="ea-req-main"><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.requestedBy+'</div></div><div class="ea-req-when">'+eaStackTimeHTML(r.timestamp)+'</div>'+actions+'</div>';
+    return '<div class="ea-req-row ea-req-row-3col"><div class="ea-req-main"><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.requestedBy+'</div></div><div class="ea-req-when">'+eaStackTimeHTML(r.timestamp)+'</div>'+actions+'</div>';
   }).join('');
   const reqBody=visibleRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
   const activityRows=cfgRecentActivity.map(function(a){
-    return '<div class="ea-req-row"><div><div class="ea-req-label">'+a.title+'</div><div class="ea-req-time">'+a.sub+'</div></div><div style="font-family:monospace;font-size:11px;color:var(--gray);white-space:nowrap;flex-shrink:0">'+a.when+'</div></div>';
+    return '<div class="ea-req-row"><div><div class="ea-req-label">'+a.title+'</div><div class="ea-req-time">'+a.sub+'</div></div><div style="font-size:11.5px;font-weight:500;color:var(--gray);white-space:nowrap;flex-shrink:0">'+a.when+'</div></div>';
   }).join('');
   const activityBody=cfgRecentActivity.length?activityRows:'<div class="ea-req-empty">No recent activity yet.</div>';
   return '<div class="ai-exec-page">'
@@ -1562,7 +1570,7 @@ function buildPaymentsHTML(){
       +'<td style="font-weight:600;color:var(--navy)">'+p.name+'</td>'
       +'<td style="color:var(--orange);font-weight:600">'+p.amountDue+'</td>'
       +'<td>'+p.type+'</td>'
-      +'<td><span class="lp-status-badge active" style="background:#dcfce7;color:#16a34a;border:1.5px solid #86efac;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600">'+p.orderStatus+'</span></td>'
+      +'<td><span class="lp-status-badge '+(p.orderStatus==='Onboarding'?'pending':'active')+'">'+p.orderStatus+'</span></td>'
       +'<td onclick="event.stopPropagation()">'+statusBtn+'</td>'
       +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openPmSidebar('+p.id+')" title="More actions">'+dotsIco+'</button></td>'
       +'</tr>';
@@ -1644,14 +1652,14 @@ function ctToggleStatFilter(v){
   renderADTPage();
 }
 function openCtSidebar(id,tab,pendingStatus){
-  ctSelectedId=id;ctTab=tab||'basic-details';ctCommercialEditMode=false;
+  ctSelectedId=id;ctTab=tab||'basic-details';ctCommercialEditMode=false;ctSecondOpinionRejectMode=false;
   if(pendingStatus)window._ctPendingStatus=pendingStatus;else delete window._ctPendingStatus;
   const sb=document.getElementById('ct-split-sb');if(sb)sb.classList.add('open');
   const inner=document.getElementById('ct-isb-inner');if(inner)inner.innerHTML=renderCtSidebar();
   document.querySelectorAll('.ct-row').forEach(r=>r.classList.toggle('lp-row-selected',r.id==='ct-row-'+id));
 }
 function closeCtSidebar(){
-  ctSelectedId=null;ctCommercialEditMode=false;delete window._ctPendingStatus;
+  ctSelectedId=null;ctCommercialEditMode=false;ctSecondOpinionRejectMode=false;delete window._ctPendingStatus;
   const sb=document.getElementById('ct-split-sb');if(sb)sb.classList.remove('open');
   document.querySelectorAll('.ct-row').forEach(r=>r.classList.remove('lp-row-selected'));
 }
@@ -1659,7 +1667,7 @@ function refreshCtSidebar(){
   const inner=document.getElementById('ct-isb-inner');
   if(inner)inner.innerHTML=renderCtSidebar();
 }
-function navCtTab(tab){ctTab=tab;ctCommercialEditMode=false;const inner=document.getElementById('ct-isb-inner');if(inner){inner.innerHTML=renderCtSidebar();requestAnimationFrame(function(){const nt=document.getElementById('ct-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
+function navCtTab(tab){ctTab=tab;ctCommercialEditMode=false;ctSecondOpinionRejectMode=false;const inner=document.getElementById('ct-isb-inner');if(inner){inner.innerHTML=renderCtSidebar();requestAnimationFrame(function(){const nt=document.getElementById('ct-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
 function saveCtCommercialEdit(){
   const c=contractsData.find(x=>x.id===ctSelectedId);if(!c)return;
   ['adtFee','annualGross','baseGross','holidayBonus','month13','monthlyGrossNet','monthlyInvoice','monthlySalary12','monthlySalary1392','netPay','socialPremAmt','socialPremPct','totalMonthlyGross'].forEach(function(key){
@@ -1709,6 +1717,33 @@ function openCtModal(id){
   document.getElementById('ct-modal-overlay').style.display='flex';
 }
 function closeCtModal(){document.getElementById('ct-modal-overlay').style.display='none';}
+function ctSecondOpinionReviewPanelHTML(c,req){
+  if(ctSecondOpinionRejectMode){
+    return '<div class="lp-logs-form">'
+      +'<div class="lp-logs-form-header" style="color:#ef4444"><span style="width:9px;height:9px;border-radius:50%;background:#ef4444;display:inline-block;flex-shrink:0"></span>Reject Proposal</div>'
+      +'<p class="lp-logs-form-sub">Let '+req.requestedBy+' know why this proposal is being rejected.</p>'
+      +'<div class="lp-logs-form-label">Note <span class="lp-logs-form-req">*</span></div>'
+      +'<textarea class="lp-logs-form-textarea" id="ct-reject-note-'+c.id+'" placeholder="Add a note explaining the rejection..."></textarea>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button class="ep-cancel-btn" style="flex:1" onclick="ctRejectSecondOpinionCancel()">Cancel</button>'
+      +'<button class="sa-req-btn sa-req-reject" style="flex:1;padding:9px;font-size:13px" onclick="ctRejectSecondOpinionSubmit('+c.id+')">Submit Rejection</button>'
+      +'</div></div>';
+  }
+  return '<div class="lp-logs-form">'
+    +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:#f59e0b;display:inline-block;flex-shrink:0"></span>Second Opinion Requested</div>'
+    +'<p class="lp-logs-form-sub">'+req.requestedBy+' flagged this proposal for your review: &ldquo;'+req.note+'&rdquo;</p>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="sa-req-btn sa-req-approve" style="flex:1;padding:9px;font-size:13px" onclick="ctApproveSecondOpinion('+c.id+')">Approve</button>'
+    +'<button class="sa-req-btn sa-req-reject" style="flex:1;padding:9px;font-size:13px" onclick="ctRejectSecondOpinionOpen('+c.id+')">Reject</button>'
+    +'</div></div>';
+}
+function ctSecondOpinionResolvedPanelHTML(req){
+  const approved=req.status==='Approved';
+  return '<div class="lp-logs-form">'
+    +'<div class="lp-logs-form-header" style="color:'+(approved?'#16a34a':'#ef4444')+'"><span style="width:9px;height:9px;border-radius:50%;background:'+(approved?'#16a34a':'#ef4444')+';display:inline-block;flex-shrink:0"></span>'+(approved?'Proposal Approved':'Proposal Rejected')+'</div>'
+    +'<p class="lp-logs-form-sub">'+(approved?'You approved this proposal after reviewing the margin.':'You rejected this proposal.'+(req.resolutionNote?' Note sent: &ldquo;'+req.resolutionNote+'&rdquo;':''))+'</p>'
+    +'</div>';
+}
 function renderCtSidebar(){
   const c=contractsData.find(x=>x.id===ctSelectedId);if(!c)return '';
   const tabs=[{id:'basic-details',label:'Basic Details'},{id:'commercial-terms',label:'Commercial Terms'},{id:'compliance',label:'Compliance'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
@@ -1799,14 +1834,39 @@ function renderCtSidebar(){
         +'<td style="'+tdS+';font-weight:600">'+ci.item+'</td>'
         +'<td style="'+tdS+';font-weight:500">'+ci.note+'</td>'
         +'<td style="'+tdS+'">'+ci.status+'</td>'
-        +'<td style="'+tdS+'"><span style="color:var(--navy);font-size:12px;cursor:pointer">Upload your document</span></td>'
-        +'<td style="'+tdS+'"><button style="border:none;background:none;cursor:pointer;color:var(--navy);padding:0" title="Upload">'+upIco+'</button></td>'
+        +'<td style="'+tdS+'">'+(ci.doc?'<span style="color:#16a34a;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'+ci.doc+'</span>':'<span style="color:var(--navy);font-size:12px;cursor:pointer" onclick="ctUploadComplianceDoc('+c.id+','+i+')">Upload your document</span>')+'</td>'
+        +'<td style="'+tdS+'"><button style="border:none;background:none;cursor:pointer;color:var(--navy);padding:0" title="Upload" onclick="ctUploadComplianceDoc('+c.id+','+i+')">'+upIco+'</button></td>'
         +'</tr>').join('')
       +'</tbody></table>';
     // -- If this contract has a live journey run currently sitting on a compliance-type step, surface the action here instead of the standalone modal, gated to whoever owns that step. --
     const linkedRun=manualJourneyRuns.find(function(r){return r.contractRecordId===c.id&&r.status!=='Completed';});
     let actionSection='';
-    if(linkedRun){
+    if(c.missingCountryConfig){
+      const countryOpts='<option value="">Select country</option>'+Object.keys(aiH2rCountryData).map(function(name){return '<option value="'+name+'"'+(c.country===name?' selected':'')+'>'+name+'</option>';}).join('');
+      const missingItem=(c.complianceItems||[])[0]||{};
+      const checklistDefs=[
+        'Confirmed the correct country of operation for '+(c.empName||'the employee'),
+        'Attached the missing statutory requirement document for '+(c.country||'this country'),
+        'Reviewed the configuration against current Compliance Hub rules'
+      ];
+      const checklistHTML=checklistDefs.map(function(t){return '<label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--navy);margin-bottom:8px;cursor:pointer"><input type="checkbox" class="mcc-resolve-check" style="margin-top:2px"> '+t+'</label>';}).join('');
+      const docStatusHTML=missingItem.doc
+        ?'<span style="color:#16a34a;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'+missingItem.doc+' attached</span>'
+        :'<span style="color:#7f1d1d;font-size:12.5px">No supporting document attached yet</span>';
+      actionSection='<div class="ep-form-card" style="margin-bottom:16px;border-color:#fca5a5;background:#fef2f2">'
+        +'<div class="ep-form-title" style="margin-bottom:4px;color:#991b1b;border:none;padding-bottom:0">Missing Country Configuration</div>'
+        +'<div style="font-size:12px;color:#7f1d1d;margin-bottom:12px">Compliance Hub could not return statutory requirements for '+(c.country||'this country')+'. Select the country, attach the missing document, and complete the checklist to resolve this exception.</div>'
+        +'<div class="ep-form-group"><label class="ep-form-label">Country of Operation</label><select class="ep-form-select" id="ct-country-config-'+c.id+'">'+countryOpts+'</select></div>'
+        +'<div style="margin-top:8px;padding:10px 12px;border:1px dashed #fca5a5;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff">'
+        +docStatusHTML
+        +'<button type="button" class="btn btn-secondary" style="padding:6px 14px;font-size:12px" onclick="ctUploadComplianceDoc('+c.id+',0)">Upload Missing File</button>'
+        +'</div>'
+        +'<div style="margin-top:14px"><div style="font-size:11.5px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Resolution Checklist</div>'
+        +checklistHTML
+        +'</div>'
+        +'<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="resolveMissingCountryConfig('+c.id+')">Resolve &amp; Save Country Configuration</button></div>'
+        +'</div>';
+    }else if(linkedRun){
       const linkedSteps=manualJourneySteps(linkedRun.journeyId);
       const curStep=linkedSteps[linkedRun.currentStepIdx];
       if(curStep&&curStep.modulePage==='compliance'){
@@ -1832,7 +1892,7 @@ function renderCtSidebar(){
     body=actionSection+itemsTable;
   }else if(ctTab==='logs'){
     const logs=ctLogsData[c.id]||[];
-    const ctLogKey=(s)=>({Submitted:'default','Quotation Approved':'active','Proposal Sent':'active','Proposal Approved':'active','Contract Sent':'active','Contract Signed':'active','Contract Approved':'active',Inactive:'inactive'}[s]||'default');
+    const ctLogKey=(s)=>({Submitted:'default','Quotation Approved':'active','Proposal Sent':'active','Proposal Approved':'active','Contract Sent':'active','Contract Signed':'active','Contract Approved':'active',Inactive:'inactive','Second Opinion Requested':'active','Proposal Rejected':'inactive'}[s]||'default');
     const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
     const clkSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
@@ -1851,7 +1911,12 @@ function renderCtSidebar(){
     const pendingStatus=window._ctPendingStatus||ctNextStep(c.status);
     let actionPanel='';
     const upIcoLg='<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
-    if(pendingStatus==='Contract Approved'){
+    const linkedSecondOpinion=entityRequests.find(function(r){return r.type==='manager-notify'&&r.contractRecordId===c.id;});
+    if(linkedSecondOpinion&&linkedSecondOpinion.status==='Pending'){
+      actionPanel=ctSecondOpinionReviewPanelHTML(c,linkedSecondOpinion);
+    }else if(linkedSecondOpinion&&linkedSecondOpinion.status!=='Pending'){
+      actionPanel=ctSecondOpinionResolvedPanelHTML(linkedSecondOpinion);
+    }else if(pendingStatus==='Contract Approved'){
       actionPanel='<div class="lp-logs-form">'
         +'<div class="lp-logs-form-header" style="color:#16a34a"><span style="width:9px;height:9px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0"></span>Contract Approved</div>'
         +'<p class="lp-logs-form-sub">Contract has been signed and approved. View the contract details and confirm.</p>'
@@ -2338,28 +2403,40 @@ function buildContractsListingHTML(){
   const types=[...new Set(contractsData.map(c=>c.type))];
   const dotsIco='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const filteredContracts=ctQuickStatusFilter?contractsData.filter(c=>c.status===ctQuickStatusFilter):contractsData;
+  const chevIco='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
+  const checkIco='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
   const rows=filteredContracts.map((c,ctIdx)=>{
     const flowIdx=ctFlow.indexOf(c.status);
     const menuItems=ctFlow.map((step,i)=>{
       const isDone=flowIdx>i;
       const isCurrent=flowIdx===i;
       const cls=isDone?'done':isCurrent?'current':'next';
-      const stepCls=isDone?'done':isCurrent?'current':'next';
-      const checkIco=isDone?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>':(i+1);
+      const ico=isDone?checkIco:(i+1);
       const click=(!isDone&&!isCurrent)?'onclick="ctPickStatus('+c.id+',\''+step+'\')"':'';
-      return '<div class="ct-act-item '+cls+'" '+click+'><span class="ct-act-step '+stepCls+'">'+checkIco+'</span>'+step+'</div>';
+      return '<div class="ct-act-item '+cls+'" '+click+'><span class="ct-act-step '+cls+'">'+ico+'</span>'+step+'</div>';
     }).join('');
     const btnLabel=c.status.length>12?c.status.slice(0,10)+'…':c.status;
-    // -- Rows created through the persona-gated journey (c.manualRunId) can only progress through that flow, not the free-form status dropdown below, so show a read-only current-step readout instead. --
+    // -- Rows created through the persona-gated journey (c.manualRunId) can only progress through that flow, not the free-form status dropdown below, so the button opens a read-only journey-progress menu (no ctPickStatus clicks) instead of letting the step be changed directly. --
     const linkedRun=c.manualRunId?getManualRun(c.manualRunId):null;
-    const linkedStep=linkedRun?(manualJourneySteps(linkedRun.journeyId)[linkedRun.currentStepIdx]||{}):null;
+    const linkedSteps=linkedRun?manualJourneySteps(linkedRun.journeyId):[];
+    const linkedStep=linkedRun?(linkedSteps[linkedRun.currentStepIdx]||{}):null;
+    const linkedLabel=linkedRun?(linkedRun.status==='Completed'?'Completed':(linkedStep.name||linkedRun.status)):'';
+    const linkedBtnLabel=linkedLabel.length>16?linkedLabel.slice(0,14)+'…':linkedLabel;
+    const linkedMenuItems=linkedRun?linkedSteps.map((step,i)=>{
+      const isDone=linkedRun.status==='Completed'||linkedRun.currentStepIdx>i;
+      const isCurrent=linkedRun.status!=='Completed'&&linkedRun.currentStepIdx===i;
+      const cls=isDone?'done':isCurrent?'current':'next';
+      const ico=isDone?checkIco:(i+1);
+      return '<div class="ct-act-item '+cls+'"><span class="ct-act-step '+cls+'">'+ico+'</span>'+step.name+'</div>';
+    }).join(''):'';
     const actionBtn=linkedRun
-      ?'<div class="ct-action-wrap" style="display:flex;align-items:center;gap:8px;justify-content:flex-end">'
-        +'<div style="text-align:right"><div class="cell-primary" style="font-size:12.5px">'+(linkedRun.status==='Completed'?'Completed':(linkedStep.name||linkedRun.status))+'</div>'+(linkedRun.status==='Completed'?'':'<div class="cell-sub">'+(linkedStep.ownerRole||'')+'</div>')+'</div>'
+      ?'<div class="ct-action-wrap">'
+        +'<button class="ct-action-btn" title="'+(linkedRun.status==='Completed'?'':(linkedStep.ownerRole||''))+'" onclick="toggleCtAction('+c.id+',event)"><span>'+linkedBtnLabel+'</span>'+chevIco+'</button>'
         +'<button class="ct-dots-btn" onclick="openCtSidebar('+c.id+',\'basic-details\');event.stopPropagation()">'+dotsIco+'</button>'
+        +'<div class="ct-action-menu" id="ctm-'+c.id+'">'+linkedMenuItems+'</div>'
         +'</div>'
       :'<div class="ct-action-wrap">'
-        +'<button class="ct-action-btn" onclick="toggleCtAction('+c.id+',event)"><span>'+btnLabel+'</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></button>'
+        +'<button class="ct-action-btn" onclick="toggleCtAction('+c.id+',event)"><span>'+btnLabel+'</span>'+chevIco+'</button>'
         +'<button class="ct-dots-btn" onclick="openCtSidebar('+c.id+',\'basic-details\');event.stopPropagation()">'+dotsIco+'</button>'
         +'<div class="ct-action-menu" id="ctm-'+c.id+'">'+menuItems+'</div>'
         +'</div>';
@@ -2394,7 +2471,7 @@ function buildContractsListingHTML(){
     +'</div></div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr>'
-    +'<th>S.No</th><th>Contract ID</th><th>Employee Name</th><th>Country</th><th>Type</th><th>Compliance</th><th>Date</th><th>Status</th><th>Action</th>'
+    +'<th>S.No</th><th>Contract ID</th><th>Employee Name</th><th>Country</th><th>Type</th><th>Compliance</th><th>Date</th><th>Status</th><th style="text-align:right">Action</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table>'
     +'<div class="lp-pagination">'
     +'<span class="lp-pagination-info">Showing 1–'+filteredContracts.length+' of '+contractsData.length+' entries</span>'
@@ -3113,7 +3190,7 @@ function buildAllTimesheetHTML(){
     +'<button class="lp-pill-search">Search</button>'
     +'</div></div>'
     +'<div class="listing-stats">'
-    +'<div class="listing-stat'+(atTsQuickFilter==='Unfilled'?' stat-selected':'')+'" onclick="atToggleTsFilter(\'Unfilled\')"><div class="listing-stat-count" style="color:var(--orange)">'+unfilled+'</div><div class="listing-stat-label">Unfilled</div></div>'
+    +'<div class="listing-stat'+(atTsQuickFilter==='Unfilled'?' stat-selected':'')+'" onclick="atToggleTsFilter(\'Unfilled\')"><div class="listing-stat-count" style="color:#b45309">'+unfilled+'</div><div class="listing-stat-label">Unfilled</div></div>'
     +'<div class="listing-stat'+(atTsQuickFilter==='Filled'?' stat-selected':'')+'" onclick="atToggleTsFilter(\'Filled\')"><div class="listing-stat-count" style="color:#0d9488">'+filled+'</div><div class="listing-stat-label">Filled</div></div>'
     +'<div class="listing-stat'+(atTsQuickFilter===''?' stat-selected':'')+'" onclick="atToggleTsFilter(\'\')"><div class="listing-stat-count" style="color:var(--navy)">'+total+'</div><div class="listing-stat-label">Total</div></div>'
     +'</div>'
@@ -3644,7 +3721,7 @@ function buildMyProfileHTML(){
       <td style="padding:10px 14px;font-size:13px;font-weight:600;color:var(--navy)">${m}</td>
       <td style="padding:10px 14px;font-size:13px;color:#374151">Pallavi Parate</td>
       <td style="padding:10px 14px;font-size:13px;color:#374151">EMP-00211</td>
-      <td style="padding:10px 14px"><span style="background:#f0fdf4;color:#16a34a;border:1.5px solid #86efac;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600">Generated</span></td>
+      <td style="padding:10px 14px"><span style="background:#f0fdf4;color:#16a34a;border:1.5px solid #86efac;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600">Generated</span></td>
       <td style="padding:10px 14px"><button style="display:flex;align-items:center;gap:5px;background:none;border:1.5px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--navy);cursor:pointer;font-family:inherit">${iDl} Download</button></td>
     </tr>`).join('');
     tabContent=`<div class="ep-form-card">
@@ -4516,7 +4593,8 @@ function cockpitQueueItems(activeRuns){
 }
 function buildOperationsCockpitHTML(){
   const activeRuns=manualJourneyRuns.filter(function(r){return r.status!=='Completed';}).concat(aiAllPendingRuns().map(function(x){
-    return {runId:x.run.runId,journeyId:x.journey.id,subject:x.run.client,entity:'Dhi Hyperlocal',mode:'Agent',currentStepIdx:x.run.currentStepIdx,status:x.run.status,slaRisk:x.run.status==='Exception'?'High':'Medium',blockedReason:x.run.exceptionNote||'Approval required',escalation:x.run.status==='Exception'?'Entity Admin in 2h':'None',manualHours:0,agentEstimateHours:0,exceptions:x.run.status==='Exception'?[{type:'Agent exception',ownerRole:'Entity Admin',status:'Open',suggestedResolution:x.run.exceptionNote||'Review run detail.'}]:[],audit:['Agentic run tracked from existing automation flow']};
+    const ownerRole=x.run.ownerRole||'Entity Admin';
+    return {runId:x.run.runId,journeyId:x.journey.id,subject:x.run.client,entity:'Dhi Hyperlocal',mode:'Agent',currentStepIdx:x.run.currentStepIdx,status:x.run.status,slaRisk:x.run.status==='Exception'?'High':'Medium',blockedReason:x.run.exceptionNote||'Approval required',escalation:x.run.status==='Exception'?'Entity Admin in 2h':'None',manualHours:0,agentEstimateHours:0,contractRecordId:x.run.contractRecordId,exceptions:x.run.status==='Exception'?[{type:'Agent exception',ownerRole:ownerRole,status:'Open',suggestedResolution:x.run.exceptionNote||'Review run detail.'}]:[],audit:['Agentic run tracked from existing automation flow']};
   }));
   const blocked=activeRuns.filter(cockpitRunNeedsAttention).length;
   const openExceptionCount=activeRuns.reduce(function(sum,r){return sum+(r.exceptions||[]).filter(function(e){return e.status==='Open';}).length;},0);
@@ -4611,8 +4689,9 @@ function exceptionQueueCardHTML(x,opts){
   const isManual=String(r.runId).indexOf('MAN-')===0;
   const dept=cockpitRunOwnerDepartment(r);
   const isException=x.kind==='exception';
+  const linkedContract=(!isManual&&r.contractRecordId)?contractsData.find(function(cc){return cc.id===r.contractRecordId;}):null;
   const resolveAction=isException
-    ?(isManual?'openExceptionResolver(\''+r.runId+'\','+x.idx+')':'openExceptionResolver(\''+r.runId+'\','+x.idx+',\''+r.journeyId+'\')')
+    ?(isManual?'openExceptionResolver(\''+r.runId+'\','+x.idx+')':(linkedContract?"navigatePage('contracts');openCtSidebar("+linkedContract.id+",'compliance')":'openExceptionResolver(\''+r.runId+'\','+x.idx+',\''+r.journeyId+'\')'))
     :'openCockpitRun(\''+r.runId+'\',\''+r.journeyId+'\')';
   const resolveLabel=isException?(isManual?'Resolve':'Review &amp; Resolve'):'Review &amp; Approve';
   const kindTag=isException?'':'<span class="cockpit-ex-kind">Approval</span>';
@@ -4633,7 +4712,7 @@ function exceptionQueueCardHTML(x,opts){
     :'<span class="cockpit-ex-dept" onclick="event.stopPropagation();openCockpitDepartmentDetail(\''+dept.toLowerCase()+'\')">'+dept+'</span>';
   const cardClick=opts.cardClick||('openCockpitRunSidebar(\''+r.runId+'\')');
   return '<div class="cockpit-ex-card" onclick="'+cardClick+'">'
-    +'<div class="cockpit-ex-left"><span class="cockpit-ex-indicator '+sev.toLowerCase()+'"></span><div><div class="cockpit-ex-title">'+newFlag+x.title+kindTag+'</div><div class="cockpit-ex-meta"><span>'+r.runId+'</span><span>'+r.mode+'</span>'+deptEl+'<span>'+(r.subject||'—')+'</span>'+escalationTag+'</div><div class="cockpit-ex-resolution">'+x.resolution+'</div></div></div>'
+    +'<div class="cockpit-ex-left"><div><div class="cockpit-ex-title">'+newFlag+x.title+kindTag+'</div><div class="cockpit-ex-meta"><span>'+r.runId+'</span><span>'+r.mode+'</span>'+deptEl+'<span>'+(r.subject||'—')+'</span>'+escalationTag+'</div><div class="cockpit-ex-resolution">'+x.resolution+'</div></div></div>'
     +'<div class="cockpit-ex-actions">'+notifyBtn+'<button class="btn btn-primary btn-sm cockpit-ex-btn" onclick="event.stopPropagation();'+resolveAction+'">'+resolveLabel+'</button></div>'
     +'</div>';
 }
@@ -4930,6 +5009,53 @@ function confirmComplianceResolve(runId){
   const note=noteEl?noteEl.value.trim():'';
   resolveComplianceStepFromDashboard(runId,note);
   closeCtModal();
+}
+// -- Simulated document upload for a contract's compliance item: no real backend, just records the chosen file name on the item so the Compliance tab and resolution checks can react to it. --
+function ctUploadComplianceDoc(contractId,itemIdx){
+  const c=contractsData.find(function(x){return x.id===contractId;});if(!c)return;
+  const ci=(c.complianceItems||[])[itemIdx];if(!ci)return;
+  const input=document.createElement('input');
+  input.type='file';
+  input.onchange=function(){
+    const file=input.files&&input.files[0];
+    if(!file)return;
+    ci.doc=file.name;
+    if(ci.status==='Missing')ci.status='Uploaded';
+    refreshCtSidebar();
+    if(typeof showAiToast==='function')showAiToast('Document uploaded',file.name+' attached to '+ci.item+'.');
+  };
+  input.click();
+}
+// -- Resolves an "Agent exception" caused by Compliance Hub failing to return country config: fills Country of Operation, clears the compliance item, and closes out the underlying AI run so it drops off the cockpit exception queue. --
+function resolveMissingCountryConfig(contractId){
+  const c=contractsData.find(function(x){return x.id===contractId;});if(!c)return;
+  const sel=document.getElementById('ct-country-config-'+contractId);
+  const country=sel?sel.value:'';
+  if(!country){if(typeof showAiToast==='function')showAiToast('Select a country','Choose a country before resolving.');return;}
+  const item=(c.complianceItems||[]).find(function(ci){return ci.status==='Missing'||ci.status==='Uploaded';});
+  if(!item||!item.doc){if(typeof showAiToast==='function')showAiToast('Document required','Upload the missing statutory requirement document before resolving.');return;}
+  const checks=[].slice.call(document.querySelectorAll('.mcc-resolve-check'));
+  if(checks.length&&checks.some(function(x){return !x.checked;})){
+    if(typeof showAiToast==='function')showAiToast('Checklist incomplete','Confirm every item on the resolution checklist before resolving.');
+    return;
+  }
+  c.countryOfOp=country;
+  c.missingCountryConfig=false;
+  if(item){item.status='Resolved';item.note='Statutory requirements configured for '+country+'.';}
+  const now=new Date();
+  const dateStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  const timeStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  (ctLogsData[contractId]=ctLogsData[contractId]||[]).unshift({date:dateStr,time:timeStr,user:'Compliance Officer',status:'Resolved',action:'Country configuration for '+country+' added; statutory requirements now available.'});
+  (ctWorkflowData[contractId]=ctWorkflowData[contractId]||[]).unshift({title:'Country Configuration Resolved',user:'Compliance Officer',date:dateStr,time:timeStr,description:'Missing country configuration resolved for '+country+'.'});
+  Object.keys(aiAutomationRuns).forEach(function(jid){
+    (aiAutomationRuns[jid]||[]).forEach(function(r){
+      if(r.contractRecordId===contractId&&r.status==='Exception'){
+        r.status='Active';r.lastActivity='Just now';delete r.exceptionNote;
+      }
+    });
+  });
+  refreshCtSidebar();
+  if(typeof showAiToast==='function')showAiToast('Country configuration resolved','Statutory requirements for '+country+' have been configured.');
 }
 
 function buildAIResponsibilitySplitHTML(journeyId){
@@ -5745,14 +5871,7 @@ function journeyModeBadgeHTML(journeyId){
 }
 function enableAgentToggleHTML(journeyId,small){
   const on=isJourneyAgentEnabled(journeyId);
-  return '<button class="agent-toggle '+(on?'on':'')+(small?' small':'')+'" onclick="event.stopPropagation();toggleJourneyAgent(\''+journeyId+'\')" title="'+(on?'Disable agent mode':'Enable agent mode')+'"><span class="agent-toggle-track"></span><span class="agent-toggle-label">'+(on?'On':'Off')+'</span></button>';
-}
-function stepAgentToggleHTML(journeyId,idx){
-  const st=manualJourneySteps(journeyId)[idx];
-  const disabled=!st||st.approvalRequired||!st.agentCapable;
-  const on=isStepAgentEnabled(journeyId,idx);
-  if(disabled)return '';
-  return '<button class="agent-toggle small '+(on?'on':'')+(disabled?' disabled':'')+'" '+(disabled?'disabled':'onclick="event.stopPropagation();toggleJourneyStepAgent(\''+journeyId+'\','+idx+')"')+' title="'+(disabled?'Human approval steps always remain manual':'Enable Agent for this step')+'"><span class="agent-toggle-track"></span><span class="agent-toggle-label">'+(on?'On':'Off')+'</span></button>';
+  return '<button class="agent-toggle '+(on?'on':'')+(small?' small':'')+'" onclick="event.stopPropagation();toggleJourneyAgent(\''+journeyId+'\')" title="'+(on?'Disable agent mode':'Enable agent mode')+'"><span class="agent-toggle-track"><span class="agent-toggle-label off-label">Disable</span><span class="agent-toggle-knob"></span><span class="agent-toggle-label on-label">Enable</span></span></button>';
 }
 function journeyActivationBadgeHTML(journeyId,locked,isRoadmap){
   if(locked)return '<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>';
@@ -5780,8 +5899,6 @@ function buildCfgContextJourneyHTML(){
     const isRoadmap=!!j.locked;
     const locked=isRoadmap&&portalRole!=='super-admin';
     const superAdminUnconfigured=isRoadmap&&portalRole==='super-admin';
-    const canConfigure=!locked;
-    const showJourneyActions=portalRole!=='super-admin';
     const clickAttr=locked?'':(superAdminUnconfigured?' style="cursor:pointer" onclick="openLockedJourneyModal(\''+j.id+'\')"':' onclick="viewCfgJourney(\''+j.id+'\')"');
     return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+clickAttr+'>'
       +'<div class="cfg-journey-main">'
@@ -5789,8 +5906,7 @@ function buildCfgContextJourneyHTML(){
       +'<div class="ai-journey-desc cfg-journey-desc">'+j.desc+'</div>'
       +'<div class="cfg-journey-tags">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
       +'</div>'
-      +(canConfigure&&showJourneyActions?'<div class="cfg-journey-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,false)+'</div></div>':'')
-      +(locked?'':'<span class="cfg-journey-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>')
+      +(locked?'':'<span class="cfg-journey-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
   const showCatFilter=portalRole==='super-admin';
@@ -5821,20 +5937,17 @@ function buildCfgJourneyDetailHTML(){
       ?'<span class="badge" style="margin-left:6px">Human approval required</span>'
       :!agentOn
         ?''
-        :assign
-        ?'<span class="badge" style="margin-left:6px">Agent: '+assign.agent+'</span>'
-        :rec
-          ?'<span class="badge cfg-agent-recommend" style="margin-left:6px" onclick="event.stopPropagation();assignRecommendedAgent(\''+j.id+'\','+i+')">&#10024; Recommended: '+rec.name+' &mdash; click to assign</span>'
+        :(assign||rec)
+          ?'<span class="badge" style="margin-left:6px">Agent: '+(assign?assign.agent:rec.name)+'</span>'
           :'<span class="badge" style="margin-left:6px">No agent assigned yet</span>';
     const stepMode=canShowAgent&&isStepAgentEnabled(j.id,manualIdx)?'<span class="manual-step-mode agent">Agent step</span>':'<span class="manual-step-mode">Manual step</span>';
     const ownerLabel=manualStep.ownerRole||'Owner TBD';
-    const agentControl=canShowAgent?'<div class="cfg-step-agent-control"><span>Agent</span>'+stepAgentToggleHTML(j.id,manualIdx)+'</div>':'';
     return '<div class="ai-timeline-item cfg-step-item">'
       +'<div class="ai-timeline-dot">'+(i+1)+'</div>'
       +'<div class="ai-timeline-card cfg-step-card" onclick="openCfgStepDrawer(\''+j.id+'\','+i+')">'
       +'<div class="cfg-step-head"><div class="cfg-step-title-wrap"><div class="ai-timeline-card-title">'+st.name+'</div><div class="ai-timeline-card-desc">'+st.src+'</div></div><span class="cfg-owner-pill">'+ownerLabel+'</span></div>'
       +'<div class="cfg-step-meta"><span>Module: '+(manualStep.modulePage?manualModuleLabel(manualStep.modulePage):'Not mapped')+'</span><span>SLA: '+(manualStep.sla||'TBD')+'</span></div>'
-      +'<div class="cfg-step-footer"><div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+stepMode+'</div>'+agentControl+'</div>'
+      +'<div class="cfg-step-footer"><div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+stepMode+'</div></div>'
       +'</div></div>';
   }).join('');
   const totalSteps=j.steps.length;
@@ -5853,7 +5966,7 @@ function buildCfgJourneyDetailHTML(){
     +statGrid
     +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
     +buildAIResponsibilitySplitHTML(j.id)
-    +'<div class="review-title" style="margin:32px 0 14px">Flow &middot; runs top to bottom &middot; click a step to assign an agent</div>'
+    +'<div class="review-title" style="margin:32px 0 14px">Flow &middot; runs top to bottom &middot; click a step to view its assigned agent</div>'
     +'<div class="ai-timeline">'+timeline+'</div>'
     +'<button class="btn btn-secondary btn-sm" style="margin-top:16px;margin-left:44px;border-style:dashed">+ Add step</button>'
     +'</div>';
@@ -5878,48 +5991,24 @@ function renderCfgStepDrawer(){
   const agentOn=isJourneyAgentEnabled(j.id);
   const canShowAgent=agentOn&&!isHuman&&manualStep.agentCapable&&!manualStep.approvalRequired;
   const rec=(!assign.agent&&canShowAgent)?cfgRecommendedAgentForStep(st):null;
-  const defaultAgent=assign.agent||(rec?rec.name:'');
-  const recBanner=rec?'<div class="info-box tip" style="margin-bottom:14px"><div class="ib-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg></div><div><strong>Recommended: '+rec.name+'</strong>This agent already handles this exact step.<div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="assignRecommendedAgent(\''+j.id+'\','+cfgDrawerStepIdx+');closeCfgStepDrawer()">Use this agent</button></div></div></div>':'';
+  const displayAgent=assign.agent||(rec?rec.name:'');
   const header='<div class="ct-modal-hdr"><span class="ct-modal-title">'+st.name+'</span><button class="ct-modal-close" onclick="closeCfgStepDrawer()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
   const body='<div class="review-section"><div class="review-title">Step Source</div><p style="font-size:12.5px;color:var(--navy);line-height:1.6">'+st.src+'</p></div>'
     +(isHuman
       ?'<div class="review-section" style="border-color:#93c5fd;background:#eff6ff"><div class="review-title" style="color:#1d4ed8">Human approval required</div><p style="font-size:12.5px;color:#1d4ed8;line-height:1.6">This step is governed by a rule and routes to a human for sign-off before the journey continues.</p></div>'
       :!canShowAgent
         ?'<div class="review-section"><div class="review-title">Manual step</div><p style="font-size:12.5px;color:var(--gray);line-height:1.6">'+(agentOn?'No agent is available for this step, so it remains manual.':'Enable Agent at journey level to configure agent-capable steps. Until then, this step stays manual.')+'</p></div>'
-      :'<div class="review-section">'
-        +'<div class="review-title">Assign agent &amp; governance</div>'
-        +recBanner
-        +'<div class="ep-form-group" style="margin-bottom:12px"><label class="ep-form-label">Agent</label><select class="ep-form-select" id="cfg-step-agent-sel">'
-        +'<option value="">Unassigned</option>'
-        +cfgAgents.map(function(a){return '<option value="'+a.name+'"'+(defaultAgent===a.name?' selected':'')+'>'+a.name+'</option>';}).join('')
-        +'</select></div>'
-        +'<div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin-bottom:14px">Governance: the assigned agent reads this step\'s allowed actions and failure handling from its governance file before it can act.</div>'
-        +'<button class="btn btn-primary btn-sm" onclick="saveCfgStepAssignment(\''+j.id+'\','+cfgDrawerStepIdx+')">Save assignment</button>'
-        +'</div>');
+      :displayAgent
+        ?'<div class="review-section"><div class="review-title">Assigned Agent<button class="btn btn-secondary btn-sm" onclick="viewCfgAgentSkillByName(\''+displayAgent.replace(/'/g,"\\'")+'\')">Rules</button></div>'
+          +'<p style="font-size:13px;color:var(--navy);font-weight:600;margin:0">'+displayAgent+'</p>'
+          +'</div>'
+        :'<div class="review-section"><div class="review-title">No agent assigned</div><p style="font-size:12.5px;color:var(--gray);line-height:1.6">No agent is currently mapped to this step.</p></div>');
   return '<div class="ct-modal" style="width:min(600px,92vw)" onclick="event.stopPropagation()">'+header+body+'</div>';
-}
-function saveCfgStepAssignment(journeyId,idx){
-  const sel=document.getElementById('cfg-step-agent-sel');
-  const agent=sel?sel.value:'';
-  const key=journeyId+'__'+idx;
-  if(agent)cfgStepAssignments[key]={agent:agent,governance:'Default governance'};
-  else delete cfgStepAssignments[key];
-  closeCfgStepDrawer();
-  if(page==='cfg-journey-detail')navigatePage('cfg-journey-detail');
 }
 function cfgRecommendedAgentForStep(st){
   if(st.type==='rule')return null;
   return findCfgAgentByName(st.src)||null;
 }
-function assignRecommendedAgent(journeyId,idx){
-  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
-  const st=j.steps[idx];if(!st)return;
-  const rec=cfgRecommendedAgentForStep(st);if(!rec)return;
-  const key=journeyId+'__'+idx;
-  cfgStepAssignments[key]={agent:rec.name,governance:rec.guardrail||'Default governance'};
-  if(page==='cfg-journey-detail')navigatePage('cfg-journey-detail');
-}
-
 // -- Configure: Agents --
 function cfgEscapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function cfgAgentSlug(name){return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');}
@@ -6367,17 +6456,17 @@ function buildManualJourneyRunHTML(){
       +'<div class="manual-step-mode">'+mode+'</div>'
       +'</div>';
   }).join('');
-  const evidence=buildEvidencePackHTML(run,steps,run.currentStepIdx);
-  const exceptions=(run.exceptions||[]).map(function(e,i){return {e:e,i:i};}).filter(function(x){return x.e.status==='Open';}).map(function(x){
+  const openExceptions=(run.exceptions||[]).map(function(e,i){return {e:e,i:i};}).filter(function(x){return x.e.status==='Open';});
+  const hasExceptions=openExceptions.length>0;
+  const exceptions=openExceptions.map(function(x){
     const exOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(x.e.ownerRole);
     const exAction=exOwner
       ?'<button class="btn btn-secondary btn-sm" onclick="openManualExceptionResolver(\''+run.runId+'\','+x.i+')">Resolve</button>'
       :'<div class="manual-waiting-note">Waiting on <strong>'+x.e.ownerRole+'</strong></div>';
     return '<div class="manual-exception-card"><div><div class="cell-primary">'+x.e.type+'</div><div class="cell-sub">'+x.e.ownerRole+'</div><p>'+x.e.suggestedResolution+'</p></div>'+exAction+'</div>';
-  }).join('')||'<div class="manual-empty-note">No open exceptions on this run.</div>';
-  const audit=(run.audit||[]).map(function(a){return '<div class="audit-line"><span class="audit-dot"></span><div class="audit-copy"><strong>Run event</strong>'+a+'</div></div>';}).join('');
+  }).join('');
   const progress=run.status==='Completed'?100:Math.min(100,Math.round(((run.currentStepIdx||0)+1)/Math.max(steps.length,1)*100));
-  const openExceptionCount=(run.exceptions||[]).filter(function(e){return e.status==='Open';}).length;
+  const openExceptionCount=openExceptions.length;
   const stepsCompletedLabel=(run.status==='Completed'?steps.length:(run.currentStepIdx||0))+' of '+steps.length;
   const moduleLabel=manualModuleLabel(cur.modulePage);
   const isOwner=run.status==='Completed'||portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(cur.ownerRole);
@@ -6400,7 +6489,8 @@ function buildManualJourneyRunHTML(){
     +'<div class="manual-current-card"><div class="manual-current-head"><div><span class="manual-current-kicker">Current Step</span><div class="manual-current-title">'+cur.name+'</div></div><div class="manual-current-progress"><strong>'+progress+'%</strong><span>'+openExceptionCount+' open blocker'+(openExceptionCount===1?'':'s')+'</span></div></div>'
     +'<p class="manual-current-desc">'+cur.manualAction+'</p>'
     +'<div class="manual-current-foot"><div class="manual-current-meta"><span>'+(cur.ownerRole||'Entity Admin')+'</span><span class="dot">&middot;</span><span>'+moduleLabel+'</span><span class="dot">&middot;</span><span>SLA '+(cur.sla||'—')+'</span></div><div class="manual-current-actions">'+currentActions+'</div></div></div>'
-    +'<div class="dash-two-col manual-run-grid"><div class="listing-card dash-panel manual-steps-panel"><div class="dash-panel-head"><div>Journey Steps</div><span>Manual / Agent mode per step</span></div><div class="manual-panel-body">'+timeline+'</div></div><div class="manual-run-side"><div class="listing-card dash-panel manual-evidence-panel"><div class="dash-panel-head"><div>Step-Level Evidence Pack</div><span>Trust layer</span></div><div class="manual-panel-body">'+evidence+'</div></div><div class="listing-card dash-panel manual-exceptions-panel"><div class="dash-panel-head"><div>Exceptions</div><span>Exception-first queue</span></div><div class="manual-panel-body">'+exceptions+'</div></div><div class="listing-card dash-panel manual-audit-panel"><div class="dash-panel-head"><div>Audit Trail</div><span>Immutable story</span></div><div class="manual-panel-body">'+audit+'</div></div></div></div>'
+    +'<div class="dash-two-col manual-run-grid'+(hasExceptions?'':' solo')+'"><div class="listing-card dash-panel manual-steps-panel"><div class="dash-panel-head"><div>Journey Steps</div><span>Manual / Agent mode per step</span></div><div class="manual-panel-body">'+timeline+'</div></div>'
+    +(hasExceptions?'<div class="manual-run-side"><div class="listing-card dash-panel manual-exceptions-panel"><div class="dash-panel-head"><div>Exceptions</div><span>Exception-first queue</span></div><div class="manual-panel-body">'+exceptions+'</div></div></div>':'')+'</div>'
     +'</div>';
 }
 // -- Same "linked journey run is on this step" banner the Compliance tab already shows, generalized to any Contracts-sidebar tab that a manual step maps to (see manualStepTabMap), so acting on Basic Details / Commercial Terms / Workflow also advances the linked run. --
@@ -6430,26 +6520,6 @@ function deOnboardingBannerHTML(emp){
     ?'<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Onboarding Complete</button></div>'
     :'<div class="manual-waiting-note">Waiting on <strong>'+curStep.ownerRole+'</strong></div>';
   return '<div class="ep-form-card" style="margin-bottom:16px">'+contextLine+action+'</div>';
-}
-function buildEvidencePackHTML(run,steps,currentStepIdx){
-  const completedIdx=run.status==='Completed'?steps.length-1:currentStepIdx-1;
-  if(completedIdx<0){
-    return '<div class="manual-empty-note">No evidence captured yet &mdash; complete the current step to generate its evidence record.</div>';
-  }
-  const step=steps[completedIdx]||{};
-  const before=completedIdx%2===0?'Not captured':'Pending validation';
-  const after=completedIdx%2===0?'Captured manually':'Awaiting correction';
-  return '<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">Evidence for: <strong style="color:var(--navy)">'+step.name+'</strong></div>'
-    +'<div class="evidence-grid">'
-    +'<div class="evidence-item"><div class="evidence-label">Source data</div><div class="evidence-value">'+run.subject+' · '+run.entity+'</div></div>'
-    +'<div class="evidence-item"><div class="evidence-label">Documents used</div><div class="evidence-value">Contract, timesheet, compliance report</div></div>'
-    +'<div class="evidence-item"><div class="evidence-label">Rule/check applied</div><div class="evidence-value">'+(step.exceptionType||'Standard validation')+'</div></div>'
-    +'<div class="evidence-item"><div class="evidence-label">Owner role</div><div class="evidence-value">'+(step.ownerRole||'Entity Admin')+'</div></div>'
-    +'<div class="evidence-item"><div class="evidence-label">Timestamp</div><div class="evidence-value">'+new Date().toLocaleString()+'</div></div>'
-    +'<div class="evidence-item"><div class="evidence-label">Before / After</div><div class="evidence-value">'+before+' -> '+after+'</div></div>'
-    +'<div class="evidence-item"><div class="evidence-label">Approval notes</div><div class="evidence-value">'+(step.approvalRequired?'Approval required':'No approval required')+'</div></div>'
-    +'<div class="evidence-item"><div class="evidence-label">System logs</div><div class="evidence-value">'+(run.audit&&run.audit[0]?run.audit[0]:'Run created')+'</div></div>'
-    +'</div>';
 }
 function buildJourneySimulationHTML(){
   const j=cfgJourneys.find(function(x){return x.id===selectedSimulationJourneyId;})||cfgJourneys[0];
@@ -8116,7 +8186,10 @@ let _runNotifyTimer=null;
 function notifyRunOwner(runId,ownerName,stepName,ownerRole){
   notifiedRunIds.add(runId);
   const ownerPersonaId=ownerRole?manualStepOwnerPersonaId(ownerRole):null;
-  if(ownerPersonaId)pushRunNotification(runId,ownerPersonaId,'"'+stepName+'" needs your attention — nudged by an admin.');
+  if(ownerPersonaId){
+    notifiedRunOwners[runId]=ownerPersonaId;
+    pushRunNotification(runId,ownerPersonaId,'"'+stepName+'" needs your attention — nudged by an admin.');
+  }
   const overlay=document.getElementById('run-notify-overlay');const desc=document.getElementById('run-notify-desc');
   if(overlay&&desc){
     desc.textContent='Sent notification to '+ownerName+' — owner of '+stepName+'.';
@@ -8286,8 +8359,8 @@ function buildAIWaitingApprovalHTML(opts){
   const sidePanelHTML=showDataPanel?opts.approvalPanelHTML:opts.sidePanelHTML;
   const showSidePanel=!!sidePanelHTML;
   const actionButtons=showDataPanel
-    ?'<button class="btn btn-secondary" onclick="openNotifyManagerModal(\''+(opts.managerName||'')+'\',\''+(opts.noteContextLabel||'')+'\',\''+(opts.noteRefId||'')+'\')">Notify Entity Admin</button><button class="btn btn-success" onclick="'+opts.onApprove+'">Approve</button>'
-    :'<button class="btn btn-success" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>';
+    ?'<button class="btn btn-secondary" onclick="openNotifyManagerModal(\''+(opts.managerName||'')+'\',\''+(opts.noteContextLabel||'')+'\',\''+(opts.noteRefId||'')+'\')">Notify Entity Admin</button><button class="action-btn action-approve" onclick="'+opts.onApprove+'">Approve</button>'
+    :'<button class="action-btn action-approve" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>';
   const card='<div class="ep-form-card" style="padding:40px 32px">'
     +'<div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">'
     +'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
@@ -8390,7 +8463,7 @@ function aiContractDocActionBarHTML(){
   }
   return '<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px">'
     +'<button class="btn btn-secondary btn-sm" onclick="aiContractDocEdit()">Edit</button>'
-    +'<button class="btn btn-success btn-sm" onclick="aiContractDocApprove()">Approve</button>'
+    +'<button class="action-btn action-approve btn-sm" onclick="aiContractDocApprove()">Approve</button>'
     +'</div>';
 }
 function aiContractDocEdit(){
@@ -8649,6 +8722,16 @@ function aiUpsertRun(journeyId,runId,patch){
   Object.assign(run,patch);
   return run;
 }
+function findAiRunJourneyId(runId){
+  return Object.keys(aiAutomationRuns).find(function(jid){return (aiAutomationRuns[jid]||[]).some(function(r){return r.runId===runId;});})||null;
+}
+// -- Dispatch a notification-bell click to wherever that run actually lives: MAN- runs get the manual preview modal, agent/hybrid RUN- runs open My Tasks with the task panel already selected (previously a dead click — getManualRun only knows about MAN- runs). --
+function openNotifiedRun(runId){
+  if(String(runId).indexOf('MAN-')===0){openManualRunPreviewModal(runId);return;}
+  const journeyId=findAiRunJourneyId(runId);if(!journeyId)return;
+  navigatePage('my-tasks');
+  openMyTaskAction(runId,journeyId);
+}
 function aiAllPendingRuns(){
   if(portalRole==='entity-user'){
     return personaOwnedRunItems(getActivePersona()).map(function(it){return {run:it.run,journey:it.journey};});
@@ -8705,8 +8788,8 @@ function buildEntityAdminMyTasksHTML(){
   const noteRows=notes.map(function(r){
     const isPending=r.status==='Pending';
     const actions=isPending
-      ?'<button class="sa-req-btn sa-req-approve" onclick="acknowledgeManagerNotify(\''+r.id+'\')">Mark as Reviewed</button>'
-      :'<span class="status-pill approved">Reviewed</span>';
+      ?'<button class="sa-req-btn sa-req-approve" onclick="resolveManagerNotify(\''+r.id+'\')">Review in Contract</button>'
+      :'<span class="status-pill '+(r.status==='Rejected'?'rejected':'approved')+'">'+(r.status==='Rejected'?'Rejected':'Reviewed')+'</span>';
     return '<div class="ea-task-row"><div class="ea-task-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-task-what"><div class="ea-task-label">'+r.label+'</div>'+(r.note?'<div class="ea-task-note" style="color:var(--navy)">'+r.note+'</div>':'')+'</div><div class="ea-task-when">'+r.timestamp+'</div><div class="ea-task-actions">'+actions+'</div></div>';
   }).join('');
   const noteBody=notes.length?noteRows:'<div class="ea-req-empty">No notes yet &mdash; if your Entity User flags an approval for a second opinion, it\'ll show up here.</div>';
@@ -8781,8 +8864,8 @@ function renderMyTaskDetailPanel(reqId){
     const actionPanel='<div class="ep-form-card" style="margin-top:14px">'
       +'<div style="font-size:11.5px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Current Action Required</div>'
       +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:18px">Approving activates this immediately for '+r.entity+'. Reject if it needs more information first.</div>'
-      +'<button class="btn btn-success" style="width:100%;justify-content:center;margin-bottom:8px" onclick="approveEntityRequest(\''+r.id+'\');closeMyTaskDetail()">Approve</button>'
-      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="rejectEntityRequest(\''+r.id+'\');closeMyTaskDetail()">Reject</button>'
+      +'<button class="action-btn action-approve" style="width:100%;margin-bottom:8px" onclick="approveEntityRequest(\''+r.id+'\');closeMyTaskDetail()">Approve</button>'
+      +'<button class="action-btn action-reject" style="width:100%" onclick="rejectEntityRequest(\''+r.id+'\');closeMyTaskDetail()">Reject</button>'
       +'</div>';
     body=infoCard+actionPanel;
   }
@@ -8817,24 +8900,22 @@ function buildMyTasksPageHTML(){
     const step=events[Math.min(r.currentStepIdx,events.length-1)];
     const isException=r.status==='Exception';
     const actionText=isException?(r.exceptionNote||'This run is blocked and needs review.'):('Waiting on: '+(step?step.name:'Review'));
-    return '<tr class="lp-row mt-run-row'+(mtTaskSelectedRunId===r.runId?' lp-row-selected':'')+'" id="mt-run-row-'+r.runId+'" style="cursor:pointer" onclick="openMyTaskAction(\''+r.runId+'\',\''+j.id+'\')">'
-      +'<td><div class="cell-primary">'+j.name+'</div><div class="cell-sub">'+r.runId+'</div></td>'
-      +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+(r.country||'')+(r.contractType?' &middot; '+r.contractType:'')+'</div></td>'
-      +'<td>'+actionText+'</td>'
-      +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
-      +'<td class="cell-sub">'+r.lastActivity+'</td>'
-      +'<td onclick="event.stopPropagation()"><button class="lp-action-btn" onclick="openMyTaskAction(\''+r.runId+'\',\''+j.id+'\')" title="Open task">'+mtDotsIco+'</button></td>'
-      +'</tr>';
+    const sub=r.client+(r.country?' &middot; '+r.country:'')+(r.contractType?' &middot; '+r.contractType:'');
+    return '<div class="cockpit-run-card mt-run-row'+(mtTaskSelectedRunId===r.runId?' mt-card-selected':'')+'" id="mt-run-row-'+r.runId+'" onclick="openMyTaskAction(\''+r.runId+'\',\''+j.id+'\')">'
+      +'<div class="cockpit-run-head"><div class="cockpit-run-head-main"><div class="cockpit-run-id">'+j.name+'</div><div class="cockpit-run-entity">'+sub+'</div></div><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></div>'
+      +'<div class="cockpit-run-mini-sub"><span>'+actionText+'</span></div>'
+      +'<div class="cockpit-run-mini-sub" style="margin-top:8px"><span class="cell-sub">'+r.runId+' &middot; '+r.lastActivity+'</span><button class="lp-action-btn" onclick="event.stopPropagation();openMyTaskAction(\''+r.runId+'\',\''+j.id+'\')" title="Open task">'+mtDotsIco+'</button></div>'
+      +'</div>';
   }).join('');
   const body=items.length
-    ?'<table class="listing-table ai-run-table mt-table lp-table"><thead><tr><th>Journey</th><th>Client</th><th>Action Needed</th><th>Status</th><th>Last Activity</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    ?'<div class="cockpit-run-list">'+rows+'</div>'
     :'<div style="text-align:center;color:var(--gray);font-size:12.5px;padding:40px">No pending tasks right now &mdash; journeys you run will show up here if they need your approval or attention.</div>';
   const sbInner=mtTaskSelectedRunId?renderMyTaskActionPanel(mtTaskSelectedRunId,items.find(function(it){return it.run.runId===mtTaskSelectedRunId;}).journey.id):'';
   return '<div class="ai-exec-page">'
     +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">My Tasks</p>'
     +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">Every journey run across Contract Creation, Payroll, and Hire to Retire that is waiting on your approval or needs attention.</p>'
     +'<div style="margin-bottom:20px">'+buildMyPendingManualTasksHTML()+'</div>'
-    +'<div class="lp-split-wrap"><div class="lp-split-main"><div class="listing-card" style="border:none;border-radius:0;box-shadow:none;overflow-x:hidden">'+body+'</div></div>'
+    +'<div class="lp-split-wrap"><div class="lp-split-main" style="background:transparent;border:none">'+body+'</div>'
     +'<div class="lp-split-sb'+(mtTaskSelectedRunId?' open':'')+'" id="mt-task-sb"><div class="lp-isb" id="mt-task-sb-inner">'+sbInner+'</div></div>'
     +'</div>'
     +'</div>';
@@ -8869,8 +8950,8 @@ function renderMyTaskActionPanel(runId,journeyId){
     actionBody='<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">'+(currentEvent?currentEvent.name:'Review pre-filled data')+'</div>'
       +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:18px">'+aiSummary+'</div>'
       +'<button class="btn btn-secondary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="openAIEventDrawer(\''+journeyId+'\','+run.currentStepIdx+')">Review Data</button>'
-      +'<button class="btn btn-success" style="width:100%;justify-content:center;margin-bottom:8px" onclick="mtApproveRunStep(\''+run.runId+'\',\''+journeyId+'\')">Approve and Continue</button>'
-      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="mtRejectRunStep(\''+run.runId+'\',\''+journeyId+'\')">Reject / Send for Correction</button>';
+      +'<button class="action-btn action-approve" style="width:100%;margin-bottom:8px" onclick="mtApproveRunStep(\''+run.runId+'\',\''+journeyId+'\')">Approve and Continue</button>'
+      +'<button class="action-btn action-reject" style="width:100%" onclick="mtRejectRunStep(\''+run.runId+'\',\''+journeyId+'\')">Reject / Send for Correction</button>';
   }else if(run.status==='Completed'){
     actionBody='<div style="font-size:12.5px;color:var(--gray);line-height:1.6">All '+events.length+' events completed. '+run.client+' &mdash; '+j.name+' finished successfully.</div>';
   }else{
@@ -8932,15 +9013,23 @@ function mtResolveException(runId,journeyId){
   setTimeout(function(){aiAdvanceRunPastAutoSteps(run,journeyId);run.lastActivity='Just now';mtTaskRefresh(runId,journeyId);},2000);
 }
 function openMyTaskAction(runId,journeyId){
+  // -- Runs tied to a real contract record (e.g. RUN-4002/Lucas Dubois) resolve in the actual Workforce Operations record, not the standalone slide-in panel — route there the same way openComplianceHubForRun() does for Contract Creation runs. --
+  const runs=aiAutomationRuns[journeyId]||[];
+  const run=runs.find(function(r){return r.runId===runId;});
+  if(run&&run.contractRecordId&&contractsData.some(function(c){return c.id===run.contractRecordId;})){
+    navigatePage('contracts');
+    openCtSidebar(run.contractRecordId,'compliance');
+    return;
+  }
   mtTaskSelectedRunId=runId;
   const sb=document.getElementById('mt-task-sb');if(sb)sb.classList.add('open');
   const inner=document.getElementById('mt-task-sb-inner');if(inner)inner.innerHTML=renderMyTaskActionPanel(runId,journeyId);
-  document.querySelectorAll('.mt-run-row').forEach(function(row){row.classList.toggle('lp-row-selected',row.id==='mt-run-row-'+runId);});
+  document.querySelectorAll('.mt-run-row').forEach(function(row){row.classList.toggle('mt-card-selected',row.id==='mt-run-row-'+runId);});
 }
 function closeMyTaskAction(){
   mtTaskSelectedRunId=null;
   const sb=document.getElementById('mt-task-sb');if(sb)sb.classList.remove('open');
-  document.querySelectorAll('.mt-run-row').forEach(function(row){row.classList.remove('lp-row-selected');});
+  document.querySelectorAll('.mt-run-row').forEach(function(row){row.classList.remove('mt-card-selected');});
 }
 
 function buildAIActiveAutomationHTML(){
@@ -9055,8 +9144,8 @@ function buildAIRunDetailHTML(){
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">'+(currentEvent?currentEvent.name:'Review pre-filled data')+'</div>'
       +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:18px">'+aiSummary+'</div>'
       +'<button class="btn btn-secondary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="openAIEventDrawer(\''+j.id+'\','+run.currentStepIdx+')">Review Data</button>'
-      +'<button class="btn btn-success" style="width:100%;justify-content:center;margin-bottom:8px" onclick="aiApproveRunStep(\''+run.runId+'\',\''+j.id+'\')">Approve and Continue</button>'
-      +'<button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="aiRejectRunStep(\''+run.runId+'\',\''+j.id+'\')">Reject / Send for Correction</button>'
+      +'<button class="action-btn action-approve" style="width:100%;margin-bottom:8px" onclick="aiApproveRunStep(\''+run.runId+'\',\''+j.id+'\')">Approve and Continue</button>'
+      +'<button class="action-btn action-reject" style="width:100%" onclick="aiRejectRunStep(\''+run.runId+'\',\''+j.id+'\')">Reject / Send for Correction</button>'
       +'</div>';
   }else{
     actionPanel='<div class="ep-form-card">'

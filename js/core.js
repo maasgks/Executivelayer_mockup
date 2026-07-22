@@ -6,6 +6,8 @@ let portalRole='super-admin',userDDMode='main';
 let activePersonaId='hr';
 let dashboardTab='employee';
 let salesOpenDealsOpen=false;
+let salesTeamQueueOpen=false;
+let complianceContractQueueOpen=false,complianceHubItemsOpen=false,complianceSupportItemsOpen=false;
 let aiContractPrefill=null,aiAssistedFlow=false,aiCtNotFoundOpen=false,aiProposalDraft=null,aiCtChatMsgs=[],aiWizardFormData={},aiCreatedContractId=null;
 const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
 const aiOpsManager={name:'Priya Nair',role:'Ops Manager',initials:'PN'};
@@ -89,7 +91,7 @@ const aiAutomationRuns={
   ],
   'h2r-lifecycle':[
     {runId:'RUN-4001',client:'Sofia Romano',country:'Italy',contractType:'Contractor',currentStepIdx:3,status:'Waiting for Approval',lastActivity:'6 hours ago'},
-    {runId:'RUN-4002',client:'Lucas Dubois',country:'France',contractType:'EOR',currentStepIdx:1,status:'Exception',lastActivity:'2 hours ago',exceptionNote:'Compliance Hub could not return statutory requirements for France — missing country configuration.'},
+    {runId:'RUN-4002',client:'Lucas Dubois',country:'France',contractType:'EOR',currentStepIdx:3,status:'Exception',lastActivity:'2 hours ago',exceptionNote:'Compliance Hub could not return statutory requirements for France — missing country configuration.',contractRecordId:5},
     {runId:'RUN-4003',client:'James Wilson',country:'United Kingdom',contractType:'EOR',currentStepIdx:4,status:'Completed',lastActivity:'3 days ago'}
   ]
 };
@@ -375,7 +377,7 @@ function renderNotif(){
   });
   el.innerHTML=`<div class="np-head"><div class="np-title">Notifications</div><div class="np-actions"><button class="np-iconbtn" title="Refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="np-iconbtn" onclick="toggleNotif()" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
   <div class="np-controls"><button class="np-mark" onclick="event.stopPropagation();markAllNotifsRead()">Mark all as read</button><div class="np-toggle-row"><span>Only Show Unread</span><button class="np-switch ${notifShowUnread?'on':''}" onclick="event.stopPropagation();notifShowUnread=!notifShowUnread;renderNotif()"></button></div></div>
-  <div class="np-list">${list.map(n=>`<div class="np-item${n.runId?' np-item-clickable':''}"${n.runId?` onclick="toggleNotif();openManualRunPreviewModal('${n.runId}')" style="cursor:pointer"`:''}><div class="np-avatar">N</div><div class="np-body"><div class="np-row1"><div class="np-text">${n.name}</div><div class="np-time">${n.time}</div></div><div class="np-row2">Contract ID - ${n.cid}${n.pending?'<span class="np-pending">Pending</span>':''}</div></div></div>`).join('')||'<div style="padding:24px;text-align:center;color:var(--gray);font-size:12px">No unread notifications</div>'}</div>`;
+  <div class="np-list">${list.map(n=>`<div class="np-item${n.runId?' np-item-clickable':''}"${n.runId?` onclick="toggleNotif();openNotifiedRun('${n.runId}')" style="cursor:pointer"`:''}><div class="np-avatar">N</div><div class="np-body"><div class="np-row1"><div class="np-text">${n.name}</div><div class="np-time">${n.time}</div></div><div class="np-row2">Contract ID - ${n.cid}${n.pending?'<span class="np-pending">Pending</span>':''}</div></div></div>`).join('')||'<div style="padding:24px;text-align:center;color:var(--gray);font-size:12px">No unread notifications</div>'}</div>`;
 }
 function pushRunNotification(runId,forPersonaId,message){
   notifData.unshift({name:message,cid:runId,time:'Just now',pending:true,forPersona:forPersonaId,runId:runId});
@@ -680,9 +682,24 @@ function dashboardTabsForRole(role){
     return map[activePersonaId]||[{id:'employee',label:'Employee Dashboard'}];
   }
   if(role==='super-admin')return [{id:'super-admin',label:'Opendhi Super Admin'}];
-  const tabs=[{id:'employee',label:'Employee Dashboard'}];
-  if(role==='entity-admin')tabs.push({id:'entity-admin',label:'Entity Admin'});
-  return tabs;
+  if(role==='entity-admin')return [{id:'entity-admin',label:'Entity Admin'}];
+  return [{id:'employee',label:'Employee Dashboard'}];
+}
+function toggleSalesTeamQueuePanel(){
+  salesTeamQueueOpen=!salesTeamQueueOpen;
+  renderADTPage();
+}
+function toggleComplianceContractQueuePanel(){
+  complianceContractQueueOpen=!complianceContractQueueOpen;
+  renderADTPage();
+}
+function toggleComplianceHubItemsPanel(){
+  complianceHubItemsOpen=!complianceHubItemsOpen;
+  renderADTPage();
+}
+function toggleComplianceSupportItemsPanel(){
+  complianceSupportItemsOpen=!complianceSupportItemsOpen;
+  renderADTPage();
 }
 function switchDashboardTab(tab){
   dashboardTab=tab;
@@ -1237,19 +1254,26 @@ const contractsData=[
   {id:4,contractId:'94132',empName:'Rajdeep Singh',empDesig:'java developer',country:'Netherlands',type:'EOR',date:'2026-06-06 12:34:17',status:'Proposal Sent',
    nationality:'India',countryOfOp:'Netherlands',workPermit:false,gender:'MALE',email:'rajdeep@testemp.com',contact:'+91 6666666666',dob:'1990-11-10',jobTitle:'Java Developer',skill:'Java, Microservices',empDuration:'2026-06-06 – 2026-12-06',empType:'EOR',workSchedule:'8',payAmount:'90000',currency:'INR',jobDesc:'java developer',payFrequency:'Monthly',
    commercial:{adtFee:'549',annualGross:'0.05',baseGross:'0.06',holidayBonus:'0.06',month13:'0.06',monthlyGrossNet:'0.02',monthlyInvoice:'0.02',monthlySalary12:'0.05',monthlySalary1392:'0.06',netPay:'0.11',socialPremAmt:'0.05',socialPremPct:'26.02',totalMonthlyGross:'0.05'},
-   complianceItems:[{item:'EOR NL Proposal',note:'Optional',status:'Pending',doc:null}]}
+   complianceItems:[{item:'EOR NL Proposal',note:'Optional',status:'Pending',doc:null}]},
+  {id:5,contractId:'94236',empName:'Lucas Dubois',empDesig:'Finance Analyst',country:'France',type:'EOR',date:'2026-07-20 09:30:00',status:'Submitted',
+   nationality:'French',countryOfOp:'',workPermit:false,gender:'MALE',email:'lucas@testemp.com',contact:'+33 6 12 34 56 78',dob:'1990-04-15',jobTitle:'Finance Analyst',skill:'Financial Reporting',empDuration:'2026-07-20 – 2027-07-20',empType:'EOR',workSchedule:'8',payAmount:'52000',currency:'EUR',jobDesc:'Finance analyst role',payFrequency:'Monthly',
+   commercial:{adtFee:'549',annualGross:'0.05',baseGross:'0.06',holidayBonus:'0.06',month13:'0.06',monthlyGrossNet:'0.02',monthlyInvoice:'0.03',monthlySalary12:'0.05',monthlySalary1392:'0.06',netPay:'0.11',socialPremAmt:'0.05',socialPremPct:'26.02',totalMonthlyGross:'0.05'},
+   complianceItems:[{item:'Country Configuration — France',note:'Compliance Hub could not return statutory requirements for France.',status:'Missing',doc:null}],
+   missingCountryConfig:true,manualRunId:'RUN-4002'}
 ];
 const ctLogsData={
   1:[{date:'2026-06-11',time:'15:17:26',user:'Admin',status:'Submitted',action:'Contract submitted for review and quotation.'}],
-  2:[{date:'2026-06-06',time:'15:05:48',user:'Admin',status:'Proposal Sent',action:'EOR proposal sent to employee for review.'},{date:'2026-06-06',time:'14:00:00',user:'Manager',status:'Quotation Approved',action:'Quotation approved by manager. Proceeding to proposal.'},{date:'2026-06-06',time:'13:00:00',user:'Admin',status:'Submitted',action:'Contract submitted for review.'}],
+  2:[{date:'2026-07-05',time:'11:40:00',user:'Entity User',status:'Second Opinion Requested',action:'Not sure about the margin on this one — can you take a look before I approve?'},{date:'2026-06-06',time:'15:05:48',user:'Admin',status:'Proposal Sent',action:'EOR proposal sent to employee for review.'},{date:'2026-06-06',time:'14:00:00',user:'Manager',status:'Quotation Approved',action:'Quotation approved by manager. Proceeding to proposal.'},{date:'2026-06-06',time:'13:00:00',user:'Admin',status:'Submitted',action:'Contract submitted for review.'}],
   3:[{date:'2026-06-06',time:'14:07:35',user:'Admin',status:'Inactive',action:'Contract set to Inactive.'}],
-  4:[{date:'2026-06-06',time:'12:34:17',user:'Admin',status:'Proposal Sent',action:'EOR proposal sent to employee.'},{date:'2026-06-06',time:'11:00:00',user:'Admin',status:'Submitted',action:'Contract submitted for review.'}]
+  4:[{date:'2026-06-06',time:'12:34:17',user:'Admin',status:'Proposal Sent',action:'EOR proposal sent to employee.'},{date:'2026-06-06',time:'11:00:00',user:'Admin',status:'Submitted',action:'Contract submitted for review.'}],
+  5:[{date:'2026-07-20',time:'09:30:00',user:'AI Agent',status:'Submitted',action:'Contract submitted; Compliance Hub could not return statutory requirements for France — missing country configuration.'}]
 };
 const ctWorkflowData={
   1:[{title:'Contract Submitted',user:'Admin',date:'2026-06-11',time:'15:17:26',description:'EOR contract for TestEmp Antar submitted for quotation and review.'}],
-  2:[{title:'Proposal Sent',user:'Admin',date:'2026-06-06',time:'15:05:48',description:'EOR proposal dispatched to Rashi Singh for review and acceptance.'},{title:'Quotation Approved',user:'Manager',date:'2026-06-06',time:'14:00:00',description:'Quotation approved. Proposal stage initiated.'},{title:'Contract Submitted',user:'Admin',date:'2026-06-06',time:'13:00:00',description:'EOR contract submitted for review.'}],
+  2:[{title:'Second Opinion Requested',user:'Entity User',date:'2026-07-05',time:'11:40:00',description:'Entity User flagged the proposal margin for a second opinion before approving.'},{title:'Proposal Sent',user:'Admin',date:'2026-06-06',time:'15:05:48',description:'EOR proposal dispatched to Rashi Singh for review and acceptance.'},{title:'Quotation Approved',user:'Manager',date:'2026-06-06',time:'14:00:00',description:'Quotation approved. Proposal stage initiated.'},{title:'Contract Submitted',user:'Admin',date:'2026-06-06',time:'13:00:00',description:'EOR contract submitted for review.'}],
   3:[{title:'Contract Inactive',user:'Admin',date:'2026-06-06',time:'14:07:35',description:'Contract for Deepak Singh set to Inactive.'}],
-  4:[{title:'Proposal Sent',user:'Admin',date:'2026-06-06',time:'12:34:17',description:'EOR proposal sent to Rajdeep Singh.'},{title:'Contract Submitted',user:'Admin',date:'2026-06-06',time:'11:00:00',description:'EOR contract submitted for review.'}]
+  4:[{title:'Proposal Sent',user:'Admin',date:'2026-06-06',time:'12:34:17',description:'EOR proposal sent to Rajdeep Singh.'},{title:'Contract Submitted',user:'Admin',date:'2026-06-06',time:'11:00:00',description:'EOR contract submitted for review.'}],
+  5:[{title:'Compliance Exception Raised',user:'AI Agent',date:'2026-07-20',time:'09:30:00',description:'Compliance Hub could not return statutory requirements for France — missing country configuration.'}]
 };
 let ctSelectedId=null,ctTab='basic-details',ctCommercialEditMode=false;
 
@@ -1370,16 +1394,28 @@ const entityLockedCategories=['P2P','F2A'];
 // contract-creation ships pre-activated so Entity User lands on a working "Create Contract" action out of the box;
 // payroll-creation/h2r-lifecycle start locked so the request -> approve -> unlock flow has something real to demo.
 const entityJourneyActivation={'contract-creation':true};
+function formatEntityTimestamp(date){
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const day=String(date.getDate()).padStart(2,'0');
+  const month=months[date.getMonth()];
+  const year=date.getFullYear();
+  let hours=date.getHours();
+  const minutes=String(date.getMinutes()).padStart(2,'0');
+  const seconds=String(date.getSeconds()).padStart(2,'0');
+  const ampm=hours>=12?'PM':'AM';
+  hours=hours%12;if(hours===0)hours=12;
+  return day+' '+month+' '+year+', '+hours+':'+minutes+':'+seconds+' '+ampm;
+}
 let entityRequestSeq=1;
 const entityRequests=[
-  {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'},
-  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'h2r-lifecycle',label:'Activate Hire to Retire (H2R) Journey for Norrbridge Logistics',requestedBy:'Sanne de Vries (Entity Admin)',entity:'Norrbridge Logistics B.V.',clientId:'norrbridge-logistics',timestamp:'28 Jun 2026, 3:15 PM',status:'Pending',note:'Client wants the H2R journey live before their next hiring wave.'},
-  {id:'REQ-'+(entityRequestSeq++),type:'journey-custom',refId:'custom-vendor-onboarding',label:'Custom journey request: Vendor Onboarding & Compliance',requestedBy:'Karan Mehta (Entity Admin)',entity:'Vantage Freight Pvt Ltd',clientId:'vantage-freight',timestamp:'20 Jun 2026, 10:05 AM',status:'Approved',note:'Approved and folded into their Contract Creation journey scope.'},
-  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'payroll-creation',label:'Activate Payroll Creation Journey for Kaira Textiles',requestedBy:'Rohan Shah (Entity Admin)',entity:'Kaira Textiles Ltd',clientId:'kaira-textiles',timestamp:'12 Jun 2026, 5:40 PM',status:'Approved',note:''},
-  {id:'REQ-'+(entityRequestSeq++),type:'manager-notify',refId:'PRO-5820',label:'Proposal approval — second opinion requested',requestedBy:'Entity User',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:'05 Jul 2026, 11:40 AM',status:'Pending',note:"Not sure about the margin on this one — can you take a look before I approve?"}
+  {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:formatEntityTimestamp(new Date()),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'},
+  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'h2r-lifecycle',label:'Activate Hire to Retire (H2R) Journey for Norrbridge Logistics',requestedBy:'Sanne de Vries (Entity Admin)',entity:'Norrbridge Logistics B.V.',clientId:'norrbridge-logistics',timestamp:'28 Jun 2026, 3:15:00 PM',status:'Pending',note:'Client wants the H2R journey live before their next hiring wave.'},
+  {id:'REQ-'+(entityRequestSeq++),type:'journey-custom',refId:'custom-vendor-onboarding',label:'Custom journey request: Vendor Onboarding & Compliance',requestedBy:'Karan Mehta (Entity Admin)',entity:'Vantage Freight Pvt Ltd',clientId:'vantage-freight',timestamp:'20 Jun 2026, 10:05:00 AM',status:'Approved',note:'Approved and folded into their Contract Creation journey scope.'},
+  {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'payroll-creation',label:'Activate Payroll Creation Journey for Kaira Textiles',requestedBy:'Rohan Shah (Entity Admin)',entity:'Kaira Textiles Ltd',clientId:'kaira-textiles',timestamp:'12 Jun 2026, 5:40:00 PM',status:'Approved',note:''},
+  {id:'REQ-'+(entityRequestSeq++),type:'manager-notify',refId:'PRO-5820',label:'Proposal approval — second opinion requested',requestedBy:'Entity User',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:'05 Jul 2026, 11:40:00 AM',status:'Pending',note:"Not sure about the margin on this one — can you take a look before I approve?",contractRecordId:2}
 ];
 function createEntityRequest(type,refId,label,note){
-  const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:new Date().toLocaleString(),status:'Pending',note:note||''};
+  const req={id:'REQ-'+(entityRequestSeq++),type,refId,label,requestedBy:portalRoleLabel(portalRole),entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:formatEntityTimestamp(new Date()),status:'Pending',note:note||''};
   entityRequests.unshift(req);
   return req;
 }
@@ -1401,6 +1437,54 @@ function acknowledgeManagerNotify(id){
   req.status='Approved';
   renderADTPage();
   showAiToast('Marked as reviewed','You\'ve acknowledged this note from your Entity User.');
+}
+// -- Notes flagged for a second opinion route into the linked deal's own Logs tab in Workforce Operations > Contracts, so the reviewer approves/rejects in the record itself rather than inline in the notes list. --
+function resolveManagerNotify(id){
+  const req=entityRequests.find(function(r){return r.id===id&&r.type==='manager-notify';});if(!req||req.status!=='Pending')return;
+  if(!req.contractRecordId){acknowledgeManagerNotify(id);return;}
+  navigatePage('contracts');
+  openCtSidebar(req.contractRecordId,'logs');
+}
+let ctSecondOpinionRejectMode=false;
+function ctApproveSecondOpinion(contractId){
+  const req=entityRequests.find(function(r){return r.type==='manager-notify'&&r.contractRecordId===contractId&&r.status==='Pending';});if(!req)return;
+  const c=contractsData.find(function(x){return x.id===contractId;});
+  req.status='Approved';
+  const now=new Date();
+  const dateStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  const timeStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  (ctLogsData[contractId]=ctLogsData[contractId]||[]).unshift({date:dateStr,time:timeStr,user:'Entity Admin',status:'Proposal Approved',action:'Approved the proposal after reviewing the margin.'});
+  (ctWorkflowData[contractId]=ctWorkflowData[contractId]||[]).unshift({title:'Proposal Approved',user:'Entity Admin',date:dateStr,time:timeStr,description:'Entity Admin approved the proposal flagged by '+req.requestedBy+'.'});
+  if(c&&c.status==='Proposal Sent')c.status='Proposal Approved';
+  ctSecondOpinionRejectMode=false;
+  refreshCtSidebar();
+  showAiToast('Proposal Approved','You approved the proposal for '+(c?c.empName:'this deal')+'.');
+}
+function ctRejectSecondOpinionOpen(contractId){
+  ctSecondOpinionRejectMode=true;
+  refreshCtSidebar();
+  requestAnimationFrame(function(){const ta=document.getElementById('ct-reject-note-'+contractId);if(ta)ta.focus();});
+}
+function ctRejectSecondOpinionCancel(){
+  ctSecondOpinionRejectMode=false;
+  refreshCtSidebar();
+}
+function ctRejectSecondOpinionSubmit(contractId){
+  const req=entityRequests.find(function(r){return r.type==='manager-notify'&&r.contractRecordId===contractId&&r.status==='Pending';});if(!req)return;
+  const ta=document.getElementById('ct-reject-note-'+contractId);
+  const note=ta?ta.value.trim():'';
+  if(!note){showAiToast('Note required','Add a note explaining the rejection before submitting.');return;}
+  const c=contractsData.find(function(x){return x.id===contractId;});
+  req.status='Rejected';
+  req.resolutionNote=note;
+  const now=new Date();
+  const dateStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  const timeStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  (ctLogsData[contractId]=ctLogsData[contractId]||[]).unshift({date:dateStr,time:timeStr,user:'Entity Admin',status:'Proposal Rejected',action:note});
+  (ctWorkflowData[contractId]=ctWorkflowData[contractId]||[]).unshift({title:'Proposal Rejected',user:'Entity Admin',date:dateStr,time:timeStr,description:note});
+  ctSecondOpinionRejectMode=false;
+  refreshCtSidebar();
+  showAiToast('Proposal Rejected','You rejected the proposal for '+(c?c.empName:'this deal')+'.');
 }
 // -- Journey activation: Entity User asks Entity Admin, and Entity Admin approves directly (no Super Admin hop) --
 function approveJourneyRequestAsAdmin(id){
@@ -1481,6 +1565,8 @@ let selectedEvidenceRunId='MAN-1001',selectedEvidenceStepIdx=1;
 let selectedExceptionRunId='MAN-1002',selectedExceptionIdx=0;
 let manualRunSeq=1004;
 let notifiedRunIds=new Set();
+// -- runId -> personaId of whoever the Ops Cockpit "Notify Owner" action targeted. Lets a notified persona see the run in their own My Tasks even when the event-source ownership heuristic in personaOwnedRunItems doesn't independently recognize them as the owner. --
+let notifiedRunOwners={};
 const cockpitDepartmentDirectory=[
   {id:'hr',name:'HR',summary:'Employee lifecycle, onboarding, attendance, payroll setup, and H2R approvals.',admin:{name:'Ananya Rao',email:'ananya.rao@dhi.com',title:'HR Team Lead',journeys:['Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Ramesh Patel',email:'ramesh.patel@dhi.com',title:'HR Associate',journeys:['Payroll Creation Journey']},{name:'Priya Sharma',email:'priya.sharma@dhi.com',title:'HR Associate',journeys:['Hire to Retire (H2R) Journey']},{name:'Aishi Verma',email:'aishi.verma@dhi.com',title:'HR Associate',journeys:['Contract Creation Journey','Payroll Creation Journey']}]},
   {id:'compliance',name:'Compliance',summary:'Compliance Hub checks, statutory rules, document readiness, and blockers.',admin:{name:'Kiran Iyer',email:'kiran.iyer@dhi.com',title:'Compliance Team Lead',journeys:['Contract Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Meera Nair',email:'meera.nair@dhi.com',title:'Compliance Associate',journeys:['Contract Creation Journey']},{name:'Devika Rao',email:'devika.rao@dhi.com',title:'Compliance Associate',journeys:['Hire to Retire (H2R) Journey']}]},
@@ -1551,6 +1637,8 @@ function persistAppState(){
       contractsData:contractsData,manualJourneyRuns:manualJourneyRuns,
       ctLogsData:ctLogsData,ctWorkflowData:ctWorkflowData,
       directEmpData:directEmpData,notifData:notifData,
+      entityRequests:entityRequests,entityRequestSeq:entityRequestSeq,
+      notifiedRunIds:Array.from(notifiedRunIds),notifiedRunOwners:notifiedRunOwners,
       manualRunSeq:manualRunSeq,liveRunSeq:liveRunSeq
     }));
   }catch(e){}
@@ -1566,10 +1654,42 @@ function loadAppState(){
     replaceArray(manualJourneyRuns,s.manualJourneyRuns);
     replaceArray(directEmpData,s.directEmpData);
     replaceArray(notifData,s.notifData);
+    replaceArray(entityRequests,s.entityRequests);
     replaceObject(ctLogsData,s.ctLogsData);
     replaceObject(ctWorkflowData,s.ctWorkflowData);
+    replaceObject(notifiedRunOwners,s.notifiedRunOwners);
+    if(Array.isArray(s.notifiedRunIds))notifiedRunIds=new Set(s.notifiedRunIds);
+    if(typeof s.entityRequestSeq==='number')entityRequestSeq=s.entityRequestSeq;
     if(typeof s.manualRunSeq==='number')manualRunSeq=s.manualRunSeq;
     if(typeof s.liveRunSeq==='number')liveRunSeq=s.liveRunSeq;
+    // -- Demo reset: the RUN-4002 / contract-5 "missing country configuration" walkthrough is meant to be re-demoable on every refresh, so force it back to its unresolved seed state regardless of what got persisted. --
+    notifiedRunIds.delete('RUN-4002');
+    delete notifiedRunOwners['RUN-4002'];
+    const demoContract=contractsData.find(function(c){return c.id===5;});
+    if(demoContract){
+      demoContract.countryOfOp='';
+      demoContract.missingCountryConfig=true;
+      demoContract.complianceItems=[{item:'Country Configuration — France',note:'Compliance Hub could not return statutory requirements for France.',status:'Missing',doc:null}];
+    }
+    ctLogsData[5]=[{date:'2026-07-20',time:'09:30:00',user:'AI Agent',status:'Submitted',action:'Contract submitted; Compliance Hub could not return statutory requirements for France — missing country configuration.'}];
+    ctWorkflowData[5]=[{title:'Compliance Exception Raised',user:'AI Agent',date:'2026-07-20',time:'09:30:00',description:'Compliance Hub could not return statutory requirements for France — missing country configuration.'}];
+    // -- Demo reset: the PRO-5820 "second opinion" note and its linked Rashi Singh deal (contract id 2) are meant to be re-demoable on every refresh, so force both back to their unresolved seed state regardless of what got persisted. --
+    const demoNote=entityRequests.find(function(r){return r.type==='manager-notify'&&r.refId==='PRO-5820';});
+    if(demoNote){demoNote.status='Pending';demoNote.contractRecordId=2;delete demoNote.resolutionNote;}
+    const demoDeal=contractsData.find(function(c){return c.id===2;});
+    if(demoDeal)demoDeal.status='Proposal Sent';
+    ctLogsData[2]=[
+      {date:'2026-07-05',time:'11:40:00',user:'Entity User',status:'Second Opinion Requested',action:'Not sure about the margin on this one — can you take a look before I approve?'},
+      {date:'2026-06-06',time:'15:05:48',user:'Admin',status:'Proposal Sent',action:'EOR proposal sent to employee for review.'},
+      {date:'2026-06-06',time:'14:00:00',user:'Manager',status:'Quotation Approved',action:'Quotation approved by manager. Proceeding to proposal.'},
+      {date:'2026-06-06',time:'13:00:00',user:'Admin',status:'Submitted',action:'Contract submitted for review.'}
+    ];
+    ctWorkflowData[2]=[
+      {title:'Second Opinion Requested',user:'Entity User',date:'2026-07-05',time:'11:40:00',description:'Entity User flagged the proposal margin for a second opinion before approving.'},
+      {title:'Proposal Sent',user:'Admin',date:'2026-06-06',time:'15:05:48',description:'EOR proposal dispatched to Rashi Singh for review and acceptance.'},
+      {title:'Quotation Approved',user:'Manager',date:'2026-06-06',time:'14:00:00',description:'Quotation approved. Proposal stage initiated.'},
+      {title:'Contract Submitted',user:'Admin',date:'2026-06-06',time:'13:00:00',description:'EOR contract submitted for review.'}
+    ];
   }catch(e){}
 }
 function manualJourneySteps(journeyId){return manualJourneyStepCatalog[journeyId]||[];}
