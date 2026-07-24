@@ -1110,6 +1110,8 @@ const payrollEmpData=[
 ];
 const prLogsData={},prWorkflowData={};
 let prSelectedId=null,prTab='basic-details';
+// -- The "action needed" tab badge/banner should only appear when this sidebar was opened by following a journey/task link (dashboard queue, My Tasks, notification) — not on a plain row-open. Set only by those launchers, cleared on close. --
+let prJourneyContextRunId=null;
 // -- When a contract-creation run reaches Payroll Readiness (the final step), the employee needs a real Payroll row for HR to validate bank/tax/compensation — pulled from the linked contract, pinned to the top via readinessRunId until HR marks the step complete. --
 function ensurePayrollEmpForReadiness(run){
   if(payrollEmpData.some(function(e){return e.readinessRunId===run.runId;}))return;
@@ -1276,6 +1278,8 @@ const ctWorkflowData={
   5:[{title:'Compliance Exception Raised',user:'AI Agent',date:'2026-07-20',time:'09:30:00',description:'Compliance Hub could not return statutory requirements for France — missing country configuration.'}]
 };
 let ctSelectedId=null,ctTab='basic-details',ctCommercialEditMode=false;
+// -- Same journey-context gate as prJourneyContextRunId, for the Contracts sidebar. --
+let ctJourneyContextRunId=null;
 
 // -- AI EXECUTIVE MODULE --
 const aiJourneys=[
@@ -1408,7 +1412,6 @@ function formatEntityTimestamp(date){
 }
 let entityRequestSeq=1;
 const entityRequests=[
-  {id:'REQ-'+(entityRequestSeq++),type:'system-activation',refId:'keka-hrms',label:'Enable KEKA HRMS integration for Dhi Hyperlocal',requestedBy:'Priya Nair (Entity Admin)',entity:'Dhi Hyperlocal',clientId:'dhi-hyperlocal',timestamp:formatEntityTimestamp(new Date()),status:'Pending',note:'Client wants employee & attendance data synced from KEKA — not yet available as a connected system.'},
   {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'h2r-lifecycle',label:'Activate Hire to Retire (H2R) Journey for Norrbridge Logistics',requestedBy:'Sanne de Vries (Entity Admin)',entity:'Norrbridge Logistics B.V.',clientId:'norrbridge-logistics',timestamp:'28 Jun 2026, 3:15:00 PM',status:'Pending',note:'Client wants the H2R journey live before their next hiring wave.'},
   {id:'REQ-'+(entityRequestSeq++),type:'journey-custom',refId:'custom-vendor-onboarding',label:'Custom journey request: Vendor Onboarding & Compliance',requestedBy:'Karan Mehta (Entity Admin)',entity:'Vantage Freight Pvt Ltd',clientId:'vantage-freight',timestamp:'20 Jun 2026, 10:05:00 AM',status:'Approved',note:'Approved and folded into their Contract Creation journey scope.'},
   {id:'REQ-'+(entityRequestSeq++),type:'journey-activation',refId:'payroll-creation',label:'Activate Payroll Creation Journey for Kaira Textiles',requestedBy:'Rohan Shah (Entity Admin)',entity:'Kaira Textiles Ltd',clientId:'kaira-textiles',timestamp:'12 Jun 2026, 5:40:00 PM',status:'Approved',note:''},

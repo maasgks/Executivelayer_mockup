@@ -48,7 +48,7 @@ function renderPageContentImpl(id){
   if(page==='cfg-model-detail'){el.innerHTML=buildCfgModelDetailHTML();return;}
   if(page==='cfg-model-add'){el.innerHTML=buildCfgModelAddHTML();return;}
   if(page==='cfg-context-journey'){el.innerHTML=buildCfgContextJourneyHTML();return;}
-  if(page==='cfg-journey-detail'){el.innerHTML=buildCfgJourneyDetailHTML();return;}
+  if(page==='cfg-journey-detail'){el.innerHTML=buildCfgJourneyDetailHTML();initCfgFlowScroll();return;}
   if(page==='journey-simulation'){el.innerHTML=buildJourneySimulationHTML();return;}
   if(page==='cfg-agents'){el.innerHTML=buildCfgAgentsHTML();return;}
   if(page==='operations-cockpit'){el.innerHTML=buildOperationsCockpitPageHTML();return;}

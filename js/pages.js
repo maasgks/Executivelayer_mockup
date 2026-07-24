@@ -1,4 +1,4 @@
-// -- DASHBOARD: tab bar + per-role tab dispatch --
+﻿// -- DASHBOARD: tab bar + per-role tab dispatch --
 function buildDashboardTabsHTML(){
   const tabs=dashboardTabsForRole(portalRole);
   if(tabs.length<2)return '';
@@ -22,9 +22,9 @@ function dashStat(label,val,sub,kind){
   return '<div class="stat-card"><div class="stat-label"><span>'+label+'</span></div><div class="stat-val" style="color:'+color+'">'+val+'</div><div class="stat-sub">'+(sub||'')+'</div></div>';
 }
 // -- Interactive stat card: same hero-tile treatment as Super Admin/Entity Admin dashboards. pageId is optional — omit it when no matching page exists yet, and the card renders without a click action. customClick (raw JS, e.g. to pre-set a filter before navigating) overrides the plain navigatePage(pageId) call when given. --
-function dashStatNav(label,val,sub,kind,icon,pageId,customClick){
-  const colorClass=kind==='green'?'cfg-hero-green':kind==='red'?'cfg-hero-red':kind==='orange'?'cfg-hero-orange':'cfg-hero-blue';
-  const valColor=kind==='green'?'#16a34a':kind==='red'?'#dc2626':kind==='orange'?'var(--orange)':'var(--navy)';
+function dashStatNav(label,val,sub,kind,icon,pageId,customClick,flatVal){
+  const colorClass=kind==='green'?'cfg-hero-green':kind==='red'?'cfg-hero-red':kind==='orange'?'cfg-hero-orange':kind==='teal'?'cfg-hero-teal':kind==='violet'?'cfg-hero-violet':'cfg-hero-blue';
+  const valColor=flatVal?'var(--navy)':kind==='green'?'#16a34a':kind==='red'?'#dc2626':kind==='orange'?'var(--orange)':kind==='teal'?'#0d9488':kind==='violet'?'#7c3aed':'var(--navy)';
   const click=customClick?' onclick="'+customClick+'"':pageId?' onclick="navigatePage(\''+pageId+'\')"':'';
   const staticClass=(pageId||customClick)?'':' dash-stat-static';
   return '<div class="stat-card ea-hero-stat '+colorClass+staticClass+'"'+click+'><div class="stat-label"><span>'+label+'</span><div class="stat-icon">'+icon+'</div></div><div class="stat-val" style="color:'+valColor+'">'+val+'</div><div class="stat-sub">'+(sub||'')+'</div></div>';
@@ -116,7 +116,7 @@ function openMyManualTask(runId){
   const tab=ctTabForManualStep(step);
   if(run.journeyId==='contract-creation'&&run.contractRecordId&&tab&&contractsData.some(function(c){return c.id===run.contractRecordId;})){
     navigatePage('contracts');
-    openCtSidebar(run.contractRecordId,tab);
+    openCtSidebar(run.contractRecordId,tab,null,run.runId);
     return;
   }
   if(step&&step.modulePage==='direct'){
@@ -125,7 +125,7 @@ function openMyManualTask(runId){
   }
   if(step&&step.modulePage==='payroll'){
     const emp=payrollEmpData.find(function(e){return e.readinessRunId===runId;});
-    if(emp){navigatePage('payroll');openPrSidebar(emp.id);return;}
+    if(emp){navigatePage('payroll');openPrSidebar(emp.id,run.runId);return;}
   }
   selectedManualRunId=runId;manualJourneyBackPage='my-tasks';page='manual-journey-run';renderADTPage();
 }
@@ -174,7 +174,7 @@ function buildFinanceApprovalDashboardHTML(){
 }
 function buildComplianceDashboardHTML(){
   return dashHeader('Opendhi Compliance Admin Dashboard','Monitor contract compliance, compliance hub items, payment compliance, and assigned support tasks.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contract Compliance','18','5 blocking payroll readiness','orange',dashIcoDoc,null,'toggleComplianceContractQueuePanel()')+dashStatNav('Compliance Hub Items','26','9 require review','orange',dashIcoShield,null,'toggleComplianceHubItemsPanel()')+dashStatNav('Assigned Support Items','7','3 high priority','orange',dashIcoDoc,null,'toggleComplianceSupportItemsPanel()')+dashStatNav('Payment Compliance','5','5 pending issues','orange',dashIcoShield,'compliance')+dashStatNav('Payroll Blockers','4','Resolve before payroll run','orange',dashIcoMoney,'payroll')+dashStatNav('Document Verification Pending','9','Documents awaiting review','orange',dashIcoShield,'compliance')+dashStatNav('Expiring Documents','5','Expiring in next 30 days','orange',dashIcoShield,'compliance')+'</div>'
+    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contract Compliance','18','5 blocking payroll readiness','red',dashIcoDoc,null,'toggleComplianceContractQueuePanel()',true)+dashStatNav('Compliance Hub Items','26','9 require review','blue',dashIcoShield,null,'toggleComplianceHubItemsPanel()',true)+dashStatNav('Assigned Support Items','7','3 high priority','orange',dashIcoDoc,null,'toggleComplianceSupportItemsPanel()',true)+dashStatNav('Payment Compliance','5','5 pending issues','teal',dashIcoShield,'compliance',null,true)+dashStatNav('Payroll Blockers','4','Resolve before payroll run','red',dashIcoMoney,'payroll',null,true)+dashStatNav('Document Verification Pending','9','Documents awaiting review','violet',dashIcoShield,'compliance',null,true)+dashStatNav('Expiring Documents','5','Expiring in next 30 days','orange',dashIcoShield,'compliance',null,true)+'</div>'
     +buildComplianceLiveQueuePanelHTML()
     +(complianceContractQueueOpen||complianceHubItemsOpen?'<div class="dash-two-col">'
       +(complianceContractQueueOpen?dashTable('Contract Compliance Queue',['Employee','Contract Issue','Status','Action'],[['Ramesh Patel','Missing signature',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Priya Sharma','Work permit pending',statusMini('Blocking','rejected'),statusMini('Review','draft')],['Arjun Desai','Clause update required',statusMini('Needs Review','pending'),statusMini('Open','draft')],['Aishi Verma','Contract verified',statusMini('Ready','approved'),statusMini('View','draft')]],'View all'):'')
@@ -688,14 +688,16 @@ function buildDirectListingHTML(){
     +'</div></div>';
 }
 // -- PAYROLL PAGE (per-employee readiness list + sidebar, same shape as Direct Employee) --
-function openPrSidebar(id){
+// -- journeyRunId: only passed by launchers that route in from a journey/task surface (dashboard queue, My Tasks, manual run page). Plain row-opens omit it, so the "action needed" tab badge/banner stays off until the user follows an actual pending-work link. --
+function openPrSidebar(id,journeyRunId){
   prSelectedId=id;prTab='basic-details';
+  prJourneyContextRunId=journeyRunId||null;
   const sb=document.getElementById('pr-split-sb');if(sb)sb.classList.add('open');
   const inner=document.getElementById('pr-isb-inner');if(inner)inner.innerHTML=renderPrSidebar();
   document.querySelectorAll('.pr-row').forEach(r=>r.classList.toggle('lp-row-selected',r.id==='pr-row-'+id));
 }
 function closePrSidebar(){
-  prSelectedId=null;
+  prSelectedId=null;prJourneyContextRunId=null;
   const sb=document.getElementById('pr-split-sb');if(sb)sb.classList.remove('open');
   document.querySelectorAll('.pr-row').forEach(r=>r.classList.remove('lp-row-selected'));
 }
@@ -703,6 +705,7 @@ function navPrTab(tab){prTab=tab;const inner=document.getElementById('pr-isb-inn
 function resetPrFilters(){prSelectedId=null;renderADTPage();}
 function prReadinessBannerHTML(emp){
   const run=manualLinkedRunForPayrollEmp(emp.id);if(!run)return '';
+  if(prJourneyContextRunId!==run.runId)return '';
   const steps=manualJourneySteps(run.journeyId);
   const curStep=steps[run.currentStepIdx];
   if(!curStep||curStep.name!=='Payroll Readiness')return '';
@@ -753,7 +756,9 @@ function buildPayrollListingHTML(){
 function renderPrSidebar(){
   const emp=payrollEmpData.find(e=>e.id===prSelectedId);if(!emp)return '';
   const tabs=[{id:'basic-details',label:'Basic Details'},{id:'readiness',label:'Payroll Readiness'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
-  const pendingTab=manualLinkedRunForPayrollEmp(emp.id)?'readiness':null;
+  // -- Same journey-context gate as the Contracts sidebar (ctJourneyContextRunId): only badge the tab when this sidebar was opened by following the run's journey link, not on a plain row-open. --
+  const pendingRun=manualLinkedRunForPayrollEmp(emp.id);
+  const pendingTab=(pendingRun&&prJourneyContextRunId===pendingRun.runId)?'readiness':null;
   const tabBar='<div class="lp-isb-tabbar">'
     +'<button class="lp-isb-nav-btn" onclick="scrollTabRow(\'left\',\'pr-isb-tabs\')" title="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<div class="lp-isb-tabs" id="pr-isb-tabs">'+tabs.map(t=>'<button class="lp-isb-tab'+(prTab===t.id?' active':'')+(pendingTab===t.id?' lp-isb-tab--pending':'')+'" onclick="navPrTab(\''+t.id+'\')">'+t.label+(pendingTab===t.id?'<span class="lp-isb-tab-badge" title="Action needed"></span>':'')+'</button>').join('')+'</div>'
@@ -1644,22 +1649,24 @@ function openChatSidebar(id,tab){chatSelectedId=id;chatTab=tab||'basic-details';
 function closeChatSidebar(){chatSelectedId=null;const sb=document.getElementById('chat-split-sb');if(sb)sb.classList.remove('open');document.querySelectorAll('.chat-row').forEach(r=>r.classList.remove('lp-row-selected'));}
 function navChatTab(tab){chatTab=tab;const inner=document.getElementById('chat-isb-inner');if(inner){inner.innerHTML=renderChatSidebar();requestAnimationFrame(function(){const nt=document.getElementById('chat-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
 function setChatFilter(f){chatStatusFilter=f;chatSelectedId=null;renderADTPage();}
-function chatStatusBadge(s){const m={active:{bg:'#f0fdf4',c:'#16a34a',b:'#86efac',l:'Active'},waiting_client:{bg:'#fff7ed',c:'#c2410c',b:'#fed7aa',l:'Waiting for Client'},waiting_csm:{bg:'#fef3c7',c:'#d97706',b:'#fde68a',l:'Waiting for CSM'},inactive:{bg:'#f1f5f9',c:'#64748b',b:'#e2e8f0',l:'Inactive'}};const v=m[s]||{bg:'#f1f5f9',c:'#64748b',b:'#e2e8f0',l:s};return'<span style="background:'+v.bg+';color:'+v.c+';border:1.5px solid '+v.b+';border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;display:inline-block;white-space:nowrap">'+v.l+'</span>';}
+function chatStatusBadge(s){const m={active:{bg:'#f0fdf4',c:'#16a34a',b:'#86efac',l:'Active'},waiting_client:{bg:'#f1f5f9',c:'#1a1a1a',b:'#d1d5db',l:'Waiting for Client'},waiting_csm:{bg:'#fef3c7',c:'#d97706',b:'#fde68a',l:'Waiting for CSM'},inactive:{bg:'#f1f5f9',c:'#64748b',b:'#e2e8f0',l:'Inactive'}};const v=m[s]||{bg:'#f1f5f9',c:'#64748b',b:'#e2e8f0',l:s};return'<span style="background:'+v.bg+';color:'+v.c+';border:1.5px solid '+v.b+';border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;display:inline-block;white-space:nowrap">'+v.l+'</span>';}
 function ctPickStatus(contractId,status){document.querySelectorAll('.ct-action-menu').forEach(m=>m.classList.remove('open'));openCtSidebar(contractId,'logs',status);}
 function ctToggleStatFilter(v){
   ctQuickStatusFilter=ctQuickStatusFilter===v?'':v;
   ctSelectedId=null;
   renderADTPage();
 }
-function openCtSidebar(id,tab,pendingStatus){
+// -- journeyRunId: only passed by launchers that route in from a journey/task surface (dashboard queue, My Tasks, manual run page). Plain row-opens omit it, so the "action needed" tab badge/banner stays off until the user follows an actual pending-work link. --
+function openCtSidebar(id,tab,pendingStatus,journeyRunId){
   ctSelectedId=id;ctTab=tab||'basic-details';ctCommercialEditMode=false;ctSecondOpinionRejectMode=false;
+  ctJourneyContextRunId=journeyRunId||null;
   if(pendingStatus)window._ctPendingStatus=pendingStatus;else delete window._ctPendingStatus;
   const sb=document.getElementById('ct-split-sb');if(sb)sb.classList.add('open');
   const inner=document.getElementById('ct-isb-inner');if(inner)inner.innerHTML=renderCtSidebar();
   document.querySelectorAll('.ct-row').forEach(r=>r.classList.toggle('lp-row-selected',r.id==='ct-row-'+id));
 }
 function closeCtSidebar(){
-  ctSelectedId=null;ctCommercialEditMode=false;ctSecondOpinionRejectMode=false;delete window._ctPendingStatus;
+  ctSelectedId=null;ctCommercialEditMode=false;ctSecondOpinionRejectMode=false;ctJourneyContextRunId=null;delete window._ctPendingStatus;
   const sb=document.getElementById('ct-split-sb');if(sb)sb.classList.remove('open');
   document.querySelectorAll('.ct-row').forEach(r=>r.classList.remove('lp-row-selected'));
 }
@@ -1747,9 +1754,10 @@ function ctSecondOpinionResolvedPanelHTML(req){
 function renderCtSidebar(){
   const c=contractsData.find(x=>x.id===ctSelectedId);if(!c)return '';
   const tabs=[{id:'basic-details',label:'Basic Details'},{id:'commercial-terms',label:'Commercial Terms'},{id:'compliance',label:'Compliance'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
-  // -- Badge the tab a linked journey run is currently waiting on, so the pending action is visible without opening the tab. --
+  // -- Badge the tab a linked journey run is currently waiting on — but only when this sidebar was opened by following that run's journey link (dashboard queue, My Tasks, notification). A plain/direct open of the record shows the data with no "action needed" framing; the role dashboard is the source of truth for what's pending. --
   const pendingRun=manualLinkedRunForContract(c.id);
-  const pendingTabId=pendingRun?ctTabForManualStep(manualJourneySteps(pendingRun.journeyId)[pendingRun.currentStepIdx]):null;
+  const journeyActive=pendingRun&&ctJourneyContextRunId===pendingRun.runId;
+  const pendingTabId=journeyActive?ctTabForManualStep(manualJourneySteps(pendingRun.journeyId)[pendingRun.currentStepIdx]):null;
   const tabBar='<div class="lp-isb-tabbar">'
     +'<button class="lp-isb-nav-btn" onclick="scrollTabRow(\'left\',\'ct-isb-tabs\')" title="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<div class="lp-isb-tabs" id="ct-isb-tabs">'+tabs.map(t=>'<button class="lp-isb-tab'+(ctTab===t.id?' active':'')+(pendingTabId===t.id?' lp-isb-tab--pending':'')+'" onclick="navCtTab(\''+t.id+'\')">'+t.label+(pendingTabId===t.id?'<span class="lp-isb-tab-badge" title="Action needed"></span>':'')+'</button>').join('')+'</div>'
@@ -2352,12 +2360,12 @@ function buildContractFormHTML(type,step,splitMode){
     +'</div>';
 }
 function buildContractTypeSelectHTML(){
-  const icoStyle='width:44px;height:44px;border-radius:12px;background:#fff8f0;border:1px solid #fed7aa;display:flex;align-items:center;justify-content:center;flex-shrink:0';
+  const icoStyle='width:44px;height:44px;border-radius:12px;background:#f1f5f9;border:1px solid #d1d5db;display:flex;align-items:center;justify-content:center;flex-shrink:0';
   const peoBag='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="12"/></svg>';
   const eorBuild='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 21V10h8v11"/><path d="M12 7h.01"/></svg>';
   const card=function(ico,type,title,desc,onclick){
     return '<div style="background:#fff;border:1px solid var(--border);border-radius:16px;padding:28px 30px;display:flex;flex-direction:column;gap:20px;transition:.18s;cursor:default" '
-      +'onmouseenter="this.style.boxShadow=\'0 4px 20px rgba(15,23,42,.10)\';this.style.borderColor=\'#fed7aa\'" '
+      +'onmouseenter="this.style.boxShadow=\'0 4px 20px rgba(15,23,42,.10)\';this.style.borderColor=\'#d1d5db\'" '
       +'onmouseleave="this.style.boxShadow=\'\';this.style.borderColor=\'var(--border)\'">'
       +'<div style="display:flex;align-items:flex-start;gap:18px">'
       +'<div style="'+icoStyle+'">'+ico+'</div>'
@@ -3062,7 +3070,7 @@ function buildMyTimesheetHTML() {
   // ── Stats ──
   const statsHtml = '<div class="ts-stats">'
     + '<div class="ts-stat-card"><div class="ts-stat-top"><span class="ts-stat-label">Total Working Hours</span><div class="ts-stat-ico" style="background:#eff6ff"><svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div></div><div class="ts-stat-val">'+presentCount+'</div><div class="ts-stat-sub">'+mName+' '+y+'</div><div class="ts-stat-vs pos">+'+presentCount+' days vs last month</div></div>'
-    + '<div class="ts-stat-card"><div class="ts-stat-top"><span class="ts-stat-label">Leaves Taken</span><div class="ts-stat-ico" style="background:#fff7ed"><svg viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div></div><div class="ts-stat-val">0</div><div class="ts-stat-sub">No leaves taken</div><div class="ts-stat-vs neu">+0 days vs last month</div></div>'
+    + '<div class="ts-stat-card"><div class="ts-stat-top"><span class="ts-stat-label">Leaves Taken</span><div class="ts-stat-ico" style="background:#f1f5f9"><svg viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div></div><div class="ts-stat-val">0</div><div class="ts-stat-sub">No leaves taken</div><div class="ts-stat-vs neu">+0 days vs last month</div></div>'
     + '<div class="ts-stat-card"><div class="ts-stat-top"><span class="ts-stat-label">Total Hours</span><div class="ts-stat-ico" style="background:#f0fdf4"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div><div class="ts-stat-val">'+totalHoursNum.toFixed(0)+'h</div><div class="ts-stat-sub">8h average/day</div><div class="ts-stat-vs pos">+0% vs last month</div></div>'
     + '<div class="ts-stat-card"><div class="ts-stat-top"><span class="ts-stat-label">Overtime</span><div class="ts-stat-ico" style="background:#faf5ff"><svg viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div></div><div class="ts-stat-val">0h</div><div class="ts-stat-sub">'+mName+' '+y+'</div><div class="ts-stat-vs neu">+0h vs last month</div></div>'
     + '</div>';
@@ -4072,7 +4080,7 @@ function renderTkSidebar(){
       +'<div>'
       +'<div style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Chat Thread</div>'
       +'<div style="display:flex;gap:8px;margin-bottom:12px"><div style="width:28px;height:28px;border-radius:50%;background:#e0e7ff;color:#4f46e5;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+initials+'</div><div style="flex:1"><div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:3px">'+t.clientName+' <span style="color:#9ca3af;font-weight:400">· '+t.createdAt+'</span></div><div style="background:#f1f5f9;border-radius:0 8px 8px 8px;padding:8px 12px;font-size:12.5px;color:#374151;line-height:1.4">'+t.description+'</div></div></div>'
-      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px"><div style="flex:1;display:flex;justify-content:flex-end"><div><div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:3px;text-align:right">'+t.assignedTo+' <span style="color:#9ca3af;font-weight:400">· Today</span></div><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px 0 8px 8px;padding:8px 12px;font-size:12.5px;color:#374151;line-height:1.4">Thank you for reaching out. We are looking into this and will respond shortly.</div></div></div><div style="width:28px;height:28px;border-radius:50%;background:#fff7ed;color:#ea580c;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">PP</div></div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px"><div style="flex:1;display:flex;justify-content:flex-end"><div><div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:3px;text-align:right">'+t.assignedTo+' <span style="color:#9ca3af;font-weight:400">· Today</span></div><div style="background:#f1f5f9;border:1px solid #d1d5db;border-radius:8px 0 8px 8px;padding:8px 12px;font-size:12.5px;color:#374151;line-height:1.4">Thank you for reaching out. We are looking into this and will respond shortly.</div></div></div><div style="width:28px;height:28px;border-radius:50%;background:#f1f5f9;color:#ea580c;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">PP</div></div>'
       +'<div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--border)"><input style="flex:1;height:34px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;font-family:inherit;outline:none;color:var(--navy)" placeholder="Type a reply…"><button style="height:34px;padding:0 16px;background:var(--orange);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Send</button></div>'
       +'</div></div>';
   }else if(tkTab==='attachments'){
@@ -4993,7 +5001,7 @@ function openComplianceHubForRun(runId){
   const run=getManualRun(runId);if(!run)return;
   if(run.journeyId==='contract-creation'&&run.contractRecordId&&contractsData.some(function(c){return c.id===run.contractRecordId;})){
     navigatePage('contracts');
-    openCtSidebar(run.contractRecordId,'compliance');
+    openCtSidebar(run.contractRecordId,'compliance',null,run.runId);
   }else{
     openComplianceResolveModal(runId);
   }
@@ -5060,18 +5068,21 @@ function resolveMissingCountryConfig(contractId){
 
 function buildAIResponsibilitySplitHTML(journeyId){
   const events=aiJourneyEvents[journeyId]||[];
-  const aiEvents=events.filter(function(e){return e.chips.includes('AI Automated');});
-  const humanEvents=events.filter(function(e){return e.chips.includes('Human Required')||e.chips.includes('Approval Required')||e.chips.includes('Client Action');});
-  const item=function(e,cls){return '<div class="ai-resp-item"><span class="ai-resp-dot '+cls+'"></span>'+e.name+'</div>';};
+  const cfgJ=cfgJourneys.find(function(x){return x.id===journeyId;});
+  const steps=(cfgJ&&cfgJ.steps&&cfgJ.steps.length===events.length)?cfgJ.steps:null;
+  const labeled=events.map(function(e,i){return {name:steps?steps[i].name:e.name,chips:e.chips};});
+  const aiEvents=labeled.filter(function(e){return e.chips.includes('AI Automated');});
+  const humanEvents=labeled.filter(function(e){return e.chips.includes('Human Required')||e.chips.includes('Approval Required')||e.chips.includes('Client Action');});
+  const chip=function(e,cls){return '<span class="ai-resp-chip '+cls+'"><span class="ai-resp-chip-dot"></span>'+e.name+'</span>';};
+  const strip=function(label,cls,list){
+    return '<div class="ai-resp-strip ai-resp-'+cls+'">'
+      +'<div class="ai-resp-strip-label"><b>'+label+'</b><span>'+list.length+' / '+events.length+' events</span></div>'
+      +'<div class="ai-resp-chips">'+list.map(function(e){return chip(e,cls);}).join('')+'</div>'
+      +'</div>';
+  };
   return '<div class="ai-resp-split">'
-    +'<div class="ep-form-card ai-resp-card ai-resp-ai">'
-    +'<div class="ep-form-title" style="border:none;margin-bottom:12px;padding-bottom:0">AI Will Handle <span class="ai-resp-count">'+aiEvents.length+' of '+events.length+' events</span></div>'
-    +aiEvents.map(function(e){return item(e,'ai');}).join('')
-    +'</div>'
-    +'<div class="ep-form-card ai-resp-card ai-resp-human">'
-    +'<div class="ep-form-title" style="border:none;margin-bottom:12px;padding-bottom:0">Human Will Handle <span class="ai-resp-count">'+humanEvents.length+' of '+events.length+' events</span></div>'
-    +humanEvents.map(function(e){return item(e,'human');}).join('')
-    +'</div>'
+    +strip('AI Will Handle','ai',aiEvents)
+    +strip('Human Will Handle','human',humanEvents)
     +'</div>';
 }
 function aiTimelineDotClass(chips){
@@ -5161,7 +5172,7 @@ function buildAIJourneyRunSummaryHTML(journeyId){
       +'</div>';
   }).join('')+'</div>';
   const statCard=function(kind,label,val,color,count){
-    const selected=aiRunStatusFilter===kind?' style="border-color:'+(color||'var(--orange)')+';background:'+(color||'#de7909')+'0d"':'';
+    const selected=aiRunStatusFilter===kind?' style="border-color:'+(color||'var(--orange)')+';background:'+(color||'#1a1a1a')+'0d"':'';
     const clickable=count>0?' clickable-stat':'';
     return '<div class="stat-card'+clickable+'"'+selected+(count>0?' onclick="aiJourneyFilterRunsByStatus(\''+kind+'\')"':'')+'><div class="stat-label"><span>'+label+'</span></div><div class="stat-val" style="color:'+(color||'inherit')+'">'+val+'</div></div>';
   };
@@ -5333,7 +5344,7 @@ function buildCfgSystemsHTML(){
       +'</div>'
     :'<div class="review-section" style="display:flex;align-items:center;gap:12px;border-color:#fed7aa;background:#fff7ed;margin-bottom:20px">'
       +'<div style="width:34px;height:34px;border-radius:50%;background:#ffedd5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17.02" x2="12.01" y2="17.02"/></svg></div>'
-      +'<div><div style="font-size:13px;font-weight:700;color:#c2410c">'+connected+' of '+total+' systems connected</div><div style="font-size:12px;color:#9a3412;margin-top:2px">Test or configure the rest to bring them online.</div></div>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#1a1a1a">'+connected+' of '+total+' systems connected</div><div style="font-size:12px;color:#9a3412;margin-top:2px">Test or configure the rest to bring them online.</div></div>'
       +'</div>';
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap">'
@@ -5352,7 +5363,7 @@ function cfgApiDirBadge(dir){
 function cfgApiTypeBadge(type){
   return type==='Transformational'
     ?'<span class="badge" style="background:#f5f3ff;color:#7c3aed">Transactional</span>'
-    :'<span class="badge" style="background:#fff7ed;color:#c2410c">Transactional</span>';
+    :'<span class="badge" style="background:#f1f5f9;color:#1a1a1a">Transactional</span>';
 }
 function startCfgSystemEdit(){cfgSystemEditing=true;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
 function cancelCfgSystemEdit(){cfgSystemEditing=false;cfgSystemDraft=null;navigatePage('cfg-system-detail');}
@@ -5617,7 +5628,7 @@ function cfgMapRow(unified,source,type){
     +'</div>';
 }
 function cfgEnrichRow(e){
-  return '<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed rgba(222,121,9,.25)">'
+  return '<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed rgba(26,26,26,.25)">'
     +'<div style="flex:1;font-size:13px;font-weight:600;color:var(--orange)">'+e.name+'</div>'
     +'<div style="color:#f1c27a">&larr;</div>'
     +'<div style="flex:1;font-size:12px;color:var(--gray)">added in Data Foundation</div>'
@@ -5780,9 +5791,9 @@ function buildCfgModelDetailHTML(){
       +'</div>';
   const enrichSection=editing
     ?'<div class="ep-form-card" style="margin-bottom:18px;border-color:#f1c27a">'
-      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(222,121,9,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
+      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(26,26,26,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
       +dm.enrichment.map(function(e,i){
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed rgba(222,121,9,.25);flex-wrap:wrap">'
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed rgba(26,26,26,.25);flex-wrap:wrap">'
           +'<input class="ep-form-input" style="flex:1;min-width:160px" id="cfg-enr-n-'+i+'" value="'+attrSafe(e.name)+'" placeholder="Enrichment field name">'
           +cfgTypeSelect('cfg-enr-t-'+i,e.type)
           +'<button type="button" class="ep-cancel-btn" style="padding:4px 9px" onclick="removeCfgEnrichRow('+i+')">Remove</button>'
@@ -5791,7 +5802,7 @@ function buildCfgModelDetailHTML(){
       +'<button type="button" class="btn btn-secondary btn-sm" style="margin-top:14px;border:1px dashed #f1c27a;color:var(--orange);background:transparent" onclick="addCfgEnrichRow()">+ Add enrichment field</button>'
       +'</div>'
     :'<div class="ep-form-card" style="margin-bottom:18px;border-color:#f1c27a">'
-      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(222,121,9,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
+      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(26,26,26,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
       +(m.enrichment.length?m.enrichment.map(function(e){return cfgEnrichRow(e);}).join(''):'<div style="padding:12px 0;font-size:12.5px;color:var(--gray)">No enrichment fields yet.</div>')
       +'</div>';
   const rulesSection=editing
@@ -5943,18 +5954,19 @@ function buildCfgJourneyDetailHTML(){
     const stepMode=canShowAgent&&isStepAgentEnabled(j.id,manualIdx)?'<span class="manual-step-mode agent">Agent step</span>':'<span class="manual-step-mode">Manual step</span>';
     const ownerLabel=manualStep.ownerRole||'Owner TBD';
     return '<div class="ai-timeline-item cfg-step-item">'
-      +'<div class="ai-timeline-dot">'+(i+1)+'</div>'
+      +'<div class="ai-timeline-dot cfg-flow-dot">'+(i+1)+'</div>'
       +'<div class="ai-timeline-card cfg-step-card" onclick="openCfgStepDrawer(\''+j.id+'\','+i+')">'
       +'<div class="cfg-step-head"><div class="cfg-step-title-wrap"><div class="ai-timeline-card-title">'+st.name+'</div><div class="ai-timeline-card-desc">'+st.src+'</div></div><span class="cfg-owner-pill">'+ownerLabel+'</span></div>'
       +'<div class="cfg-step-meta"><span>Module: '+(manualStep.modulePage?manualModuleLabel(manualStep.modulePage):'Not mapped')+'</span><span>SLA: '+(manualStep.sla||'TBD')+'</span></div>'
       +'<div class="cfg-step-footer"><div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+stepMode+'</div></div>'
       +'</div></div>';
   }).join('');
-  const totalSteps=j.steps.length;
-  const aiStepsCount=j.steps.filter(function(st,i){const m=cfgManualStep(j.id,i);return agentOn&&st.type!=='rule'&&m.agentCapable&&!m.approvalRequired&&isStepAgentEnabled(j.id,cfgManualStepIndex(j.id,i));}).length;
-  const humanStepsCount=j.steps.filter(function(st){return st.type==='rule';}).length;
+  const respEvents=aiJourneyEvents[j.id]||[];
+  const totalSteps=respEvents.length||j.steps.length;
+  const aiStepsCount=respEvents.filter(function(e){return e.chips.includes('AI Automated');}).length;
+  const humanStepsCount=respEvents.filter(function(e){return e.chips.includes('Human Required')||e.chips.includes('Approval Required')||e.chips.includes('Client Action');}).length;
   const riskLevel=(aiJourneys.find(function(x){return x.id===j.id;})||{}).risk||'—';
-  const statGrid='<div class="stat-grid" style="margin-bottom:24px">'
+  const statGrid='<div class="stat-grid cfg-detail-stat-grid" style="margin-bottom:16px">'
     +'<div class="stat-card"><div class="stat-label"><span>Total Events</span></div><div class="stat-val">'+totalSteps+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>AI Automated</span></div><div class="stat-val" style="color:var(--orange)">'+aiStepsCount+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Human Required</span></div><div class="stat-val" style="color:#2563eb">'+humanStepsCount+'</div></div>'
@@ -5964,12 +5976,65 @@ function buildCfgJourneyDetailHTML(){
     +cfgBackBtn('cfg-context-journey','Context & Journey')
     +'<div class="cfg-detail-hero"><div><div class="cfg-detail-title-row"><p>'+j.name+'</p>'+journeyActivationBadgeHTML(j.id,!!j.locked&&portalRole!=='super-admin',!!j.locked&&portalRole==='super-admin')+(portalRole!=='super-admin'?journeyModeBadgeHTML(j.id):'')+'</div><div class="cfg-detail-sub">'+j.desc+'</div></div>'+detailActions+'</div>'
     +statGrid
-    +'<div class="review-title" style="margin-bottom:14px">Responsibility Split</div>'
+    +'<div class="cfg-resp-caption">Responsibility Split</div>'
     +buildAIResponsibilitySplitHTML(j.id)
-    +'<div class="review-title" style="margin:32px 0 14px">Flow &middot; runs top to bottom &middot; click a step to view its assigned agent</div>'
-    +'<div class="ai-timeline">'+timeline+'</div>'
+    +'<div class="review-title" style="margin:20px 0 10px;font-size:14.5px">Flow &middot; runs top to bottom &middot; click a step to view its assigned agent</div>'
+    +'<div class="ai-timeline cfg-flow-timeline">'+timeline+'</div>'
     +'<button class="btn btn-secondary btn-sm" style="margin-top:16px;margin-left:44px;border-style:dashed">+ Add step</button>'
     +'</div>';
+}
+let _cfgFlowObserver=null;
+let _cfgFlowScrollHandler=null;
+function initCfgFlowScroll(){
+  if(_cfgFlowObserver){_cfgFlowObserver.disconnect();_cfgFlowObserver=null;}
+  const root=document.getElementById('adt-content');
+  if(root&&_cfgFlowScrollHandler){root.removeEventListener('scroll',_cfgFlowScrollHandler);_cfgFlowScrollHandler=null;}
+  const items=root?Array.prototype.slice.call(root.querySelectorAll('.cfg-flow-timeline .cfg-step-item')):[];
+  if(!root||!items.length)return;
+  const rootRect=root.getBoundingClientRect();
+  const triggerOffset=rootRect.height*0.5;
+  const triggerY=rootRect.top+triggerOffset;
+  const marginTop=-triggerOffset;
+  const marginBottom=-(rootRect.height-triggerOffset-2);
+  const lastIdx=items.length-1;
+  _cfgFlowObserver=new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      const el=entry.target;
+      if(entry.isIntersecting){
+        el.classList.add('cfg-flow-active');
+        el.classList.remove('cfg-flow-reached');
+      }else if(entry.boundingClientRect.top<triggerY){
+        el.classList.remove('cfg-flow-active');
+        el.classList.add('cfg-flow-reached');
+      }else{
+        el.classList.remove('cfg-flow-active','cfg-flow-reached');
+      }
+    });
+  },{root:root,rootMargin:marginTop+'px 0px '+marginBottom+'px 0px',threshold:0});
+  function observeAll(){items.forEach(function(it){_cfgFlowObserver.observe(it);});}
+  observeAll();
+  items[0].classList.add('cfg-flow-active');
+  // Any number of trailing cards can be too short (individually or combined) to ever
+  // scroll their way past the mid-viewport trigger line before hitting max scroll — so
+  // relying on IntersectionObserver alone can strand several cards un-lit at the bottom.
+  // Fix: once truly at the bottom, disconnect the observer (so its async callbacks can't
+  // race with / undo this) and force every card's state directly. Reconnect on scroll-up.
+  let atBottomLock=false;
+  _cfgFlowScrollHandler=function(){
+    const atBottom=root.scrollHeight-root.scrollTop-root.clientHeight<4;
+    if(atBottom){
+      if(!atBottomLock){atBottomLock=true;_cfgFlowObserver.disconnect();}
+      items.forEach(function(it,idx){
+        if(idx===lastIdx){it.classList.add('cfg-flow-active');it.classList.remove('cfg-flow-reached');}
+        else{it.classList.remove('cfg-flow-active');it.classList.add('cfg-flow-reached');}
+      });
+    }else if(atBottomLock){
+      atBottomLock=false;
+      observeAll();
+    }
+  };
+  root.addEventListener('scroll',_cfgFlowScrollHandler,{passive:true});
+  _cfgFlowScrollHandler();
 }
 function openCfgStepDrawer(journeyId,idx){
   cfgDrawerJourneyId=journeyId;cfgDrawerStepIdx=idx;
@@ -6474,9 +6539,9 @@ function buildManualJourneyRunHTML(){
   const linkedDeEmp=cur.modulePage==='direct'?directEmpData.find(function(e){return e.onboardingRunId===run.runId;}):null;
   const linkedPrEmp=cur.modulePage==='payroll'?payrollEmpData.find(function(e){return e.readinessRunId===run.runId;}):null;
   const openHubAction=cur.modulePage==='compliance'?"openComplianceHubForRun('"+run.runId+"')"
-    :(run.contractRecordId&&curCtTab&&contractsData.some(function(c){return c.id===run.contractRecordId;}))?"navigatePage('contracts');openCtSidebar("+run.contractRecordId+",'"+curCtTab+"')"
+    :(run.contractRecordId&&curCtTab&&contractsData.some(function(c){return c.id===run.contractRecordId;}))?"navigatePage('contracts');openCtSidebar("+run.contractRecordId+",'"+curCtTab+"',null,'"+run.runId+"')"
     :linkedDeEmp?"navigatePage('direct');openDeSidebar("+linkedDeEmp.id+")"
-    :linkedPrEmp?"navigatePage('payroll');openPrSidebar("+linkedPrEmp.id+")"
+    :linkedPrEmp?"navigatePage('payroll');openPrSidebar("+linkedPrEmp.id+",'"+run.runId+"')"
     :"navigatePage('"+(cur.modulePage||'dashboard')+"')";
   const heroActions=(run.status!=='Completed'&&isOwner)?'<button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Step Complete</button>':'';
   const currentActions=run.status==='Completed'?''
@@ -6496,6 +6561,7 @@ function buildManualJourneyRunHTML(){
 // -- Same "linked journey run is on this step" banner the Compliance tab already shows, generalized to any Contracts-sidebar tab that a manual step maps to (see manualStepTabMap), so acting on Basic Details / Commercial Terms / Workflow also advances the linked run. --
 function manualStepBannerHTML(c,tabId){
   const linkedRun=manualLinkedRunForContract(c.id);if(!linkedRun)return '';
+  if(ctJourneyContextRunId!==linkedRun.runId)return '';
   const linkedSteps=manualJourneySteps(linkedRun.journeyId);
   const curStep=linkedSteps[linkedRun.currentStepIdx];
   if(!curStep||ctTabForManualStep(curStep)!==tabId)return '';
@@ -8148,7 +8214,7 @@ function aiSubmitAssistedContract(type){
     commercial:aiGenCommercial(p.pay),
     complianceItems:[{item:type+' '+(p.country||'')+' Proposal',note:'Optional',status:'Pending',doc:null}]
   };
-  contractsData.push(record);
+  contractsData.unshift(record);
   ctLogsData[newId]=[{date:now.date,time:now.time,user:'AI Contract Assistant',status:'Submitted',action:'Contract created via AI Contract Assistant for '+fullName+'.'}];
   ctWorkflowData[newId]=[{title:'Contract Created by AI',user:'AI Contract Assistant',date:now.date,time:now.time,description:'AI compiled the proposal and contract data from the conversation for '+fullName+'.'}];
   aiCreatedContractId=newId;
@@ -8456,8 +8522,8 @@ function aiSimulateContractApproval(){
 let aiContractEditMode=false;
 function aiContractDocActionBarHTML(){
   if(aiContractEditMode){
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding:10px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px">'
-      +'<div style="font-size:12.5px;font-weight:600;color:#c2410c">Editing contract &mdash; make your changes below, then save.</div>'
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding:10px 16px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:10px">'
+      +'<div style="font-size:12.5px;font-weight:600;color:#1a1a1a">Editing contract &mdash; make your changes below, then save.</div>'
       +'<button class="btn btn-success btn-sm" onclick="aiContractDocSave()">Save</button>'
       +'</div>';
   }
@@ -8805,7 +8871,7 @@ function buildSuperAdminMyTasksHTML(){
   const pending=entityAccessRequestsPending();
   if(mtReqSelectedId&&!pending.some(function(r){return r.id===mtReqSelectedId;}))mtReqSelectedId=null;
   const rows=pending.map(function(r){
-    return '<div class="ea-task-row" id="mt-req-row-'+r.id+'"'+(mtReqSelectedId===r.id?' style="background:#fff8f0"':'')+'><div class="ea-task-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-task-what"><div class="ea-task-label">'+r.label+'</div><div class="ea-task-note">'+r.entity+'</div></div><div class="ea-task-when">'+r.timestamp+'</div>'
+    return '<div class="ea-task-row" id="mt-req-row-'+r.id+'"'+(mtReqSelectedId===r.id?' style="background:#f1f5f9"':'')+'><div class="ea-task-who">'+requesterAvatarHTML(r.requestedBy)+requesterCaptionHTML(r.requestedBy)+'</div><div class="ea-task-what"><div class="ea-task-label">'+r.label+'</div><div class="ea-task-note">'+r.entity+'</div></div><div class="ea-task-when">'+r.timestamp+'</div>'
       +'<div class="ea-task-actions sa-req-actions"><button class="sa-req-btn sa-req-approve" onclick="openMyTaskDetail(\''+r.id+'\')">Approve</button><button class="sa-req-btn sa-req-reject" onclick="rejectEntityRequest(\''+r.id+'\')">Reject</button></div></div>';
   }).join('');
   const body=pending.length?rows:'<div class="ea-req-empty">No pending requests right now &mdash; requests to enable a system, agent, or journey will show up here.</div>';
@@ -8881,7 +8947,7 @@ function openMyTaskDetail(reqId){
   mtReqTab='journeys';
   const sb=document.getElementById('mt-req-sb');if(sb)sb.classList.add('open');
   const inner=document.getElementById('mt-req-sb-inner');if(inner)inner.innerHTML=renderMyTaskDetailPanel(reqId);
-  document.querySelectorAll('.ea-task-row').forEach(function(row){row.style.background=row.id==='mt-req-row-'+reqId?'#fff8f0':'';});
+  document.querySelectorAll('.ea-task-row').forEach(function(row){row.style.background=row.id==='mt-req-row-'+reqId?'#f1f5f9':'';});
 }
 function closeMyTaskDetail(){
   mtReqSelectedId=null;
