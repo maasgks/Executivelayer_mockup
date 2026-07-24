@@ -7977,18 +7977,21 @@ function aiCtRenderMatchCard(emp,parsed){
     +'</div></div>';
 }
 function aiCtNotFoundPanel(parsed){
-  const countryOpts=['','Netherlands','India','Germany','Spain','United Kingdom','France','Italy'].map(function(c){return '<option value="'+c+'">'+(c||'Select Country')+'</option>';}).join('');
-  const empTypeOpts=['','EOR','PEO','Contractor'].map(function(t){return '<option value="'+t+'">'+(t||'Select Type')+'</option>';}).join('');
+  const nameParts=(parsed.name||'').trim().split(' ');
+  const fname=nameParts[0]||'',lname=nameParts.slice(1).join(' ')||'';
+  const country=parsed.country||'',empType=parsed.empType||'',jobTitle=parsed.jobTitle||'';
+  const countryOpts=['','Netherlands','India','Germany','Spain','United Kingdom','France','Italy'].map(function(c){return '<option value="'+c+'"'+(c===country?' selected':'')+'>'+(c||'Select Country')+'</option>';}).join('');
+  const empTypeOpts=['','EOR','PEO','Contractor'].map(function(t){return '<option value="'+t+'"'+(t===empType?' selected':'')+'>'+(t||'Select Type')+'</option>';}).join('');
   return '<div class="ep-form-card">'
     +'<div style="font-size:11.5px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">No existing employee found</div>'
-    +'<div style="font-size:12px;color:var(--gray);margin-bottom:14px">I couldn\'t find &ldquo;'+(parsed.name||'this person')+'&rdquo; in ADT. Enter their details below, or let AI fill the form in for you.</div>'
+    +'<div style="font-size:12px;color:var(--gray);margin-bottom:14px">I couldn\'t find &ldquo;'+(parsed.name||'this person')+'&rdquo; in ADT. I\'ve pre-filled their details below from the request &mdash; review and continue, or let AI fill the form in for you.</div>'
     +'<button type="button" class="btn btn-secondary" id="ai-ct-autofill-btn" style="margin-bottom:16px" onclick="aiCtSimulateFill()">&#10024; Simulate Auto-Fill</button>'
     +'<div class="ep-form-grid" style="margin-bottom:16px">'
-    +'<div class="ep-form-group"><label class="ep-form-label">First Name</label><input class="ep-form-input" id="ai-ct-fname"></div>'
-    +'<div class="ep-form-group"><label class="ep-form-label">Last Name</label><input class="ep-form-input" id="ai-ct-lname"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">First Name</label><input class="ep-form-input" id="ai-ct-fname" value="'+fname+'"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Last Name</label><input class="ep-form-input" id="ai-ct-lname" value="'+lname+'"></div>'
     +'<div class="ep-form-group"><label class="ep-form-label">Country</label><select class="ep-form-select" id="ai-ct-country">'+countryOpts+'</select></div>'
     +'<div class="ep-form-group"><label class="ep-form-label">Employment Type</label><select class="ep-form-select" id="ai-ct-emptype">'+empTypeOpts+'</select></div>'
-    +'<div class="ep-form-group ep-form-full"><label class="ep-form-label">Job Title</label><input class="ep-form-input" id="ai-ct-jobtitle" placeholder="e.g. Software Engineer"></div>'
+    +'<div class="ep-form-group ep-form-full"><label class="ep-form-label">Job Title</label><input class="ep-form-input" id="ai-ct-jobtitle" placeholder="e.g. Software Engineer" value="'+jobTitle+'"></div>'
     +'</div>'
     +'<button class="btn btn-primary" onclick="aiCtUseManualEntry()">Continue to Contract Form</button>'
     +'</div>';
@@ -8145,7 +8148,7 @@ function aiCtUseEmployee(empId){
   const parts=emp.name.split(' ');
   aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||'',pay:aiCtMockSalary(emp).replace(/,/g,'')};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
-  aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||'';
+  aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||'';aiCtJourneyIsSimulated=false;
   const promptEl=document.getElementById('ai-ct-prompt');
   aiCtChatMsgs=[
     {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+emp.name)},
@@ -8165,7 +8168,7 @@ function aiCtUseManualEntry(){
   const rec=Object.assign({id:newId,name:fullName,empId:empId,dept:'—',jobTitle:jobTitle||'—',joinDate:now.date,desc:'Created via AI Contract Assistant',contact:'—',email:'—',status:'Active'},
     isGlobal?{country:country,workerType:empType||'EOR'}:{branch:'—'});
   arr.push(rec);
-  aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||'';
+  aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||'';aiCtJourneyIsSimulated=true;
   aiContractPrefill={fname:fname,lname:lname,email:'',country:country,jobTitle:jobTitle};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
   const promptEl=document.getElementById('ai-ct-prompt');
@@ -8201,6 +8204,12 @@ function buildAIAssistedContractSplitHTML(type){
   const formHtml=buildContractFormHTML(type,step,true);
   return '<div class="ai-ct-split">'
     +'<div class="ai-ct-split-chat">'
+    +'<div class="ai-ct-upload-bar">'
+    +'<button type="button" class="ai-ct-upload-btn" onclick="aiCtTriggerDocUpload()" title="Upload an offer letter, ID, or filled-in form &mdash; AI will extract the details and fill the form">'
+    +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+    +'<span>Upload document to auto-fill</span>'
+    +'</button>'
+    +'</div>'
     +'<div class="chat-area" id="ai-ct-chat"></div>'
     +'<div class="input-area"><div class="input-row">'
     +'<input class="input-field" id="ai-ct-chat-input-field" placeholder="Ask AI or add more details..." onkeydown="if(event.key===\'Enter\')aiCtChatSend()">'
@@ -8224,6 +8233,94 @@ function aiCtChatSend(){
     aiCtChatMsgs.push({role:'bot',text:'Got it &mdash; I\'ve noted that. Keep filling in the form on the right, and I\'ll keep helping as you go.'});
     renderChat('ai-ct-chat',aiCtChatMsgs);
   },500);
+}
+// ── AI Contract Assistant: upload-to-autofill ──
+// Simulates parsing an uploaded document (offer letter, ID, filled-in form). Instead of a
+// single summary, the chat replays each required field's question immediately followed by
+// the answer pulled from the document (mirroring the manual Q&A flow), filling the matching
+// form field in step with each answer. Optional/already-defaulted fields are filled silently
+// at the end. Matches the sample document in sample-docs/.
+function aiCtTriggerDocUpload(){
+  const inp=document.getElementById('ai-ct-upload-input');
+  if(!inp)return;
+  inp.value='';
+  inp.click();
+}
+function aiCtDocFieldValues(){
+  const p=aiContractPrefill||{};
+  return {
+    nationality:'India',
+    country:p.country||'Germany',
+    fname:p.fname||'Rohan',
+    lname:p.lname||'Verma',
+    email:p.email||'rohan.verma@personalmail.com',
+    mobile:'+91 98765 43210',
+    dob:'1994-03-18',
+    address:'221B Residency Road, Bengaluru, India',
+    jobTitle:p.jobTitle||'Operations Analyst',
+    jobDesc:'Owns cross-border vendor coordination and operational reporting.',
+    toDate:'2027-04-12',
+    pay:'55000'
+  };
+}
+// Optional fields (no chat question defined, already have form defaults) that the sample
+// document also covers — filled quietly once the Q&A flow finishes.
+function aiCtDocSilentFieldValues(){
+  return {'peo-gender':'Male','peo-skill':'Vendor & Operations Management','peo-from':'2026-08-01'};
+}
+function aiCtHandleDocUpload(e){
+  const file=e.target.files&&e.target.files[0];
+  if(!file)return;
+  const fname=file.name;
+  aiCtPendingField=null;
+  aiCtChatMsgs.push({role:'user',text:'Please use this document to fill in the contract details.',attachment:{name:fname,isImage:false}});
+  renderChat('ai-ct-chat',aiCtChatMsgs);
+  showTyping('ai-ct-chat');
+  setTimeout(function(){
+    hideTyping();
+    aiCtChatMsgs.push({role:'bot',text:'Reading <b>'+fname+'</b>&hellip; I\'ll go through each field and pull the answer straight from the document.'});
+    renderChat('ai-ct-chat',aiCtChatMsgs);
+    setTimeout(function(){aiCtRunDocQAFlow(fname,aiCtDocFieldValues());},700);
+  },500);
+}
+function aiCtRunDocQAFlow(fname,values){
+  const queue=AI_CT_FIELDS.filter(aiCtFieldMissing).filter(function(f){return values[f.key]!==undefined;});
+  let i=0;
+  function step(){
+    if(i>=queue.length){aiCtFinishDocUpload();return;}
+    const field=queue[i];
+    const val=values[field.key];
+    aiCtChatMsgs.push({role:'bot',text:field.question});
+    renderChat('ai-ct-chat',aiCtChatMsgs);
+    showTyping('ai-ct-chat');
+    setTimeout(function(){
+      hideTyping();
+      aiCtChatMsgs.push({role:'bot',text:'&#128196; Found in <b>'+fname+'</b>: &ldquo;'+val+'&rdquo; &mdash; set <b>'+field.label+'</b>.'});
+      renderChat('ai-ct-chat',aiCtChatMsgs);
+      aiWizardFormData[field.key]=val;
+      const el=document.getElementById(field.id);
+      if(el){el.value=val;el.classList.add('ai-ct-field-fill');setTimeout(function(){el.classList.remove('ai-ct-field-fill');},600);}
+      i++;
+      setTimeout(step,550);
+    },550);
+  }
+  step();
+}
+function aiCtFinishDocUpload(){
+  const extras=aiCtDocSilentFieldValues();
+  Object.keys(extras).forEach(function(id){
+    const el=document.getElementById(id);
+    if(el&&!el.value){el.value=extras[id];el.classList.add('ai-ct-field-fill');setTimeout(function(){el.classList.remove('ai-ct-field-fill');},600);}
+  });
+  const remaining=aiCtMissingFields();
+  if(remaining.length){
+    aiCtChatMsgs.push({role:'bot',text:'A few details weren\'t in the document, so I\'ll ask about those now.'});
+    renderChat('ai-ct-chat',aiCtChatMsgs);
+    setTimeout(aiCtAskNextField,500);
+  }else{
+    aiCtChatMsgs.push({role:'bot',text:'All the required details are filled in on the right from the document. Review the form and click the button at the bottom when you\'re ready.'});
+    renderChat('ai-ct-chat',aiCtChatMsgs);
+  }
 }
 function aiCtPushStepMessage(step){
   const msgs={1:'Now let\'s confirm the job details &mdash; title, schedule, and pay.',2:'Almost done &mdash; just leave entitlement, probation, and notice period left.'};
@@ -8256,7 +8353,8 @@ function aiSubmitAssistedContract(type){
     empDuration:from+(p.toDate?' – '+p.toDate:''),empType:type,workSchedule:p.hours||'—',payAmount:p.pay||'—',currency:'INR',
     jobDesc:p.jobDesc||'—',payFrequency:'Monthly',
     commercial:aiGenCommercial(p.pay),
-    complianceItems:[{item:type+' '+(p.country||'')+' Proposal',note:'Optional',status:'Pending',doc:null}]
+    complianceItems:[{item:type+' '+(p.country||'')+' Proposal',note:'Optional',status:'Pending',doc:null}],
+    simulated:aiCtJourneyIsSimulated
   };
   contractsData.unshift(record);
   ctLogsData[newId]=[{date:now.date,time:now.time,user:'AI Contract Assistant',status:'Submitted',action:'Contract created via AI Contract Assistant for '+fullName+'.'}];
@@ -8607,7 +8705,6 @@ function buildAIContractDocCardHTML(rec,d,opts){
     +'<div><div class="adt-doc-brand">ADT</div><div class="adt-doc-brand-sub">Global Employment Platform</div></div>'
     +'<div><div class="adt-doc-title">EMPLOYMENT AGREEMENT</div><div class="adt-doc-meta">Contract No. '+(rec.contractId||'—')+'<br>Issued '+now.date+'</div></div>'
     +'</div>'
-    +'<div style="margin-bottom:18px">'+aiCtCurrentAgentBadge()+'</div>'
     +'<div class="adt-doc-section">'
     +'<div class="adt-doc-section-title">Parties</div>'
     +'<div class="review-grid">'
@@ -8711,13 +8808,13 @@ function aiCtRunOnboardingStep(){
 function aiCtOnboardingStepDetailHTML(idx,rec){
   if(idx===0){
     const docs=[
-      {label:'Government ID Proof',note:'Verified against submitted ID'},
-      {label:'Proof of Address',note:'Verified'},
-      {label:'Educational Certificates',note:'Verified'},
-      {label:'Bank Account Details',note:'Verified for payroll setup'},
-      {label:'Signed Employment Contract',note:'On file'}
+      {label:'Government ID Proof',note:'Passport, national ID, or driver\'s license'},
+      {label:'Proof of Address',note:'Utility bill or bank statement, last 3 months'},
+      {label:'Educational Certificates',note:'Highest qualification certificate'},
+      {label:'Bank Account Details',note:'For payroll disbursement'},
+      {label:'Signed Employment Contract',note:'Countersigned agreement copy'}
     ];
-    const rows=docs.map(function(d){return '<div class="ea-req-row"><div><div class="ea-req-label">'+d.label+'</div><div class="ea-req-time">'+d.note+'</div></div><span class="status-pill active">Verified</span></div>';}).join('');
+    const rows=docs.map(function(d){return '<div class="ea-req-row"><div><div class="ea-req-label">'+d.label+'</div><div class="ea-req-time">'+d.note+'</div></div><span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#b45309"><span class="cl-spinner" style="width:12px;height:12px;border-width:2px"></span>Verifying</span></div>';}).join('');
     return '<div class="ai-timeline-card-desc" style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="cl-spinner" style="width:13px;height:13px;border-width:2px"></span>Collecting onboarding documents&hellip;</div>'
       +'<div class="ea-req-list">'+rows+'</div>';
   }

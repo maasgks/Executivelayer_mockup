@@ -11,7 +11,7 @@ let complianceContractQueueOpen=false,complianceHubItemsOpen=false,complianceSup
 let aiContractPrefill=null,aiAssistedFlow=false,aiCtNotFoundOpen=false,aiProposalDraft=null,aiCtChatMsgs=[],aiWizardFormData={},aiCreatedContractId=null;
 const aiDealManager={name:'Karan Mehta',role:'Deal Manager',initials:'KM'};
 const aiOpsManager={name:'Priya Nair',role:'Ops Manager',initials:'PN'};
-let aiCtAnimatedStage=-1,aiCtPendingEmpType='',aiCtJourneyEmployee=null;
+let aiCtAnimatedStage=-1,aiCtPendingEmpType='',aiCtJourneyEmployee=null,aiCtJourneyIsSimulated=false;
 let aiCtPendingField=null,aiCtQuestionsStarted=false;
 const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'};
 const aiHrManager={name:'Pallavi Parate',role:'HR Manager',initials:'PP'};
@@ -1671,6 +1671,16 @@ function loadAppState(){
     if(typeof s.entityRequestSeq==='number')entityRequestSeq=s.entityRequestSeq;
     if(typeof s.manualRunSeq==='number')manualRunSeq=s.manualRunSeq;
     if(typeof s.liveRunSeq==='number')liveRunSeq=s.liveRunSeq;
+    // -- Demo reset: contracts created via "Simulate: New/Existing Employee" (tagged record.simulated, or legacy runs from before that tag existed) are scratch data for re-running the walkthrough, so purge them on every load instead of letting them pile up as duplicates. --
+    const legacySimulatedNames=['Rohan Verma','New Employee','Verma'];
+    for(let i=contractsData.length-1;i>=0;i--){
+      const c=contractsData[i];
+      if(c.simulated||(!('simulated' in c)&&c.manualRunId&&legacySimulatedNames.indexOf(c.empName)>-1)){
+        contractsData.splice(i,1);
+        for(let j=manualJourneyRuns.length-1;j>=0;j--){if(manualJourneyRuns[j].contractRecordId===c.id)manualJourneyRuns.splice(j,1);}
+        delete ctLogsData[c.id];delete ctWorkflowData[c.id];
+      }
+    }
     // -- Demo reset: the RUN-4002 / contract-5 "missing country configuration" walkthrough is meant to be re-demoable on every refresh, so force it back to its unresolved seed state regardless of what got persisted. --
     notifiedRunIds.delete('RUN-4002');
     delete notifiedRunOwners['RUN-4002'];
@@ -1727,7 +1737,8 @@ function getManualRun(runId){return manualJourneyRuns.find(function(r){return r.
 const manualStepTabMap={'Deal & Employee Record':'basic-details','Compliance Check':'compliance','Proposal Drafted':'commercial-terms','Proposal Approved':'commercial-terms','Client Acceptance':'workflow','Contract Generated & Sent':'workflow','Signature Received':'workflow','Signed Contract Approved':'workflow'};
 function ctTabForManualStep(step){return (step&&manualStepTabMap[step.name])||null;}
 function manualLinkedRunForContract(contractId){return manualJourneyRuns.find(function(r){return r.contractRecordId===contractId&&r.status!=='Completed';});}
-function isJourneyAgentEnabled(journeyId){return !!journeyAgentEnabled[journeyId];}
+// -- Agent Mode is the default experience: a journey is agent-enabled unless the admin explicitly toggles it off. --
+function isJourneyAgentEnabled(journeyId){return journeyAgentEnabled[journeyId]!==false;}
 function isStepAgentEnabled(journeyId,idx){
   const step=manualJourneySteps(journeyId)[idx];
   if(!step||step.approvalRequired)return false;
@@ -1745,7 +1756,7 @@ function journeyModeLabel(journeyId){
   return 'Hybrid';
 }
 function toggleJourneyAgent(journeyId){
-  journeyAgentEnabled[journeyId]=!journeyAgentEnabled[journeyId];
+  journeyAgentEnabled[journeyId]=!isJourneyAgentEnabled(journeyId);
   if(!journeyStepAgentEnabled[journeyId])journeyStepAgentEnabled[journeyId]={};
   manualJourneySteps(journeyId).forEach(function(st,i){if(st.agentCapable&&!st.approvalRequired)journeyStepAgentEnabled[journeyId][i]=journeyAgentEnabled[journeyId];});
   renderADTPage();
