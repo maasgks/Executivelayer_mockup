@@ -33,6 +33,7 @@ function renderPageContentImpl(id){
   if(isAIContractWizardPage(page)){
     const cjStage=aiCtJourneyStage();
     if(cjStage>=0){
+      aiCtSyncLinkedRun(cjStage);
       el.innerHTML='<div class="aicj-wrap">'+buildAIContractJourneyBarHTML(cjStage)+'<div id="aicj-inner"></div></div>';
       dispatchAIContractWizardPage(document.getElementById('aicj-inner'));
     }else{

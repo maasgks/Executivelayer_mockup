@@ -7790,6 +7790,26 @@ function renderAgentRunPanel(){
 
 // -- AI CONTRACT ASSISTANT (Contracts "+" flow, gated on the contract-creation journey being Active) --
 // -- Contract Creation Journey: persistent animated step bar (bound to aiJourneyEvents['contract-creation']) --
+// Maps an AI-assisted journey stage (aiCtJourneyStage(), 0-7) to the furthest step it implies
+// in manualJourneyStepCatalog['contract-creation'] (0-9). The AI flow moves faster than the
+// manual catalog's granularity (e.g. no separate "Client Acceptance" step), so this is a
+// monotonic "at least this far along" mapping rather than a 1:1 step match.
+const AI_CT_STAGE_TO_MANUAL_STEP={1:2,2:3,3:5,4:6,6:8,7:9};
+// Keeps the linked manualJourneyRuns entry (the "step" dropdown shown against the contract in
+// the Contracts list) moving forward as the AI-assisted journey advances, instead of freezing
+// at "Compliance Check" — the step it's initialized to right after the contract is created.
+function aiCtSyncLinkedRun(stage){
+  if(!aiCreatedContractId)return;
+  const c=contractsData.find(function(x){return x.id===aiCreatedContractId;});
+  if(!c||!c.manualRunId)return;
+  const run=getManualRun(c.manualRunId);
+  if(!run||run.status==='Completed')return;
+  const targetIdx=AI_CT_STAGE_TO_MANUAL_STEP[stage];
+  if(targetIdx===undefined)return;
+  const steps=manualJourneySteps(run.journeyId);
+  if(targetIdx>run.currentStepIdx)run.currentStepIdx=Math.min(targetIdx,steps.length-1);
+  if(stage===7){run.status='Completed';run.currentStepIdx=steps.length-1;}
+}
 function aiCtJourneyStage(){
   if(page==='ai-contract-assistant')return 0;
   if(page==='ai-employee-created')return 0;
