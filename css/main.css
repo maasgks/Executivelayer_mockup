@@ -799,6 +799,8 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-ct-field-fill{background:var(--ol)!important;border-color:var(--orange)!important;transition:background .25s,border-color .25s}
 .ep-form-select{padding:9px 28px 9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;appearance:none;background:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;outline:none;cursor:pointer;transition:.15s;width:100%;box-sizing:border-box}
 .ep-form-select:focus{border-color:var(--orange);box-shadow:0 0 0 2px rgba(26,26,26,.1)}
+.cas-modal{width:min(560px,92vw)}
+.cas-modal-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid var(--border)}
 .ep-form-full{grid-column:1/-1}
 .ai-wizard-form-card{padding:28px 30px}
 .ai-wizard-form-grid{row-gap:26px;column-gap:32px}

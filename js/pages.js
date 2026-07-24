@@ -5887,10 +5887,10 @@ function enableAgentToggleHTML(journeyId,small){
 function journeyActivationBadgeHTML(journeyId,locked,isRoadmap){
   if(locked)return '<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>';
   if(isRoadmap)return '<span class="status-pill draft">Not Configured</span>';
-  if(entityJourneyActivation[journeyId])return '<span class="status-pill active">Activated</span>';
+  if(entityJourneyActivation[journeyId])return '<span class="status-pill active">Available</span>';
   const state=journeyRequestState(journeyId);
   if(state==='awaiting-admin')return '<span class="status-pill pending">Requested</span>';
-  return '<span class="status-pill draft">Available</span>';
+  return '<span class="status-pill active">Available</span>';
 }
 function cfgSetJourneyCategoryFilter(cat){
   cfgJourneyCategoryFilter=cfgJourneyCategoryFilter===cat?'':cat;
@@ -5940,7 +5940,6 @@ function buildCfgJourneyDetailHTML(){
     const key=j.id+'__'+i;
     const assign=cfgStepAssignments[key];
     const isHuman=st.type==='rule';
-    const manualIdx=cfgManualStepIndex(j.id,i);
     const manualStep=cfgManualStep(j.id,i);
     const canShowAgent=agentOn&&!isHuman&&manualStep.agentCapable&&!manualStep.approvalRequired;
     const rec=(!assign&&canShowAgent)?cfgRecommendedAgentForStep(st):null;
@@ -5951,7 +5950,8 @@ function buildCfgJourneyDetailHTML(){
         :(assign||rec)
           ?'<span class="badge" style="margin-left:6px">Agent: '+(assign?assign.agent:rec.name)+'</span>'
           :'<span class="badge" style="margin-left:6px">No agent assigned yet</span>';
-    const stepMode=canShowAgent&&isStepAgentEnabled(j.id,manualIdx)?'<span class="manual-step-mode agent">Agent step</span>':'<span class="manual-step-mode">Manual step</span>';
+    const agentCapableStep=!isHuman&&manualStep.agentCapable&&!manualStep.approvalRequired;
+    const stepMode=agentCapableStep?'<span class="manual-step-mode agent">AI Agent</span>':'<span class="manual-step-mode">Manual</span>';
     const ownerLabel=manualStep.ownerRole||'Owner TBD';
     return '<div class="ai-timeline-item cfg-step-item">'
       +'<div class="ai-timeline-dot cfg-flow-dot">'+(i+1)+'</div>'
@@ -5961,6 +5961,8 @@ function buildCfgJourneyDetailHTML(){
       +'<div class="cfg-step-footer"><div class="ai-timeline-chips">'+cfgStepTypeTag(st.type)+assignBadge+stepMode+'</div></div>'
       +'</div></div>';
   }).join('');
+  const emptyStepsNote=(!j.steps.length)?'<div class="cfg-step-empty-note" style="margin-left:44px;padding:14px 16px;border:1.5px dashed var(--border);border-radius:10px;font-size:12.5px;color:var(--gray)">No steps configured yet &mdash; add the first step to start building this journey.</div>':'';
+  const addStepBtn=j.locked?'<button class="btn btn-secondary btn-sm" style="margin-top:16px;margin-left:44px;border-style:dashed" onclick="openCfgAddStepModal(\''+j.id+'\')">+ Add step</button>':'';
   const respEvents=aiJourneyEvents[j.id]||[];
   const totalSteps=respEvents.length||j.steps.length;
   const aiStepsCount=respEvents.filter(function(e){return e.chips.includes('AI Automated');}).length;
@@ -5980,8 +5982,50 @@ function buildCfgJourneyDetailHTML(){
     +buildAIResponsibilitySplitHTML(j.id)
     +'<div class="review-title" style="margin:20px 0 10px;font-size:14.5px">Flow &middot; runs top to bottom &middot; click a step to view its assigned agent</div>'
     +'<div class="ai-timeline cfg-flow-timeline">'+timeline+'</div>'
-    +'<button class="btn btn-secondary btn-sm" style="margin-top:16px;margin-left:44px;border-style:dashed">+ Add step</button>'
+    +emptyStepsNote
+    +addStepBtn
     +'</div>';
+}
+function openCfgAddStepModal(journeyId){
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
+  const typeOptions='<option value="src">Source &mdash; system/AI performed</option><option value="rule">Human Approval &mdash; needs sign-off</option><option value="eng">Engine &mdash; internal processing</option>';
+  const moduleOptions='<option value="">Not mapped</option>'+Object.keys(manualModulePageLabels).map(function(k){return '<option value="'+k+'">'+manualModulePageLabels[k]+'</option>';}).join('');
+  document.getElementById('ct-modal-overlay').innerHTML=
+    '<div class="ct-modal cas-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr" style="align-items:flex-start;margin-bottom:22px">'
+    +'<div><div class="ct-modal-title">Add Step</div><div style="font-size:12.5px;color:var(--gray);margin-top:3px">'+j.name+'</div></div>'
+    +'<button class="ct-modal-close" onclick="closeCtModal()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
+    +'</div>'
+    +'<div class="ep-form-group" style="margin-bottom:18px"><label class="ep-form-label">Step Name <span class="req">*</span></label><input id="cas-name" class="ep-form-input" type="text" placeholder="e.g. Send Proposal"></div>'
+    +'<div class="ep-form-grid" style="row-gap:18px">'
+    +'<div class="ep-form-group"><label class="ep-form-label">Step Type <span class="req">*</span></label><select id="cas-type" class="ep-form-select">'+typeOptions+'</select></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Performed By <span class="req">*</span></label><input id="cas-src" class="ep-form-input" type="text" placeholder="e.g. AI Contract Assistant"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Owner Role</label><input id="cas-owner" class="ep-form-input" type="text" placeholder="e.g. Compliance Officer"></div>'
+    +'<div class="ep-form-group"><label class="ep-form-label">Module</label><select id="cas-module" class="ep-form-select">'+moduleOptions+'</select></div>'
+    +'<div class="ep-form-group" style="grid-column:1/-1"><label class="ep-form-label">SLA</label><input id="cas-sla" class="ep-form-input" type="text" placeholder="e.g. 4h" style="max-width:calc(50% - 9px)"></div>'
+    +'</div>'
+    +'<div class="cas-modal-footer">'
+    +'<button class="ep-cancel-btn" onclick="closeCtModal()">Cancel</button>'
+    +'<button class="ep-save-btn" onclick="submitCfgAddStep(\''+journeyId+'\')">Add Step</button>'
+    +'</div></div>';
+  document.getElementById('ct-modal-overlay').style.display='flex';
+  requestAnimationFrame(function(){const el=document.getElementById('cas-name');if(el)el.focus();});
+}
+function submitCfgAddStep(journeyId){
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});if(!j)return;
+  const nameVal=(document.getElementById('cas-name')||{}).value||'';
+  const srcVal=(document.getElementById('cas-src')||{}).value||'';
+  if(!nameVal.trim()){alert('Please enter a step name.');return;}
+  if(!srcVal.trim()){alert('Please enter who performs this step.');return;}
+  const typeVal=(document.getElementById('cas-type')||{}).value||'src';
+  const ownerVal=(document.getElementById('cas-owner')||{}).value||'';
+  const moduleVal=(document.getElementById('cas-module')||{}).value||'';
+  const slaVal=(document.getElementById('cas-sla')||{}).value||'';
+  j.steps.push({name:nameVal.trim(),src:srcVal.trim(),type:typeVal,ownerRole:ownerVal.trim(),modulePage:moduleVal,sla:slaVal.trim(),agentCapable:typeVal!=='rule',approvalRequired:typeVal==='rule'});
+  if(j.locked)j.tags=[j.steps.length+' step'+(j.steps.length===1?'':'s')].concat(j.tags.filter(function(t){return t!=='Roadmap'&&!/^\d+\s+steps?$/.test(t);}));
+  closeCtModal();
+  renderADTPage();
+  showAiToast('Step added','"'+nameVal.trim()+'" was added to '+j.name+'.');
 }
 let _cfgFlowObserver=null;
 let _cfgFlowScrollHandler=null;

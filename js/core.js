@@ -1626,7 +1626,13 @@ function cfgManualStepIndex(journeyId,cfgIdx){
   const map=cfgToManualStepIndexMap[journeyId];
   return map&&typeof map[cfgIdx]==='number'?map[cfgIdx]:cfgIdx;
 }
-function cfgManualStep(journeyId,cfgIdx){return manualJourneySteps(journeyId)[cfgManualStepIndex(journeyId,cfgIdx)]||{};}
+function cfgManualStep(journeyId,cfgIdx){
+  const catalogStep=manualJourneySteps(journeyId)[cfgManualStepIndex(journeyId,cfgIdx)];
+  if(catalogStep)return catalogStep;
+  const j=cfgJourneys.find(function(x){return x.id===journeyId;});
+  const rawStep=j&&j.steps[cfgIdx];
+  return rawStep?{ownerRole:rawStep.ownerRole,modulePage:rawStep.modulePage,sla:rawStep.sla,agentCapable:rawStep.agentCapable,approvalRequired:rawStep.approvalRequired}:{};
+}
 const manualJourneyRuns=[
   {runId:'MAN-1001',journeyId:'contract-creation',subject:'Rashi Singh',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:1,status:'Blocked',slaRisk:'High',blockedReason:'Netherlands work permit rule missing in Compliance Hub',escalation:'Entity Admin in 1h',startedAt:'Today 09:10 AM',manualHours:3.2,agentEstimateHours:.4,createdBy:'account-manager',contractRecordId:2,exceptions:[{type:'Missing compliance rule',ownerRole:'Compliance Officer',status:'Open',suggestedResolution:'Add Netherlands work permit rule or attach override evidence.'}],audit:['Deal record created by Account Manager','Compliance Hub opened 4 times','Exception raised for missing work permit rule']},
   {runId:'MAN-1002',journeyId:'payroll-creation',subject:'Anika Shah',entity:'Dhi Hyperlocal',mode:'Manual',currentStepIdx:2,status:'Active',slaRisk:'Medium',blockedReason:'Timesheet and leave totals need reconciliation',escalation:'None',startedAt:'Today 10:35 AM',manualHours:2.4,agentEstimateHours:.3,exceptions:[{type:'Timesheet discrepancy',ownerRole:'HR',status:'Open',suggestedResolution:'Reconcile 22 present days with 2 approved leave days before salary calculation.'}],audit:['Payroll run initiated manually','Timesheet module visited 3 times','Attendance days entered manually']},
