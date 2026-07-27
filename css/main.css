@@ -1457,11 +1457,11 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 /* pending: not yet reached — plain black, no glow */
 .ai-timeline-item.cfg-step-item::before{width:1px;background:#4b5563;box-shadow:none;transition:background .75s ease-out,box-shadow .75s ease-out}
 .ai-timeline-dot.cfg-flow-dot{background:#fff;border:1px solid #4b5563;color:var(--navy);font-size:12px;box-shadow:none;transition:background .6s ease-out,border-color .6s ease-out,color .6s ease-out,box-shadow .6s ease-out}
-/* reached: scrolled past — steady solid green line/ring, no glow */
-.cfg-step-item.cfg-flow-reached::before{background:#16a34a;box-shadow:none}
-.cfg-step-item.cfg-flow-reached .cfg-flow-dot{background:#fff;border-color:#16a34a;color:var(--navy);box-shadow:none}
+/* reached: scrolled past — steady solid green line/ring, no glow (thicker than the unreached gray segments) */
+.cfg-step-item.cfg-flow-reached::before{left:13px;width:3px;background:#16a34a;box-shadow:none}
+.cfg-step-item.cfg-flow-reached .cfg-flow-dot{background:#fff;border-width:2.5px;border-color:#16a34a;color:var(--navy);box-shadow:none}
 /* active: currently at the reading line — interior unchanged, breathing glow stays outside the ring */
-.cfg-step-item.cfg-flow-active .cfg-flow-dot{background:#fff;border-color:#16a34a;color:var(--navy);animation:cfgFlowActivePulse 2.2s ease-in-out infinite}
+.cfg-step-item.cfg-flow-active .cfg-flow-dot{background:#fff;border-width:2.5px;border-color:#16a34a;color:var(--navy);animation:cfgFlowActivePulse 2.2s ease-in-out infinite}
 @keyframes cfgFlowActivePulse{
   0%,100%{box-shadow:0 0 0 4px rgba(22,163,74,.16),0 0 8px rgba(22,163,74,.28)}
   50%{box-shadow:0 0 0 6px rgba(22,163,74,.24),0 0 14px rgba(22,163,74,.4)}
