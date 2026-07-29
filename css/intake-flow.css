@@ -1,0 +1,137 @@
+/* USER intake flow (Configure > Systems > ADT Solution > USER).
+   A focused, linear task surface rather than another browsing page: the app sidebar is hidden
+   for the duration (renderer.js), the three stages stay visible as a stepper so the journey
+   reads as one continuation, and the form itself gets the whole viewport so its fields can
+   breathe. Fields are deliberately larger than the app's dense table-oriented controls — this
+   is a data-entry moment, and 13px inputs at 34px tall are for grids, not for typing into. */
+
+.uif-page{min-height:100vh;background:var(--light);display:flex;flex-direction:column}
+
+/* -- Slim top bar: exit route + context, so hiding the sidebar never strands anyone. -- */
+.uif-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:14px 26px;background:#fff;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.uif-exit{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--border);background:#fff;color:var(--navy);font-size:12.5px;font-weight:600;
+  font-family:inherit;cursor:pointer;transition:.15s}
+.uif-exit:hover{background:var(--ol);border-color:#cbd5e1}
+.uif-context{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gray)}
+.uif-context strong{color:var(--navy);font-weight:600}
+.uif-context-dot{width:5px;height:5px;border-radius:50%;background:#0d9488;flex-shrink:0}
+
+/* -- Stepper: the whole journey, always visible, so step 1 already shows what follows. -- */
+.uif-stepper{display:flex;align-items:flex-start;justify-content:center;gap:0;
+  padding:30px 26px 8px;max-width:760px;margin:0 auto;width:100%}
+.uif-step{display:flex;flex-direction:column;align-items:center;gap:9px;flex:0 0 auto;width:132px;text-align:center}
+.uif-step-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;border:2px solid var(--border);background:#fff;color:#9ca3af;transition:.25s}
+.uif-step-label{font-size:12px;font-weight:600;color:#9ca3af;line-height:1.35;transition:.25s}
+.uif-step-sub{font-size:10.5px;color:#b3bac5;line-height:1.35}
+.uif-step.is-active .uif-step-dot{border-color:var(--navy);background:var(--navy);color:#fff;
+  box-shadow:0 0 0 4px rgba(15,23,42,.08)}
+.uif-step.is-active .uif-step-label{color:var(--navy)}
+.uif-step.is-done .uif-step-dot{border-color:#0d9488;background:#0d9488;color:#fff}
+.uif-step.is-done .uif-step-label{color:#0f766e}
+/* Connector sits level with the dot centre, not the label block. */
+.uif-step-line{flex:1;height:2px;background:var(--border);margin-top:17px;min-width:24px;border-radius:2px;transition:.25s}
+.uif-step-line.is-done{background:#0d9488}
+
+/* align-items:flex-start matters — the default `stretch` made the card grow to the full height
+   of the flex row, leaving a tall empty white block under short content. */
+.uif-body{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:22px 26px 56px}
+.uif-card{width:100%;max-width:680px;background:#fff;border:1px solid var(--border);border-radius:14px;
+  padding:30px 32px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+.uif-card-head{margin-bottom:24px}
+.uif-card-title{font-size:18px;font-weight:700;color:var(--navy);margin-bottom:5px}
+.uif-card-sub{font-size:13px;color:var(--gray);line-height:1.6}
+
+/* -- Form -- */
+.uif-grid{display:grid;grid-template-columns:1fr 1fr;gap:19px 20px}
+.uif-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.uif-field.uif-full{grid-column:1 / -1}
+.uif-label{font-size:12.5px;font-weight:600;color:var(--navy)}
+.uif-label .req{color:var(--red);margin-left:2px}
+.uif-input,.uif-select{width:100%;box-sizing:border-box;padding:11px 13px;font-size:14px;font-family:inherit;
+  color:var(--navy);background:#fff;border:1px solid #d6dbe3;border-radius:9px;outline:none;transition:.15s}
+.uif-input::placeholder{color:#aab2bf}
+.uif-select{padding-right:34px;appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center}
+.uif-input:focus,.uif-select:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.12)}
+/* Errors are per-field rather than one banner at the top: the message belongs next to the
+   control that has to change. */
+.uif-field.has-error .uif-input,.uif-field.has-error .uif-select{border-color:var(--red);background:#fffbfb}
+.uif-field.has-error .uif-input:focus,.uif-field.has-error .uif-select:focus{box-shadow:0 0 0 3px rgba(239,68,68,.13)}
+.uif-error-text{font-size:11.5px;color:#b91c1c;line-height:1.4}
+.uif-phone{display:grid;grid-template-columns:118px 1fr;gap:10px}
+
+.uif-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin-top:28px;padding-top:22px;border-top:1px solid var(--ol);flex-wrap:wrap}
+.uif-hint{font-size:11.5px;color:var(--gray);line-height:1.5;flex:1;min-width:180px}
+.uif-submit{display:inline-flex;align-items:center;gap:8px;padding:11px 24px;border:none;border-radius:9px;
+  font-size:13.5px;font-weight:600;color:#fff;background:var(--navy);font-family:inherit;cursor:pointer;transition:.15s}
+.uif-submit:hover:not(:disabled){background:#1e293b}
+.uif-submit:disabled{opacity:.55;cursor:default}
+
+.uif-banner{display:flex;gap:10px;padding:12px 14px;border-radius:10px;font-size:12.5px;line-height:1.6;margin-bottom:20px}
+.uif-banner.warn{background:#fdf6d8;border:1px solid #f0dfa0;color:#8a6d10}
+.uif-banner.error{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.uif-banner code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.uif-banner button{background:none;border:none;padding:0;font:inherit;font-weight:700;
+  color:inherit;text-decoration:underline;cursor:pointer}
+
+/* -- Processing: the journey made visible while it happens, so the wait explains itself. -- */
+.uif-proc{display:flex;flex-direction:column;gap:2px}
+.uif-proc-item{display:flex;gap:14px;align-items:flex-start}
+.uif-proc-rail{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:24px}
+.uif-proc-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);background:#fff;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.25s}
+.uif-proc-line{width:2px;flex:1;min-height:22px;background:var(--border);margin:2px 0;transition:.25s}
+.uif-proc-body{padding-bottom:18px;min-width:0;flex:1}
+.uif-proc-title{font-size:13.5px;font-weight:600;color:#9ca3af;transition:.25s}
+.uif-proc-note{font-size:12px;color:var(--gray);margin-top:3px;line-height:1.5}
+.uif-proc-item.is-active .uif-proc-dot{border-color:var(--navy);background:var(--navy)}
+.uif-proc-item.is-active .uif-proc-title{color:var(--navy)}
+.uif-proc-item.is-done .uif-proc-dot{border-color:#0d9488;background:#0d9488}
+.uif-proc-item.is-done .uif-proc-line{background:#0d9488}
+.uif-proc-item.is-done .uif-proc-title{color:var(--navy)}
+.uif-spin{width:9px;height:9px;border-radius:50%;border:2px solid rgba(255,255,255,.35);
+  border-top-color:#fff;animation:uif-spin .7s linear infinite}
+@keyframes uif-spin{to{transform:rotate(360deg)}}
+
+/* -- Success -- */
+.uif-success-head{display:flex;gap:13px;align-items:flex-start;padding:16px 18px;border-radius:11px;
+  background:#f0fdf4;border:1px solid #bbf7d0;margin-bottom:24px}
+.uif-success-icon{width:32px;height:32px;border-radius:50%;background:#16a34a;color:#fff;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.uif-success-title{font-size:14.5px;font-weight:700;color:#15803d;margin-bottom:3px}
+.uif-success-sub{font-size:12.5px;color:#166534;line-height:1.6}
+
+.uif-idrow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+.uif-idcard{padding:13px 15px;border:1px solid var(--border);border-radius:10px;background:var(--light);min-width:0}
+.uif-idcard-label{font-size:10.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-bottom:5px}
+.uif-idcard-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;
+  color:var(--navy);overflow-wrap:anywhere}
+.uif-idcard.accent{background:#f0fdfa;border-color:#99f6e4}
+.uif-idcard.accent .uif-idcard-value{color:#0d9488}
+
+.uif-section-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--gray);margin:0 0 11px}
+.uif-kv{display:flex;justify-content:space-between;gap:18px;padding:10px 0;border-bottom:1px dashed var(--border)}
+.uif-kv:last-child{border-bottom:none}
+.uif-kv-key{font-size:12.5px;color:var(--gray);flex-shrink:0}
+.uif-kv-val{font-size:13px;font-weight:600;color:var(--navy);text-align:right;overflow-wrap:anywhere}
+.uif-note{font-size:12.5px;color:var(--gray);line-height:1.7;margin:20px 0 0;padding:13px 15px;
+  border-radius:10px;background:var(--light);border:1px solid var(--border)}
+.uif-cta{display:flex;gap:11px;flex-wrap:wrap;margin-top:24px}
+.uif-btn-secondary{padding:11px 20px;border:1px solid var(--border);border-radius:9px;background:#fff;
+  color:var(--navy);font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+.uif-btn-secondary:hover{background:var(--ol);border-color:#cbd5e1}
+
+@media (max-width:760px){
+  .uif-grid{grid-template-columns:1fr}
+  .uif-idrow{grid-template-columns:1fr}
+  .uif-step{width:96px}
+  .uif-step-sub{display:none}
+  .uif-card{padding:24px 20px}
+  .uif-body{padding:18px 14px 40px}
+}

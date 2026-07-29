@@ -11,16 +11,32 @@
   if(page==='ai-onboarding-run'){el.innerHTML=buildAIOnboardingRunHTML();return;}
   if(page==='ai-journey-complete'){el.innerHTML=buildAIJourneyCompleteHTML();return;}
 }
-// Pages that already render their own dedicated "back" UI inside their content -- skip the generic bar there to avoid a duplicate.
-const PAGES_WITH_OWN_BACK_UI=new Set(['dashboard','cfg-system-detail','cfg-model-detail','cfg-journey-detail','ai-journey-detail','ai-run-detail','cost-calculator']);
+// -- Back is a structural affordance, not a history control.
+//
+// This bar used to render "< whatever page you visited last" on any page with a non-empty
+// nav stack, which meant every top-level destination carried one: opening Teams from Direct
+// Employee showed "< Direct Employee", opening Contracts from Teams showed "< Teams". That is
+// browser history leaking into app chrome, and it is noise on a page that is itself a
+// navigation root — the sidebar is how you leave it.
+//
+// The rule now: a back control belongs on a page only when that page is a drill-down from
+// another page, and it always points at that page's canonical parent — so the same screen
+// always offers the same exit, however you arrived at it. getSidebarActivePage() already knows
+// which sidebar destination each page belongs under, so it doubles as the parent map; a page
+// that is its own parent is top-level and gets nothing.
 function injectPageBackBar(id){
   const el=document.getElementById(id);
   if(!el)return;
-  if(!navStack.length||PAGES_WITH_OWN_BACK_UI.has(page))return;
-  const target=navStack[navStack.length-1];
+  const parent=getSidebarActivePage(page);
+  if(!parent||parent===page)return;              // top-level destination
+  if(!canAccessPage(parent,portalRole))return;   // parent hidden for this role
+  // Nearly every detail and wizard screen renders its own back control, pointing at the same
+  // parent. Detecting that from the rendered content rather than keeping a hand-maintained
+  // list of page ids means the two can never drift out of sync.
+  if(el.querySelector('.ep-back,.ep-cancel-btn,.uif-exit'))return;
   const bar=document.createElement('div');
   bar.className='page-back-bar';
-  bar.innerHTML='<button class="page-back-btn" onclick="goBackPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> '+getPageTitle(target)+'</button>';
+  bar.innerHTML='<button class="page-back-btn" onclick="navigatePage(\''+parent+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> '+getPageTitle(parent)+'</button>';
   el.insertBefore(bar,el.firstChild);
 }
 function renderPageContent(id){
@@ -45,6 +61,7 @@ function renderPageContentImpl(id){
   if(page==='cfg-systems'){el.innerHTML=buildCfgSystemsHTML();return;}
   if(page==='cfg-system-detail'){el.innerHTML=buildCfgSystemDetailHTML();return;}
   if(page==='cfg-system-add'){el.innerHTML=buildCfgSystemAddHTML();return;}
+  if(page==='cfg-user-intake'){el.innerHTML=buildCfgUserIntakeHTML();return;}
   if(page==='cfg-data-foundation'){el.innerHTML=buildCfgDataFoundationHTML();return;}
   if(page==='cfg-model-detail'){el.innerHTML=buildCfgModelDetailHTML();return;}
   if(page==='cfg-model-add'){el.innerHTML=buildCfgModelAddHTML();return;}
@@ -63,6 +80,7 @@ function renderPageContentImpl(id){
   if(page==='ai-journey-run'){el.innerHTML=buildAIJourneyRunHTML();return;}
   if(page==='cost-calculator'){el.innerHTML=buildCostCalculatorPageHTML();initCostCalcPage();return;}
   if(page==='leave-policies'){el.innerHTML=buildLeavePoliciesHTML();return;}
+  if(page==='master-data'){mdEnsureLoaded();el.innerHTML=buildMasterDataHTML();return;}
   if(page==='direct'){el.innerHTML=buildDirectListingHTML();return;}
   if(page==='payroll'){el.innerHTML=buildPayrollListingHTML();return;}
   if(page==='global'){el.innerHTML=buildGlobalListingHTML();return;}
@@ -91,7 +109,7 @@ function renderADTPage(){
   // Show/hide + button in topbar based on current page
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
-    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','operations-cockpit','journey-simulation','manual-journey-run'];
+    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','operations-cockpit','journey-simulation','manual-journey-run','master-data'];
     const show=!noAddPages.includes(page);
     addBtn.style.display=show?'':'none';
     if(show){
@@ -104,7 +122,11 @@ function renderADTPage(){
   buildSidebar('adt-sidebar',adtSidebarCollapsed,getSidebarActivePage(page));
   renderNotifBadge();
   const sidebar=document.getElementById('adt-sidebar');
-  if(sidebar)sidebar.style.display=page==='cost-calculator'?'none':'';
+  // -- The USER intake flow is a linear task, not a browsing surface: it hides the sidebar the
+  // same way the cost calculator does, so the form owns the viewport and its fields can breathe.
+  // Its own top bar carries the exit route, so nobody is stranded. --
+  const focusedFlowPages=['cost-calculator','cfg-user-intake'];
+  if(sidebar)sidebar.style.display=focusedFlowPages.includes(page)?'none':'';
   renderPageContent('adt-content');
   aiScrollContentToTop();
   persistAppState();
@@ -114,6 +136,15 @@ function renderADTPage(){
 const dashboardContentHTML=document.getElementById('adt-content').innerHTML;
 loadAppState();
 renderADTPage();
+
+// -- Pull Master Data from the backend once on load, so records survive a refresh and show up
+// in every browser rather than only the one that ingested them. Deliberately after the first
+// render and non-blocking: the backend may not be running (this page still opens as a static
+// file), and everything except Master Data works without it. --
+(function hydrateFromBackend(){
+  if(typeof mdRefreshFromBackend!=='function')return;
+  mdRefreshFromBackend().then(function(){renderADTPage();});
+})();
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ COST CALCULATOR ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 const ccCountries=[

@@ -76,6 +76,12 @@ let mtReqSelectedId=null,mtReqTab='journeys';
 let mtTaskSelectedRunId=null;
 let aiClientSelectedId=null,aiClientTab='journeys';
 let liveRunSeq=9000;
+// -- ADT Solution live sync. The ADTEMP-####/ADT-REF-#### pair and the "what have we already
+// seen" cursor are both minted by the backend now (see backend/server.js) rather than from
+// counters kept here: two browsers running this page each had their own counter, so both
+// issued ADTEMP-0001 to different people and each re-ingested submissions the other had
+// already taken. The poll loop's on/off state (adtPollTimerId, js/pages.js) stays client-side
+// and unpersisted, since a fresh page load always starts idle and must be re-armed. --
 let aiJourneyDetailSelectedStage=-1;
 let aiRunStatusFilter='';
 const aiAutomationRuns={
@@ -109,6 +115,11 @@ const sidebarItems=[
   ]},
   {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
   {id:'my-tasks',label:'My Tasks',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
+  // -- Master Data is the Executive Layer's OWN store — records it ingested from connected
+  // systems, with their provenance, audit log and workflow. Grouped with Configure/AI Executive
+  // (orange) rather than with Employee/Teams/Leaves, because everything below this point belongs
+  // to the connected SaaS product we are mirroring, not to the Executive Layer itself. --
+  {id:'master-data',label:'Master Data',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
   {dropdown:'Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',children:[
     {id:'direct',label:'Direct Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
     {id:'global',label:'Global Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
@@ -179,11 +190,11 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='operations-cockpit')return{title:'Operations Cockpit',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'Operations Cockpit',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='operations-cockpit')return{title:'Operations Cockpit',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'Operations Cockpit',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Master Data',context:'Master Data',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add'||pg==='cfg-user-intake')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -615,6 +626,8 @@ function closeAgent(){stopAmThreeJS();hideAgentWorkspaceButton();agentRunData=nu
 const pageRoleMap={
   'cfg-overview':['super-admin'],'cfg-data-foundation':['super-admin'],'cfg-model-detail':['super-admin'],'cfg-model-add':['super-admin'],'cfg-system-add':['super-admin'],
   'cfg-systems':['super-admin','entity-admin'],'cfg-system-detail':['super-admin','entity-admin'],
+  'cfg-user-intake':['super-admin','entity-admin'],
+  'master-data':['super-admin','entity-admin'],
   'cfg-context-journey':['super-admin','entity-admin'],'cfg-journey-detail':['super-admin','entity-admin'],
   'cfg-agents':['super-admin','entity-admin'],'operations-cockpit':['entity-admin'],
   'all-users':['super-admin'],'settings':['super-admin']
@@ -624,6 +637,8 @@ function defaultPageForRole(role){return role==='entity-user'?'ai-executive':'da
 
 function navigatePage(pg){
   const resolved=canAccessPage(pg,portalRole)?pg:defaultPageForRole(portalRole);
+  // -- The "Live ADT Solution Sync" listener (aiH2rStartAdtListening, js/pages.js) only makes sense while the operator is looking at the H2R live-run screen ('ai-journey-run'). Navigating anywhere else stops it, so a background poll can never silently pull the operator back into a run they've already left. --
+  if(resolved!=='ai-journey-run'&&typeof adtPollTimerId!=='undefined'&&adtPollTimerId)aiH2rStopAdtListening();
   if(resolved!==page){
     if(view==='adt'&&navStack.length&&navStack[navStack.length-1]===resolved){
       navStack.pop();
@@ -635,11 +650,9 @@ function navigatePage(pg){
   if(view==='adt'){renderADTPage();return;}
   if(view==='agent-active'){showAgentModule(resolved);return;}
 }
-function goBackPage(){
-  if(!navStack.length)return;
-  page=navStack.pop();
-  renderADTPage();
-}
+// -- No history-based "go back": the back bar navigates to a page's canonical parent instead
+// (see injectPageBackBar, js/renderer.js). navStack is still maintained because navigatePage
+// uses it to avoid pushing duplicate entries when stepping back through a drill-down. --
 
 function portalRoleLabel(r){return r==='super-admin'?'Super Admin':r==='entity-admin'?'Entity Admin':getActivePersona().label;}
 function portalRoleInitials(r){return r==='super-admin'?'SA':r==='entity-admin'?'EA':getActivePersona().initials;}
@@ -1063,6 +1076,9 @@ function csSelect(opt,val,csid){
   else if(csid==='ap-filter-value')apFilterValue=val;
   else if(csid==='lp-filter-field')lpFilterField=val;
   else if(csid==='lp-filter-status')lpFilterStatus=val;
+  // -- Direct Employee status filter. Repaints immediately rather than waiting for the Search
+  // button, matching how the other pill filters on this bar behave. --
+  else if(csid==='de-f-status')setDeStatusFilter(val);
 }
 function markApFormDirty(){}
 function cancelAddPolicy(){selectedEmps=new Set();apFilterType='';apFilterValue='';page='leave-policies';renderADTPage();}
@@ -1094,6 +1110,53 @@ function ensureDirectEmpForOnboarding(run){
     desc:c?(c.empType+' employee'):'New employee',contact:(c&&c.contact)||'--',email:(c&&c.email)||'--',
     status:'Active',onboardingRunId:run.runId
   });
+}
+// -- Appends a deLogsData entry only if an identical {status,action} pair isn't already present for this employee, so re-rendering the same H2R stage screen never duplicates a log line. Newest entry goes first (unshift), matching the existing seed data's ordering. --
+function appendDeLogOnce(empRowId,statusLabel,actionText,actorUser){
+  const logs=deLogsData[empRowId]=deLogsData[empRowId]||[];
+  if(logs.some(function(l){return l.status===statusLabel&&l.action===actionText;}))return;
+  const now=new Date();
+  logs.unshift({
+    date:now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),
+    time:now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}),
+    user:actorUser||'AI Executive',status:statusLabel,action:actionText
+  });
+}
+// -- MASTER DATA (Executive Layer's own store) --
+// Records the Executive Layer has ingested from connected systems. Deliberately separate from
+// directEmpData: Direct Employee, Teams, Leaves and everything below them in the sidebar belong
+// to the connected SaaS product this app mirrors, and are mock data. Master Data is ours, and
+// is backed by the real backend.
+//
+// Deliberately NOT persisted to localStorage, unlike every other array in this file. These three
+// are a cache of server state, and a cached copy that outlives the server's copy is worse than
+// no cache at all: clearing backend/data left the UI listing records the backend had never heard
+// of, which then failed "Employee not found" on every write. Rebuilt from the backend on load
+// (mdRefreshFromBackend) so what is on screen is always something the backend can act on.
+const masterData=[];
+const mdLogsData={},mdWorkflowData={};
+let mdSelectedId=null,mdTab='basic-details',mdStatusFilter='';
+// 'loading' until the first fetch settles, then 'ok' or 'offline'. Lets the empty listing say
+// which kind of empty it is instead of implying nothing has ever been ingested.
+let mdBackendState='loading';
+// Save-in-flight state for the Logs tab's status form: mdSaveState is null | 'saving' | 'done',
+// mdSaveStep indexes the progress list, mdSaveDraft holds what was typed so a failed write can
+// restore the form untouched, and mdLogEnter flags the newly written entry for its enter animation.
+let mdSaveState=null,mdSaveStep=-1,mdSaveDraft=null,mdSaveError='',mdLogEnter=false;
+
+// -- Mirrors one backend row into masterData, replacing its logs and workflow with the
+// backend's. The backend is the source of truth for identity, status, logs and workflow; this
+// list is only a render cache, so a matched row is overwritten wholesale rather than merged. --
+function syncEmpFromBackend(row,logs,workflow){
+  const existing=masterData.find(function(e){return e.empId===row.employee_code;});
+  const localId=existing?existing.id:masterData.reduce(function(m,e){return Math.max(m,e.id);},0)+1;
+  const mapped=execApiToDirectEmpRow(row,localId);
+  if(existing)Object.assign(existing,mapped);
+  else masterData.unshift(mapped);
+  if(logs)mdLogsData[localId]=execApiToLogRows(logs);
+  if(workflow)mdWorkflowData[localId]=execApiToWorkflowRows(workflow);
+  persistAppState();
+  return localId;
 }
 function manualLinkedRunForEmployee(empId){
   const emp=directEmpData.find(function(e){return e.id===empId;});
@@ -1165,7 +1228,7 @@ const deWorkflowData={
     {title:'Onboarding Complete',user:'Admin',date:'01 Feb 2024',time:'09:00:00 AM',description:'Employee onboarded. Role: Product Manager.'}
   ]
 };
-let deSelectedId=null,deTab='basic-details';
+let deSelectedId=null,deTab='basic-details',deStatusFilter='';
 const globalEmpData=[
   {id:1,name:'Emma Schmidt',empId:'GEP001',dept:'Engineering',country:'Germany',jobTitle:'Senior Developer',workerType:'EOR',joinDate:'10 Feb 2024',desc:'Full time employee',contact:'+49 152 0000 0001',email:'emma@testemp.com',status:'Active'},
   {id:2,name:'Lucas Dubois',empId:'GEP002',dept:'Finance',country:'France',jobTitle:'Finance Analyst',workerType:'EOR',joinDate:'15 Apr 2024',desc:'Full time employee',contact:'+33 6 12 34 56 78',email:'lucas@testemp.com',status:'Active'},
@@ -1364,6 +1427,32 @@ const cfgSystems=[
       {name:'SupplierMaster · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'PurchaseOrder · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
       {name:'GoodsReceipt · Service Confirmation',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'}
+    ]},
+  // -- ADT Solution is the one system here that is genuinely wired up rather than described:
+  // its endpoint is served by backend/mock-adt-server.js today and repoints at the real ADT
+  // host through ADT_BASE_URL. dataModelIds is what puts the USER card on its detail page. --
+  // -- internal:true marks a platform that is ours rather than a third-party ERP. Its detail page
+  // hides the Connection block and the released-API list: endpoint, auth scheme and API inventory
+  // are implementation detail of our own stack, not an integration contract someone reviews here.
+  // What stays is what the platform contributes — its Data Foundation objects. --
+  {id:'adt-solution',name:'ADT Solution',type:'ADT',method:'REST / JSON',endpoint:'http://localhost:4100/api/',auth:'Bearer Token',apis:3,lastTested:'Just now',status:'Connected',isDefault:true,activatedForEntity:true,
+    internal:true,dataModelIds:['user'],
+    apiList:[
+      {name:'employee-intake/submit · USER Intake Form',dir:'rw',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transactional'},
+      {name:'employee-intake/latest · Latest Submission',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transactional'},
+      {name:'employee-intake/schema · Form Definition',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'}
+    ]},
+  {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.vyoma.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+    apiList:[
+      {name:'WorkforceRoster · Field Workforce',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'},
+      {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Hire to Retire',sub:'Time & Attendance',type:'Transactional'},
+      {name:'PayoutBatch · Contractor Payouts',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
+    ]},
+  {id:'nfadmin',name:'NFAdmin',type:'NFAdmin',method:'REST / SOAP',endpoint:'https://nfadmin.vyoma.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+    apiList:[
+      {name:'EntityRegistry · Legal Entity Master',dir:'r',cat:'Others',sub:'General',type:'Transformational'},
+      {name:'ComplianceFiling · Statutory Filings',dir:'rw',cat:'Others',sub:'General',type:'Transactional'},
+      {name:'UserDirectory · Admin Users',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'}
     ]}
 ];
 
@@ -1378,7 +1467,29 @@ const cfgModels=[
     mapped:[['Vendor ID','SupplierID','string'],['Vendor Name','SupplierName','string'],['Country','Country','string'],['Payment Terms','PaymentTerms','string'],['Rating','VendorRating','decimal'],['Bank Details','BankInfo','object']],
     enrichment:[{name:'Risk Category',type:'string'},{name:'ESG Score',type:'string'},{name:'Preferred Status',type:'string'}],
     rules:{makerChecker:true,validation:'Vendor rating ≥ 3.0'},
-    sample:[['Vendor ID','VEN-2044'],['Vendor Name','Bharat Steel Traders'],['Country','India'],['Payment Terms','Net 30'],['Rating','4.2'],['Bank Details','HDFC •••• 2210']]}
+    sample:[['Vendor ID','VEN-2044'],['Vendor Name','Bharat Steel Traders'],['Country','India'],['Payment Terms','Net 30'],['Rating','4.2'],['Bank Details','HDFC •••• 2210']]},
+  // -- USER is the live one: its mapped fields are exactly what ADT Solution's intake form
+  // submits, and its enrichment fields are exactly what that form does NOT capture — which is
+  // why an ingested record sits in Pending until HR supplies them. systemId puts this card on
+  // the ADT Solution system page; intakeFormPage is the form the card opens. --
+  {id:'user',name:'USER',source:'ADT Solution',systemId:'adt-solution',intakeFormPage:'cfg-user-intake',
+    desc:'People captured by the ADT Solution intake form, unified into Executive Layer master data.',
+    mapped:[
+      ['Full Name','full_name','string'],
+      ['Work Email','work_email','string'],
+      ['Phone Country Code','phone_country_code','string'],
+      ['Phone Number','phone_number','string'],
+      ['Company Name','company_name','string'],
+      ['Country Hiring In','country_hiring_in','string'],
+      ['Looking For','looking_for','string'],
+      ['Heard About Us','heard_about_us','string']
+    ],
+    enrichment:[
+      {name:'Department',type:'string'},{name:'Job Title',type:'string'},
+      {name:'Branch',type:'string'},{name:'Joining Date',type:'date'},{name:'Status',type:'string'}
+    ],
+    rules:{makerChecker:true,validation:'Full name and work email are required; record enters as Pending until enrichment fields are supplied'},
+    sample:[['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Status','Pending']]}
 ];
 let cfgModelTested={};
 let cfgModelEditing=false;
@@ -2190,6 +2301,30 @@ const cfgRecentActivity=[
 
 // -- Configure: shared UI state --
 let selectedCfgSystemId=null,selectedCfgModelId=null,selectedCfgJourneyId=null;
+// -- Configure > Systems > ADT Solution > USER: the intake form page. cfgUserIntakeFields is
+// fetched from ADT's own /schema endpoint (via our backend) rather than hardcoded, so the form
+// tracks whatever ADT actually asks for. cfgUserIntakeResult holds the created master data
+// record after a successful submit, which is what the success panel reports. --
+let cfgUserIntakeModelId=null,cfgUserIntakeFields=null,cfgUserIntakeResult=null,cfgUserIntakeError='',cfgUserIntakeBusy=false,cfgUserIntakeOffline=false;
+// cfgUserIntakeStep is the stage of the three-part journey (0 form, 1 ingestion, 2 record);
+// cfgUserIntakeProgress indexes the ingestion feed within stage 1. cfgUserIntakeDraft holds what
+// has been typed, because re-rendering to show a validation error rebuilds the inputs and would
+// otherwise wipe the form. Errors are keyed by field name so each message sits on its own control.
+let cfgUserIntakeStep=0,cfgUserIntakeProgress=-1,cfgUserIntakeFieldErrors={},cfgUserIntakeDraft={};
+// -- Used when ADT's schema endpoint can't be reached — most often because the backend simply
+// isn't running. The page renders these fields instead of sitting on "Loading…" forever, so the
+// form is always visible and the reason it can't be submitted is stated rather than implied.
+// Mirrors backend/server.js's FALLBACK_INTAKE_FIELDS. --
+const cfgUserIntakeFallbackFields=[
+  {name:'full_name',label:'Full name',type:'text',required:true},
+  {name:'work_email',label:'Work email',type:'email',required:true},
+  {name:'phone_country_code',label:'Phone number',type:'select',options:['+91','+31','+49','+34','+44','+1','+65'],placeholder:'Select'},
+  {name:'phone_number',label:'',type:'text'},
+  {name:'company_name',label:'Company name',type:'text'},
+  {name:'country_hiring_in',label:'Country hiring in',type:'select',options:['India','Netherlands','Germany','Spain','United Kingdom','United States','Singapore']},
+  {name:'looking_for',label:'What are you looking for?',type:'select',options:['Employer of Record (EOR)','Contractor Management','Payroll Outsourcing','Entity Setup','PEO Services']},
+  {name:'heard_about_us',label:'How did you hear about us?',type:'select',options:['Google Search','LinkedIn','Referral','Conference / Event','Existing Customer','Other']}
+];
 let cfgSystemEditing=false;
 let cfgSystemDraft=null;
 let cfgStepAssignments={};
@@ -2197,6 +2332,15 @@ let cfgDrawerJourneyId=null,cfgDrawerStepIdx=-1;
 
 // -- AI Executive: live run flows for activated journeys (Create Contract / Create Employee / Run Payroll) --
 let aiRunFlowJourneyId=null,aiRunFlowStep=-1,aiRunFlowData={};
+// -- ADT Solution live sync (H2R "Create Employee" entry only): aiH2rAdtFeedStep drives buildAIRunTimelineHTML's reuse for the ingestion feed (-1 idle, 0 listening, 1-4 ingesting). aiH2rAdtLastSubmission holds the raw form fields as ADT sent them; aiH2rAdtLastEmployee holds the master data row the backend created from them. adtPollTimerId is the setInterval handle (never persisted — a fresh page load always starts idle and requires re-arming). --
+let aiH2rAdtFeedStep=-1,aiH2rAdtLastSubmission=null,aiH2rAdtLastEmployee=null,aiH2rAdtLastLocalId=null,aiH2rAdtError='',adtPollTimerId=null;
+const aiH2rAdtIngestSteps=[
+  {label:'Listening',running:'Connected to ADT Solution — waiting for a new intake form submission…',type:'ai'},
+  {label:'Fetching Submission',running:'New submission detected — retrieving it from ADT Solution…',type:'ai'},
+  {label:'Form Details Received',running:'Reading the submitted form fields…',type:'ai'},
+  {label:'Generating Identifiers',running:'Minting the Employee ID and Reference ID for this record…',type:'ai'},
+  {label:'Creating Master Data',running:'Creating the master data entry — status Pending until HR completes it…',type:'ai'}
+];
 const aiRunFlows={
   'h2r-lifecycle':{
     entryLabel:'Create Employee',

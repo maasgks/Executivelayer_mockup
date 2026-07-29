@@ -167,6 +167,15 @@
 .lp-log-status-text--active{color:#16a34a}
 .lp-log-status-text--inactive{color:#ef4444}
 .lp-log-status-text--default{color:#64748b}
+/* Pending (record ingested from an external system, awaiting HR completion) and Created
+   (the record's first entry) — without these both fell through to the grey 'default' styling,
+   which read as "nothing happened" for the two entries that open every ADT-sourced timeline. */
+.lp-log-avatar--pending{background:#fdf6d8;color:#8a6d10;border:2px solid #d9b64a}
+.lp-log-dot--pending{background:#d9b64a}
+.lp-log-status-text--pending{color:#8a6d10}
+.lp-log-avatar--created{background:#f0fdfa;color:#0d9488;border:2px solid #0d9488}
+.lp-log-dot--created{background:#0d9488}
+.lp-log-status-text--created{color:#0d9488}
 .lp-log-meta-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#64748b;flex-wrap:wrap;margin-bottom:7px}
 .lp-log-meta-item{display:flex;align-items:center;gap:3px}
 .lp-log-meta-item svg{flex-shrink:0;opacity:.65}
@@ -257,3 +266,94 @@
 .lp-pg-btn.active{background:var(--orange);color:#fff;border-color:var(--orange);font-weight:700}
 .lp-pg-btn:disabled{opacity:.4;cursor:default}
 .lp-pg-arrow{color:#64748b}
+
+/* -- Master Data: master-detail behaviour --------------------------------------------------
+   The shared split view overlays a 68%-wide drawer on top of the listing. Master Data's table
+   has nine columns, so what stayed uncovered was three clipped columns — unreadable, and no
+   help in choosing a different record. With a record selected the listing collapses to an
+   identity-only list sized for the strip that remains. */
+/* The listing narrows to exactly the strip the drawer leaves free, so a row's hover and
+   selection highlight stop at the panel edge instead of running underneath it. */
+.md-split--compact .lp-split-main{width:29%;overflow-x:hidden}
+.md-split-sb.open{width:70%}
+.md-row--compact{cursor:pointer;transition:background .12s}
+.md-row--compact td{padding:11px 14px;border-bottom:1px solid #f1f5f9}
+.md-row--compact:hover{background:#f8fafc}
+.md-row--compact.lp-row-selected{background:#f0fdfa}
+.md-compact-cell{display:flex;align-items:center;gap:9px;min-width:0}
+.md-compact-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.md-compact-name{font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.md-compact-meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;
+  color:var(--gray);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Below this the strip is too narrow to be worth keeping, so the drawer takes the full width
+   and the listing is simply hidden while a record is open. */
+@media (max-width:900px){
+  .md-split-sb.open{width:100%}
+  .md-split--compact .lp-split-main{visibility:hidden}
+}
+
+/* -- Master Data: compact header bar --------------------------------------------------------
+   Replaces a stacked title + paragraph + four large stat cards, which together pushed the first
+   record roughly 200px down the page. Everything collapses to one ~52px row, and the counts are
+   the status filter rather than passive statistics. */
+.md-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:12px 18px;background:#fff;border:1px solid var(--border);border-radius:12px;margin-bottom:12px}
+.md-bar-title{display:flex;align-items:baseline;gap:9px;font-size:14px;font-weight:700;color:var(--navy);flex-shrink:0}
+.md-chips{display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:1;min-width:0}
+.md-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;
+  border:1px solid var(--border);background:#fff;font-family:inherit;cursor:pointer;transition:.15s}
+.md-chip:hover{border-color:#cbd5e1;background:#f8fafc}
+.md-chip.is-on{border-color:#0d9488;background:#f0fdfa}
+.md-chip-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.md-chip-label{font-size:12px;font-weight:600;color:var(--gray)}
+.md-chip.is-on .md-chip-label{color:#0f766e}
+.md-chip-count{font-size:12px;font-weight:700;color:var(--navy);
+  background:var(--ol);border-radius:20px;padding:1px 7px;min-width:20px;text-align:center}
+.md-chip.is-on .md-chip-count{background:#ccfbf1;color:#0f766e}
+.md-refresh{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:8px;
+  border:1px solid var(--border);background:#fff;color:var(--navy);font-size:12.5px;font-weight:600;
+  font-family:inherit;cursor:pointer;flex-shrink:0;transition:.15s}
+.md-refresh:hover{background:var(--ol);border-color:#cbd5e1}
+@media (max-width:760px){
+  .md-bar{gap:10px;padding:11px 14px}
+  .md-refresh span{display:none}
+}
+
+/* -- Master Data: status-save progress ------------------------------------------------------
+   While a status change is in flight the form is replaced by these three steps — the same work
+   the backend does in one transaction (row update, audit entry, workflow event). A disabled form
+   would still invite interaction and would say nothing about what is happening server-side. */
+.md-save-panel{animation:md-fade-in .2s ease-out}
+.md-save-steps{margin-top:14px}
+.md-save-step{display:flex;gap:11px;align-items:flex-start}
+.md-save-rail{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:20px}
+.md-save-dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);background:#fff;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.25s}
+.md-save-line{width:2px;flex:1;min-height:18px;background:var(--border);margin:2px 0;transition:.25s}
+.md-save-body{padding-bottom:14px;min-width:0;flex:1}
+.md-save-title{font-size:12.5px;font-weight:600;color:#9ca3af;transition:.25s}
+.md-save-note{font-size:11.5px;color:var(--gray);margin-top:2px;line-height:1.45;
+  animation:md-fade-in .25s ease-out}
+.md-save-step.is-active .md-save-dot{border-color:var(--navy);background:var(--navy)}
+.md-save-step.is-active .md-save-title{color:var(--navy)}
+.md-save-step.is-done .md-save-dot{border-color:#0d9488;background:#0d9488}
+.md-save-step.is-done .md-save-line{background:#0d9488}
+.md-save-step.is-done .md-save-title{color:var(--navy)}
+.md-save-spin{width:8px;height:8px;border-radius:50%;border:2px solid rgba(255,255,255,.35);
+  border-top-color:#fff;animation:md-spin .7s linear infinite}
+@keyframes md-spin{to{transform:rotate(360deg)}}
+@keyframes md-fade-in{from{opacity:0}to{opacity:1}}
+
+/* The entry just written slides in, so the result of Save is something you watch happen rather
+   than something that is simply already there on the next frame. */
+@keyframes md-log-in{
+  from{opacity:0;transform:translateY(-10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.md-log-enter{animation:md-log-in .42s cubic-bezier(.16,1,.3,1)}
+.md-log-enter .lp-log-card{box-shadow:0 0 0 2px rgba(13,148,136,.25);transition:box-shadow .8s ease-out .4s}
+.md-save-header{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.md-save-from{color:var(--gray);font-weight:500}
+.md-save-arrow{color:#cbd5e1;flex-shrink:0}

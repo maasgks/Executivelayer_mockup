@@ -447,7 +447,42 @@ function closeDeSidebar(){
 }
 function navDeTab(tab){deTab=tab;const inner=document.getElementById('de-isb-inner');if(inner){inner.innerHTML=renderDeSidebar();requestAnimationFrame(function(){const nt=document.getElementById('de-isb-tabs');if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}});}}
 function scrollTabRow(dir,id){const el=document.getElementById(id);if(!el)return;const t=el.querySelector('.lp-isb-tab');const w=t?t.offsetWidth*2+32:160;el.scrollBy({left:dir==='right'?w:-w,behavior:'smooth'});}
-function resetDeFilters(){deSelectedId=null;renderADTPage();}
+function resetDeFilters(){deSelectedId=null;deStatusFilter='';renderADTPage();}
+function setDeStatusFilter(val){deStatusFilter=val||'';renderADTPage();}
+
+// -- Saves the Logs tab's status form. This form was markup only before — select, textarea and
+// Save button had no handlers, so nothing typed here ever went anywhere.
+//
+// Direct Employee belongs to the connected SaaS product this app mirrors, so its rows are mock
+// data and this stays local. The Executive Layer's own records live in Master Data, whose
+// equivalent form (mdSaveStatusChange) writes through to the backend. --
+function deSaveStatusChange(){
+  const emp=directEmpData.find(function(e){return e.id===deSelectedId;});
+  if(!emp)return;
+  const statusEl=document.getElementById('de-log-status');
+  const commentEl=document.getElementById('de-log-comment');
+  const errEl=document.getElementById('de-log-error');
+  const status=statusEl?statusEl.value:'';
+  const comment=commentEl?commentEl.value.trim():'';
+
+  const showError=function(msg){
+    if(!errEl)return;
+    errEl.textContent=msg;
+    errEl.style.display='block';
+  };
+  if(errEl)errEl.style.display='none';
+  if(!status){showError('Select a status.');return;}
+  if(!comment){showError('A comment is required.');return;}
+
+  emp.status=status;
+  appendDeLogOnce(emp.id,status,comment,aiHrManager.name);
+  persistAppState();
+  const inner=document.getElementById('de-isb-inner');
+  if(inner)inner.innerHTML=renderDeSidebar();
+  // The listing behind the drawer shows the status badge, so it has to repaint too.
+  renderADTPage();
+  const sb=document.getElementById('de-split-sb');if(sb)sb.classList.add('open');
+}
 function renderDeSidebar(){
   const emp=directEmpData.find(e=>e.id===deSelectedId);if(!emp)return '';
   const tabs=[{id:'basic-details',label:'Basic Details'},{id:'bank-details',label:'Bank Details'},{id:'attachments',label:'Attachments'},{id:'salary-details',label:'Salary Details'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
@@ -589,7 +624,7 @@ function renderDeSidebar(){
       +'</div>';
   }else if(deTab==='logs'){
     const logs=deLogsData[emp.id]||[];
-    const deLogKey=(s)=>({Active:'active',Inactive:'inactive'}[s]||'default');
+    const deLogKey=(s)=>({Active:'active',Inactive:'inactive',Pending:'pending',Created:'created'}[s]||'default');
     const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
     const clkSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
@@ -615,17 +650,19 @@ function renderDeSidebar(){
         }).join('')+'</div>'
       :'<div class="lp-logs-empty">No activity logs yet.</div>';
     const csk=deLogKey(emp.status||'Active');
+    // -- Offering the record's current status would make Save a no-op, so it is left out. --
+    const statusOptions=['Active','Inactive'].filter(function(s){return s!==emp.status;});
     const formHTML='<div class="lp-logs-form">'
       +'<div class="lp-logs-form-header"><span class="lp-log-dot lp-log-dot--'+csk+'"></span>'+emp.status+'</div>'
       +'<p class="lp-logs-form-sub">Update employee status and add a comment</p>'
       +'<div class="lp-logs-form-label">Status <span class="lp-logs-form-req">*</span></div>'
-      +'<div class="lp-logs-form-sel-wrap"><select class="lp-logs-form-select"><option value="">Select Status</option>'
-      +'<option value="Active"'+(emp.status==='Active'?' selected':'')+'>Active</option>'
-      +'<option value="Inactive"'+(emp.status==='Inactive'?' selected':'')+'>Inactive</option>'
+      +'<div class="lp-logs-form-sel-wrap"><select class="lp-logs-form-select" id="de-log-status"><option value="">Select Status</option>'
+      +statusOptions.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('')
       +'</select>'+chevSvg+'</div>'
       +'<div class="lp-logs-form-label">Comment <span class="lp-logs-form-req">*</span></div>'
-      +'<textarea class="lp-logs-form-textarea" placeholder="Enter comment"></textarea>'
-      +'<button class="lp-logs-save-btn">Save</button>'
+      +'<textarea class="lp-logs-form-textarea" id="de-log-comment" placeholder="Enter comment"></textarea>'
+      +'<div id="de-log-error" style="display:none;font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-top:10px"></div>'
+      +'<button class="lp-logs-save-btn" id="de-log-save" onclick="deSaveStatusChange()">Save</button>'
       +'</div>';
     body='<div class="lp-logs-wrap">'+timelineHTML+formHTML+'</div>';
   }else if(deTab==='workflow'){
@@ -649,10 +686,466 @@ function renderDeSidebar(){
   }
   return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
+/* == MASTER DATA (Executive Layer's own store) ==========================================
+   Everything below renders masterData, which the backend owns. Deliberately a separate module
+   from Direct Employee: Direct Employee, Teams, Leaves and the rest of the sidebar below it
+   belong to the connected SaaS product this app mirrors and are mock data, whereas these
+   records are the Executive Layer's, ingested from connected systems with real provenance.
+   ====================================================================================== */
+
+// -- Opening the drawer re-renders the page, not just the drawer, because the listing switches
+// to its compact form when a record is selected (see buildMasterDataHTML). Patching only the
+// drawer left the full nine-column table underneath, of which the drawer covered all but a
+// clipped three columns — a strip too narrow to read and too wide to be useful. --
+function openMdSidebar(id){
+  const wasOpen=!!mdSelectedId;
+  mdSelectedId=id;mdTab='basic-details';
+  renderADTPage();
+  // Only animate when the panel is actually arriving; switching between records should feel
+  // like a swap, not a re-entrance.
+  if(!wasOpen){
+    const sb=document.getElementById('md-split-sb');
+    if(sb){sb.classList.remove('open');requestAnimationFrame(function(){sb.classList.add('open');});}
+  }
+}
+function closeMdSidebar(){
+  const sb=document.getElementById('md-split-sb');
+  mdSelectedId=null;
+  // Let the panel slide out before the listing expands back to full width, so the two motions
+  // read as one gesture instead of the table snapping wide behind a still-visible drawer.
+  if(sb){sb.classList.remove('open');setTimeout(function(){renderADTPage();},280);}
+  else renderADTPage();
+}
+function navMdTab(tab){
+  mdTab=tab;
+  const inner=document.getElementById('md-isb-inner');
+  if(inner){
+    inner.innerHTML=renderMdSidebar();
+    requestAnimationFrame(function(){
+      const nt=document.getElementById('md-isb-tabs');
+      if(nt){const a=nt.querySelector('.lp-isb-tab.active');if(a)a.scrollIntoView({inline:'start',block:'nearest'});}
+    });
+  }
+}
+function setMdStatusFilter(val){mdStatusFilter=val||'';renderADTPage();}
+function resetMdFilters(){mdSelectedId=null;mdStatusFilter='';renderADTPage();}
+
+// -- Pulls the whole store from the backend. Called on page load, by the Refresh button, and
+// after any write that reveals the local cache is stale.
+//
+// Replaces the local arrays rather than merging into them: the backend is the authority on what
+// exists, so a record it no longer has must disappear here too. Merging is what previously left
+// deleted/reset records on screen, where every action on them failed. --
+function mdRefreshFromBackend(){
+  return execApiListEmployees({pageSize:200}).then(function(res){
+    if(!res.ok||!res.data){
+      mdBackendState=res.offline?'offline':'ok';
+      return res;
+    }
+    mdBackendState='ok';
+    masterData.length=0;
+    Object.keys(mdLogsData).forEach(function(k){delete mdLogsData[k];});
+    Object.keys(mdWorkflowData).forEach(function(k){delete mdWorkflowData[k];});
+    if(mdSelectedId&&!res.data.employees.length)mdSelectedId=null;
+    // Oldest first, so the newest backend record ends up at the top of masterData.
+    return Promise.all(res.data.employees.slice().reverse().map(function(row){
+      return execApiGetEmployee(row.employee_code).then(function(full){
+        if(full.ok&&full.data)syncEmpFromBackend(full.data.employee,full.data.logs,full.data.workflow);
+      });
+    })).then(function(){
+      // The drawer's selection is an index into the list we just rebuilt, so drop it if the
+      // record it pointed at is gone.
+      if(mdSelectedId&&!masterData.some(function(e){return e.id===mdSelectedId;}))mdSelectedId=null;
+      return res;
+    });
+  });
+}
+function mdRefreshClicked(){
+  mdRefreshFromBackend().then(function(){renderADTPage();});
+}
+// -- Fetches on entering the page if the store was never successfully loaded. The load-time
+// hydrate runs once; if the backend happened to be down or slow at that moment, the page would
+// otherwise stay empty for the whole session even after the backend came back — the user would
+// see an empty list with no indication that a retry was all it needed. Guarded so it never
+// loops: only fires when the state is not already 'ok', and never twice at once. --
+let mdEnsureInFlight=false;
+function mdEnsureLoaded(){
+  if(mdBackendState==='ok'||mdEnsureInFlight)return;
+  mdEnsureInFlight=true;
+  mdRefreshFromBackend().then(function(){
+    mdEnsureInFlight=false;
+    if(page==='master-data')renderADTPage();
+  });
+}
+
+// -- Status change from the Logs tab. Unlike the Direct Employee equivalent this writes through
+// to the backend, where the row update and the audit entry are one transaction — so the badge,
+// the log timeline and the workflow trail cannot drift apart. --
+// -- The write the backend actually performs, named step by step. The row update, the audit
+// entry and the workflow event are one transaction server-side, so showing them as three
+// sequential lines is an honest account of the work rather than decoration over a spinner. --
+const mdSaveSteps=[
+  {title:'Updating record status',note:'Writing the new status to the master data row…'},
+  {title:'Writing audit entry',note:'Appending the comment to the record\'s log…'},
+  {title:'Recording workflow event',note:'Adding the transition to the workflow trail…'}
+];
+
+function mdSaveStatusChange(){
+  if(mdSaveState)return;
+  const rec=masterData.find(function(e){return e.id===mdSelectedId;});
+  if(!rec)return;
+  const statusEl=document.getElementById('md-log-status');
+  const commentEl=document.getElementById('md-log-comment');
+  const errEl=document.getElementById('md-log-error');
+  const status=statusEl?statusEl.value:'';
+  const comment=commentEl?commentEl.value.trim():'';
+
+  // Inline validation stays a direct DOM tweak — no re-render, so nothing typed is disturbed.
+  const showInlineError=function(msg){
+    if(!errEl)return;
+    errEl.textContent=msg;
+    errEl.style.display='block';
+  };
+  if(errEl)errEl.style.display='none';
+  if(!status){showInlineError('Select a status.');if(statusEl)statusEl.focus();return;}
+  if(!comment){showInlineError('A comment is required.');if(commentEl)commentEl.focus();return;}
+
+  // Held so the form can be restored exactly as typed if the write fails.
+  mdSaveDraft={status:status,comment:comment};
+  mdSaveError='';
+  mdSaveState='saving';mdSaveStep=0;
+  mdPatchSidebar();
+
+  let response=null,arrived=false;
+  const request=execApiChangeStatus(rec.empId,status,comment,aiHrManager.name).then(function(res){
+    response=res;arrived=true;
+    return res;
+  });
+
+  const fail=function(res){
+    mdSaveState=null;mdSaveStep=-1;
+    if(res.offline)mdSaveError='Cannot reach the Executive Layer backend. Start it with: node backend/dev.js';
+    // A 404 means this row exists on screen but not in the backend — the listing is stale (most
+    // often because the database was reset). Say so plainly and resync, rather than leaving a
+    // record on screen that fails every action.
+    else if(res.status===404){
+      mdSaveError='This record no longer exists in the backend — the list was out of date. Refreshing…';
+      mdPatchSidebar();
+      mdRefreshFromBackend().then(function(){renderADTPage();});
+      return;
+    }
+    else mdSaveError=res.error;
+    mdPatchSidebar();
+  };
+
+  const advance=function(i){
+    // Never claim progress the server has not made: hold on the first step until the write has
+    // actually come back, then pace the remaining steps so they can be read.
+    if(i>=1&&!arrived){setTimeout(function(){advance(i);},140);return;}
+    if(response&&!response.ok){fail(response);return;}
+    mdSaveStep=i;
+    mdPatchSaveProgress();
+    if(i>=mdSaveSteps.length-1){
+      setTimeout(function(){
+        mdSaveState='done';
+        mdPatchSaveProgress();
+        setTimeout(function(){
+          syncEmpFromBackend(response.data.employee,response.data.logs,response.data.workflow);
+          mdSaveState=null;mdSaveStep=-1;mdSaveDraft=null;
+          // Flags the newest timeline card so it animates in on this render only.
+          mdLogEnter=true;
+          renderADTPage();
+          setTimeout(function(){mdLogEnter=false;},900);
+        },560);
+      },480);
+      return;
+    }
+    setTimeout(function(){advance(i+1);},520);
+  };
+  request.then(function(res){if(!res.ok&&mdSaveStep<1)fail(res);});
+  setTimeout(function(){advance(1);},520);
+}
+
+function mdPatchSidebar(){
+  const inner=document.getElementById('md-isb-inner');
+  if(inner)inner.innerHTML=renderMdSidebar();
+}
+// Patches only the progress list, so the timeline beside it does not flicker on every tick.
+function mdPatchSaveProgress(){
+  const el=document.getElementById('md-save-progress');
+  if(el)el.innerHTML=mdSaveProgressHTML();
+}
+function mdSaveProgressHTML(){
+  const done=mdSaveState==='done';
+  return mdSaveSteps.map(function(s,i){
+    const state=(done||mdSaveStep>i)?'is-done':(mdSaveStep===i?'is-active':'');
+    const mark=(done||mdSaveStep>i)
+      ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>'
+      : (mdSaveStep===i?'<span class="md-save-spin"></span>':'');
+    return '<div class="md-save-step '+state+'">'
+      +'<div class="md-save-rail"><div class="md-save-dot">'+mark+'</div>'
+      +(i<mdSaveSteps.length-1?'<div class="md-save-line"></div>':'')+'</div>'
+      +'<div class="md-save-body"><div class="md-save-title">'+s.title+'</div>'
+      +((done||mdSaveStep>=i)?'<div class="md-save-note">'+s.note+'</div>':'')
+      +'</div></div>';
+  }).join('');
+}
+
+function renderMdSidebar(){
+  const rec=masterData.find(function(e){return e.id===mdSelectedId;});
+  if(!rec)return '';
+  // -- No separate "Form Details" tab: Basic Details already shows every submitted field under
+  // "Captured by the intake form", so a second tab repeated the same values with nothing added. --
+  const tabs=[
+    {id:'basic-details',label:'Basic Details'},
+    {id:'logs',label:'Logs'},
+    {id:'workflow',label:'Workflow'}
+  ];
+  const tabBar='<div class="lp-isb-tabbar">'
+    +'<button class="lp-isb-nav-btn" onclick="scrollTabRow(\'left\',\'md-isb-tabs\')" title="Scroll left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
+    +'<div class="lp-isb-tabs" id="md-isb-tabs">'+tabs.map(function(t){return '<button class="lp-isb-tab'+(mdTab===t.id?' active':'')+'" onclick="navMdTab(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'
+    +'<button class="lp-isb-nav-btn nav-right" onclick="scrollTabRow(\'right\',\'md-isb-tabs\')" title="Scroll right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeMdSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'</div>';
+  const d='<span style="color:#9ca3af">--</span>';
+  const v=function(x){return x&&x!=='--'?x:d;};
+  const iP='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const iB='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>';
+  const iI='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h4"/></svg>';
+  const iPin='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+  const iBag='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>';
+  const iCal='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  const iPhone='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72c.2.73.43 1.44.7 2.81a2 2 0 0 1-.45 2.11L7.91 9a16 16 0 0 0 6 6l.9-.87a2 2 0 0 1 2.11-.45c1.37.27 2.08.5 2.81.7A2 2 0 0 1 21.73 16.92z"/></svg>';
+  const iMail='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  const iSearch='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+  const fc=function(ico,label,val){
+    return '<div class="lp-sb-field-card"><div class="lp-sb-field-icon">'+ico+'</div><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+label+'</div><div class="lp-sb-field-value">'+val+'</div></div></div>';
+  };
+  let body='';
+
+  if(mdTab==='basic-details'){
+    // -- Identity strip: the two ids that make this record traceable back to the system it came
+    // from. Both are minted by the backend, so they are unique across the whole Executive Layer
+    // rather than per browser session. First thing shown, because "which record is this and
+    // where did it come from" is the first question asked of a master data entry. --
+    const idStrip='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'
+      +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source: '+(rec.source==='adt_solution'?'ADT Solution':'Manual')+'</span>'
+      +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Employee ID: '+rec.empId+'</span>'
+      +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Reference ID: '+(rec.referenceId||'--')+'</span>'
+      +'<span class="lp-status-badge '+String(rec.status).toLowerCase()+'">'+rec.status+'</span>'
+      +'</div>';
+    // -- Records ingested from ADT Solution sit in Pending because the intake form simply does
+    // not ask for department, job title, branch or joining date. Naming the missing fields is
+    // more useful than a bare badge — it tells the operator exactly what is outstanding. --
+    const pendingNote=rec.status==='Pending'
+      ? '<div style="font-size:12px;color:#8a6d10;background:#fdf6d8;border:1px solid #f0dfa0;border-radius:8px;padding:10px 12px;margin-bottom:14px;line-height:1.6">'
+        +'<strong>Pending completion.</strong> The ADT Solution intake form does not capture department, job title, branch or joining date. Once those are filled in, set this record to Active from the Logs tab.'
+        +'</div>'
+      : '';
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+rec.name+'</span></div>'
+      +idStrip+pendingNote
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;margin:4px 0 10px">Captured by the intake form</div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iP,'Name',v(rec.name))+fc(iMail,'Work Email',v(rec.email))
+      +fc(iPhone,'Contact Number',v(rec.contact))+fc(iB,'Company',v(rec.companyName))
+      +fc(iPin,'Country Hiring In',v(rec.country))+fc(iSearch,'Looking For',v(rec.lookingFor))
+      +fc(iI,'Heard About Us',v(rec.heardAboutUs))
+      +'</div>'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;margin:20px 0 10px">Completed in the Executive Layer</div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iB,'Department',v(rec.dept))+fc(iPin,'Branch',v(rec.branch))
+      +fc(iBag,'Job Title',v(rec.jobTitle))+fc(iCal,'Joining Date',v(rec.joinDate))
+      +'</div>';
+
+  }else if(mdTab==='logs'){
+    const logs=mdLogsData[rec.id]||[];
+    const logKey=function(s){return ({Active:'active',Inactive:'inactive',Pending:'pending',Created:'created'})[s]||'default';};
+    const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const clkSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    const chevSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
+    const timelineHTML=logs.length
+      ?'<div class="lp-logs-timeline">'+logs.map(function(l,i){
+          const sk=logKey(l.status);
+          // The entry just written animates in, so the result of Save is visible rather than
+          // simply appearing between one frame and the next.
+          const enter=(i===0&&mdLogEnter)?' md-log-enter':'';
+          return '<div class="lp-log-row'+enter+'">'
+            +'<div class="lp-log-avatar-col">'
+            +'<div class="lp-log-avatar lp-log-avatar--'+sk+'">'+personSvg+'</div>'
+            +(i<logs.length-1?'<div class="lp-log-connector"></div>':'')
+            +'</div>'
+            +'<div class="lp-log-card">'
+            +'<div class="lp-log-status-row"><span class="lp-log-dot lp-log-dot--'+sk+'"></span><span class="lp-log-status-text lp-log-status-text--'+sk+'">'+l.status+'</span></div>'
+            +'<div class="lp-log-meta-row">'
+            +'<span class="lp-log-meta-item">'+personSvg+'<span>'+l.user+'</span></span>'
+            +(l.date?'<span class="lp-log-meta-item">'+calSvg+'<span>'+l.date+'</span></span>':'')
+            +(l.time?'<span class="lp-log-meta-item">'+clkSvg+'<span>'+l.time+'</span></span>':'')
+            +'</div>'
+            +'<div class="lp-log-comment-row"><span class="lp-log-comment-label">Comment:</span>'+l.action+'</div>'
+            +'</div>'
+            +'</div>';
+        }).join('')+'</div>'
+      :'<div class="lp-logs-empty">No activity logs yet.</div>';
+    const csk=logKey(rec.status||'Pending');
+    // -- While the write is in flight the form is replaced by the progress panel rather than
+    // just greying out: a disabled form still invites interaction, and the point is to show
+    // that a real transaction is happening on the server. --
+    let formHTML;
+    if(mdSaveState){
+      const target=(mdSaveDraft&&mdSaveDraft.status)||rec.status;
+      const tk=logKey(target);
+      // The transition, not just the destination — showing "Active" alone while the write is
+      // still in flight reads as though it had already been applied.
+      formHTML='<div class="lp-logs-form md-save-panel">'
+        +'<div class="lp-logs-form-header md-save-header">'
+        +'<span class="lp-log-dot lp-log-dot--'+csk+'"></span><span class="md-save-from">'+rec.status+'</span>'
+        +'<svg class="md-save-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
+        +'<span class="lp-log-dot lp-log-dot--'+tk+'"></span><span>'+target+'</span>'
+        +'</div>'
+        +'<p class="lp-logs-form-sub">'+(mdSaveState==='done'?'Saved to the Executive Layer store.':'Saving to the Executive Layer store…')+'</p>'
+        +'<div class="md-save-steps" id="md-save-progress">'+mdSaveProgressHTML()+'</div>'
+        +'</div>';
+    }else{
+      // Offering the record's current status would be a no-op the backend rejects with a 409,
+      // so it is left out rather than explained after the fact.
+      const statusOptions=['Pending','Active','Inactive'].filter(function(s){return s!==rec.status;});
+      const draft=mdSaveDraft||{};
+      formHTML='<div class="lp-logs-form">'
+        +'<div class="lp-logs-form-header"><span class="lp-log-dot lp-log-dot--'+csk+'"></span>'+rec.status+'</div>'
+        +'<p class="lp-logs-form-sub">Update status and add a comment</p>'
+        +'<div class="lp-logs-form-label">Status <span class="lp-logs-form-req">*</span></div>'
+        +'<div class="lp-logs-form-sel-wrap"><select class="lp-logs-form-select" id="md-log-status"><option value="">Select Status</option>'
+        +statusOptions.map(function(s){return '<option value="'+s+'"'+(draft.status===s?' selected':'')+'>'+s+'</option>';}).join('')
+        +'</select>'+chevSvg+'</div>'
+        +'<div class="lp-logs-form-label">Comment <span class="lp-logs-form-req">*</span></div>'
+        +'<textarea class="lp-logs-form-textarea" id="md-log-comment" placeholder="Enter comment">'+(draft.comment||'')+'</textarea>'
+        // A failed write restores the form with what was typed still in it, and the reason above the button.
+        +'<div id="md-log-error" style="'+(mdSaveError?'':'display:none;')+'font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-top:10px">'+(mdSaveError||'')+'</div>'
+        +'<button class="lp-logs-save-btn" id="md-log-save" onclick="mdSaveStatusChange()">Save</button>'
+        +'</div>';
+    }
+    body='<div class="lp-logs-wrap">'+timelineHTML+formHTML+'</div>';
+
+  }else if(mdTab==='workflow'){
+    const wf=mdWorkflowData[rec.id]||[];
+    const wfPersonSvg='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const wfCalSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    body=wf.length
+      ?'<div class="lp-wf-wrap">'+wf.map(function(w,i){
+        return '<div class="lp-wf-row">'
+          +'<div class="lp-wf-dot-col"><div class="lp-wf-dot"></div>'+(i<wf.length-1?'<div class="lp-wf-connector"></div>':'')+'</div>'
+          +'<div class="lp-wf-card">'
+          +'<div class="lp-wf-title">'+w.title+'</div>'
+          +'<div class="lp-wf-meta-row">'
+          +'<span class="lp-wf-meta-item">'+wfPersonSvg+'<span>'+w.user+'</span></span>'
+          +(w.date?'<span class="lp-wf-meta-item">'+wfCalSvg+'<span>'+w.date+'</span></span>':'')
+          +(w.time?'<span class="lp-wf-meta-sep">|</span><span>'+w.time+'</span>':'')
+          +'</div>'
+          +'<div class="lp-wf-desc"><span class="lp-wf-desc-label">Description:</span><span class="lp-wf-desc-text">'+w.description+'</span></div>'
+          +'</div>'
+          +'</div>';
+      }).join('')+'</div>'
+      :'<div class="lp-wf-empty">No workflow entries yet.</div>';
+  }
+  return tabBar+'<div class="lp-isb-body">'+body+'</div>';
+}
+
+function buildMasterDataHTML(){
+  const d='<span style="color:#9ca3af">--</span>';
+  const rows=masterData.filter(function(e){return !mdStatusFilter||e.status===mdStatusFilter;});
+  const counts={Pending:0,Active:0,Inactive:0};
+  masterData.forEach(function(e){if(counts[e.status]!==undefined)counts[e.status]++;});
+
+  // -- With the drawer open only about a third of the table stays uncovered, so the listing
+  // switches to a compact identity-only form that actually fits it: name, the two ids, and a
+  // status dot. That is all you need to pick a different record while reading one — the full
+  // nine-column table returns the moment the drawer closes. --
+  const compact=!!mdSelectedId;
+  const statusDotColor={Pending:'#d9b64a',Active:'#16a34a',Inactive:'#ef4444'};
+  const tableBody=rows.length
+    ?rows.map(function(e,i){
+      const sel=mdSelectedId===e.id;
+      if(compact){
+        return '<tr class="md-row md-row--compact'+(sel?' lp-row-selected':'')+'" id="md-row-'+e.id+'" onclick="openMdSidebar('+e.id+')">'
+          +'<td>'
+          +'<div class="md-compact-cell">'
+          +'<span class="md-compact-dot" style="background:'+(statusDotColor[e.status]||'#94a3b8')+'"></span>'
+          +'<div style="min-width:0">'
+          +'<div class="md-compact-name">'+e.name+'</div>'
+          +'<div class="md-compact-meta">'+(e.empId||'--')+(e.referenceId?(' &middot; '+e.referenceId):'')+'</div>'
+          +'</div></div></td>'
+          +'</tr>';
+      }
+      return '<tr class="md-row'+(sel?' lp-row-selected':'')+'" id="md-row-'+e.id+'" style="cursor:pointer" onclick="openMdSidebar('+e.id+')">'
+        +'<td style="color:var(--gray);font-size:13px">'+(i+1)+'</td>'
+        +'<td style="font-weight:600;color:var(--navy)">'+e.name+'</td>'
+        +'<td style="font-family:monospace;font-size:12px">'+(e.empId||d)+'</td>'
+        +'<td>'+(e.referenceId?('<span style="font-family:monospace;font-size:12px;color:#0d9488;font-weight:600">'+e.referenceId+'</span>'):d)+'</td>'
+        +'<td><span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">'+(e.source==='adt_solution'?'ADT Solution':'Manual')+'</span></td>'
+        +'<td>'+(e.companyName||d)+'</td>'
+        +'<td>'+(e.country||d)+'</td>'
+        +'<td><span class="lp-status-badge '+String(e.status).toLowerCase()+'">'+e.status+'</span></td>'
+        +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openMdSidebar('+e.id+')"><svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg></button></td>'
+        +'</tr>';
+    }).join('')
+    // -- Three different kinds of empty, which must not look alike: still loading, backend
+    // unreachable, or genuinely nothing ingested yet. Showing the last message when the backend
+    // is simply down would be a lie about the state of the store. --
+    :'<tr><td colspan="9" style="padding:44px 16px;text-align:center">'
+      +(mdBackendState==='loading'
+        ?'<div style="font-size:12.5px;color:var(--gray)">Loading master data…</div>'
+        :mdBackendState==='offline'
+          ?'<div style="font-size:13px;font-weight:600;color:#8a6d10;margin-bottom:6px">Not connected to the backend</div>'
+            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Master data is held by the Executive Layer backend, which isn\'t reachable — so this list can\'t be shown, not that it is empty. Start it with <span style="font-family:monospace">node backend/dev.js</span>, then '
+            +'<button onclick="mdRefreshClicked()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">refresh</button>.</div>'
+          :'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No master data yet</div>'
+            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Records arrive here when a connected system sends one. Submit the USER intake form under <strong>Configure &rsaquo; Systems &rsaquo; ADT Solution</strong>, or arm the live sync from <strong>AI Executive &rsaquo; Hire to Retire</strong>.</div>')
+      +'</td></tr>';
+
+  // -- One compact bar rather than a title block, a paragraph and four large stat cards stacked
+  // above each other. That chrome cost roughly 200px of vertical space before a single record
+  // was visible — on a laptop the drawer opened almost below the fold. The counts double as the
+  // status filter, so they earn their place instead of merely reporting. --
+  const chip=function(label,count,key,dot){
+    const on=mdStatusFilter===key;
+    return '<button class="md-chip'+(on?' is-on':'')+'" onclick="setMdStatusFilter(\''+(on?'':key)+'\')">'
+      +(dot?'<span class="md-chip-dot" style="background:'+dot+'"></span>':'')
+      +'<span class="md-chip-label">'+label+'</span>'
+      +'<span class="md-chip-count">'+count+'</span>'
+      +'</button>';
+  };
+
+  return '<div class="lp-page">'
+    +'<div class="md-bar">'
+    +'<div class="md-bar-title">Master Data</div>'
+    +'<div class="md-chips">'
+    +chip('All',masterData.length,'')
+    +chip('Pending',counts.Pending,'Pending','#d9b64a')
+    +chip('Active',counts.Active,'Active','#16a34a')
+    +chip('Inactive',counts.Inactive,'Inactive','#ef4444')
+    +'</div>'
+    +'<button class="md-refresh" onclick="mdRefreshClicked()" title="Refresh from the backend">'
+    +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'
+    +'<span>Refresh</span></button>'
+    +'</div>'
+    +'<div class="lp-split-wrap'+(compact?' md-split--compact':'')+'"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
+    +'<table class="lp-table"><thead><tr>'
+    +(compact
+      ?'<th>'+rows.length+' record'+(rows.length===1?'':'s')+'</th>'
+      :'<th>SR. NO</th><th>NAME</th><th>EMPLOYEE ID</th><th>REFERENCE ID</th><th>SOURCE</th><th>COMPANY</th><th>COUNTRY</th><th>STATUS</th><th>ACTION</th>')
+    +'</tr></thead><tbody>'+tableBody+'</tbody></table>'
+    +'</div></div>'
+    +'<div class="lp-split-sb md-split-sb'+(mdSelectedId?' open':'')+'" id="md-split-sb"><div class="lp-isb" id="md-isb-inner">'+(mdSelectedId?renderMdSidebar():'')+'</div></div>'
+    +'</div></div>';
+}
+
 function buildDirectListingHTML(){
   const d='<span style="color:#9ca3af">--</span>';
   // -- Employees waiting on HR for onboarding (see ensureDirectEmpForOnboarding) pin to the top with a notification dot, same "needs action" treatment used on the Contracts sidebar tabs. --
-  const sortedEmps=directEmpData.slice().sort(function(a,b){
+  const sortedEmps=directEmpData.slice().filter(function(e){
+    return !deStatusFilter||e.status===deStatusFilter;
+  }).sort(function(a,b){
     return (manualLinkedRunForEmployee(a.id)?0:1)-(manualLinkedRunForEmployee(b.id)?0:1);
   });
   const rows=sortedEmps.map((e,i)=>{
@@ -675,7 +1168,7 @@ function buildDirectListingHTML(){
     +'<div class="lp-filter-bar-row">'
     +apCS('de-f-dept',['Engineering','HR','Product','Design','Sales'],'','Department')
     +apCS('de-f-branch',['Hyderabad','Mumbai','Delhi','Punjab','Bangalore'],'','Branch')
-    +apCS('de-f-status',['Active','Inactive'],'','Status')
+    +apCS('de-f-status',['Active','Inactive'],deStatusFilter,'Status')
     +'<button class="lp-pill-reset" onclick="resetDeFilters()">Reset</button>'
     +'<button class="lp-pill-search">Search</button>'
     +'</div></div>'
@@ -5465,10 +5958,21 @@ function buildCfgSystemDetailHTML(){
   const s=cfgSystems.find(function(x){return x.id===selectedCfgSystemId;})||cfgSystems[0];
   const editing=cfgSystemEditing;
   const d=editing&&cfgSystemDraft?cfgSystemDraft:s;
+  // -- Internal platforms are our own stack, so their endpoint, auth scheme and API inventory are
+  // implementation detail rather than an integration contract to review here. The page drops the
+  // Connection block, the released-API list, and the Edit/Test actions that only operate on them,
+  // leaving what the platform actually contributes: its Data Foundation objects. --
+  const internal=!!s.internal;
   const heading=editing
     ?'<div class="ep-form-group" style="margin-bottom:8px;max-width:360px"><input class="ep-form-input" id="cfg-sys-edit-name" value="'+attrSafe(d.name)+'" style="font-size:16px;font-weight:700"></div>'
-    :'<p style="font-size:17px;font-weight:700;margin-bottom:6px">'+s.name+'</p><p style="font-size:12.5px;color:var(--gray);margin:0">'+s.type+' &middot; connected via released APIs</p>';
-  const actionBtns=editing?'':'<div style="display:flex;gap:10px;flex-shrink:0"><button class="btn btn-secondary btn-sm" onclick="testCfgSystemConnection(\''+s.id+'\',this)">Test connection</button><button class="btn btn-primary btn-sm" onclick="startCfgSystemEdit()">Edit</button></div>';
+    :'<p style="font-size:17px;font-weight:700;margin-bottom:6px">'+s.name+'</p>'
+      +'<p style="font-size:12.5px;color:var(--gray);margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +(internal
+        ?'<span class="badge" style="color:#475569;background:#f1f5f9;border-color:#cbd5e1">Internal platform</span>'
+          +'<span class="status-pill '+(s.status==='Connected'?'active':'inactive')+'">'+s.status+'</span>'
+        :s.type+' &middot; connected via released APIs')
+      +'</p>';
+  const actionBtns=(editing||internal)?'':'<div style="display:flex;gap:10px;flex-shrink:0"><button class="btn btn-secondary btn-sm" onclick="testCfgSystemConnection(\''+s.id+'\',this)">Test connection</button><button class="btn btn-primary btn-sm" onclick="startCfgSystemEdit()">Edit</button></div>';
   const connectionBlock=editing
     ?'<div class="ep-form-card" style="margin-bottom:24px">'
       +'<div class="ep-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px">'
@@ -5547,13 +6051,36 @@ function buildCfgSystemDetailHTML(){
       +'<button type="button" class="btn btn-secondary btn-sm" onclick="addCfgApiRow(\''+s.id+'\')">+ Add API</button>'
       +'</div>'
     :'';
+  // -- Data Foundation objects sourced from this system. Shown on the system page (not only
+  // under Configure > Data Foundation) because "what does this system give us" is the question
+  // being asked here. Systems with no models of their own simply omit the section. --
+  const systemModels=cfgModels.filter(function(m){return m.systemId===s.id;});
+  const dataFoundationBlock=systemModels.length
+    ?'<div class="review-title" style="margin-bottom:12px">Data Foundation</div>'
+      +'<div class="ai-journey-grid" style="margin-bottom:24px">'
+      +systemModels.map(function(m){
+        const openAction=m.intakeFormPage
+          ?'viewCfgUserIntake(\''+m.id+'\')'
+          :'viewCfgModel(\''+m.id+'\')';
+        return '<div class="ai-journey-card" onclick="'+openAction+'">'
+          +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+m.name+'</div>'
+          +'<span class="status-pill active">Live</span></div>'
+          +'<div class="ai-journey-desc">'+m.desc+'</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'
+          +'<span class="badge">'+m.mapped.length+' mapped</span>'
+          +'<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9">'+m.enrichment.length+' enrichment</span>'
+          +(m.intakeFormPage?'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Intake form</span>':'')
+          +'</div></div>';
+      }).join('')
+      +'</div>'
+    :'';
   return '<div class="ai-exec-page">'
     +cfgBackBtn('cfg-systems','Systems')
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap"><div>'+heading+'</div>'+actionBtns+'</div>'
-    +'<div class="review-title" style="margin-bottom:12px">Connection</div>'
-    +connectionBlock
-    +'<div class="review-title" style="margin-bottom:12px">Available APIs'+(editing?'':' &middot; released')+'</div>'
-    +'<div class="ep-form-card" style="padding:0">'+apiRows+addApiForm+'</div>'
+    +(internal?'':'<div class="review-title" style="margin-bottom:12px">Connection</div>'+connectionBlock)
+    +dataFoundationBlock
+    +(internal?'':'<div class="review-title" style="margin-bottom:12px">Available APIs'+(editing?'':' &middot; released')+'</div>'
+      +'<div class="ep-form-card" style="padding:0">'+apiRows+addApiForm+'</div>')
     +'</div>';
 }
 function cancelCfgSystemAdd(){navigatePage('cfg-systems');}
@@ -5597,6 +6124,369 @@ function cfgTypeSelect(id,current){
   return '<select class="ep-form-select" style="width:auto" id="'+id+'">'+opts.map(function(o){return '<option'+(o===current?' selected':'')+'>'+o+'</option>';}).join('')+'</select>';
 }
 function viewCfgModel(id){selectedCfgModelId=id;cfgModelEditing=false;cfgModelDraft=null;navigatePage('cfg-model-detail');}
+/* -- Configure > Systems > ADT Solution > USER -------------------------------------------
+   A three-stage flow rather than three unrelated screens: Intake Form -> Ingestion -> Master
+   Data Record, with the stepper visible throughout so the journey reads as one continuation.
+   The app sidebar is hidden for the duration (renderer.js) so the form owns the viewport —
+   this is a data-entry task, not a page to browse away from. Styles: css/intake-flow.css. */
+
+const cfgUserIntakeStages=[
+  {label:'Intake Form',sub:'Fill in the details'},
+  {label:'Ingestion',sub:'ADT to Executive Layer'},
+  {label:'Master Data',sub:'Record created'}
+];
+// The ingestion feed. These are the real steps the request goes through — the submission is
+// posted to ADT, ADT assigns its id, and the Executive Layer ingests what comes back — so the
+// wait explains itself instead of being a blank spinner.
+const cfgUserIntakeProgressSteps=[
+  {title:'Submitting to ADT Solution',note:'Posting the intake form to the source system…'},
+  {title:'Submission accepted',note:'ADT Solution has registered the submission.'},
+  {title:'Retrieving into the Executive Layer',note:'Reading the submission back through the intake API…'},
+  {title:'Minting identifiers',note:'Assigning the Employee ID and Reference ID…'},
+  {title:'Master data record created',note:'Written to the Executive Layer store as Pending.'}
+];
+
+function viewCfgUserIntake(modelId){
+  cfgUserIntakeModelId=modelId;
+  cfgUserIntakeResult=null;cfgUserIntakeError='';cfgUserIntakeBusy=false;
+  cfgUserIntakeFields=null;cfgUserIntakeOffline=false;
+  cfgUserIntakeStep=0;cfgUserIntakeProgress=-1;cfgUserIntakeFieldErrors={};cfgUserIntakeDraft={};
+  navigatePage('cfg-user-intake');
+  // Ask ADT (through our backend) what its form actually asks for, rather than shipping a
+  // second copy of the field list that drifts the moment ADT changes the form. If that call
+  // fails, fall back to the known field set: an unreachable backend should leave the form
+  // visible and say why it can't be submitted, not strand the page on a loading message.
+  execApiRequest('GET','/adt/form-schema').then(function(res){
+    if(res.ok&&res.data&&res.data.fields){
+      cfgUserIntakeFields=res.data.fields;
+      cfgUserIntakeOffline=false;
+    }else{
+      cfgUserIntakeFields=cfgUserIntakeFallbackFields;
+      cfgUserIntakeOffline=true;
+    }
+    if(page==='cfg-user-intake'){renderADTPage();cfgUserIntakeFocusFirst();}
+  });
+}
+// -- Retry after the operator has started the backend, without making them navigate away and
+// back to clear the offline state. Keeps anything already typed. --
+function cfgUserIntakeRetry(){
+  cfgUserIntakeCaptureDraft();
+  const draft=cfgUserIntakeDraft;
+  viewCfgUserIntake(cfgUserIntakeModelId||'user');
+  cfgUserIntakeDraft=draft;
+}
+function cfgUserIntakeExit(){
+  const m=cfgModels.find(function(x){return x.id===cfgUserIntakeModelId;});
+  viewCfgSystem((m&&m.systemId)||'adt-solution');
+}
+function cfgUserIntakeReset(){
+  cfgUserIntakeResult=null;cfgUserIntakeError='';cfgUserIntakeBusy=false;
+  cfgUserIntakeStep=0;cfgUserIntakeProgress=-1;cfgUserIntakeFieldErrors={};cfgUserIntakeDraft={};
+  renderADTPage();cfgUserIntakeFocusFirst();
+}
+// -- Opens the master data record this submission created. syncEmpFromBackend has already
+// mirrored it locally, so this is a straight navigation rather than another fetch. --
+function cfgUserIntakeOpenRecord(){
+  if(!cfgUserIntakeResult)return;
+  const localId=syncEmpFromBackend(cfgUserIntakeResult.employee,cfgUserIntakeResult.logs,cfgUserIntakeResult.workflow);
+  navigatePage('master-data');
+  openMdSidebar(localId);
+}
+function cfgUserIntakeFocusFirst(){
+  const el=document.getElementById('cfg-ui-full_name');
+  if(el)el.focus();
+}
+// -- Re-rendering the page rebuilds the inputs from scratch, so anything typed has to be read
+// out first or it is lost the moment a validation error appears. --
+function cfgUserIntakeCaptureDraft(){
+  (cfgUserIntakeFields||[]).forEach(function(f){
+    const el=document.getElementById('cfg-ui-'+f.name);
+    if(el)cfgUserIntakeDraft[f.name]=el.value;
+  });
+}
+// -- Clears one field's error as soon as it is edited, rather than making the user submit again
+// to find out whether they fixed it. --
+function cfgUserIntakeClearError(name){
+  if(!cfgUserIntakeFieldErrors[name])return;
+  delete cfgUserIntakeFieldErrors[name];
+  const wrap=document.getElementById('cfg-uiw-'+name);
+  if(wrap){
+    wrap.classList.remove('has-error');
+    const msg=wrap.querySelector('.uif-error-text');
+    if(msg)msg.remove();
+  }
+}
+function cfgUserIntakeKeydown(ev){
+  // Enter submits from any single-line control, the way a normal form behaves.
+  if(ev.key==='Enter'&&ev.target&&ev.target.tagName!=='TEXTAREA'){ev.preventDefault();submitCfgUserIntake();}
+}
+
+function submitCfgUserIntake(){
+  if(cfgUserIntakeBusy)return;
+  cfgUserIntakeCaptureDraft();
+  const payload={};
+  (cfgUserIntakeFields||[]).forEach(function(f){
+    payload[f.name]=(cfgUserIntakeDraft[f.name]||'').trim();
+  });
+
+  // Validate every field in one pass and report them all together — fixing one error only to
+  // be shown the next is the thing that makes a form feel hostile.
+  const errors={};
+  if(!payload.full_name)errors.full_name='Enter the full name.';
+  if(!payload.work_email)errors.work_email='Enter the work email.';
+  else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.work_email))errors.work_email='That does not look like a valid email address.';
+  if(payload.phone_number&&!payload.phone_country_code)errors.phone_country_code='Pick a country code.';
+  cfgUserIntakeFieldErrors=errors;
+  cfgUserIntakeError='';
+  if(Object.keys(errors).length){
+    renderADTPage();
+    const first=document.getElementById('cfg-ui-'+Object.keys(errors)[0]);
+    if(first)first.focus();
+    return;
+  }
+
+  // Move to the ingestion stage and walk the feed while the request is in flight. The feed is
+  // paced so each step is readable; the real response is awaited in parallel, and the flow only
+  // completes once both the animation and the request are done.
+  cfgUserIntakeBusy=true;
+  cfgUserIntakeStep=1;cfgUserIntakeProgress=0;
+  renderADTPage();
+
+  let response=null,responseArrived=false;
+  // Posts to ADT Solution through our backend, which forwards it to ADT and then ingests what
+  // ADT returns. The record therefore originates in the source system and carries a real ADT
+  // submission id — writing straight to our own tables would demo a path that does not exist.
+  const request=execApiRequest('POST','/adt/submit',payload).then(function(res){
+    response=res;responseArrived=true;
+    // Publish the result as soon as it lands, while still on stage 1, so the feed can name the
+    // real ADT submission id and the minted identifiers as it reaches those steps instead of
+    // narrating placeholders. The success stage is gated on cfgUserIntakeStep, not on this.
+    if(res.ok)cfgUserIntakeResult=res.data;
+    return res;
+  });
+
+  const advance=function(i){
+    // Hold at "Submitting" until the server has actually answered, so the feed never claims
+    // progress that has not happened.
+    if(i>=1&&!responseArrived){setTimeout(function(){advance(i);},200);return;}
+    if(response&&!response.ok){finishWithError(response);return;}
+    cfgUserIntakeProgress=i;
+    cfgUserIntakePatchProgress();
+    if(i>=cfgUserIntakeProgressSteps.length-1){
+      setTimeout(function(){
+        cfgUserIntakeBusy=false;
+        cfgUserIntakeResult=response.data;
+        syncEmpFromBackend(response.data.employee,response.data.logs,response.data.workflow);
+        cfgUserIntakeStep=2;
+        renderADTPage();
+      },620);
+      return;
+    }
+    setTimeout(function(){advance(i+1);},620);
+  };
+  const finishWithError=function(res){
+    cfgUserIntakeBusy=false;
+    cfgUserIntakeStep=0;cfgUserIntakeProgress=-1;
+    cfgUserIntakeError=res.offline
+      ? 'Cannot reach the Executive Layer backend. Start it with: node backend/dev.js'
+      : res.error;
+    renderADTPage();
+  };
+  request.then(function(res){if(!res.ok&&cfgUserIntakeProgress<1)finishWithError(res);});
+  setTimeout(function(){advance(1);},620);
+}
+
+// -- Patches only the feed rather than re-rendering the page, so the stepper above it does not
+// flicker on every tick. --
+function cfgUserIntakePatchProgress(){
+  const el=document.getElementById('cfg-ui-progress');
+  if(el)el.innerHTML=cfgUserIntakeProgressHTML();
+}
+
+function cfgUserIntakeStepperHTML(){
+  const parts=[];
+  cfgUserIntakeStages.forEach(function(s,i){
+    if(i>0)parts.push('<div class="uif-step-line'+(cfgUserIntakeStep>=i?' is-done':'')+'"></div>');
+    const state=cfgUserIntakeStep>i?'is-done':(cfgUserIntakeStep===i?'is-active':'');
+    const mark=cfgUserIntakeStep>i
+      ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
+      : String(i+1);
+    parts.push('<div class="uif-step '+state+'">'
+      +'<div class="uif-step-dot">'+mark+'</div>'
+      +'<div><div class="uif-step-label">'+s.label+'</div><div class="uif-step-sub">'+s.sub+'</div></div>'
+      +'</div>');
+  });
+  return '<div class="uif-stepper">'+parts.join('')+'</div>';
+}
+
+function cfgUserIntakeShellHTML(inner){
+  const m=cfgModels.find(function(x){return x.id===cfgUserIntakeModelId;})||cfgModels.find(function(x){return x.id==='user';});
+  const sys=cfgSystems.find(function(x){return x.id===(m&&m.systemId);});
+  return '<div class="uif-page">'
+    +'<div class="uif-topbar">'
+    +'<button class="uif-exit" onclick="cfgUserIntakeExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>'+(sys?sys.name:'ADT Solution')+'</button>'
+    +'<div class="uif-context"><span class="uif-context-dot"></span>'
+    +'<span><strong>'+(m?m.name:'USER')+'</strong> &middot; '+(sys?sys.name:'ADT Solution')+' intake</span></div>'
+    +'</div>'
+    +cfgUserIntakeStepperHTML()
+    +'<div class="uif-body">'+inner+'</div>'
+    +'</div>';
+}
+
+function cfgUserIntakeProgressHTML(){
+  return cfgUserIntakeProgressSteps.map(function(s,i){
+    const state=cfgUserIntakeProgress>i?'is-done':(cfgUserIntakeProgress===i?'is-active':'');
+    const mark=cfgUserIntakeProgress>i
+      ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>'
+      : (cfgUserIntakeProgress===i?'<span class="uif-spin"></span>':'');
+    // Once known, the real ADT submission id and minted identifiers replace the generic wording,
+    // so the feed reports what happened rather than what was planned.
+    let note=s.note;
+    const e=cfgUserIntakeResult&&cfgUserIntakeResult.employee;
+    if(e&&i===1)note='ADT Solution assigned submission '+e.source_record_id+'.';
+    if(e&&i===3)note='Employee ID '+e.employee_code+' &middot; Reference ID '+e.reference_id+'.';
+    return '<div class="uif-proc-item '+state+'">'
+      +'<div class="uif-proc-rail"><div class="uif-proc-dot">'+mark+'</div>'
+      +(i<cfgUserIntakeProgressSteps.length-1?'<div class="uif-proc-line"></div>':'')+'</div>'
+      +'<div class="uif-proc-body"><div class="uif-proc-title">'+s.title+'</div>'
+      +(cfgUserIntakeProgress>=i?'<div class="uif-proc-note">'+note+'</div>':'')
+      +'</div></div>';
+  }).join('');
+}
+
+function buildCfgUserIntakeHTML(){
+  const m=cfgModels.find(function(x){return x.id===cfgUserIntakeModelId;})||cfgModels.find(function(x){return x.id==='user';});
+
+  /* ---------- Stage 3: the record ---------- */
+  if(cfgUserIntakeStep===2&&cfgUserIntakeResult){
+    const e=cfgUserIntakeResult.employee;
+    const f=e.raw_source_payload||{};
+    const kv=function(k,v){
+      return '<div class="uif-kv"><span class="uif-kv-key">'+k+'</span><span class="uif-kv-val">'+(v||'<span style="color:#9ca3af">--</span>')+'</span></div>';
+    };
+    return cfgUserIntakeShellHTML('<div class="uif-card">'
+      +'<div class="uif-success-head">'
+      +'<div class="uif-success-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+      +'<div><div class="uif-success-title">Master data record created</div>'
+      +'<div class="uif-success-sub">Submitted to ADT Solution, retrieved by the Executive Layer, and stored with its own identifiers.</div></div>'
+      +'</div>'
+      +'<div class="uif-idrow">'
+      +'<div class="uif-idcard"><div class="uif-idcard-label">Employee ID</div><div class="uif-idcard-value">'+e.employee_code+'</div></div>'
+      +'<div class="uif-idcard accent"><div class="uif-idcard-label">Reference ID</div><div class="uif-idcard-value">'+e.reference_id+'</div></div>'
+      +'<div class="uif-idcard"><div class="uif-idcard-label">ADT Submission</div><div class="uif-idcard-value">'+e.source_record_id+'</div></div>'
+      +'</div>'
+      +'<p class="uif-section-label">Submitted details</p>'
+      +'<div style="margin-bottom:4px">'
+      +kv('Status','<span class="lp-status-badge '+String(e.status).toLowerCase()+'">'+e.status+'</span>')
+      +kv('Full name',f.full_name)
+      +kv('Work email',f.work_email)
+      +kv('Phone number',[f.phone_country_code,f.phone_number].filter(Boolean).join(' '))
+      +kv('Company name',f.company_name)
+      +kv('Country hiring in',f.country_hiring_in)
+      +kv('What they are looking for',f.looking_for)
+      +kv('How they heard about us',f.heard_about_us)
+      +'</div>'
+      +'<div class="uif-note">The record is <strong>Pending</strong> because this form does not capture department, job title, branch or joining date. Open it in Master Data to see its Logs and Workflow, complete those fields, and set it Active.</div>'
+      +'<div class="uif-cta">'
+      +'<button class="uif-submit" onclick="cfgUserIntakeOpenRecord()">Open master data record'
+      +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+      +'<button class="uif-btn-secondary" onclick="cfgUserIntakeReset()">Submit another</button>'
+      +'</div>'
+      +'</div>');
+  }
+
+  /* ---------- Stage 2: ingestion ---------- */
+  if(cfgUserIntakeStep===1){
+    return cfgUserIntakeShellHTML('<div class="uif-card">'
+      +'<div class="uif-card-head">'
+      +'<div class="uif-card-title">Ingesting the submission</div>'
+      +'<div class="uif-card-sub">The form goes to ADT Solution first, then comes back into the Executive Layer through the same route a form filled on ADT\'s own site would take.</div>'
+      +'</div>'
+      +'<div class="uif-proc" id="cfg-ui-progress">'+cfgUserIntakeProgressHTML()+'</div>'
+      +'</div>');
+  }
+
+  /* ---------- Stage 1: the form ---------- */
+  if(!cfgUserIntakeFields){
+    return cfgUserIntakeShellHTML('<div class="uif-card">'
+      +'<div class="uif-card-sub" style="text-align:center;padding:26px 0">Loading the form definition from ADT Solution…</div>'
+      +'</div>');
+  }
+
+  const errs=cfgUserIntakeFieldErrors||{};
+  const draft=cfgUserIntakeDraft||{};
+  const errText=function(name){
+    return errs[name]?'<div class="uif-error-text">'+errs[name]+'</div>':'';
+  };
+  const wrapCls=function(name,extra){
+    return 'uif-field'+(extra?' '+extra:'')+(errs[name]?' has-error':'');
+  };
+  const selOpts=function(f){
+    const cur=draft[f.name]||'';
+    return '<option value="">'+(f.placeholder||f.label||'Select')+'</option>'
+      +(f.options||[]).map(function(o){
+        return '<option value="'+attrSafe(o)+'"'+(o===cur?' selected':'')+'>'+o+'</option>';
+      }).join('');
+  };
+
+  const fieldHTML=[];
+  for(let i=0;i<cfgUserIntakeFields.length;i++){
+    const f=cfgUserIntakeFields[i];
+    // The phone row is the one composite on ADT's form — a dial-code select and a free-text
+    // number sharing a single "Phone number" label — so it renders as one full-width cell.
+    if(f.name==='phone_country_code'){
+      const next=cfgUserIntakeFields[i+1];
+      const numName=next?next.name:'phone_number';
+      fieldHTML.push('<div class="'+wrapCls('phone_country_code','uif-full')+'" id="cfg-uiw-phone_country_code">'
+        +'<label class="uif-label" for="cfg-ui-phone_number">Phone number</label>'
+        +'<div class="uif-phone">'
+        +'<select class="uif-select" id="cfg-ui-phone_country_code" onchange="cfgUserIntakeClearError(\'phone_country_code\')">'+selOpts(f)+'</select>'
+        +'<input class="uif-input" id="cfg-ui-'+numName+'" placeholder="Phone number" value="'+attrSafe(draft[numName]||'')+'" onkeydown="cfgUserIntakeKeydown(event)">'
+        +'</div>'
+        +errText('phone_country_code')
+        +'</div>');
+      i++; // the paired number field is consumed above
+      continue;
+    }
+    const req=f.required?'<span class="req">*</span>':'';
+    if(f.type==='select'){
+      fieldHTML.push('<div class="'+wrapCls(f.name)+'" id="cfg-uiw-'+f.name+'">'
+        +'<label class="uif-label" for="cfg-ui-'+f.name+'">'+f.label+req+'</label>'
+        +'<select class="uif-select" id="cfg-ui-'+f.name+'" onchange="cfgUserIntakeClearError(\''+f.name+'\')">'+selOpts(f)+'</select>'
+        +errText(f.name)
+        +'</div>');
+    }else{
+      fieldHTML.push('<div class="'+wrapCls(f.name)+'" id="cfg-uiw-'+f.name+'">'
+        +'<label class="uif-label" for="cfg-ui-'+f.name+'">'+f.label+req+'</label>'
+        +'<input class="uif-input" type="'+(f.type==='email'?'email':'text')+'" id="cfg-ui-'+f.name+'" placeholder="'+attrSafe(f.label)+'"'
+        +' value="'+attrSafe(draft[f.name]||'')+'"'
+        +' oninput="cfgUserIntakeClearError(\''+f.name+'\')" onkeydown="cfgUserIntakeKeydown(event)">'
+        +errText(f.name)
+        +'</div>');
+    }
+  }
+
+  const banner=cfgUserIntakeOffline
+    ? '<div class="uif-banner warn"><div><strong>Not connected.</strong> The Executive Layer backend isn\'t reachable, so these are the last known fields rather than ADT Solution\'s live definition &mdash; and submitting won\'t work yet. Start it with <code>node backend/dev.js</code>, then <button onclick="cfgUserIntakeRetry()">retry</button>.</div></div>'
+    : (cfgUserIntakeError?'<div class="uif-banner error"><div>'+cfgUserIntakeError+'</div></div>':'');
+
+  return cfgUserIntakeShellHTML('<div class="uif-card">'
+    +'<div class="uif-card-head">'
+    +'<div class="uif-card-title">'+(m?m.name:'USER')+' intake form</div>'
+    +'<div class="uif-card-sub">ADT Solution\'s own form, rendered from its published field definition. Submitting sends it to ADT Solution and creates the matching master data record here.</div>'
+    +'</div>'
+    +banner
+    +'<div class="uif-grid">'+fieldHTML.join('')+'</div>'
+    +'<div class="uif-actions">'
+    +'<div class="uif-hint">Department, job title, branch and joining date aren\'t on this form &mdash; the record arrives as <strong>Pending</strong> until they\'re completed.</div>'
+    +'<button class="uif-submit" onclick="submitCfgUserIntake()"'+(cfgUserIntakeBusy?' disabled':'')+'>'
+    +(cfgUserIntakeBusy?'Submitting…':'Submit')
+    +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+    +'</div>'
+    +'</div>');
+}
+
+
 function buildCfgDataFoundationHTML(){
   cfgModelEditing=false;cfgModelDraft=null;
   const cards=cfgModels.length
@@ -6688,10 +7578,12 @@ function startAIJourneyRun(journeyId){
   navigatePage('ai-journey-run');
 }
 function aiRunFlowExit(){
+  aiH2rStopAdtListening();aiH2rAdtFeedStep=-1;aiH2rAdtLastSubmission=null;aiH2rAdtLastEmployee=null;aiH2rAdtLastLocalId=null;aiH2rAdtError='';
   aiRunFlowJourneyId=null;aiRunFlowStep=-1;aiRunFlowData={};
   navigatePage('ai-executive');
 }
 function aiRunFlowRestart(){
+  aiH2rStopAdtListening();aiH2rAdtFeedStep=-1;aiH2rAdtLastSubmission=null;aiH2rAdtLastEmployee=null;aiH2rAdtLastLocalId=null;aiH2rAdtError='';
   aiRunFlowStep=-1;aiRunFlowData={};
   if(aiRunFlowJourneyId==='payroll-creation'){aiPayrollData={};aiPayrollAnimatedStage=-1;}
   if(aiRunFlowJourneyId==='h2r-lifecycle'){aiH2rData={};aiH2rAnimatedStage=-1;aiH2rOffboardStep=-1;}
@@ -7131,12 +8023,19 @@ function buildAIPayrollCompleteHTML(){
     +'</div></div></div>';
 }
 
+// -- Reused wherever a real ADT Solution-sourced record needs to be visibly distinguished from simulated/mock runs — same teal "Source" badge style as cfgStepTypeTag() (js/pages.js:5930), just with the reference id appended. --
+function adtSourceBadgeHTML(refId){
+  return '<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source: ADT Solution'+(refId?(' — Ref: '+refId):'')+'</span>';
+}
 // -- HIRE TO RETIRE (H2R) JOURNEY: full bespoke run through all 5 stages of aiJourneyEvents['h2r-lifecycle'] --
 function buildAIH2rJourneyHTML(flow,j){
   if(aiRunFlowStep===-1)return buildAIH2rPromptHTML(flow,j);
   const stage=Math.max(0,Math.min(aiRunFlowStep,4));
+  const sourceBadge=(aiRunFlowData&&aiRunFlowData.source==='adt-solution')
+    ?'<div style="margin:-4px 0 14px">'+adtSourceBadgeHTML(aiRunFlowData.adtReferenceId)+'</div>':'';
   return '<div class="aicj-wrap">'
     +buildAIJourneyBarHTML('h2r-lifecycle',stage,'h2r')
+    +sourceBadge
     +'<div id="aicj-inner">'+buildAIH2rStageHTML(flow,j)+'</div>'
     +'</div>';
 }
@@ -7155,8 +8054,105 @@ function buildAIH2rPromptHTML(flow,j){
     +'<button class="icon-btn active" onclick="aiRunFlowSubmit()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>'
     +'</div>'
     +'<div id="ai-h2r-result" style="margin-top:16px;text-align:left"></div>'
+    +'<div style="margin:22px 0 14px;text-align:center;font-size:11px;color:var(--gray);text-transform:uppercase;letter-spacing:.5px">or</div>'
+    +'<div id="ai-h2r-adt-panel">'+buildAIH2rAdtPanelHTML()+'</div>'
     +'</div>'
     +'</div></div></div>';
+}
+function buildAIH2rAdtPanelHTML(){
+  if(aiH2rAdtFeedStep===-1){
+    const adtFormUrl=(window.EXEC_CONFIG&&EXEC_CONFIG.adtFormUrl)||'http://localhost:4100';
+    return '<div class="ep-form-card" style="text-align:left">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">Live ADT Solution Sync</div>'
+      +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:14px">Nothing to type here. Start listening, then fill in the intake form on ADT Solution — the moment it is submitted, the Executive Layer pulls the record across and creates its master data entry.</div>'
+      +(aiH2rAdtError?'<div style="font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin-bottom:12px">'+aiH2rAdtError+'</div>':'')
+      +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+      +'<button class="btn btn-secondary" onclick="aiH2rStartAdtListening()">Listen for ADT Solution Submissions</button>'
+      +'<a href="'+adtFormUrl+'" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#0d9488;text-decoration:none">Open the ADT Solution form &rarr;</a>'
+      +'</div>'
+      +'</div>';
+  }
+  const steps=aiH2rAdtIngestSteps.map(function(s){return Object.assign({},s);});
+  if(aiH2rAdtLastSubmission){
+    const s=aiH2rAdtLastSubmission;
+    steps[2].skipNote='Received — '+(s.full_name||'')+(s.company_name?(', '+s.company_name):'')+(s.country_hiring_in?(' · '+s.country_hiring_in):'');
+  }
+  if(aiH2rAdtLastEmployee){
+    const e=aiH2rAdtLastEmployee;
+    steps[3].skipNote='Minted by Executive Layer — Employee ID '+e.employee_code+', Reference '+e.reference_id;
+    steps[4].skipNote='Master data created — status '+e.status+', pending HR completion';
+  }
+  return '<div class="ep-form-card" style="text-align:left">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">Live ADT Solution Sync</div>'
+    +'<div class="ai-timeline">'+buildAIRunTimelineHTML({steps:steps},aiH2rAdtFeedStep)+'</div>'
+    +(aiH2rAdtError?'<div style="font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin-top:12px">'+aiH2rAdtError+'</div>':'')
+    +'</div>';
+}
+function patchAIH2rAdtPanel(){
+  const el=document.getElementById('ai-h2r-adt-panel');
+  if(el)el.innerHTML=buildAIH2rAdtPanelHTML();
+}
+function aiH2rStartAdtListening(){
+  if(adtPollTimerId)return;
+  aiH2rAdtFeedStep=0;aiH2rAdtLastSubmission=null;aiH2rAdtLastEmployee=null;aiH2rAdtLastLocalId=null;aiH2rAdtError='';
+  patchAIH2rAdtPanel();
+  const intervalMs=(window.EXEC_CONFIG&&EXEC_CONFIG.pollIntervalMs)||4000;
+  adtPollTimerId=setInterval(aiH2rAdtPollTick,intervalMs);
+  aiH2rAdtPollTick();
+}
+function aiH2rStopAdtListening(){
+  if(adtPollTimerId){clearInterval(adtPollTimerId);adtPollTimerId=null;}
+}
+// -- One poll of ADT Solution, made by the backend on our behalf: the API credential and the
+// "already seen" cursor both live there, so this side only has to react to the verdict. --
+function aiH2rAdtPollTick(){
+  if(!adtPollTimerId)return;
+  execApiPollAdt().then(function(res){
+    if(!adtPollTimerId)return;
+    if(!res.ok){
+      // Keep listening on a transient failure — the backend or ADT being briefly unreachable
+      // is not a reason to make the operator re-arm the panel. Surface it and try again.
+      aiH2rAdtError=res.offline
+        ? 'Cannot reach the Executive Layer backend. Start it with: node backend/server.js'
+        : ('ADT Solution sync error: '+res.error);
+      patchAIH2rAdtPanel();
+      return;
+    }
+    aiH2rAdtError='';
+    // 'duplicate' means the backend recognised the submission as one it had already ingested,
+    // so there is no new master data to show and we simply keep listening.
+    if(!res.data||res.data.status!=='ingested')return;
+    aiH2rStopAdtListening();
+    aiH2rAdtIngest(res.data);
+  });
+}
+// -- Walks the ingestion feed, then hands off to the master data record the backend just
+// created. The identifiers shown are the server-minted ones, not values invented here. --
+function aiH2rAdtIngest(payload){
+  aiH2rAdtLastSubmission=payload.submission;
+  aiH2rAdtFeedStep=1;
+  patchAIH2rAdtPanel();
+  setTimeout(function(){
+    aiH2rAdtFeedStep=2;
+    patchAIH2rAdtPanel();
+    setTimeout(function(){
+      aiH2rAdtLastEmployee=payload.employee;
+      aiH2rAdtFeedStep=3;
+      patchAIH2rAdtPanel();
+      setTimeout(function(){
+        aiH2rAdtFeedStep=4;
+        patchAIH2rAdtPanel();
+        setTimeout(function(){
+          aiH2rAdtLastLocalId=syncEmpFromBackend(payload.employee,payload.logs,payload.workflow);
+          aiH2rAdtFeedStep=-1;
+          // Straight to the master data entry this created, with its drawer open — the record,
+          // its identifiers and its log trail are the point of the flow.
+          navigatePage('master-data');
+          openMdSidebar(aiH2rAdtLastLocalId);
+        },900);
+      },900);
+    },900);
+  },900);
 }
 function aiH2rSimulateNew(){
   const inp=document.getElementById('ai-run-prompt');
@@ -7226,7 +8222,7 @@ function buildAIH2rLeavePolicyHTML(){
 }
 function buildAIH2rApprovalHTML(){
   const d=aiH2rData||{};
-  if(d.runId)aiUpsertRun('h2r-lifecycle',d.runId,{client:d.name,country:d.country,contractType:d.role,currentStepIdx:3,status:'Waiting for Approval',lastActivity:'Just now'});
+  if(d.runId)aiUpsertRun('h2r-lifecycle',d.runId,{client:d.name,country:d.country,contractType:d.role,currentStepIdx:3,status:'Waiting for Approval',lastActivity:'Just now',source:d.source,adtReferenceId:d.adtReferenceId});
   return buildAIWaitingApprovalHTML({
     description:'A policy deviation was detected while setting up <strong>'+(d.name||'the employee')+'</strong>. We\'ve notified <strong style="color:var(--navy)">'+aiHrManager.name+'</strong> (HR Manager) to review and approve before finalizing the setup.',
     entityUserDescription:'A policy deviation was detected while setting up <strong>'+(d.name||'the employee')+'</strong>. Review the compliance and leave policy details and approve to finalize the setup, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
@@ -9388,7 +10384,7 @@ function buildAIRunDetailHTML(){
   else{backLabel='Back to '+j.name;backAction="viewAIJourney('"+j.id+"'"+(aiJourneyDetailBackPage?",'"+aiJourneyDetailBackPage+"'":'')+")";}
   const mainContent='<button class="ep-cancel-btn" style="margin-bottom:14px" onclick="'+backAction+'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> '+backLabel+'</button>'
     +'<p style="font-size:16px;font-weight:700;margin-bottom:4px">'+j.name+' &mdash; '+run.client+'</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">'+run.country+' &middot; '+run.contractType+' &middot; Run ID '+run.runId+' &middot; <span class="status-pill '+aiRunStatusPillClass(run.status)+'">'+run.status+'</span></p>'
+    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px">'+run.country+' &middot; '+run.contractType+' &middot; Run ID '+run.runId+' &middot; <span class="status-pill '+aiRunStatusPillClass(run.status)+'">'+run.status+'</span>'+(run.source==='adt-solution'?' &middot; '+adtSourceBadgeHTML(run.adtReferenceId):'')+'</p>'
     +'<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start">'
     +'<div><div class="ai-timeline" style="margin-bottom:20px">'+timeline+'</div>'+backendPanel+'</div>'
     +'<div>'+actionPanel+'</div>'
