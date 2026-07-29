@@ -104,22 +104,39 @@ const aiAutomationRuns={
 
 let openDropdowns=new Set();
 let activeSidebarItem='dashboard';
+// -- The sidebar is split in two. The `group` entry at the top holds the Executive Layer's OWN
+// modules — the AI execution layer: AI Executive (run journeys), Configure (define what it can
+// run), Client (the records it owns). Everything after the group belongs to the connected SaaS
+// product this app mirrors, so it sits below a divider under its own section label. --
 const sidebarItems=[
-  {id:'dashboard',label:'Dashboard',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'},
-  {dropdown:'Configure',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',children:[
-    {id:'cfg-systems',label:'Systems',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg>'},
-    {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
-    {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
-    {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'},
-    {id:'operations-cockpit',label:'Operations Cockpit',roles:['entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
+  {group:'AI Execution Layer',roles:['super-admin','entity-admin','entity-user'],items:[
+    {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
+    // -- My Runs is the history of what this user started; My Tasks is what is waiting on them.
+    // Both belong to the AI layer and sit under the module that fills them, in that order:
+    // what I set in motion, then what has come back to me. Same roles as My Tasks — Super Admin
+    // configures the platform rather than running journeys through it, so a personal run history
+    // would be permanently empty for them. --
+    {id:'my-runs',label:'My Runs',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16M4 12h16M4 18.5h9"/><circle cx="18.5" cy="18.5" r="3"/><path d="M18.5 17.2v1.5l1 .8"/></svg>'},
+    // -- My Tasks is the queue AI Executive runs hand back to a person, so it belongs to the AI
+    // layer and sits directly under the module that fills it. Its roles are unchanged: only
+    // Entity Admin and Entity User have it, and the group simply omits it for anyone else. --
+    {id:'my-tasks',label:'My Tasks',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
+    {dropdown:'Configure',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',children:[
+      {id:'cfg-systems',label:'Systems',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg>'},
+      {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
+      {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
+      {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'},
+      {id:'operations-cockpit',label:'Operations Cockpit',roles:['entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
+    ]}
   ]},
-  {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
-  {id:'my-tasks',label:'My Tasks',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
-  // -- Master Data is the Executive Layer's OWN store — records it ingested from connected
-  // systems, with their provenance, audit log and workflow. Grouped with Configure/AI Executive
-  // (orange) rather than with Employee/Teams/Leaves, because everything below this point belongs
-  // to the connected SaaS product we are mirroring, not to the Executive Layer itself. --
-  {id:'master-data',label:'Master Data',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
+  {divider:true},
+  {section:'Workspace'},
+  {id:'dashboard',label:'Dashboard',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'},
+  // -- Client holds the records ingested from connected systems, with their provenance, audit log
+  // and workflow. It lives with the connected SaaS product's own modules rather than in the AI
+  // layer group: the AI layer is what runs and configures journeys, and this is the data those
+  // journeys land in. Sits above Employee/Teams because those mirror what it holds. --
+  {id:'master-data',label:'Client',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
   {dropdown:'Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',children:[
     {id:'direct',label:'Direct Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
     {id:'global',label:'Global Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
@@ -153,15 +170,22 @@ const sidebarItems=[
 ];
 
 
+function sidebarRoleAllows(it){return !it.roles||it.roles.includes(portalRole);}
+// -- Drops the children this role cannot see; a dropdown left with none is filtered out by the caller. --
+function filterSidebarEntry(it){
+  if(!it.dropdown)return it;
+  return Object.assign({},it,{children:(it.children||[]).filter(sidebarRoleAllows)});
+}
+function sidebarEntryKept(it){return !it.dropdown||it.children.length>0;}
 function getSidebarItems(){
   return sidebarItems
-    .filter(it=>!it.roles||it.roles.includes(portalRole))
+    .filter(sidebarRoleAllows)
     .map(it=>{
-      if(!it.dropdown)return it;
-      const children=(it.children||[]).filter(c=>!c.roles||c.roles.includes(portalRole));
-      return Object.assign({},it,{children});
+      // A group carries its own list of modules, each filtered exactly like a top-level entry.
+      if(it.group)return Object.assign({},it,{items:(it.items||[]).filter(sidebarRoleAllows).map(filterSidebarEntry).filter(sidebarEntryKept)});
+      return filterSidebarEntry(it);
     })
-    .filter(it=>!it.dropdown||it.children.length>0);
+    .filter(it=>it.group?it.items.length>0:sidebarEntryKept(it));
 }
 
 const ctxMap={dashboard:'You\'re on the <b>Dashboard</b>. I can help you understand metrics, navigate sections, or start any workflow.',people:'You\'re viewing <b>People</b>. I can help search employees, filter by country, or explain statuses.',contracts:'You\'re on <b>Contracts</b>. I can help create, review, or modify contracts.',payroll:'You\'re viewing <b>Payroll</b>. I can help with salary calculations or running payroll.',compliance:'You\'re on the <b>Compliance Hub</b>. I can check requirements for specific countries.',settings:'You\'re in <b>Company Settings</b>. I can help configure account or manage permissions.',teams:'You\'re viewing <b>Teams</b>. I can help manage team structures.',leaves:'You\'re on <b>Leaves</b>. I can help with leave policies and applications.',payments:'You\'re viewing <b>Payments</b>. I can help track invoices and payment history.',support:'You\'re on <b>Support</b>. I\'m here to help with any questions.'};
@@ -190,11 +214,11 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='operations-cockpit')return{title:'Operations Cockpit',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'Operations Cockpit',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Master Data',context:'Master Data',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='operations-cockpit')return{title:'Operations Cockpit',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'Operations Cockpit',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add'||pg==='cfg-user-intake')return 'cfg-systems';if(pg==='cfg-model-detail'||pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return 'cfg-data-foundation';if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -297,49 +321,71 @@ function buildSidebar(id,collapsed,activePg){
   top.innerHTML=(collapsed?'':'<span class="sb-menu-label">Menu</span>')+'<button class="sidebar-toggle" onclick="toggleSidebar(\''+scope+'\')" title="Toggle sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="2"/><line x1="15" y1="5" x2="15" y2="19"/></svg></button>';
   el.appendChild(top);
   const items=getSidebarItems();
+  // -- Groups render into their own container, so the AI layer reads as one block; everything
+  // else renders straight into the sidebar. Dropdown open/close still queries `el`, which is the
+  // sidebar root either way, so grouped and ungrouped dropdowns stay mutually exclusive. --
   items.forEach(item=>{
-    if(item.section){if(!collapsed){const s=document.createElement('div');s.className='sb-section';s.textContent=item.section;el.appendChild(s);}return;}
-    if(item.dropdown){
-      const hasActiveChild=(item.children||[]).some(c=>c.id===activePg);
-      const isOpen=openDropdowns.has(item.dropdown)||hasActiveChild;
+    if(item.group){
+      const box=document.createElement('div');box.className='sb-group';
       if(!collapsed){
-        const parentBtn=document.createElement('button');parentBtn.type='button';
-        parentBtn.className='sb-parent'+(isOpen?' open':'')+(hasActiveChild?' has-active':'');
-        parentBtn.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.dropdown+'</span><svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
-        parentBtn.title=item.dropdown;
-        const childrenDiv=document.createElement('div');childrenDiv.className='sb-children';childrenDiv.style.maxHeight=isOpen?'600px':'0';
-        (item.children||[]).forEach(child=>{
-          const cd=document.createElement('button');cd.type='button';
-          cd.className='sb-item'+(child.id===activePg?' active':'');
-          cd.innerHTML='<div class="sb-ico-wrap">'+(child.icon||'')+'</div><span>'+child.label+'</span>';
-          cd.title=child.label;
-          cd.onclick=()=>{activeSidebarItem=child.id;navigatePage(child.id);};
-          childrenDiv.appendChild(cd);
-        });
-        parentBtn.onclick=()=>{
-          if(collapsed){if(scope==='adt'){adtSidebarCollapsed=false;openDropdowns.clear();openDropdowns.add(item.dropdown);buildSidebar(id,false,activeSidebarItem);}return;}
-          if(openDropdowns.has(item.dropdown)){openDropdowns.delete(item.dropdown);childrenDiv.style.maxHeight='0';parentBtn.classList.remove('open');}
-          else{el.querySelectorAll('.sb-parent.open').forEach(b=>b.classList.remove('open'));el.querySelectorAll('.sb-children').forEach(c=>c.style.maxHeight='0');openDropdowns.clear();openDropdowns.add(item.dropdown);childrenDiv.style.maxHeight='600px';parentBtn.classList.add('open');}
-        };
-        el.appendChild(parentBtn);el.appendChild(childrenDiv);
-      }else{
-        const d=document.createElement('button');d.type='button';d.className='sb-parent'+(hasActiveChild?' has-active':'');
-        d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div>';
-        d.title=item.dropdown;
-        d.onclick=()=>{adtSidebarCollapsed=false;openDropdowns.clear();openDropdowns.add(item.dropdown);buildSidebar(id,false,activeSidebarItem);};
-        el.appendChild(d);
+        const lbl=document.createElement('div');lbl.className='sb-group-label';
+        lbl.innerHTML='<span class="sb-group-dot"></span><span>'+item.group+'</span>';
+        box.appendChild(lbl);
       }
+      el.appendChild(box);
+      (item.items||[]).forEach(sub=>renderSidebarEntry(sub,box,el,id,collapsed,activePg,scope));
       return;
     }
-    const d=document.createElement('button');
-    d.type='button';
-    d.className='sb-item'+(item.id===activePg?' active':'')+(item.id==='ai-executive'?' sb-item-ai':'');
-    const badgeCount=item.id==='my-tasks'&&typeof myTasksPendingCount==='function'?myTasksPendingCount():0;
-    d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.label+'</span>'+(badgeCount?'<span class="sb-item-badge">'+badgeCount+'</span>':'');
-    d.title=item.label+(badgeCount?' ('+badgeCount+' pending)':'');
-    d.onclick=item.placeholder?()=>{}:()=>{activeSidebarItem=item.id;navigatePage(item.id);};
-    el.appendChild(d);
+    renderSidebarEntry(item,el,el,id,collapsed,activePg,scope);
   });
+}
+// -- `box` is where this entry's nodes go (a group container or the sidebar itself); `el` is
+// always the sidebar root, used for the "close every other dropdown" sweep. --
+function renderSidebarEntry(item,box,el,id,collapsed,activePg,scope){
+  // -- The divider renders in both states: expanded it separates two labelled halves, collapsed
+  // it is the only thing marking the seam, since the section label is hidden. --
+  if(item.divider){const dv=document.createElement('div');dv.className='sb-divider';box.appendChild(dv);return;}
+  if(item.section){if(!collapsed){const s=document.createElement('div');s.className='sb-section';s.textContent=item.section;box.appendChild(s);}return;}
+  if(item.dropdown){
+    const hasActiveChild=(item.children||[]).some(c=>c.id===activePg);
+    const isOpen=openDropdowns.has(item.dropdown)||hasActiveChild;
+    if(!collapsed){
+      const parentBtn=document.createElement('button');parentBtn.type='button';
+      parentBtn.className='sb-parent'+(isOpen?' open':'')+(hasActiveChild?' has-active':'');
+      parentBtn.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.dropdown+'</span><svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
+      parentBtn.title=item.dropdown;
+      const childrenDiv=document.createElement('div');childrenDiv.className='sb-children';childrenDiv.style.maxHeight=isOpen?'600px':'0';
+      (item.children||[]).forEach(child=>{
+        const cd=document.createElement('button');cd.type='button';
+        cd.className='sb-item'+(child.id===activePg?' active':'');
+        cd.innerHTML='<div class="sb-ico-wrap">'+(child.icon||'')+'</div><span>'+child.label+'</span>';
+        cd.title=child.label;
+        cd.onclick=()=>{activeSidebarItem=child.id;navigatePage(child.id);};
+        childrenDiv.appendChild(cd);
+      });
+      parentBtn.onclick=()=>{
+        if(collapsed){if(scope==='adt'){adtSidebarCollapsed=false;openDropdowns.clear();openDropdowns.add(item.dropdown);buildSidebar(id,false,activeSidebarItem);}return;}
+        if(openDropdowns.has(item.dropdown)){openDropdowns.delete(item.dropdown);childrenDiv.style.maxHeight='0';parentBtn.classList.remove('open');}
+        else{el.querySelectorAll('.sb-parent.open').forEach(b=>b.classList.remove('open'));el.querySelectorAll('.sb-children').forEach(c=>c.style.maxHeight='0');openDropdowns.clear();openDropdowns.add(item.dropdown);childrenDiv.style.maxHeight='600px';parentBtn.classList.add('open');}
+      };
+      box.appendChild(parentBtn);box.appendChild(childrenDiv);
+    }else{
+      const d=document.createElement('button');d.type='button';d.className='sb-parent'+(hasActiveChild?' has-active':'');
+      d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div>';
+      d.title=item.dropdown;
+      d.onclick=()=>{adtSidebarCollapsed=false;openDropdowns.clear();openDropdowns.add(item.dropdown);buildSidebar(id,false,activeSidebarItem);};
+      box.appendChild(d);
+    }
+    return;
+  }
+  const d=document.createElement('button');
+  d.type='button';
+  d.className='sb-item'+(item.id===activePg?' active':'')+(item.id==='ai-executive'?' sb-item-ai':'');
+  const badgeCount=item.id==='my-tasks'&&typeof myTasksPendingCount==='function'?myTasksPendingCount():0;
+  d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.label+'</span>'+(badgeCount?'<span class="sb-item-badge">'+badgeCount+'</span>':'');
+  d.title=item.label+(badgeCount?' ('+badgeCount+' pending)':'');
+  d.onclick=item.placeholder?()=>{}:()=>{activeSidebarItem=item.id;navigatePage(item.id);};
+  box.appendChild(d);
 }
 const defaultChildIcon='<svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="4"/><path d="M5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg>';
 
@@ -630,6 +676,7 @@ const pageRoleMap={
   'master-data':['super-admin','entity-admin'],
   'cfg-context-journey':['super-admin','entity-admin'],'cfg-journey-detail':['super-admin','entity-admin'],
   'cfg-agents':['super-admin','entity-admin'],'operations-cockpit':['entity-admin'],
+  'my-runs':['entity-admin','entity-user'],
   'all-users':['super-admin'],'settings':['super-admin']
 };
 function canAccessPage(pg,role){const allowed=pageRoleMap[pg];return !allowed||allowed.includes(role);}
@@ -637,6 +684,8 @@ function defaultPageForRole(role){return role==='entity-user'?'ai-executive':'da
 
 function navigatePage(pg){
   const resolved=canAccessPage(pg,portalRole)?pg:defaultPageForRole(portalRole);
+  // Any deliberate navigation ends the All Timesheet drill-down, including the back button itself.
+  tsFromAllTimesheet=false;
   // -- The "Live ADT Solution Sync" listener (aiH2rStartAdtListening, js/pages.js) only makes sense while the operator is looking at the H2R live-run screen ('ai-journey-run'). Navigating anywhere else stops it, so a background poll can never silently pull the operator back into a run they've already left. --
   if(resolved!=='ai-journey-run'&&typeof adtPollTimerId!=='undefined'&&adtPollTimerId)aiH2rStopAdtListening();
   if(resolved!==page){
@@ -678,8 +727,11 @@ function setPortalRole(role,force,personaId){
   showAiToast('Switched to '+portalRoleLabel(portalRole),'You are now viewing ADT as this role.');
 }
 
-// -- DASHBOARD TABS: Super Admin goes straight to its own dashboard (no tab bar); other admin/employee roles keep the tab switcher --
+// -- DASHBOARD TABS: every role now lands on the standard Employee Dashboard, with any
+// role-specific dashboard sitting beside it as a second tab. Super Admin has no second tab —
+// its platform oversight moved to AI Executive, where the rest of the AI layer already lives. --
 function dashboardTabsForRole(role){
+  const employeeTab={id:'employee',label:'Employee Dashboard'};
   if(role==='entity-user'){
     const map={
       'account-manager':[{id:'sales',label:'Deal Desk Dashboard'}],
@@ -692,11 +744,12 @@ function dashboardTabsForRole(role){
       'it-systems-admin':[{id:'it-admin',label:'IT Systems Dashboard'}],
       'finance-approver':[{id:'finance-approval',label:'Finance Approval'},{id:'finance-admin',label:'Finance Admin'}]
     };
-    return map[activePersonaId]||[{id:'employee',label:'Employee Dashboard'}];
+    // -- Personas with no dashboard of their own keep the role-scoped hero view under "My
+    // Workspace", so moving the standard dashboard onto the `employee` id does not cost them it. --
+    return [employeeTab].concat(map[activePersonaId]||[{id:'my-work',label:'My Workspace'}]);
   }
-  if(role==='super-admin')return [{id:'super-admin',label:'Opendhi Super Admin'}];
-  if(role==='entity-admin')return [{id:'entity-admin',label:'Entity Admin'}];
-  return [{id:'employee',label:'Employee Dashboard'}];
+  if(role==='entity-admin')return [employeeTab,{id:'entity-admin',label:'Entity Admin'}];
+  return [employeeTab];
 }
 function toggleSalesTeamQueuePanel(){
   salesTeamQueueOpen=!salesTeamQueueOpen;
@@ -1079,6 +1132,11 @@ function csSelect(opt,val,csid){
   // -- Direct Employee status filter. Repaints immediately rather than waiting for the Search
   // button, matching how the other pill filters on this bar behave. --
   else if(csid==='de-f-status')setDeStatusFilter(val);
+  // -- The Client source filter repaints on pick, same as de-f-status. Only the free-text box
+  // waits for Search, which is what a search box next to a Search button is expected to do. --
+  else if(csid==='md-f-source')setMdSourceFilter(val);
+  else if(csid==='mr-f-journey')setMrFilter('journey',val);
+  else if(csid==='mr-f-mode')setMrFilter('mode',val);
 }
 function markApFormDirty(){}
 function cancelAddPolicy(){selectedEmps=new Set();apFilterType='';apFilterValue='';page='leave-policies';renderADTPage();}
@@ -1122,11 +1180,12 @@ function appendDeLogOnce(empRowId,statusLabel,actionText,actorUser){
     user:actorUser||'AI Executive',status:statusLabel,action:actionText
   });
 }
-// -- MASTER DATA (Executive Layer's own store) --
+// -- CLIENT (Executive Layer's own store) --
 // Records the Executive Layer has ingested from connected systems. Deliberately separate from
 // directEmpData: Direct Employee, Teams, Leaves and everything below them in the sidebar belong
-// to the connected SaaS product this app mirrors, and are mock data. Master Data is ours, and
-// is backed by the real backend.
+// to the connected SaaS product this app mirrors, and are mock data. Client is ours, and
+// is backed by the real backend. (Internal ids still read `master-data`/`masterData` — the page
+// id is wired through routing, RBAC and the backend, so only the label changed.)
 //
 // Deliberately NOT persisted to localStorage, unlike every other array in this file. These three
 // are a cache of server state, and a cached copy that outlives the server's copy is worse than
@@ -1136,6 +1195,12 @@ function appendDeLogOnce(empRowId,statusLabel,actionText,actorUser){
 const masterData=[];
 const mdLogsData={},mdWorkflowData={};
 let mdSelectedId=null,mdTab='basic-details',mdStatusFilter='';
+// -- Client listing filters. Status is deliberately NOT among them: it is owned by the stat tiles,
+// which carry live counts and so say strictly more than an "All Statuses" dropdown could. Source
+// is the one dimension left worth a dropdown — which system sent the record — and mdSearchQuery
+// matches name, employee id, reference id, company and email in one box. Empty string means
+// "no filter on this dimension". --
+let mdFilterSource='',mdSearchQuery='';
 // 'loading' until the first fetch settles, then 'ok' or 'offline'. Lets the empty listing say
 // which kind of empty it is instead of implying nothing has ever been ingested.
 let mdBackendState='loading';
@@ -1473,7 +1538,7 @@ const cfgModels=[
   // why an ingested record sits in Pending until HR supplies them. systemId puts this card on
   // the ADT Solution system page; intakeFormPage is the form the card opens. --
   {id:'user',name:'USER',source:'ADT Solution',systemId:'adt-solution',intakeFormPage:'cfg-user-intake',
-    desc:'People captured by the ADT Solution intake form, unified into Executive Layer master data.',
+    desc:'People captured by the ADT Solution intake form, unified into the Executive Layer Client store.',
     mapped:[
       ['Full Name','full_name','string'],
       ['Work Email','work_email','string'],
@@ -1496,11 +1561,15 @@ let cfgModelEditing=false;
 let cfgModelDraft=null;
 
 // -- Configure: Context & Journey (ADT's real business journeys — same set as AI Executive) --
+// -- `short` is what the category box shows: the stages of the process, in order, in one line
+// that fits the box at any column width. `desc` is the full sentence, kept for the tooltip and
+// anywhere with room for a sentence. The box previously rendered `desc` clamped to 34px behind
+// a fade, which cut mid-sentence and read as broken. --
 const cfgJourneyCategories=[
-  {id:'O2C',name:'Order to Cash',desc:"From customer order through fulfillment, invoicing, and payment collection."},
-  {id:'P2P',name:'Procure to Pay',desc:'From requisitioning through purchase order, receipt, and invoice payment.'},
-  {id:'H2R',name:'Hire to Retire',desc:'Full employee lifecycle: hiring, payroll, benefits, leave, offboarding.'},
-  {id:'F2A',name:'Finance to Accounting',desc:'Financial transactions into the ledger — reconciliation, close, reporting.'}
+  {id:'O2C',name:'Order to Cash',short:'Order to fulfilment, invoice, payment',desc:"From customer order through fulfillment, invoicing, and payment collection."},
+  {id:'P2P',name:'Procure to Pay',short:'Requisition to PO, receipt, payment',desc:'From requisitioning through purchase order, receipt, and invoice payment.'},
+  {id:'H2R',name:'Hire to Retire',short:'Hiring to payroll, leave, offboarding',desc:'Full employee lifecycle: hiring, payroll, benefits, leave, offboarding.'},
+  {id:'F2A',name:'Finance to Accounting',short:'Ledger to reconciliation, close, reporting',desc:'Financial transactions into the ledger — reconciliation, close, reporting.'}
 ];
 let cfgJourneyCategoryFilter='';
 // P2P and F2A have no journeys built out yet — locked for entity-facing roles until they do; Super Admin can still browse/author into them.
@@ -1755,6 +1824,9 @@ function persistAppState(){
   try{
     localStorage.setItem(APP_STATE_KEY,JSON.stringify({
       contractsData:contractsData,manualJourneyRuns:manualJourneyRuns,
+      // aiAutomationRuns was the one live store left out, so every Payroll and H2R run a user
+      // completed was lost on reload while the manual runs beside it survived.
+      aiAutomationRuns:aiAutomationRuns,
       ctLogsData:ctLogsData,ctWorkflowData:ctWorkflowData,
       directEmpData:directEmpData,notifData:notifData,
       entityRequests:entityRequests,entityRequestSeq:entityRequestSeq,
@@ -1777,6 +1849,7 @@ function loadAppState(){
     replaceArray(entityRequests,s.entityRequests);
     replaceObject(ctLogsData,s.ctLogsData);
     replaceObject(ctWorkflowData,s.ctWorkflowData);
+    replaceObject(aiAutomationRuns,s.aiAutomationRuns);
     replaceObject(notifiedRunOwners,s.notifiedRunOwners);
     if(Array.isArray(s.notifiedRunIds))notifiedRunIds=new Set(s.notifiedRunIds);
     if(typeof s.entityRequestSeq==='number')entityRequestSeq=s.entityRequestSeq;
@@ -1795,6 +1868,13 @@ function loadAppState(){
     // -- Demo reset: the RUN-4002 / contract-5 "missing country configuration" walkthrough is meant to be re-demoable on every refresh, so force it back to its unresolved seed state regardless of what got persisted. --
     notifiedRunIds.delete('RUN-4002');
     delete notifiedRunOwners['RUN-4002'];
+    // Now that aiAutomationRuns persists, the run itself has to be forced back too — otherwise
+    // resolving the exception once would retire this walkthrough for good.
+    const demoRun=(aiAutomationRuns['h2r-lifecycle']||[]).find(function(r){return r.runId==='RUN-4002';});
+    if(demoRun){
+      demoRun.currentStepIdx=3;demoRun.status='Exception';demoRun.lastActivity='2 hours ago';
+      demoRun.exceptionNote='Compliance Hub could not return statutory requirements for France — missing country configuration.';
+    }
     const demoContract=contractsData.find(function(c){return c.id===5;});
     if(demoContract){
       demoContract.countryOfOp='';
@@ -1843,6 +1923,27 @@ function manualStepOwnerName(ownerRole){
   const exact=people.find(function(p){return p.title===ownerRole;});
   return (exact||dept.admin).name;
 }
+/* == RUN ATTRIBUTION ====================================================================
+   Who started a run, in the one form every store agrees on. An Entity User is their persona
+   (the id manual step ownership is already keyed on); Super Admin and Entity Admin are their
+   role. Without this stamped at creation, "runs I started" is not a question the data can
+   answer at all — which is why the run lists could only ever filter by pending action. == */
+function currentActorId(){return portalRole==='entity-user'?activePersonaId:portalRole;}
+// -- `startedBy` is deliberately separate from `createdBy`. createdBy is the persona a deal is
+// booked to — it drives notification routing (pushRunNotification) and the Deal Desk's Open
+// Deals count, and an admin-created deal is booked to Account Manager on purpose. startedBy is
+// the human who actually clicked, which is the only thing "runs I started" can honestly mean. --
+function runStartedBy(r){return r.startedBy||r.createdBy||'';}
+// -- My Runs listing filters. Status is owned by the stat tiles, which carry counts, so it is
+// kept out of the dropdowns; journey and mode are the two cuts the tiles cannot make. --
+let mrJourneyFilter='',mrModeFilter='',mrStatusFilter='',mrSearchQuery='';
+function actorLabel(id){
+  if(!id)return 'Unknown';
+  if(id==='super-admin')return 'Super Admin';
+  if(id==='entity-admin')return 'Entity Admin';
+  const p=enterprisePersonas.find(function(x){return x.id===id;});
+  return p?p.label:id;
+}
 function getManualRun(runId){return manualJourneyRuns.find(function(r){return r.runId===runId;});}
 // -- MANUAL MODE: which Contracts-sidebar tab a contract-creation step's "act on this" surface lives on, so My Tasks/queue "Open" actions land the owner on the right tab of the real record instead of a generic run page. --
 const manualStepTabMap={'Deal & Employee Record':'basic-details','Compliance Check':'compliance','Proposal Drafted':'commercial-terms','Proposal Approved':'commercial-terms','Client Acceptance':'workflow','Contract Generated & Sent':'workflow','Signature Received':'workflow','Signed Contract Approved':'workflow'};
@@ -1887,7 +1988,9 @@ function openJourneySimulation(journeyId){
 function backFromJourneySimulation(){navigatePage(journeySimulationBackPage||'cfg-context-journey');}
 function startManualJourneyRun(journeyId){
   const j=aiJourneys.find(function(x){return x.id===journeyId;})||cfgJourneys.find(function(x){return x.id===journeyId;});
-  const run={runId:'MAN-'+(manualRunSeq++),journeyId:journeyId,subject:journeyId==='payroll-creation'?'Anika Shah':journeyId==='h2r-lifecycle'?'Sofia Romano':'Rashi Singh',entity:'Dhi Hyperlocal',mode:journeyModeLabel(journeyId),currentStepIdx:0,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',manualHours:0,agentEstimateHours:0,exceptions:[],audit:['Manual run started for '+(j?j.name:journeyId)]};
+  // createdBy: the only manual-run creator that was never stamped, which left every hand-started
+  // run unattributable while the two contract paths recorded theirs.
+  const run={runId:'MAN-'+(manualRunSeq++),journeyId:journeyId,subject:journeyId==='payroll-creation'?'Anika Shah':journeyId==='h2r-lifecycle'?'Sofia Romano':'Rashi Singh',entity:'Dhi Hyperlocal',mode:journeyModeLabel(journeyId),currentStepIdx:0,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',createdBy:currentActorId(),startedBy:currentActorId(),manualHours:0,agentEstimateHours:0,exceptions:[],audit:['Manual run started for '+(j?j.name:journeyId)+' by '+actorLabel(currentActorId())]};
   manualJourneyRuns.unshift(run);
   selectedManualRunId=run.runId;
   manualJourneyBackPage=page||'ai-executive';
@@ -2290,6 +2393,9 @@ Every action this agent takes is logged with timestamp, data source, and outcome
 const cfgAgentsOriginalSkill=cfgAgents.map(function(a){return a.skillMd;});
 let cfgAgentSkillModalIdx=-1;
 let cfgAgentSkillEditing=false;
+// -- Which agent's detail modal is open. Doubles as "did skill.md get opened from a detail
+// modal", which is what decides whether skill.md offers Back or only Close. --
+let cfgAgentDetailIdx=-1;
 
 // -- Configure: Overview recent activity (copied from reference console) --
 const cfgRecentActivity=[
@@ -2301,9 +2407,13 @@ const cfgRecentActivity=[
 
 // -- Configure: shared UI state --
 let selectedCfgSystemId=null,selectedCfgModelId=null,selectedCfgJourneyId=null;
-// -- Configure > Systems > ADT Solution > USER: the intake form page. cfgUserIntakeFields is
+// -- Where the open model detail was entered from. It now has two doors — Data Foundation for
+// models without an intake form, and a system's own page — so its back button and the sidebar
+// highlight have to follow the one actually used rather than assume Data Foundation. --
+let cfgModelBackPage='cfg-data-foundation';
+// -- Configure > Data Foundation > USER: the intake form page. cfgUserIntakeFields is
 // fetched from ADT's own /schema endpoint (via our backend) rather than hardcoded, so the form
-// tracks whatever ADT actually asks for. cfgUserIntakeResult holds the created master data
+// tracks whatever ADT actually asks for. cfgUserIntakeResult holds the created Client
 // record after a successful submit, which is what the success panel reports. --
 let cfgUserIntakeModelId=null,cfgUserIntakeFields=null,cfgUserIntakeResult=null,cfgUserIntakeError='',cfgUserIntakeBusy=false,cfgUserIntakeOffline=false;
 // cfgUserIntakeStep is the stage of the three-part journey (0 form, 1 ingestion, 2 record);
@@ -2332,14 +2442,14 @@ let cfgDrawerJourneyId=null,cfgDrawerStepIdx=-1;
 
 // -- AI Executive: live run flows for activated journeys (Create Contract / Create Employee / Run Payroll) --
 let aiRunFlowJourneyId=null,aiRunFlowStep=-1,aiRunFlowData={};
-// -- ADT Solution live sync (H2R "Create Employee" entry only): aiH2rAdtFeedStep drives buildAIRunTimelineHTML's reuse for the ingestion feed (-1 idle, 0 listening, 1-4 ingesting). aiH2rAdtLastSubmission holds the raw form fields as ADT sent them; aiH2rAdtLastEmployee holds the master data row the backend created from them. adtPollTimerId is the setInterval handle (never persisted — a fresh page load always starts idle and requires re-arming). --
+// -- ADT Solution live sync (H2R "Create Employee" entry only): aiH2rAdtFeedStep drives buildAIRunTimelineHTML's reuse for the ingestion feed (-1 idle, 0 listening, 1-4 ingesting). aiH2rAdtLastSubmission holds the raw form fields as ADT sent them; aiH2rAdtLastEmployee holds the client record the backend created from them. adtPollTimerId is the setInterval handle (never persisted — a fresh page load always starts idle and requires re-arming). --
 let aiH2rAdtFeedStep=-1,aiH2rAdtLastSubmission=null,aiH2rAdtLastEmployee=null,aiH2rAdtLastLocalId=null,aiH2rAdtError='',adtPollTimerId=null;
 const aiH2rAdtIngestSteps=[
   {label:'Listening',running:'Connected to ADT Solution — waiting for a new intake form submission…',type:'ai'},
   {label:'Fetching Submission',running:'New submission detected — retrieving it from ADT Solution…',type:'ai'},
   {label:'Form Details Received',running:'Reading the submitted form fields…',type:'ai'},
   {label:'Generating Identifiers',running:'Minting the Employee ID and Reference ID for this record…',type:'ai'},
-  {label:'Creating Master Data',running:'Creating the master data entry — status Pending until HR completes it…',type:'ai'}
+  {label:'Creating Client Record',running:'Creating the Client record — status Pending until HR completes it…',type:'ai'}
 ];
 const aiRunFlows={
   'h2r-lifecycle':{
@@ -2463,9 +2573,15 @@ const allTsData=[
   {id:2,empId:'11755',name:'Shaun J',country:'-',empStatus:'Active',tsStatus:'Unfilled',role:'Direct Employee',initials:'SJ'},
   {id:3,empId:'11754',name:'Shaun Test1',country:'-',empStatus:'Active',tsStatus:'Unfilled',role:'Entity Super Admin',initials:'ST'}
 ];
+// -- Set here and cleared in navigatePage, so it is true only while the user drilled in from the
+// All Timesheet row and false the moment they reach My Timesheet any other way. atViewCalendar
+// assigns `page` directly rather than going through navigatePage, which is what keeps the two
+// paths distinguishable. --
+let tsFromAllTimesheet=false;
 function atViewCalendar(empId,name,initials,role){
   tsEmp={name:name,initials:initials,role:role||'Employee'};
   tsSelectedDay=null;
+  tsFromAllTimesheet=true;
   page='my-timesheet';
   renderADTPage();
 }

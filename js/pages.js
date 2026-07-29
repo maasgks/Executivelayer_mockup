@@ -10,7 +10,7 @@ function buildDashboardTabsHTML(){
 function buildDashboardPageHTML(){
   const tabs=dashboardTabsForRole(portalRole);
   if(!tabs.some(t=>t.id===dashboardTab))dashboardTab=tabs[0]?tabs[0].id:'employee';
-  const body=dashboardTab==='super-admin'?buildSuperAdminDashboardHTML()
+  const body=dashboardTab==='employee'?buildEmployeeDashboardHTML()
     :dashboardTab==='entity-admin'?buildEntityAdminDashboardHTML()
     :portalRole==='entity-user'?buildPersonaRoleDashboardHTML(dashboardTab)
     :dashboardContentHTML;
@@ -87,6 +87,197 @@ function buildMyCreatedRunsPanelHTML(personaId){
   // -- Jump straight into the ongoing journey run, not the preview modal — this is "my open deals," so one click should land on the live journey. --
   const cardClick=function(r){return "selectedManualRunId='"+r.runId+"';manualJourneyBackPage=page||'ai-executive';page='manual-journey-run';renderADTPage();";};
   return manualRunListPanelHTML('Open Deals',runs,'No open deals yet — create a contract to start one.',{cardClick:cardClick,bare:true});
+}
+/* == MY RUNS ============================================================================
+   Every journey run the current user started, whatever its status.
+
+   This is the surface that did not exist. Every other run list filters by *pending action* —
+   aiAllPendingRuns keeps only Waiting/Exception, myPendingManualRuns keeps only runs whose
+   CURRENT step this persona owns and drops anything Completed. So a run you started vanished
+   from your view the moment it advanced to someone else's step, and permanently once it
+   finished. This one filters by who started it, so it never disappears.
+
+   The two stores hold different shapes — manual runs carry subject/entity/slaRisk, AI runs
+   carry client/country/contractType — so both are normalised to one row here rather than
+   forcing the renderer to know which store a row came from. == */
+function myStartedRuns(){
+  const me=currentActorId();
+  const out=[];
+  manualJourneyRuns.forEach(function(r){
+    if(runStartedBy(r)!==me)return;
+    const j=aiJourneys.find(function(x){return x.id===r.journeyId;})||cfgJourneys.find(function(x){return x.id===r.journeyId;});
+    const st=manualJourneySteps(r.journeyId)[r.currentStepIdx]||{};
+    out.push({
+      kind:'manual',runId:r.runId,journeyId:r.journeyId,
+      journeyName:j?j.name:r.journeyId,
+      subject:r.subject||'—',
+      meta:r.entity||'',
+      mode:r.mode||'Manual',
+      status:r.status,
+      stepName:st.name||'—',
+      stepOwner:st.ownerRole||'—',
+      when:r.startedAt||'—'
+    });
+  });
+  Object.keys(aiAutomationRuns).forEach(function(jid){
+    const j=aiJourneys.find(function(x){return x.id===jid;});
+    const events=aiJourneyEvents[jid]||[];
+    (aiAutomationRuns[jid]||[]).forEach(function(r){
+      if(runStartedBy(r)!==me)return;
+      const ev=events[Math.min(r.currentStepIdx||0,Math.max(events.length-1,0))]||{};
+      out.push({
+        kind:'ai',runId:r.runId,journeyId:jid,
+        journeyName:j?j.name:jid,
+        subject:r.client||'—',
+        meta:(r.country||'')+(r.contractType?' · '+r.contractType:''),
+        // AI runs carry no mode field — being in this store is what makes them agent runs.
+        mode:'Agent Enabled',
+        status:r.status,
+        stepName:ev.name||'—',
+        stepOwner:ev.source||'—',
+        when:r.lastActivity||r.startedAt||'—'
+      });
+    });
+  });
+  // -- Anything still moving comes first: a finished run is a record, an open one may need you. --
+  const done={Completed:1};
+  out.sort(function(a,b){return (done[a.status]?1:0)-(done[b.status]?1:0);});
+  return out;
+}
+// -- The two stores also need different doors: a manual run opens its live journey page, an AI
+// run opens Run Detail, which reads selectedAIJourneyId rather than taking it as an argument. --
+function openMyRun(kind,journeyId,runId){
+  if(kind==='manual'){
+    selectedManualRunId=runId;
+    manualJourneyBackPage=page||'ai-executive';
+    page='manual-journey-run';
+    renderADTPage();
+    return;
+  }
+  selectedAIJourneyId=journeyId;
+  viewAIRun(runId);
+}
+function myRunStatusClass(s){
+  if(s==='Completed')return 'active';
+  if(s==='Exception'||s==='Blocked')return 'inactive';
+  if(s==='Waiting for Approval'||s==='Waiting Approval')return 'pending';
+  return 'draft';
+}
+/* -- The two stores name the same situations differently — manual runs say Blocked and Waiting
+   Approval, AI runs say Exception and Waiting for Approval. Four groups collapse that so the
+   status tiles count one thing each; the table keeps the raw status, because "Blocked" and
+   "Exception" do mean different things once you are looking at the run itself. -- */
+function mrStatusGroup(s){
+  if(s==='Completed')return 'Completed';
+  if(s==='Exception'||s==='Blocked')return 'Needs Attention';
+  if(s==='Waiting for Approval'||s==='Waiting Approval')return 'Waiting Approval';
+  return 'In Progress';
+}
+const mrAnyOption={journey:'All Journeys',mode:'All Modes'};
+function setMrFilter(kind,val){
+  const v=val===mrAnyOption[kind]?'':val;
+  if(kind==='journey')mrJourneyFilter=v;else mrModeFilter=v;
+  renderADTPage();
+}
+function setMrStatusFilter(val){mrStatusFilter=val||'';renderADTPage();}
+function resetMrFilters(){mrJourneyFilter='';mrModeFilter='';mrStatusFilter='';mrSearchQuery='';renderADTPage();}
+function applyMrSearch(){
+  const el=document.getElementById('mr-search-input');
+  mrSearchQuery=el?el.value.trim():'';
+  renderADTPage();
+}
+function mrHasActiveFilters(){return !!(mrJourneyFilter||mrModeFilter||mrStatusFilter||mrSearchQuery);}
+// -- Everything except status, so the tiles count against the current slice rather than the whole
+// history — a tile reading 3 that yields nothing when clicked is worse than no tile. --
+function mrRowsBeforeStatus(all){
+  const q=mrSearchQuery.toLowerCase();
+  return all.filter(function(r){
+    if(mrJourneyFilter&&r.journeyName!==mrJourneyFilter)return false;
+    if(mrModeFilter&&r.mode!==mrModeFilter)return false;
+    if(!q)return true;
+    return [r.runId,r.subject,r.journeyName,r.stepName,r.stepOwner].some(function(f){
+      return f&&String(f).toLowerCase().indexOf(q)!==-1;
+    });
+  });
+}
+function mrDistinct(all,pick){
+  const seen=[];
+  all.forEach(function(r){const v=pick(r);if(v&&seen.indexOf(v)===-1)seen.push(v);});
+  return seen.sort();
+}
+function buildMyRunsPageHTML(){
+  const all=myStartedRuns();
+  const base=mrRowsBeforeStatus(all);
+  const rows=base.filter(function(r){return !mrStatusFilter||mrStatusGroup(r.status)===mrStatusFilter;});
+  const counts={'In Progress':0,'Waiting Approval':0,'Needs Attention':0,Completed:0};
+  base.forEach(function(r){counts[mrStatusGroup(r.status)]++;});
+
+  const statTile=function(label,count,color){
+    const on=mrStatusFilter===label;
+    return '<div class="listing-stat'+(on?' stat-selected':'')+'" onclick="setMrStatusFilter(\''+(on?'':label)+'\')" title="'+(on?'Show all runs':'Show only '+label.toLowerCase()+' runs')+'">'
+      +'<div class="listing-stat-count" style="color:'+color+'">'+count+'</div>'
+      +'<div class="listing-stat-label">'+label+'</div>'
+      +'</div>';
+  };
+  const tableRows=rows.length?rows.map(function(r,i){
+    const open="openMyRun('"+r.kind+"','"+r.journeyId+"','"+r.runId+"')";
+    return '<tr style="cursor:pointer" onclick="'+open+'">'
+      +'<td style="color:var(--gray);font-size:13px">'+(i+1)+'</td>'
+      +'<td style="font-family:monospace;font-size:12px;font-weight:600;color:var(--navy)">'+r.runId+'</td>'
+      +'<td><div class="cell-primary">'+r.journeyName+'</div><div class="cell-sub">'+r.mode+'</div></td>'
+      +'<td><div class="cell-primary">'+r.subject+'</div><div class="cell-sub">'+(r.meta||'')+'</div></td>'
+      // -- Step plus its owner, so a run parked on someone else reads as "waiting on them",
+      // not as something the user forgot to do. --
+      +'<td><div class="cell-primary">'+r.stepName+'</div><div class="cell-sub">'+r.stepOwner+'</div></td>'
+      +'<td><span class="status-pill '+myRunStatusClass(r.status)+'">'+r.status+'</span></td>'
+      +'<td class="cell-sub">'+r.when+'</td>'
+      +'<td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm" onclick="'+open+'">View Run</button></td>'
+      +'</tr>';
+  }).join('')
+  // -- Filtered-to-nothing must not look like never-started-anything: one sends you to Reset,
+  // the other tells you the feature is waiting on you to use it. --
+  :'<tr><td colspan="8" style="padding:44px 16px;text-align:center">'
+    +(all.length&&mrHasActiveFilters()
+      ?'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No runs match these filters</div>'
+        +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">You have started '+all.length+' run'+(all.length===1?'':'s')+'. '
+        +'<button onclick="resetMrFilters()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">Clear all filters</button> to see '+(all.length===1?'it':'them')+'.</div>'
+      :'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No runs yet</div>'
+        +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Journeys you start from <strong>AI Executive</strong> appear here and stay here — active and completed alike — even once they move on to someone else.</div>')
+    +'</td></tr>';
+
+  return '<div class="lp-page">'
+    +'<div class="listing-head">'
+    +'<div class="lp-filter-bar" style="flex:1;min-width:0;padding:0">'
+    +'<div class="lp-filter-bar-label">Select Filter</div>'
+    +'<div class="lp-filter-bar-row">'
+    +apCS('mr-f-journey',[mrAnyOption.journey].concat(mrDistinct(all,function(r){return r.journeyName;})),mrJourneyFilter,mrAnyOption.journey)
+    +apCS('mr-f-mode',[mrAnyOption.mode].concat(mrDistinct(all,function(r){return r.mode;})),mrModeFilter,mrAnyOption.mode)
+    +'<input class="ct-search-input" id="mr-search-input" type="text" placeholder="Search runs..." title="Matches run ID, subject, journey, current step and its owner" value="'+attrSafe(mrSearchQuery)+'" style="flex:0 1 210px;min-width:150px;height:34px;border-radius:20px" onkeydown="if(event.key===\'Enter\')applyMrSearch()">'
+    +'<button class="lp-pill-reset" onclick="resetMrFilters()">Reset</button>'
+    +'<button class="lp-pill-search" onclick="applyMrSearch()">Search</button>'
+    +'</div></div>'
+    +'<div class="listing-stats">'
+    +statTile('In Progress',counts['In Progress'],'#2563eb')
+    +statTile('Waiting Approval',counts['Waiting Approval'],'#b45309')
+    +statTile('Needs Attention',counts['Needs Attention'],'#dc2626')
+    +statTile('Completed',counts.Completed,'#16a34a')
+    +'</div></div>'
+    +'<div class="lp-table-card" style="margin-top:14px">'
+    +'<table class="lp-table"><thead><tr>'
+    +'<th>SR. NO</th><th>RUN ID</th><th>JOURNEY</th><th>SUBJECT</th><th>CURRENT STEP</th><th>STATUS</th><th>STARTED</th><th>ACTION</th>'
+    +'</tr></thead><tbody>'+tableRows+'</tbody></table>'
+    +(rows.length
+      ?'<div class="lp-pagination">'
+        +'<span class="lp-pagination-info">'+(rows.length===all.length
+          ?'Showing all '+all.length+' run'+(all.length===1?'':'s')
+          :'Showing '+rows.length+' of '+all.length+' run'+(all.length===1?'':'s'))+'</span>'
+        +'<div class="lp-pagination-controls">'
+        +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>'
+        +'<button class="lp-pg-btn active">1</button>'
+        +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></button>'
+        +'</div></div>'
+      :'')
+    +'</div></div>';
 }
 function buildComplianceLiveQueuePanelHTML(){
   const runs=manualJourneyRuns.filter(function(r){
@@ -285,6 +476,72 @@ function buildPersonaDashboardHTML(){
     +'</div>';
 }
 
+/* == EMPLOYEE DASHBOARD =================================================================
+   The standard workspace view every role now lands on: the four things an employee checks
+   without being asked (leave, payslip, payroll, attendance), then the things asked OF them.
+   Belongs to the connected SaaS product this app mirrors, so its figures are mock data —
+   nothing here reads the Executive Layer backend. == */
+const empDashActions=[
+  {item:'Acknowledge IT Policy 2026',type:'Policy Acknowledgement',due:'20 May 2026',status:'Pending',cta:'Acknowledge'},
+  {item:'Submit May Expenses',type:'Expense Report',due:'25 May 2026',status:'Pending',cta:'Submit'},
+  // No due date: nothing is chasing this one, so the cell reads as an em dash rather than blank.
+  {item:'Update Emergency Contact',type:'Profile Update',due:'',status:'Pending',cta:'Update'}
+];
+// -- Whoever is signed in, not a hardcoded name: an Entity User is their persona, everyone else
+// is the platform account. A dashboard that greets the wrong person reads as a broken mock. --
+function empDashUserName(){
+  if(portalRole==='entity-user'){const p=getActivePersona();if(p&&p.name)return p.name;}
+  return (typeof tsEmp!=='undefined'&&tsEmp.name)?tsEmp.name:portalRoleLabel(portalRole);
+}
+function empDashTile(label,val,sub,tone){
+  const valColor=tone==='green'?'#16a34a':'var(--navy)';
+  return '<div class="emp-tile">'
+    +'<div class="emp-tile-label">'+label+'</div>'
+    +'<div class="emp-tile-val" style="color:'+valColor+'">'+val+'</div>'
+    +'<div class="emp-tile-sub'+(tone?' emp-tile-sub-'+tone:'')+'">'+sub+'</div>'
+    +'</div>';
+}
+const empIcoClock='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
+const empIcoPin='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.8"/></svg>';
+function buildEmployeeDashboardHTML(){
+  const actionRows=empDashActions.map(function(a){
+    return '<tr>'
+      +'<td class="emp-act-item">'+a.item+'</td>'
+      +'<td class="emp-act-type">'+a.type+'</td>'
+      +'<td class="emp-act-due">'+(a.due||'<span style="color:#9ca3af">&mdash;</span>')+'</td>'
+      +'<td>'+statusMini(a.status,statusClass(a.status))+'</td>'
+      +'<td style="text-align:right"><button class="emp-act-btn">'+a.cta+'</button></td>'
+      +'</tr>';
+  }).join('');
+  // -- "View All" only links out for roles that actually have My Tasks in their sidebar. Super
+  // Admin has no such module, and a link that lands somewhere unreachable from the nav is worse
+  // than no link. --
+  const hasMyTasks=['entity-admin','entity-user'].indexOf(portalRole)>=0;
+  const viewAll=hasMyTasks?'<span class="emp-act-viewall" onclick="navigatePage(\'my-tasks\')">View All</span>':'';
+  return '<div class="dash-ref">'
+    +'<div class="dash-ref-title">Employee Dashboard</div>'
+    +'<div class="dash-ref-sub">Welcome back, '+empDashUserName()+'. Here\'s your workspace overview.</div>'
+    +'</div>'
+    +'<div class="emp-tile-grid">'
+    +empDashTile('Leave Balance','12','&uarr; 3 days remaining this month','green')
+    +empDashTile('Latest Payslip','Apr','April 2026 available')
+    // -- The attendance tile is a control, not a figure, so it drops the big-number treatment
+    // for a labelled read-out plus its action. --
+    +'<div class="emp-tile emp-att">'
+      +'<div class="emp-att-head"><span>Attendance</span><button class="emp-att-view" onclick="navigatePage(\'my-timesheet\')">View</button></div>'
+      +'<div class="emp-att-row"><span class="emp-att-key">'+empIcoClock+'Clock-in Time</span><span class="emp-att-val">00:00 AM/PM</span></div>'
+      +'<div class="emp-att-row"><span class="emp-att-key">'+empIcoPin+'Location</span><span class="emp-att-val">Hyderabad</span></div>'
+      +'<div class="emp-att-foot"><span class="emp-att-logged">Logged Time &mdash; 00h:00m</span><button class="emp-att-clock">Clock In</button></div>'
+    +'</div>'
+    +'</div>'
+    +'<div class="listing-card dash-panel emp-act-panel">'
+    +'<div class="dash-panel-head"><div>Action Required</div>'+viewAll+'</div>'
+    +'<table class="listing-table dash-table emp-act-table"><thead><tr>'
+    +'<th>Item</th><th>Type</th><th>Due Date</th><th>Status</th><th></th>'
+    +'</tr></thead><tbody>'+actionRows+'</tbody></table>'
+    +'</div>';
+}
+
 // -- ENTITY ADMIN DASHBOARD: pending Requests/Notes rendered as a vertical list of cards, ranked by urgency --
 function entityRequestUrgency(r){
   const actionable=r.type==='journey-request-to-admin'||r.type==='manager-notify';
@@ -404,8 +661,11 @@ function openEntityJourneysModal(){
   document.getElementById('ct-modal-overlay').style.display='flex';
 }
 
-// -- SUPER ADMIN DASHBOARD TAB: the Configure > Overview snapshot plus items needing this role's action --
-function buildSuperAdminDashboardHTML(){
+// -- SUPER ADMIN PLATFORM OVERSIGHT: the Configure > Overview snapshot plus items needing this
+// role's action. Rendered at the top of AI Executive rather than on the Dashboard — it describes
+// the AI execution layer itself (systems, data models, journeys, agents), so it belongs with the
+// module that runs it. Returns the body only; the caller supplies the .ai-exec-page wrapper. --
+function superAdminOversightHTML(){
   const visibleRequests=entityRequests.filter(r=>r.type!=='manager-notify'&&r.type!=='journey-request-to-admin');
   const pendingCount=visibleRequests.filter(r=>r.status==='Pending').length;
   const reqRows=visibleRequests.slice(0,8).map(function(r){
@@ -415,23 +675,16 @@ function buildSuperAdminDashboardHTML(){
     return '<div class="ea-req-row ea-req-row-3col"><div class="ea-req-main"><div class="ea-req-label">'+r.label+'</div><div class="ea-req-time">'+r.requestedBy+'</div></div><div class="ea-req-when">'+eaStackTimeHTML(r.timestamp)+'</div>'+actions+'</div>';
   }).join('');
   const reqBody=visibleRequests.length?reqRows:'<div class="ea-req-empty">No requests yet — entity admins and entity users will appear here once they request something.</div>';
-  const activityRows=cfgRecentActivity.map(function(a){
-    return '<div class="ea-req-row"><div><div class="ea-req-label">'+a.title+'</div><div class="ea-req-time">'+a.sub+'</div></div><div style="font-size:11.5px;font-weight:500;color:var(--gray);white-space:nowrap;flex-shrink:0">'+a.when+'</div></div>';
-  }).join('');
-  const activityBody=cfgRecentActivity.length?activityRows:'<div class="ea-req-empty">No recent activity yet.</div>';
-  return '<div class="ai-exec-page">'
-    +cfgPageHead('Opendhi Super Admin','Full platform oversight — systems, data models, journeys, and agents across every entity.')
+  // -- No Recent Activity feed here. It reports configuration changes, which is a Configure
+  // concern — Configure > Overview still carries it (cfgOverviewBodyHTML). This page is about
+  // what needs acting on and the clients below it. --
+  return cfgPageHead('Opendhi Super Admin','Full platform oversight — systems, data models, journeys, and agents across every entity.')
     +cfgHeroTilesHTML()
     +'<div class="setup-card" style="margin-top:24px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div class="setup-title">Action Required</div>'+(pendingCount?'<span class="status-pill pending">'+pendingCount+' Pending</span>':'')+'</div>'
     +'<div class="setup-sub" style="margin-bottom:14px">Activation requests from Entity Admins and Entity Users awaiting your review</div>'
     +'<div class="ea-req-list">'+reqBody+'</div>'
-    +'</div>'
-    +'<div class="setup-card" style="margin-top:20px">'
-    +'<div class="setup-title" style="margin-bottom:4px">Recent Activity</div>'
-    +'<div class="setup-sub" style="margin-bottom:14px">Latest configuration changes across systems, data models, journeys, and agents</div>'
-    +'<div class="ea-req-list">'+activityBody+'</div>'
-    +'</div></div>';
+    +'</div>';
 }
 
 function openDeSidebar(id){
@@ -454,7 +707,7 @@ function setDeStatusFilter(val){deStatusFilter=val||'';renderADTPage();}
 // Save button had no handlers, so nothing typed here ever went anywhere.
 //
 // Direct Employee belongs to the connected SaaS product this app mirrors, so its rows are mock
-// data and this stays local. The Executive Layer's own records live in Master Data, whose
+// data and this stays local. The Executive Layer's own records live in Client, whose
 // equivalent form (mdSaveStatusChange) writes through to the backend. --
 function deSaveStatusChange(){
   const emp=directEmpData.find(function(e){return e.id===deSelectedId;});
@@ -686,7 +939,7 @@ function renderDeSidebar(){
   }
   return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
-/* == MASTER DATA (Executive Layer's own store) ==========================================
+/* == CLIENT (Executive Layer's own store) ==============================================
    Everything below renders masterData, which the backend owns. Deliberately a separate module
    from Direct Employee: Direct Employee, Teams, Leaves and the rest of the sidebar below it
    belong to the connected SaaS product this app mirrors and are mock data, whereas these
@@ -727,8 +980,54 @@ function navMdTab(tab){
     });
   }
 }
-function setMdStatusFilter(val){mdStatusFilter=val||'';renderADTPage();}
-function resetMdFilters(){mdSelectedId=null;mdStatusFilter='';renderADTPage();}
+function setMdStatusFilter(val){mdStatusFilter=val||'';mdSelectedId=null;renderADTPage();}
+function resetMdFilters(){mdSelectedId=null;mdStatusFilter='';mdFilterSource='';mdSearchQuery='';renderADTPage();}
+
+/* == CLIENT LISTING FILTERS =============================================================
+   "All Sources" is a real entry in the dropdown rather than only a placeholder, so the filter
+   can be cleared from the same menu that set it — a placeholder alone leaves the user hunting
+   for Reset to undo one pick. Picking it maps back to the empty string. == */
+const mdAnySource='All Sources';
+function setMdSourceFilter(val){
+  mdFilterSource=val===mdAnySource?'':val;
+  mdSelectedId=null;
+  renderADTPage();
+}
+// -- Reads the box on click/Enter rather than on every keystroke: re-rendering the page per
+// character would blow away the input and its caret. --
+function applyMdSearch(){
+  const el=document.getElementById('md-search-input');
+  mdSearchQuery=el?el.value.trim():'';
+  mdSelectedId=null;
+  renderADTPage();
+}
+function mdSourceLabel(e){return e.source==='adt_solution'?'ADT Solution':'Manual';}
+// -- Distinct values actually present, so a dropdown never offers a country that would return
+// nothing. '--' is the placeholder for a field HR has not filled in, not a real value. --
+function mdDistinct(pick){
+  const seen=[];
+  masterData.forEach(function(e){
+    const v=pick(e);
+    if(v&&v!=='--'&&seen.indexOf(v)===-1)seen.push(v);
+  });
+  return seen.sort();
+}
+// -- Everything except status. The stat tiles count against this, so they report what is
+// reachable inside the current slice rather than against the whole store — a tile reading 4
+// that yields nothing once clicked is worse than no tile at all. --
+function mdRowsBeforeStatus(){
+  const q=mdSearchQuery.toLowerCase();
+  return masterData.filter(function(e){
+    if(mdFilterSource&&mdSourceLabel(e)!==mdFilterSource)return false;
+    if(!q)return true;
+    // -- Country and company have no dropdown of their own, so the search box carries them:
+    // typing a country or an employer still narrows the list. --
+    return [e.name,e.empId,e.referenceId,e.companyName,e.country,e.email].some(function(f){
+      return f&&String(f).toLowerCase().indexOf(q)!==-1;
+    });
+  });
+}
+function mdHasActiveFilters(){return !!(mdStatusFilter||mdFilterSource||mdSearchQuery);}
 
 // -- Pulls the whole store from the backend. Called on page load, by the Refresh button, and
 // after any write that reveals the local cache is stale.
@@ -785,7 +1084,7 @@ function mdEnsureLoaded(){
 // entry and the workflow event are one transaction server-side, so showing them as three
 // sequential lines is an honest account of the work rather than decoration over a spinner. --
 const mdSaveSteps=[
-  {title:'Updating record status',note:'Writing the new status to the master data row…'},
+  {title:'Updating record status',note:'Writing the new status to the client record…'},
   {title:'Writing audit entry',note:'Appending the comment to the record\'s log…'},
   {title:'Recording workflow event',note:'Adding the transition to the workflow trail…'}
 ];
@@ -927,7 +1226,7 @@ function renderMdSidebar(){
     // -- Identity strip: the two ids that make this record traceable back to the system it came
     // from. Both are minted by the backend, so they are unique across the whole Executive Layer
     // rather than per browser session. First thing shown, because "which record is this and
-    // where did it come from" is the first question asked of a master data entry. --
+    // where did it come from" is the first question asked of a client record. --
     const idStrip='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'
       +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source: '+(rec.source==='adt_solution'?'ADT Solution':'Manual')+'</span>'
       +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Employee ID: '+rec.empId+'</span>'
@@ -1053,9 +1352,10 @@ function renderMdSidebar(){
 
 function buildMasterDataHTML(){
   const d='<span style="color:#9ca3af">--</span>';
-  const rows=masterData.filter(function(e){return !mdStatusFilter||e.status===mdStatusFilter;});
+  const base=mdRowsBeforeStatus();
+  const rows=base.filter(function(e){return !mdStatusFilter||e.status===mdStatusFilter;});
   const counts={Pending:0,Active:0,Inactive:0};
-  masterData.forEach(function(e){if(counts[e.status]!==undefined)counts[e.status]++;});
+  base.forEach(function(e){if(counts[e.status]!==undefined)counts[e.status]++;});
 
   // -- With the drawer open only about a third of the table stays uncovered, so the listing
   // switches to a compact identity-only form that actually fits it: name, the two ids, and a
@@ -1082,59 +1382,93 @@ function buildMasterDataHTML(){
         +'<td style="font-weight:600;color:var(--navy)">'+e.name+'</td>'
         +'<td style="font-family:monospace;font-size:12px">'+(e.empId||d)+'</td>'
         +'<td>'+(e.referenceId?('<span style="font-family:monospace;font-size:12px;color:#0d9488;font-weight:600">'+e.referenceId+'</span>'):d)+'</td>'
-        +'<td><span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">'+(e.source==='adt_solution'?'ADT Solution':'Manual')+'</span></td>'
+        +'<td><span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">'+mdSourceLabel(e)+'</span></td>'
         +'<td>'+(e.companyName||d)+'</td>'
         +'<td>'+(e.country||d)+'</td>'
         +'<td><span class="lp-status-badge '+String(e.status).toLowerCase()+'">'+e.status+'</span></td>'
         +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openMdSidebar('+e.id+')"><svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg></button></td>'
         +'</tr>';
     }).join('')
-    // -- Three different kinds of empty, which must not look alike: still loading, backend
-    // unreachable, or genuinely nothing ingested yet. Showing the last message when the backend
-    // is simply down would be a lie about the state of the store. --
+    // -- Four different kinds of empty, which must not look alike: still loading, backend
+    // unreachable, filtered down to nothing, or genuinely nothing ingested yet. Showing the last
+    // message when the backend is simply down would be a lie about the state of the store, and
+    // showing it when a filter is on would send the user hunting for records that are right
+    // there behind a dropdown. --
     :'<tr><td colspan="9" style="padding:44px 16px;text-align:center">'
-      +(mdBackendState==='loading'
-        ?'<div style="font-size:12.5px;color:var(--gray)">Loading master data…</div>'
+      +(mdBackendState==='ok'&&masterData.length&&mdHasActiveFilters()
+        ?'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No clients match these filters</div>'
+          +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">'+masterData.length+' client'+(masterData.length===1?' is':'s are')+' in the store. '
+          +'<button onclick="resetMdFilters()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">Clear all filters</button> to see '+(masterData.length===1?'it':'them')+'.</div>'
+      :mdBackendState==='loading'
+        ?'<div style="font-size:12.5px;color:var(--gray)">Loading clients…</div>'
         :mdBackendState==='offline'
           ?'<div style="font-size:13px;font-weight:600;color:#8a6d10;margin-bottom:6px">Not connected to the backend</div>'
-            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Master data is held by the Executive Layer backend, which isn\'t reachable — so this list can\'t be shown, not that it is empty. Start it with <span style="font-family:monospace">node backend/dev.js</span>, then '
+            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Client records are held by the Executive Layer backend, which isn\'t reachable — so this list can\'t be shown, not that it is empty. Start it with <span style="font-family:monospace">node backend/dev.js</span>, then '
             +'<button onclick="mdRefreshClicked()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">refresh</button>.</div>'
-          :'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No master data yet</div>'
-            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Records arrive here when a connected system sends one. Submit the USER intake form under <strong>Configure &rsaquo; Systems &rsaquo; ADT Solution</strong>, or arm the live sync from <strong>AI Executive &rsaquo; Hire to Retire</strong>.</div>')
+          :'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No clients yet</div>'
+            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Records arrive here when a connected system sends one. Submit the USER intake form under <strong>Configure &rsaquo; Data Foundation &rsaquo; USER</strong>, or arm the live sync from <strong>AI Executive &rsaquo; Hire to Retire</strong>.</div>')
       +'</td></tr>';
 
-  // -- One compact bar rather than a title block, a paragraph and four large stat cards stacked
-  // above each other. That chrome cost roughly 200px of vertical space before a single record
-  // was visible — on a laptop the drawer opened almost below the fold. The counts double as the
-  // status filter, so they earn their place instead of merely reporting. --
-  const chip=function(label,count,key,dot){
+  // -- Same listing chrome as Contracts, Direct Employee and the rest: a "Select Filter" bar on
+  // the left, the quick status tiles on the right. The tiles are the primary status filter — they
+  // carry counts, so they report and filter in the same gesture, which is why status is kept out
+  // of the dropdown rather than offered in both places. Source is the only dropdown; country and
+  // company are reachable through the search box instead. --
+  // -- No "all" tile: with none selected the listing already shows every client, and clicking the
+  // selected tile again clears it. A fourth tile duplicating the default state would be a control
+  // whose only job is to undo the other three. The running total lives in the footer count. --
+  const statTile=function(label,count,key,color){
     const on=mdStatusFilter===key;
-    return '<button class="md-chip'+(on?' is-on':'')+'" onclick="setMdStatusFilter(\''+(on?'':key)+'\')">'
-      +(dot?'<span class="md-chip-dot" style="background:'+dot+'"></span>':'')
-      +'<span class="md-chip-label">'+label+'</span>'
-      +'<span class="md-chip-count">'+count+'</span>'
-      +'</button>';
+    return '<div class="listing-stat'+(on?' stat-selected':'')+'" onclick="setMdStatusFilter(\''+(on?'':key)+'\')" title="'+(on?'Show all clients':'Show only '+key.toLowerCase()+' clients')+'">'
+      +'<div class="listing-stat-count" style="color:'+color+'">'+count+'</div>'
+      +'<div class="listing-stat-label">'+label+'</div>'
+      +'</div>';
   };
+  const refreshBtn='<button class="md-refresh" onclick="mdRefreshClicked()" title="Re-pull every client from the Executive Layer backend">'
+    +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'
+    +'<span>Refresh</span></button>';
 
   return '<div class="lp-page">'
-    +'<div class="md-bar">'
-    +'<div class="md-bar-title">Master Data</div>'
-    +'<div class="md-chips">'
-    +chip('All',masterData.length,'')
-    +chip('Pending',counts.Pending,'Pending','#d9b64a')
-    +chip('Active',counts.Active,'Active','#16a34a')
-    +chip('Inactive',counts.Inactive,'Inactive','#ef4444')
-    +'</div>'
-    +'<button class="md-refresh" onclick="mdRefreshClicked()" title="Refresh from the backend">'
-    +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'
-    +'<span>Refresh</span></button>'
-    +'</div>'
-    +'<div class="lp-split-wrap'+(compact?' md-split--compact':'')+'"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
+    +'<div class="listing-head">'
+    +'<div class="lp-filter-bar" style="flex:1;min-width:0;padding:0">'
+    +'<div class="lp-filter-bar-label">Select Filter</div>'
+    +'<div class="lp-filter-bar-row">'
+    +apCS('md-f-source',[mdAnySource].concat(mdDistinct(mdSourceLabel)),mdFilterSource,mdAnySource)
+    // -- Fixed width rather than flex:1: the box only ever holds a short term, so letting it eat
+    // the whole row made it the loudest control on a bar where it is not the primary one. The
+    // full list of searched fields moves to the tooltip, keeping the placeholder from truncating. --
+    +'<input class="ct-search-input" id="md-search-input" type="text" placeholder="Search clients..." title="Matches name, employee ID, reference ID, company and country" value="'+attrSafe(mdSearchQuery)+'" style="flex:0 1 210px;min-width:150px;height:34px;border-radius:20px" onkeydown="if(event.key===\'Enter\')applyMdSearch()">'
+    +'<button class="lp-pill-reset" onclick="resetMdFilters()">Reset</button>'
+    +'<button class="lp-pill-search" onclick="applyMdSearch()">Search</button>'
+    // -- Refresh sits with Reset and Search because all three act on this list, not on a record.
+    // It is the only one that goes back to the server, hence the icon. --
+    +refreshBtn
+    +'</div></div>'
+    +'<div class="listing-stats">'
+    +statTile('Pending',counts.Pending,'Pending','#b45309')
+    +statTile('Active',counts.Active,'Active','#16a34a')
+    +statTile('Inactive',counts.Inactive,'Inactive','#dc2626')
+    +'</div></div>'
+    +'<div class="lp-split-wrap'+(compact?' md-split--compact':'')+'" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr>'
     +(compact
       ?'<th>'+rows.length+' record'+(rows.length===1?'':'s')+'</th>'
       :'<th>SR. NO</th><th>NAME</th><th>EMPLOYEE ID</th><th>REFERENCE ID</th><th>SOURCE</th><th>COMPANY</th><th>COUNTRY</th><th>STATUS</th><th>ACTION</th>')
     +'</tr></thead><tbody>'+tableBody+'</tbody></table>'
+    // -- Hidden in compact mode: with the drawer open the listing is a narrow identity strip and
+    // a row of pagination chrome under it would take more of it than the records do. --
+    +(compact||!rows.length?''
+      :'<div class="lp-pagination">'
+        // -- With the "all" tile gone this line carries the total: unfiltered it states the whole
+        // count outright, filtered it says how much of the whole is on screen. --
+        +'<span class="lp-pagination-info">'+(rows.length===masterData.length
+          ?'Showing all '+masterData.length+' client'+(masterData.length===1?'':'s')
+          :'Showing '+rows.length+' of '+masterData.length+' client'+(masterData.length===1?'':'s'))+'</span>'
+        +'<div class="lp-pagination-controls">'
+        +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>'
+        +'<button class="lp-pg-btn active">1</button>'
+        +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></button>'
+        +'</div></div>')
     +'</div></div>'
     +'<div class="lp-split-sb md-split-sb'+(mdSelectedId?' open':'')+'" id="md-split-sb"><div class="lp-isb" id="md-isb-inner">'+(mdSelectedId?renderMdSidebar():'')+'</div></div>'
     +'</div></div>';
@@ -2424,7 +2758,7 @@ function renderCtSidebar(){
         +'<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:9px;padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:8px">'
         +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
         +'<span style="font-size:12px;color:#15803d;font-weight:600">Signed contract document uploaded</span></div>'
-        +'<button class="lp-logs-save-btn" style="background:#2563eb" onclick="openCtModal('+c.id+')">View &amp; Verify Contract</button>'
+        +'<button class="lp-logs-save-btn" onclick="openCtModal('+c.id+')">View &amp; Verify Contract</button>'
         +'</div>';
     }else if(pendingStatus==='Contract Sent'||c.status==='Contract Sent'){
       actionPanel='<div class="lp-logs-form">'
@@ -2450,7 +2784,7 @@ function renderCtSidebar(){
       actionPanel='<div class="lp-logs-form">'
         +'<div class="lp-logs-form-header" style="color:#16a34a"><span style="width:9px;height:9px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0"></span>'+(c.status==='Inactive'?'Contract Inactive':'Contract Approved')+'</div>'
         +'<p class="lp-logs-form-sub">'+(c.status==='Inactive'?'This contract has been set to Inactive.':'This contract has been fully approved and finalized.')+'</p>'
-        +(c.status==='Contract Approved'?'<button class="lp-logs-save-btn" style="background:#2563eb" onclick="openCtModal('+c.id+')">View Contract</button>':'')
+        +(c.status==='Contract Approved'?'<button class="lp-logs-save-btn" onclick="openCtModal('+c.id+')">View Contract</button>':'')
         +'</div>';
     }
     body='<div class="lp-logs-wrap">'+timelineHTML+actionPanel+'</div>';
@@ -2523,7 +2857,7 @@ function submitManualContractDeal(type){
   const run={
     runId:'MAN-'+(manualRunSeq++),journeyId:'contract-creation',subject:fullName,entity:'Dhi Hyperlocal',mode:'Manual',
     currentStepIdx:1,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',
-    manualHours:.8,agentEstimateHours:0,createdBy:creatorId,exceptions:[],
+    manualHours:.8,agentEstimateHours:0,createdBy:creatorId,startedBy:currentActorId(),exceptions:[],
     audit:['Deal & Employee Record completed by '+creatorLabel+' for '+fullName+' ('+type+')']
   };
   manualJourneyRuns.unshift(run);
@@ -2601,7 +2935,10 @@ function buildContractFormHTML(type,step,splitMode){
         +(done?'background:var(--orange);color:#fff;':active?'background:transparent;color:var(--orange);border:2px solid var(--orange);':'background:transparent;color:#d1d5db;border:2px solid #d1d5db;');
       const labelColor=active?'var(--orange)':done?'var(--navy)':'#9ca3af';
       const circleContent=done?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>':(i+1);
-      let html='<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="'+(type==='PEO'?'peoGoStep':'eorGoStep')+'('+i+')">'
+      // Completed steps are clickable (revisit and edit); future steps are not — Next is the
+      // only way forward, so a step cannot be skipped past its required fields.
+      const clickable=done;
+      let html='<div style="display:flex;align-items:center;gap:10px;cursor:'+(clickable?'pointer':'default')+'"'+(clickable?' onclick="'+(type==='PEO'?'peoGoStep':'eorGoStep')+'('+i+')"':'')+'>'
         +'<div style="'+circleStyle+'">'+circleContent+'</div>'
         +'<span style="font-size:13px;font-weight:600;color:'+labelColor+'">'+s+'</span>'
         +'</div>';
@@ -2626,7 +2963,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<div class="ep-form-group"><label class="ep-form-label">Country employee will be working from <span class="req">*</span></label>'
       +'<select class="ep-form-select" id="peo-work-country" style="height:42px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer;box-sizing:border-box;width:100%">'+countryOptsSel(prefill.country||'')+'</select></div>'
       +'</div>'
-      +'<div style="font-size:13px;font-weight:600;color:#e07b00;margin-bottom:12px">Work Permit</div>'
+      +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">Work Permit <span class="req">*</span></div>'
       +'<div style="display:flex;flex-direction:column;gap:10px">'
       +(function(){
         const hasPermit=prefill.workPermit===true;
@@ -2635,7 +2972,7 @@ function buildContractFormHTML(type,step,splitMode){
             +'<div class="peo-radio-outer" style="width:16px;height:16px;border-radius:50%;border:2px solid '+(sel?'var(--orange)':'#d1d5db')+';flex-shrink:0;display:flex;align-items:center;justify-content:center">'
             +'<div class="peo-radio-inner" style="width:7px;height:7px;border-radius:50%;background:'+(sel?'var(--orange)':'transparent')+';transition:.15s"></div>'
             +'</div>'
-            +'<span style="font-size:13px;color:#e07b00;font-weight:500">'+label+'</span>'
+            +'<span style="font-size:13px;color:var(--navy);font-weight:500">'+label+'</span>'
             +'</label>';
         };
         return wp(hasPermit,'Yes, Employee has work permit')+wp(!hasPermit,'Employee would like ADT to assist for work visa');
@@ -2652,6 +2989,11 @@ function buildContractFormHTML(type,step,splitMode){
       +'<input id="peo-fname" class="ep-form-input" type="text" placeholder="First Name" value="'+(prefill.fname||'')+'"></div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Last Name <span class="req">*</span></label>'
       +'<input id="peo-lname" class="ep-form-input" type="text" placeholder="Last Name" value="'+(prefill.lname||'')+'"></div>'
+      // -- Identity block completes before contact begins: name, DOB and gender describe who the
+      // person is; email, mobile and address describe how to reach them. DOB previously sat
+      // between Mobile and Address, splitting the contact fields around an identity fact. --
+      +'<div class="ep-form-group"><label class="ep-form-label">Date of Birth <span class="req">*</span></label>'
+      +'<input id="peo-dob" class="ep-form-input" type="date" value="'+(prefill.dob||'')+'"></div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Gender</label>'
       +'<select id="peo-gender" class="ep-form-select" style="height:42px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--navy);font-family:inherit;outline:none;background:#fff;cursor:pointer;box-sizing:border-box;width:100%">'
       +['','Male','Female','Non-binary','Prefer not to say'].map(function(g){return '<option'+(g===prefill.gender?' selected':'')+'>'+(g||'Select')+'</option>';}).join('')
@@ -2664,8 +3006,6 @@ function buildContractFormHTML(type,step,splitMode){
       +'<option>+91</option><option>+1</option><option>+44</option><option>+49</option><option>+31</option><option>+33</option><option>+61</option><option>+971</option>'
       +'</select>'
       +'<input id="peo-mobile" class="ep-form-input" type="tel" placeholder="Mobile Number" style="flex:1" value="'+(prefill.mobile||'')+'"></div></div>'
-      +'<div class="ep-form-group"><label class="ep-form-label">Date of Birth <span class="req">*</span></label>'
-      +'<input id="peo-dob" class="ep-form-input" type="date" value="'+(prefill.dob||'')+'"></div>'
       +'</div>'
       +'<div class="ep-form-group"><label class="ep-form-label">Address <span class="req">*</span></label>'
       +'<textarea id="peo-address" class="ep-form-input" rows="3" placeholder="Address" style="resize:vertical;min-height:70px;line-height:1.5">'+(prefill.address||'')+'</textarea>'
@@ -2707,18 +3047,10 @@ function buildContractFormHTML(type,step,splitMode){
       +'<span style="font-size:11.5px;color:var(--orange);font-weight:600;flex-shrink:0;margin-left:12px">maximum 100 words</span>'
       +'</div>'
 
-      // Employment Duration
-      +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Employment Duration</div>'
-      +'<div style="display:flex;gap:16px;margin-bottom:6px">'
-      +'<div style="flex:1"><input id="peo-from" class="ep-form-input" type="date" value="'+(prefill.fromDate||today)+'"></div>'
-      +'<div style="flex:1"><input id="peo-to" class="ep-form-input" type="date" value="'+(prefill.toDate||'')+'"></div>'
-      +'</div>'
-      +'<div style="display:flex;gap:16px;margin-bottom:20px">'
-      +'<div style="flex:1;font-size:11.5px;color:#64748b">Start Date <span class="req">*</span></div>'
-      +'<div style="flex:1;font-size:11.5px;color:#64748b">End Date <span class="req">*</span></div>'
-      +'</div>'
-
-      // Employment Term + Employee Type radios
+      // -- Employment Term + Employee Type BEFORE the dates: whether the contract is Permanent
+      // decides whether an End Date exists at all, so the decision has to come before the field
+      // it governs — previously the dates demanded an End Date* two rows before the user was
+      // asked whether the contract even ends. --
       +'<div class="ep-form-grid" style="margin-bottom:20px">'
       +'<div>'
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Employment Term <span class="req">*</span></div>'
@@ -2732,16 +3064,30 @@ function buildContractFormHTML(type,step,splitMode){
       +'</div>'
       +'</div>'
 
-      // Work Schedule
+      // -- Labels above the inputs, like every other field on the form — they were rendered in a
+      // second row underneath, so the eye met two bare date boxes before finding out which was
+      // which. End Date is required only when the term is Fixed, and says so. --
+      +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Employment Duration</div>'
+      +'<div style="display:flex;gap:16px;margin-bottom:20px">'
+      +'<div style="flex:1" class="ep-form-group"><label class="ep-form-label">Start Date <span class="req">*</span></label>'
+      +'<input id="peo-from" class="ep-form-input" type="date" value="'+(prefill.fromDate||today)+'"></div>'
+      +'<div style="flex:1" class="ep-form-group"><label class="ep-form-label">End Date <span style="font-weight:500;color:#94a3b8">(Fixed Term only)</span></label>'
+      +'<input id="peo-to" class="ep-form-input" type="date" value="'+(prefill.toDate||'')+'"></div>'
+      +'</div>'
+
+      // Work Schedule — 40, not 20: the form defaults Employee Type to Full Time, and a default
+      // that contradicts another default gets shipped unnoticed.
       +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:10px">Work Schedule</div>'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">'
-      +'<input id="peo-hours" class="ep-form-input" type="number" value="'+(prefill.hours||20)+'" min="1" style="width:80px;text-align:center">'
-      +'<span style="font-size:13px;color:#64748b">Hours</span>'
+      +'<input id="peo-hours" class="ep-form-input" type="number" value="'+(prefill.hours||40)+'" min="1" style="width:80px;text-align:center">'
+      +'<span style="font-size:13px;color:#64748b">Hours / week</span>'
       +'</div>'
 
       // Pay Amount
-      +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">Pay Amount</div>'
-      +'<div style="font-size:12px;color:#64748b;margin-bottom:10px">Enter the salary of employee</div>'
+      // Required mark added — it is the one commercial fact the proposal cannot be drafted
+      // without, and it was the only essential field on the step not marked.
+      +'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">Pay Amount <span class="req">*</span></div>'
+      +'<div style="font-size:12px;color:#64748b;margin-bottom:10px">Gross salary for this employee</div>'
       +'<div style="display:flex;align-items:center;gap:8px">'
       +'<div style="display:flex;align-items:center;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-shrink:0">'
       +'<span style="padding:0 10px;height:42px;display:flex;align-items:center;background:#f8fafc;border-right:1px solid var(--border);font-size:11px;font-weight:700;color:#374151">IN</span>'
@@ -2779,7 +3125,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<tr>'
       +'<td style="'+tdS+'">'
       +'<div style="font-weight:600;color:var(--navy)">Annual Leaves</div>'
-      +'<div style="font-size:11.5px;color:#3b82f6;margin-top:3px;line-height:1.4">Additional leaves will result in an additional deposit amount.</div>'
+      +'<div style="font-size:11.5px;color:#64748b;margin-top:3px;line-height:1.4">Additional leaves will result in an additional deposit amount.</div>'
       +'</td>'
       +'<td style="'+tdS+';font-weight:600">18 Days</td>'
       +'<td style="'+tdS+'">'+inputNum(0)+'</td>'
@@ -2808,7 +3154,7 @@ function buildContractFormHTML(type,step,splitMode){
       +'<input id="peo-prob" class="ep-form-input" type="number" value="'+(prefill.probation||3)+'" min="0" style="width:80px;text-align:center">'
       +'<span style="font-size:13px;color:#64748b">months</span>'
       +'</div>'
-      +'<div style="font-size:12px;color:#3b82f6;line-height:1.5">You will be invoiced a one time deposit equivalent to the employee\'s Gross Salary of 1 month.</div>'
+      +'<div style="font-size:12px;color:#64748b;line-height:1.5">You will be invoiced a one time deposit equivalent to the employee\'s Gross Salary of 1 month.</div>'
       +'</div></div>'
 
       // Notice Period
@@ -2819,7 +3165,9 @@ function buildContractFormHTML(type,step,splitMode){
       +'<input id="peo-notice" class="ep-form-input" type="number" value="'+(prefill.notice||3)+'" min="0" style="width:80px;text-align:center">'
       +'<span style="font-size:13px;color:#64748b">months</span>'
       +'</div>'
-      +'<div style="font-size:12px;color:#3b82f6;line-height:1.5">You will be invoiced a one time deposit equivalent to the employee\'s Gross Salary of 1 month.</div>'
+      // The deposit note belonged to Probation; here it was a straight copy-paste. This one
+      // describes what the notice period actually does.
+      +'<div style="font-size:12px;color:#64748b;line-height:1.5">Either party must give this much notice to end the contract. Pre-filled to the local statutory minimum.</div>'
       +'</div></div>';
   }
 
@@ -3652,7 +4000,15 @@ function buildMyTimesheetHTML() {
       + '</div>'
     : '';
 
+  // -- Only when this calendar was opened from All Timesheet. My Timesheet is a top-level
+  // sidebar destination, so injectPageBackBar gives it nothing — correct when you navigated to
+  // your own timesheet, wrong when you drilled into someone else's and had no way back. --
+  const backBar = tsFromAllTimesheet
+    ? cfgBackBtn('all-timesheet','All Timesheet')
+    : '';
+
   return '<div class="ts-main">'
+    + backBar
     + filterBar
     + userBar
     + statsHtml
@@ -4990,15 +5346,19 @@ function buildAIClientsListingHTML(){
   }).join('');
   const sbInner=aiClientSelectedId?renderAIClientSidebar():'';
   return '<div class="ai-exec-page">'
-    +'<p style="font-size:14px;font-weight:600;margin-bottom:4px">AI Executive</p>'
-    +'<p style="font-size:12px;color:var(--gray);margin-bottom:20px;max-width:640px">Journeys built for each client, their step-by-step AI/human configuration, and any pending access requests.</p>'
+    // -- Platform oversight first, then the per-client detail it summarises: the hero tiles count
+    // the systems, data models, journeys and agents these clients are built out of. --
+    +superAdminOversightHTML()
+    +'<p style="font-size:14px;font-weight:600;margin:26px 0 4px">Clients</p>'
+    +'<p style="font-size:12px;color:var(--gray);margin:0 0 18px;max-width:640px">Journeys built for each client, their step-by-step AI/human configuration, and any pending access requests.</p>'
     +'<div class="lp-split-wrap"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr><th>Client</th><th>Country</th><th>Journeys Built</th><th>Requests</th><th>Last Activity</th></tr></thead><tbody>'
     +(rows||'<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--gray)">No clients yet.</td></tr>')
     +'</tbody></table>'
     +'</div></div>'
     +'<div class="lp-split-sb'+(aiClientSelectedId?' open':'')+'" id="aic-split-sb"><div class="lp-isb" id="aic-isb-inner">'+sbInner+'</div></div>'
-    +'</div></div>';
+    +'</div>'
+    +'</div>';
 }
 
 function buildAIExecutiveDashboardHTML(){
@@ -5830,11 +6190,12 @@ function buildCfgSystemsHTML(){
         +'</div>';
     }).join('')
     :'<div class="ep-form-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No systems yet — add your first one.</div>';
+  // -- Nothing shown when everything is connected. The green "All systems configured" banner
+  // repeated what the Connected pill on every row below already said, and cost 70px above the
+  // list to do it. The amber counterpart stays: "3 of 5 connected" is a fact the rows only give
+  // up by being counted. --
   const banner=allOk
-    ?'<div class="review-section" style="display:flex;align-items:center;gap:12px;border-color:#86efac;background:#f0fdf4;margin-bottom:20px">'
-      +'<div style="width:34px;height:34px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>'
-      +'<div><div style="font-size:13px;font-weight:700;color:#15803d">All systems configured</div><div style="font-size:12px;color:#166534;margin-top:2px">Every system below is connected and ready to use in Data Foundation and Context &amp; Journey.</div></div>'
-      +'</div>'
+    ?''
     :'<div class="review-section" style="display:flex;align-items:center;gap:12px;border-color:#fed7aa;background:#fff7ed;margin-bottom:20px">'
       +'<div style="width:34px;height:34px;border-radius:50%;background:#ffedd5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17.02" x2="12.01" y2="17.02"/></svg></div>'
       +'<div><div style="font-size:13px;font-weight:700;color:#1a1a1a">'+connected+' of '+total+' systems connected</div><div style="font-size:12px;color:#9a3412;margin-top:2px">Test or configure the rest to bring them online.</div></div>'
@@ -6053,23 +6414,27 @@ function buildCfgSystemDetailHTML(){
     :'';
   // -- Data Foundation objects sourced from this system. Shown on the system page (not only
   // under Configure > Data Foundation) because "what does this system give us" is the question
-  // being asked here. Systems with no models of their own simply omit the section. --
+  // being asked here. Systems with no models of their own simply omit the section.
+  //
+  // Opening a model here shows its structure — mapping, enrichment, rules, sample test — which is
+  // what the question deserves. The intake form lives on the model itself, under Data Foundation:
+  // a system page describes the contract, not the act of submitting through it. --
   const systemModels=cfgModels.filter(function(m){return m.systemId===s.id;});
   const dataFoundationBlock=systemModels.length
     ?'<div class="review-title" style="margin-bottom:12px">Data Foundation</div>'
       +'<div class="ai-journey-grid" style="margin-bottom:24px">'
       +systemModels.map(function(m){
-        const openAction=m.intakeFormPage
-          ?'viewCfgUserIntake(\''+m.id+'\')'
-          :'viewCfgModel(\''+m.id+'\')';
-        return '<div class="ai-journey-card" onclick="'+openAction+'">'
+        // -- Model detail is Super Admin only. For anyone else the card stays as the summary it
+        // already is rather than becoming a link that the access guard bounces off the page. --
+        const canOpen=canAccessPage('cfg-model-detail',portalRole);
+        const openAction=canOpen?' style="cursor:pointer" onclick="viewCfgModel(\''+m.id+'\',\'cfg-system-detail\')"':' style="cursor:default"';
+        return '<div class="ai-journey-card"'+openAction+'>'
           +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+m.name+'</div>'
           +'<span class="status-pill active">Live</span></div>'
           +'<div class="ai-journey-desc">'+m.desc+'</div>'
           +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'
           +'<span class="badge">'+m.mapped.length+' mapped</span>'
           +'<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9">'+m.enrichment.length+' enrichment</span>'
-          +(m.intakeFormPage?'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Intake form</span>':'')
           +'</div></div>';
       }).join('')
       +'</div>'
@@ -6123,8 +6488,12 @@ function cfgTypeSelect(id,current){
   const opts=['string','decimal','number','boolean','date','object'];
   return '<select class="ep-form-select" style="width:auto" id="'+id+'">'+opts.map(function(o){return '<option'+(o===current?' selected':'')+'>'+o+'</option>';}).join('')+'</select>';
 }
-function viewCfgModel(id){selectedCfgModelId=id;cfgModelEditing=false;cfgModelDraft=null;navigatePage('cfg-model-detail');}
-/* -- Configure > Systems > ADT Solution > USER -------------------------------------------
+function viewCfgModel(id,from){
+  selectedCfgModelId=id;cfgModelEditing=false;cfgModelDraft=null;
+  cfgModelBackPage=from==='cfg-system-detail'?'cfg-system-detail':'cfg-data-foundation';
+  navigatePage('cfg-model-detail');
+}
+/* -- Configure > Data Foundation > USER (intake form) -------------------------------------------
    A three-stage flow rather than three unrelated screens: Intake Form -> Ingestion -> Master
    Data Record, with the stepper visible throughout so the journey reads as one continuation.
    The app sidebar is hidden for the duration (renderer.js) so the form owns the viewport —
@@ -6133,7 +6502,7 @@ function viewCfgModel(id){selectedCfgModelId=id;cfgModelEditing=false;cfgModelDr
 const cfgUserIntakeStages=[
   {label:'Intake Form',sub:'Fill in the details'},
   {label:'Ingestion',sub:'ADT to Executive Layer'},
-  {label:'Master Data',sub:'Record created'}
+  {label:'Client',sub:'Record created'}
 ];
 // The ingestion feed. These are the real steps the request goes through — the submission is
 // posted to ADT, ADT assigns its id, and the Executive Layer ingests what comes back — so the
@@ -6143,7 +6512,7 @@ const cfgUserIntakeProgressSteps=[
   {title:'Submission accepted',note:'ADT Solution has registered the submission.'},
   {title:'Retrieving into the Executive Layer',note:'Reading the submission back through the intake API…'},
   {title:'Minting identifiers',note:'Assigning the Employee ID and Reference ID…'},
-  {title:'Master data record created',note:'Written to the Executive Layer store as Pending.'}
+  {title:'Client record created',note:'Written to the Executive Layer store as Pending.'}
 ];
 
 function viewCfgUserIntake(modelId){
@@ -6175,16 +6544,14 @@ function cfgUserIntakeRetry(){
   viewCfgUserIntake(cfgUserIntakeModelId||'user');
   cfgUserIntakeDraft=draft;
 }
-function cfgUserIntakeExit(){
-  const m=cfgModels.find(function(x){return x.id===cfgUserIntakeModelId;});
-  viewCfgSystem((m&&m.systemId)||'adt-solution');
-}
+// -- Back to Data Foundation, which is where the form is now entered from. --
+function cfgUserIntakeExit(){navigatePage('cfg-data-foundation');}
 function cfgUserIntakeReset(){
   cfgUserIntakeResult=null;cfgUserIntakeError='';cfgUserIntakeBusy=false;
   cfgUserIntakeStep=0;cfgUserIntakeProgress=-1;cfgUserIntakeFieldErrors={};cfgUserIntakeDraft={};
   renderADTPage();cfgUserIntakeFocusFirst();
 }
-// -- Opens the master data record this submission created. syncEmpFromBackend has already
+// -- Opens the client record this submission created. syncEmpFromBackend has already
 // mirrored it locally, so this is a straight navigation rather than another fetch. --
 function cfgUserIntakeOpenRecord(){
   if(!cfgUserIntakeResult)return;
@@ -6324,7 +6691,9 @@ function cfgUserIntakeShellHTML(inner){
   const sys=cfgSystems.find(function(x){return x.id===(m&&m.systemId);});
   return '<div class="uif-page">'
     +'<div class="uif-topbar">'
-    +'<button class="uif-exit" onclick="cfgUserIntakeExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>'+(sys?sys.name:'ADT Solution')+'</button>'
+    // -- Exit names Data Foundation, the page this form is opened from. The system stays named in
+    // the context line beside it, since that is still where the submission goes. --
+    +'<button class="uif-exit" onclick="cfgUserIntakeExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>Data Foundation</button>'
     +'<div class="uif-context"><span class="uif-context-dot"></span>'
     +'<span><strong>'+(m?m.name:'USER')+'</strong> &middot; '+(sys?sys.name:'ADT Solution')+' intake</span></div>'
     +'</div>'
@@ -6367,7 +6736,7 @@ function buildCfgUserIntakeHTML(){
     return cfgUserIntakeShellHTML('<div class="uif-card">'
       +'<div class="uif-success-head">'
       +'<div class="uif-success-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
-      +'<div><div class="uif-success-title">Master data record created</div>'
+      +'<div><div class="uif-success-title">Client record created</div>'
       +'<div class="uif-success-sub">Submitted to ADT Solution, retrieved by the Executive Layer, and stored with its own identifiers.</div></div>'
       +'</div>'
       +'<div class="uif-idrow">'
@@ -6386,9 +6755,9 @@ function buildCfgUserIntakeHTML(){
       +kv('What they are looking for',f.looking_for)
       +kv('How they heard about us',f.heard_about_us)
       +'</div>'
-      +'<div class="uif-note">The record is <strong>Pending</strong> because this form does not capture department, job title, branch or joining date. Open it in Master Data to see its Logs and Workflow, complete those fields, and set it Active.</div>'
+      +'<div class="uif-note">The record is <strong>Pending</strong> because this form does not capture department, job title, branch or joining date. Open it in Client to see its Logs and Workflow, complete those fields, and set it Active.</div>'
       +'<div class="uif-cta">'
-      +'<button class="uif-submit" onclick="cfgUserIntakeOpenRecord()">Open master data record'
+      +'<button class="uif-submit" onclick="cfgUserIntakeOpenRecord()">Open client record'
       +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
       +'<button class="uif-btn-secondary" onclick="cfgUserIntakeReset()">Submit another</button>'
       +'</div>'
@@ -6473,7 +6842,7 @@ function buildCfgUserIntakeHTML(){
   return cfgUserIntakeShellHTML('<div class="uif-card">'
     +'<div class="uif-card-head">'
     +'<div class="uif-card-title">'+(m?m.name:'USER')+' intake form</div>'
-    +'<div class="uif-card-sub">ADT Solution\'s own form, rendered from its published field definition. Submitting sends it to ADT Solution and creates the matching master data record here.</div>'
+    +'<div class="uif-card-sub">ADT Solution\'s own form, rendered from its published field definition. Submitting sends it to ADT Solution and creates the matching client record here.</div>'
     +'</div>'
     +banner
     +'<div class="uif-grid">'+fieldHTML.join('')+'</div>'
@@ -6489,15 +6858,22 @@ function buildCfgUserIntakeHTML(){
 
 function buildCfgDataFoundationHTML(){
   cfgModelEditing=false;cfgModelDraft=null;
+  // -- A model that publishes an intake form opens straight into it: the form IS how you put a
+  // record into that object, so it belongs to the object rather than to the system it happens to
+  // be submitted through. Models without one open their structure as before. --
   const cards=cfgModels.length
     ?cfgModels.map(function(m){
-      return '<div class="ai-journey-card" onclick="viewCfgModel(\''+m.id+'\')">'
+      const openAction=m.intakeFormPage
+        ?'viewCfgUserIntake(\''+m.id+'\')'
+        :'viewCfgModel(\''+m.id+'\')';
+      return '<div class="ai-journey-card" onclick="'+openAction+'">'
         +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+m.name+'</div></div>'
         +'<div class="ai-journey-desc">'+m.desc+'</div>'
         +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'
         +'<span class="badge">'+m.mapped.length+' mapped</span>'
         +'<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9">'+m.enrichment.length+' enrichment</span>'
         +'<span class="badge">'+m.source+'</span>'
+        +(m.intakeFormPage?'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Intake form</span>':'')
         +'</div></div>';
     }).join('')
     :'<div class="ep-form-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No models yet — define your first one.</div>';
@@ -6729,8 +7105,10 @@ function buildCfgModelDetailHTML(){
     +'</div>'
     +sample
     +'</div>';
+  // -- Back to whichever page opened this: Data Foundation, or the system whose page listed it. --
+  const backSys=cfgModelBackPage==='cfg-system-detail'?cfgSystems.find(function(x){return x.id===m.systemId;}):null;
   return '<div class="ai-exec-page">'
-    +cfgBackBtn('cfg-data-foundation','Data Foundation')
+    +(backSys?cfgBackBtn('cfg-system-detail',backSys.name):cfgBackBtn('cfg-data-foundation','Data Foundation'))
     +(editing
       ?heading
       :'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px"><div style="flex:1;min-width:0">'+heading+'</div>'+actionBtns+'</div>')
@@ -6759,10 +7137,12 @@ function cfgCatBoxHTML(c,count){
   const col=cfgCategoryColors[c.id];
   const isActive=cfgJourneyCategoryFilter===c.id;
   const locked=portalRole!=='super-admin'&&entityLockedCategories.includes(c.id);
-  return '<div class="cfg-cat-box'+(isActive?' active':'')+(locked?' cfg-cat-box-locked':'')+'" style="'+(isActive?'border-color:'+col+';background:'+col+'0d':'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')">'
+  return '<div class="cfg-cat-box'+(isActive?' active':'')+(locked?' cfg-cat-box-locked':'')+'" title="'+attrSafe(c.desc)+'" style="'+(isActive?'border-color:'+col+';background:'+col+'0d':'')+'" onclick="cfgSetJourneyCategoryFilter(\''+c.id+'\')">'
     +'<div class="cfg-cat-box-top"><span class="cfg-cat-box-id" style="background:'+col+'1a;color:'+col+'">'+c.id+'</span>'+(locked?'<span class="cfg-cat-box-lock"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'<span class="cfg-cat-box-count">'+count+' '+(count===1?'journey':'journeys')+'</span>')+'</div>'
     +'<div class="cfg-cat-box-name">'+c.name+'</div>'
-    +'<div class="cfg-cat-box-desc">'+c.desc+'</div>'
+    // -- The short form, not `desc`: it says what the category covers in a line that fits the
+    // box, so nothing is clipped and no fade is needed. The full sentence is on the tooltip. --
+    +'<div class="cfg-cat-box-short">'+(c.short||c.desc)+'</div>'
     +'</div>';
 }
 function journeyModeBadgeHTML(journeyId){
@@ -6804,17 +7184,27 @@ function buildCfgContextJourneyHTML(){
     return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+clickAttr+'>'
       +'<div class="cfg-journey-main">'
       +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked,superAdminUnconfigured)+(!locked&&portalRole!=='super-admin'?journeyModeBadgeHTML(j.id):'')+'</div></div>'
-      +'<div class="ai-journey-desc cfg-journey-desc">'+j.desc+'</div>'
-      +'<div class="cfg-journey-tags">'+j.tags.map(function(t){return '<span class="badge">'+t+'</span>';}).join('')+'</div>'
+      // -- One line, ellipsised, with the full text on hover. Journeys are picked by name and
+      // category; the description is orientation, not the deciding factor, and at three or four
+      // lines apiece it was what pushed the list down to two rows a screen. --
+      +'<div class="ai-journey-desc cfg-journey-desc" title="'+attrSafe(j.desc)+'">'+j.desc+'</div>'
+      // -- Step count and owners as one line of plain meta rather than a row of badges: they are
+      // facts about the journey, not statuses, and badge chrome gave them the same weight as the
+      // category and availability pills above, which are the two things worth spotting. --
+      +'<div class="cfg-journey-meta">'+j.tags.join(' &middot; ')+'</div>'
       +'</div>'
       +(locked?'':'<span class="cfg-journey-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>')
       +'</div>';
   }).join(''):'<div class="ai-journey-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No journeys in this category yet.</div>';
   const showCatFilter=portalRole==='super-admin';
+  // -- No page head. The topbar already names the page, and the subtitle explained a control the
+  // category boxes below now explain themselves — it was a third line of prose above content
+  // that is already self-describing. --
   return '<div class="ai-exec-page">'
-    +cfgPageHead('Context & Journey','Pick a predefined business journey to see its steps and assign the agent and governance that runs each one.')
     +(showCatFilter?catBoxes+catInfo:'')
-    +'<div style="display:flex;flex-direction:column;gap:16px">'+cards+'</div>'
+    // 10px, not 16: rows this compact read as a list, and a gap wider than the row's own padding
+    // breaks them back into separate cards.
+    +'<div style="display:flex;flex-direction:column;gap:10px">'+cards+'</div>'
     +'</div>';
 }
 function cfgStepTypeTag(type){
@@ -7015,6 +7405,9 @@ function findCfgAgentByName(name){return cfgAgents.find(function(a){return a.nam
 function viewCfgAgentSkillByName(name){
   const idx=cfgAgents.findIndex(function(a){return a.name===name;});
   if(idx===-1)return;
+  // Opened from a journey step, not from the agent list — so there is no detail modal to go
+  // back to, and skill.md should offer Close alone.
+  cfgAgentDetailIdx=-1;
   viewCfgAgentSkill(idx);
 }
 function viewCfgAgentSkill(idx){
@@ -7025,8 +7418,13 @@ function viewCfgAgentSkill(idx){
   overlay.style.display='flex';
 }
 function closeCfgAgentSkillModal(){
-  cfgAgentSkillModalIdx=-1;cfgAgentSkillEditing=false;
+  cfgAgentSkillModalIdx=-1;cfgAgentSkillEditing=false;cfgAgentDetailIdx=-1;
   const overlay=document.getElementById('ct-modal-overlay');if(overlay){overlay.style.display='none';overlay.innerHTML='';}
+}
+// -- Back out of skill.md to the detail it was opened from, rather than closing to the list. --
+function backToCfgAgentDetail(){
+  cfgAgentSkillModalIdx=-1;cfgAgentSkillEditing=false;
+  openCfgAgentDetail(cfgAgentDetailIdx);
 }
 function refreshCfgAgentSkillModal(){
   const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
@@ -7052,7 +7450,10 @@ function renderCfgAgentSkillModal(){
   const a=cfgAgents[idx];if(!a)return '';
   const filename=cfgAgentSlug(a.name)+'/skill.md';
   const modified=a.skillMd!==cfgAgentsOriginalSkill[idx];
-  const header='<div class="ct-modal-hdr"><span class="ct-modal-title" style="font-family:monospace;font-size:12.5px;display:flex;align-items:center;gap:8px">'+filename
+  const backBtn=cfgAgentDetailIdx>=0
+    ?'<button class="ct-modal-close" style="margin-right:2px" title="Back to '+attrSafe(a.name)+'" onclick="backToCfgAgentDetail()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="15 18 9 12 15 6"/></svg></button>'
+    :'';
+  const header='<div class="ct-modal-hdr"><span class="ct-modal-title" style="font-family:monospace;font-size:12.5px;display:flex;align-items:center;gap:8px">'+backBtn+filename
     +(modified?'<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9;font-family:var(--body)">modified</span>':'')
     +'</span><button class="ct-modal-close" onclick="closeCfgAgentSkillModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
   const content=cfgAgentSkillEditing
@@ -7087,30 +7488,77 @@ function agentIconSvg(name){
   const path=agentIconPaths[name]||'<path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/>';
   return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>';
 }
+/* == AGENTS ============================================================================
+   A directory, not a wall of dossiers. Each agent used to occupy a full-width card carrying
+   its description, guardrail, model and every journey it appears in — so three agents filled
+   the screen and finding one meant scrolling past the detail of the others. Cards now carry
+   only what you scan by; the rest moves into a modal opened by the card you cared about. == */
+function agentJourneyCount(a){return a.usedIn.split(', ').filter(Boolean).length;}
 function buildCfgAgentsHTML(){
   const cards=cfgAgents.map(function(a,i){
-    const usedInPills=a.usedIn.split(', ').map(function(u){
-      return '<span class="badge" style="color:var(--navy);background:#f1f5f9">'+u+'</span>';
-    }).join('');
-    return '<div class="agent-card">'
-      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px">'
-      +'<div style="display:flex;align-items:center;gap:12px;min-width:0">'
-      +'<div class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</div>'
-      +'<div style="min-width:0"><div style="font-size:14.5px;font-weight:700;color:var(--navy)">'+a.name+'</div><div style="font-size:11px;color:var(--gray);margin-top:3px;display:flex;align-items:center;gap:7px"><span>'+a.type+'</span><span class="status-pill active" style="min-width:0;height:auto;padding:1.5px 8px;font-size:9.5px">Active</span></div></div>'
+    const n=agentJourneyCount(a);
+    return '<button type="button" class="agent-tile" onclick="openCfgAgentDetail('+i+')">'
+      +'<div class="agent-tile-top">'
+      +'<span class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</span>'
+      +'<span class="status-pill active" style="min-width:0;height:auto;padding:1.5px 8px;font-size:9.5px">Active</span>'
       +'</div>'
-      +'<button type="button" class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="viewCfgAgentSkill('+i+')">Agent Skill</button>'
-      +'</div>'
-      +'<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:14px">'+a.desc+'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center">'
-      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">'+a.guardrail+'</span>'
-      +'<span class="badge" style="color:var(--navy);background:#f1f5f9">'+a.model+'</span>'
-      +usedInPills
-      +'</div>'
-      +'</div>';
+      +'<div class="agent-tile-name">'+a.name+'</div>'
+      +'<div class="agent-tile-type">'+a.type+'</div>'
+      // -- The one figure worth keeping on the face of the card: "how much depends on this
+      // agent" is the question being asked while scanning the list. --
+      +'<div class="agent-tile-foot"><span>'+n+' journey'+(n===1?'':'s')+'</span>'
+      +'<span class="agent-tile-open">View details'
+      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
+      +'</span></div>'
+      +'</button>';
   }).join('');
   return '<div class="ai-exec-page">'
     +cfgPageHead('Agents','The agents that read, draft and act — always inside your rules.')
-    +cards
+    +'<div class="agent-grid">'+cards+'</div>'
+    +'</div>';
+}
+/* -- Detail modal. Shares the one overlay with the skill.md view, so opening skill.md from here
+   replaces this modal rather than stacking a second one over it, and skill.md's Back returns
+   here instead of dumping the user on the list. -- */
+function openCfgAgentDetail(idx){
+  cfgAgentDetailIdx=idx;
+  const overlay=document.getElementById('ct-modal-overlay');if(!overlay)return;
+  overlay.innerHTML=renderCfgAgentDetailModal();
+  overlay.style.display='flex';
+}
+function closeCfgAgentDetail(){
+  cfgAgentDetailIdx=-1;
+  const overlay=document.getElementById('ct-modal-overlay');
+  if(overlay){overlay.style.display='none';overlay.innerHTML='';}
+}
+function renderCfgAgentDetailModal(){
+  const a=cfgAgents[cfgAgentDetailIdx];if(!a)return '';
+  const row=function(label,val){
+    return '<div class="agent-modal-row"><div class="agent-modal-key">'+label+'</div><div class="agent-modal-val">'+val+'</div></div>';
+  };
+  const journeys=a.usedIn.split(', ').filter(Boolean).map(function(u){
+    return '<span class="badge" style="color:var(--navy);background:#f1f5f9">'+u+'</span>';
+  }).join('');
+  return '<div class="ct-modal agent-modal" onclick="event.stopPropagation()">'
+    +'<div class="ct-modal-hdr">'
+    +'<span class="ct-modal-title agent-modal-title">'
+    +'<span class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</span>'
+    +'<span style="min-width:0"><span class="agent-modal-name">'+a.name+'</span>'
+    +'<span class="agent-modal-sub">'+a.type+'</span></span>'
+    +'</span>'
+    +'<button class="ct-modal-close" onclick="closeCfgAgentDetail()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
+    +'</div>'
+    +'<div class="agent-modal-body">'
+    +'<div class="agent-modal-desc">'+a.desc+'</div>'
+    +row('Status','<span class="status-pill active">Active</span>')
+    +row('Guardrail',a.guardrail)
+    +row('Model',a.model)
+    +row('Used in',journeys||'<span style="color:#9ca3af">Not used in any journey yet</span>')
+    +'</div>'
+    +'<div class="agent-modal-actions">'
+    +'<button class="btn btn-secondary btn-sm" onclick="closeCfgAgentDetail()">Close</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="viewCfgAgentSkill('+cfgAgentDetailIdx+')">Agent Skill</button>'
+    +'</div>'
     +'</div>';
 }
 
@@ -8064,7 +8512,7 @@ function buildAIH2rAdtPanelHTML(){
     const adtFormUrl=(window.EXEC_CONFIG&&EXEC_CONFIG.adtFormUrl)||'http://localhost:4100';
     return '<div class="ep-form-card" style="text-align:left">'
       +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">Live ADT Solution Sync</div>'
-      +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:14px">Nothing to type here. Start listening, then fill in the intake form on ADT Solution — the moment it is submitted, the Executive Layer pulls the record across and creates its master data entry.</div>'
+      +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:14px">Nothing to type here. Start listening, then fill in the intake form on ADT Solution — the moment it is submitted, the Executive Layer pulls the record across and creates its client record.</div>'
       +(aiH2rAdtError?'<div style="font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin-bottom:12px">'+aiH2rAdtError+'</div>':'')
       +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
       +'<button class="btn btn-secondary" onclick="aiH2rStartAdtListening()">Listen for ADT Solution Submissions</button>'
@@ -8080,7 +8528,7 @@ function buildAIH2rAdtPanelHTML(){
   if(aiH2rAdtLastEmployee){
     const e=aiH2rAdtLastEmployee;
     steps[3].skipNote='Minted by Executive Layer — Employee ID '+e.employee_code+', Reference '+e.reference_id;
-    steps[4].skipNote='Master data created — status '+e.status+', pending HR completion';
+    steps[4].skipNote='Client record created — status '+e.status+', pending HR completion';
   }
   return '<div class="ep-form-card" style="text-align:left">'
     +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">Live ADT Solution Sync</div>'
@@ -8120,13 +8568,13 @@ function aiH2rAdtPollTick(){
     }
     aiH2rAdtError='';
     // 'duplicate' means the backend recognised the submission as one it had already ingested,
-    // so there is no new master data to show and we simply keep listening.
+    // so there is no new client record to show and we simply keep listening.
     if(!res.data||res.data.status!=='ingested')return;
     aiH2rStopAdtListening();
     aiH2rAdtIngest(res.data);
   });
 }
-// -- Walks the ingestion feed, then hands off to the master data record the backend just
+// -- Walks the ingestion feed, then hands off to the client record the backend just
 // created. The identifiers shown are the server-minted ones, not values invented here. --
 function aiH2rAdtIngest(payload){
   aiH2rAdtLastSubmission=payload.submission;
@@ -8145,7 +8593,7 @@ function aiH2rAdtIngest(payload){
         setTimeout(function(){
           aiH2rAdtLastLocalId=syncEmpFromBackend(payload.employee,payload.logs,payload.workflow);
           aiH2rAdtFeedStep=-1;
-          // Straight to the master data entry this created, with its drawer open — the record,
+          // Straight to the client record this created, with its drawer open — the record,
           // its identifiers and its log trail are the point of the flow.
           navigatePage('master-data');
           openMdSidebar(aiH2rAdtLastLocalId);
@@ -9383,7 +9831,7 @@ function aiSubmitAssistedContract(type){
   const dealRun={
     runId:'MAN-'+(manualRunSeq++),journeyId:'contract-creation',subject:fullName,entity:'Dhi Hyperlocal',mode:'Agent Enabled',
     currentStepIdx:1,status:'Active',slaRisk:'Low',blockedReason:'None',escalation:'None',startedAt:'Just now',
-    manualHours:0,agentEstimateHours:.8,createdBy:dealCreatorId,contractRecordId:newId,exceptions:[],
+    manualHours:0,agentEstimateHours:.8,createdBy:dealCreatorId,startedBy:currentActorId(),contractRecordId:newId,exceptions:[],
     audit:['Deal & Employee Record completed via AI Contract Assistant by '+dealCreatorLabel+' for '+fullName+' ('+type+')']
   };
   manualJourneyRuns.unshift(dealRun);
@@ -9941,7 +10389,9 @@ function viewAIRunTask(runId,journeyId){navigatePage('my-tasks');openMyTaskActio
 function aiUpsertRun(journeyId,runId,patch){
   const runs=aiAutomationRuns[journeyId]=aiAutomationRuns[journeyId]||[];
   let run=runs.find(function(r){return r.runId===runId;});
-  if(!run){run={runId:runId};runs.unshift(run);}
+  // -- Stamped on first sight only: later calls are progress updates from the same run, and the
+  // seeded demo runs are nobody's — they keep no creator, so they stay out of "My Runs". --
+  if(!run){run={runId:runId,startedBy:currentActorId(),startedAt:'Just now'};runs.unshift(run);}
   Object.assign(run,patch);
   return run;
 }

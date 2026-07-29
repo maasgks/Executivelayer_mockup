@@ -64,7 +64,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .hdr-dd-item-danger svg{color:#dc2626}
 .hdr-dd-item-danger:hover{background:#fef2f2}
 /* SIDEBAR */
-.sidebar{width:224px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 56px);padding:8px 0;transition:width .22s cubic-bezier(.4,0,.2,1);scrollbar-width:thin;scrollbar-color:#e5e7eb transparent}
+/* scrollbar-gutter:stable — the gutter is always reserved, so nothing shifts sideways when the
+   list grows past the viewport and the 3px scrollbar appears. */
+.sidebar{width:224px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 56px);padding:8px 0;transition:width .22s cubic-bezier(.4,0,.2,1);scrollbar-width:thin;scrollbar-color:#e5e7eb transparent;scrollbar-gutter:stable}
 .sidebar::-webkit-scrollbar{width:3px}
 .sidebar::-webkit-scrollbar-track{background:transparent}
 .sidebar::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:99px}
@@ -80,7 +82,11 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .sb-item.active{color:var(--orange);font-weight:600;background:#f1f5f9;box-shadow:inset 3px 0 0 var(--orange)}
 .sb-item.active .sb-ico-wrap{background:#e2e8f0;color:var(--orange)}
 .sb-item-badge{position:absolute;top:5px;right:9px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--orange);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center}
-.sidebar.collapsed .sb-item-badge{top:2px;right:2px;min-width:9px;height:9px;padding:0;font-size:0;line-height:0}
+/* Collapsed, the dot is anchored to the 34px icon chip rather than the button, which stretches
+   the width of the rail — pinned to the button it floated off in the top-right corner, detached
+   from its icon and hard against the scroll gutter. calc(50% - 20px) puts it on the chip's
+   corner whatever the rail width. */
+.sidebar.collapsed .sb-item-badge{top:3px;right:calc(50% - 20px);min-width:9px;height:9px;padding:0;font-size:0;line-height:0;box-shadow:0 0 0 2px var(--card)}
 /* -- Icon wrap -- */
 .sb-ico-wrap{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:transparent;color:#94a3b8;transition:background .14s ease,color .14s ease,transform .14s ease}
 .sb-ico-wrap svg{width:15px;height:15px}
@@ -98,6 +104,24 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .sb-parent.open .sb-chev{transform:rotate(180deg);color:var(--orange)}
 /* -- Section labels -- */
 .sb-section{font-size:10px;font-weight:700;color:#c4c9d4;text-transform:uppercase;letter-spacing:.9px;padding:16px 18px 5px;flex-shrink:0}
+/* -- AI layer group: the Executive Layer's own modules, lifted onto a tinted panel so they read
+   as one block, separate from the connected product's modules below the divider. Items inside
+   invert their surface (white on tint) so hover/active still stand out against the panel. -- */
+.sb-group{flex-shrink:0;margin:2px 8px 4px;padding:8px 0 9px;border-radius:14px;background:#f4f7fb;border:1px solid #e6ecf3;box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
+.sb-group-label{display:flex;align-items:center;gap:7px;padding:1px 13px 7px;font-size:9.5px;font-weight:700;color:#8b95a5;text-transform:uppercase;letter-spacing:.9px;white-space:nowrap}
+.sb-group-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#dde5ee,transparent)}
+.sb-group-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:conic-gradient(from var(--ai-border-angle),#3b82f6 0deg,#22c55e 120deg,var(--red) 240deg,#3b82f6 360deg);animation:ai-border-spin 7s linear infinite}
+.sb-group .sb-item,.sb-group .sb-parent{margin-left:6px;margin-right:6px;width:calc(100% - 12px)}
+.sb-group .sb-item:hover,.sb-group .sb-parent:hover{background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.sb-group .sb-item:hover .sb-ico-wrap,.sb-group .sb-parent:hover .sb-ico-wrap{background:#eef2f7}
+.sb-group .sb-item.active,.sb-group .sb-children .sb-item.active{background:#fff;box-shadow:inset 3px 0 0 var(--orange),0 1px 3px rgba(15,23,42,.1)}
+.sb-group .sb-parent.open{background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.sb-group .sb-children{margin-left:18px;border-left-color:#e2e9f1}
+/* -- Divider between the AI layer and the connected product's modules. Expanded it is followed
+   by the "Workspace" label, so that label drops its own top padding — a rule and a heading each
+   claiming their own space read as two separate breaks rather than one. -- */
+.sb-divider{flex-shrink:0;height:1px;margin:10px 16px 2px;background:var(--border)}
+.sb-divider+.sb-section{padding-top:9px}
 /* -- Children -- */
 .sb-children{display:flex;flex-direction:column;overflow:hidden;background:transparent;margin:2px 8px 4px 20px;padding:0;border-left:2px solid #edf0f4;flex-shrink:0;transition:max-height .32s cubic-bezier(.4,0,.2,1)}
 .sb-children .sb-item{padding:6px 8px;margin:1px 4px;font-size:12.5px;color:#64748b;border-radius:7px;gap:8px;flex-shrink:0;width:calc(100% - 8px);box-shadow:none}
@@ -120,6 +144,19 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .sidebar.collapsed .sb-item.active{background:transparent;box-shadow:none}
 .sidebar.collapsed .sb-item.active .sb-ico-wrap{background:#f1f5f9;color:var(--orange);box-shadow:0 0 0 1.5px rgba(26,26,26,.25)}
 .sidebar.collapsed .sb-section{display:none}
+/* -- Collapsed, the group sheds its panel entirely. A filled surface at 62px has nowhere to go:
+   inset as a card it pushes its icons off the rail's vertical axis, full-bleed it runs into the
+   scroll gutter. So segregation falls to a short centred rule under the group, and every icon —
+   grouped or not — keeps the single centre line an icon rail is built on. Every interactive
+   state below is reset to the plain rail treatment, since there is no panel to contrast against. -- */
+.sidebar.collapsed .sb-group{margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.sidebar.collapsed .sb-group .sb-item,.sidebar.collapsed .sb-group .sb-parent{margin:2px 6px;width:auto}
+.sidebar.collapsed .sb-group .sb-item:hover,.sidebar.collapsed .sb-group .sb-parent:hover{background:transparent;box-shadow:none}
+.sidebar.collapsed .sb-group .sb-item.active{background:transparent;box-shadow:none}
+.sidebar.collapsed .sb-group .sb-item:hover .sb-ico-wrap,.sidebar.collapsed .sb-group .sb-parent:hover .sb-ico-wrap{background:#e8edf4}
+.sidebar.collapsed .sb-group .sb-item.active .sb-ico-wrap,.sidebar.collapsed .sb-group .sb-parent.has-active .sb-ico-wrap,.sidebar.collapsed .sb-group .sb-parent.open .sb-ico-wrap{background:#f1f5f9}
+/* Centred hairline, inset well clear of the 3px scroll gutter. */
+.sidebar.collapsed .sb-divider{width:26px;height:1px;margin:9px auto 7px;background:#e3e8ee}
 .sidebar.collapsed .sb-parent{display:flex;padding:6px;margin:2px 6px;justify-content:center;border-radius:10px;width:auto;background:transparent}
 .sidebar.collapsed .sb-parent span,.sidebar.collapsed .sb-parent .sb-chev{display:none}
 .sidebar.collapsed .sb-parent .sb-ico-wrap{width:34px;height:34px;border-radius:9px;background:transparent}
@@ -147,7 +184,32 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
   animation:ai-border-spin 7s linear infinite;
   pointer-events:none;
 }
-.sidebar.collapsed .sb-item-ai::before{animation-duration:9s}
+/* -- Collapsed, the gradient border moves off the button and onto the 34px icon chip. On the
+   button it drew a wide rounded rectangle spanning the whole rail — twice the footprint of every
+   other icon's hover/active chip, so AI Executive read as a different size of thing rather than
+   the same thing highlighted. On the chip it matches the active ring's geometry exactly. -- */
+.sidebar.collapsed .sb-item-ai::before{display:none}
+.sidebar.collapsed .sb-item-ai .sb-ico-wrap{position:relative}
+.sidebar.collapsed .sb-item-ai .sb-ico-wrap::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  padding:1.4px;
+  background:conic-gradient(from var(--ai-border-angle),#3b82f6 0deg,#22c55e 120deg,var(--red) 240deg,#3b82f6 360deg);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  opacity:.75;
+  animation:ai-border-spin 9s linear infinite;
+  pointer-events:none;
+}
+.sidebar.collapsed .sb-item-ai.active .sb-ico-wrap::before{
+  padding:1.8px;
+  opacity:1;
+  animation-duration:2.6s;
+  background:conic-gradient(from var(--ai-border-angle),transparent 0deg,transparent 140deg,#fde3b8 200deg,#fbbf6b 250deg,var(--orange) 300deg,#fbbf6b 340deg,transparent 360deg);
+}
 .sb-item-ai.active::before{
   padding:1.8px;
   opacity:1;
@@ -155,6 +217,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
   background:conic-gradient(from var(--ai-border-angle),transparent 0deg,transparent 140deg,#fde3b8 200deg,#fbbf6b 250deg,var(--orange) 300deg,#fbbf6b 340deg,transparent 360deg);
 }
 .sb-item-ai.active{animation:ai-active-glow 2.4s ease-in-out infinite}
+/* Collapsed, the glow belongs to the icon chip only — left on the button as well it would pulse a
+   second, rail-wide halo behind the chip and undo the geometry match above. */
+.sidebar.collapsed .sb-item-ai.active{animation:none}
 .sidebar.collapsed .sb-item-ai.active .sb-ico-wrap{animation:ai-active-glow-ico 2.4s ease-in-out infinite}
 @keyframes ai-border-spin{to{--ai-border-angle:360deg}}
 @keyframes ai-active-glow{
@@ -299,17 +364,19 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .badge.cfg-agent-recommend{background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;cursor:pointer;transition:background .15s}
 .badge.cfg-agent-recommend:hover{background:#ccfbf1}
 .cfg-cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:6px}
-.cfg-cat-box{position:relative;background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:8px}
+/* gap:11px — the three lines each say a different kind of thing (what it is called, what it is
+   named, what it covers), so they need air between them to read as three facts rather than one
+   run-on block. */
+.cfg-cat-box{position:relative;background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:15px 17px 16px;cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:11px}
 .cfg-cat-box:hover{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(15,23,42,.06)}
 .cfg-cat-box.active{box-shadow:0 1px 4px rgba(15,23,42,.08)}
 .cfg-cat-box-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .cfg-cat-box-id{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.3px}
 .cfg-cat-box-count{font-size:11px;font-weight:600;color:var(--gray)}
-.cfg-cat-box-name{font-size:13.5px;font-weight:700;color:var(--navy)}
-.cfg-cat-box-desc{position:relative;font-size:11.5px;color:var(--gray);line-height:1.5;overflow:hidden;max-height:34px;transition:max-height .4s cubic-bezier(.4,0,.2,1)}
-.cfg-cat-box-desc::after{content:'';position:absolute;left:0;right:0;bottom:0;height:14px;background:linear-gradient(to bottom,transparent,var(--card));opacity:1;transition:opacity .25s ease}
-.cfg-cat-box:hover .cfg-cat-box-desc{max-height:140px}
-.cfg-cat-box:hover .cfg-cat-box-desc::after{opacity:0}
+.cfg-cat-box-name{font-size:13.5px;font-weight:700;color:var(--navy);line-height:1.3}
+/* Wraps to two lines at narrow columns rather than being clipped — there is no max-height, so
+   whatever it needs it gets, and the grid rows equalise naturally. */
+.cfg-cat-box-short{font-size:11.5px;font-weight:500;color:var(--gray);line-height:1.6;margin-top:auto}
 .cfg-cat-box-locked{cursor:default;opacity:.55}
 .cfg-cat-box-locked:hover{border-color:var(--border);box-shadow:none}
 .cfg-cat-box-lock{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--gray)}
@@ -638,6 +705,47 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .dash-status.rejected{background:#fee2e2;color:#dc2626}
 .dash-status.draft{background:#f1f5f9;color:#475569}
 @media(max-width:980px){.dash-two-col{grid-template-columns:1fr}.dash-stat-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* == EMPLOYEE DASHBOARD ==================================================================
+   Three tiles across, the third being the attendance control. align-items:stretch so the
+   attendance tile — which is taller by content — sets the row height and the two figure
+   tiles match it, rather than two short cards floating beside one tall one. */
+.emp-tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:stretch;margin-bottom:16px}
+.emp-tile{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column}
+.emp-tile-label{font-size:10.5px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.7px}
+/* The figure is the point of these tiles, so it gets the space — margin-top:auto is deliberately
+   absent: the value sits under its label, and the sub line is pushed to the bottom instead. */
+.emp-tile-val{font-size:30px;font-weight:800;line-height:1.15;color:var(--navy);margin-top:14px}
+.emp-tile-sub{font-size:11.5px;font-weight:500;color:var(--gray);margin-top:auto;padding-top:10px}
+.emp-tile-sub-green{color:#16a34a}
+/* -- Attendance tile: a read-out plus its action, so no oversized figure. -- */
+.emp-att{gap:0}
+.emp-att-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:12px}
+.emp-att-view{border:0;background:none;padding:0;font-family:inherit;font-size:12px;font-weight:600;color:var(--gray);cursor:pointer}
+.emp-att-view:hover{color:var(--navy);text-decoration:underline}
+.emp-att-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.emp-att-key{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:500;color:var(--gray);min-width:0}
+.emp-att-key svg{width:14px;height:14px;flex-shrink:0;color:#94a3b8}
+.emp-att-val{font-size:12.5px;font-weight:700;color:var(--navy);white-space:nowrap}
+.emp-att-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:12px}
+.emp-att-logged{font-size:11.5px;font-weight:500;color:var(--gray)}
+.emp-att-clock{border:0;border-radius:8px;padding:7px 16px;background:#16a34a;color:#fff;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:background .15s ease;white-space:nowrap}
+.emp-att-clock:hover{background:#15803d}
+/* -- Action Required table -- */
+.emp-act-panel{margin-bottom:0}
+.emp-act-panel .dash-panel-head span{cursor:pointer}
+.emp-act-viewall:hover{color:var(--navy);text-decoration:underline}
+.emp-act-table{min-width:640px}
+.emp-act-item{font-weight:600;color:var(--navy)}
+/* Type is a category, not a value — amber keeps it readable without competing with the item. */
+.emp-act-type{color:#b45309;font-size:12.5px}
+.emp-act-due{color:#64748b;font-size:12.5px;white-space:nowrap}
+.emp-act-btn{border:1px solid var(--border);border-radius:7px;padding:5px 13px;background:#f8fafc;color:var(--navy);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
+.emp-act-btn:hover{background:var(--ol);border-color:#cbd5e1}
+/* At two columns the attendance tile drops to its own row and spans it, rather than sitting
+   half-width beside empty space. */
+@media(max-width:1000px){.emp-tile-grid{grid-template-columns:repeat(2,1fr)}.emp-att{grid-column:1/-1}}
+@media(max-width:620px){.emp-tile-grid{grid-template-columns:1fr}}
 .row-action{width:28px;height:28px;border:0;background:transparent;color:var(--gray);border-radius:6px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .row-action:hover{background:#f1f3f5;color:var(--navy)}
 .pagination{display:flex;justify-content:flex-end;align-items:center;gap:4px;padding:12px 16px;border-top:1px solid #f0f1f3}
@@ -657,9 +765,9 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .agent-module-content{flex:1;overflow-y:auto;padding:28px 32px;background:var(--light)}
 /* SUCCESS */
 .success-card{text-align:center;padding:60px 40px;display:flex;flex-direction:column;align-items:center}
-.success-check{width:88px;height:88px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;margin-bottom:24px;position:relative;animation:popIn .5s cubic-bezier(.34,1.56,.64,1)}
-.success-check::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid #bbf7d0;opacity:.6}
-.success-check svg{width:40px;height:40px;color:var(--green)}
+.success-check{width:88px;height:88px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;margin-bottom:24px;position:relative;animation:popIn .5s cubic-bezier(.34,1.56,.64,1)}
+.success-check::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid #cbd5e1;opacity:.6}
+.success-check svg{width:40px;height:40px;color:#fff}
 @keyframes popIn{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
 .success-meta{display:inline-flex;align-items:center;gap:8px;background:#f1f5f9;color:var(--navy);padding:6px 14px;border-radius:20px;font-size:11.5px;font-weight:600;margin-bottom:24px}
 /* REVIEW */
@@ -789,6 +897,43 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .agent-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:14px;transition:.2s}
 .agent-card:hover{border-color:#f1c27a;box-shadow:0 4px 16px rgba(15,23,42,.06)}
 .agent-card-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.2s}
+/* == AGENT DIRECTORY ====================================================================
+   auto-fill rather than a fixed column count, so the grid keeps a readable card width at any
+   viewport instead of stretching three cards across a wide monitor. */
+.agent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px}
+/* A button, not a div: the whole tile is the hit area, so it should be focusable and respond
+   to Enter like any other control. text-align resets the browser's button centring. */
+.agent-tile{display:flex;flex-direction:column;text-align:left;font-family:inherit;cursor:pointer;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px 14px;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+.agent-tile:hover{border-color:#f1c27a;box-shadow:0 6px 20px rgba(15,23,42,.08);transform:translateY(-2px)}
+.agent-tile:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.agent-tile-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.agent-tile-name{font-size:14px;font-weight:700;color:var(--navy);line-height:1.35}
+.agent-tile-type{font-size:11.5px;font-weight:500;color:var(--gray);margin-top:3px}
+/* margin-top:auto pins the footer to the bottom so tiles with a one- or two-line name still
+   line their footers up across the row. */
+.agent-tile-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-top:auto;padding-top:14px;font-size:11.5px;font-weight:500;color:var(--gray)}
+.agent-tile-open{display:inline-flex;align-items:center;gap:5px;font-weight:600;color:var(--navy);opacity:0;transform:translateX(-4px);transition:opacity .18s ease,transform .18s ease}
+.agent-tile:hover .agent-tile-open,.agent-tile:focus-visible .agent-tile-open{opacity:1;transform:translateX(0)}
+/* -- Agent detail modal -- */
+/* .ct-modal.agent-modal, not .agent-modal: leaves.css loads after main.css and its .ct-modal
+   base carries an equal-specificity width/max-height/overflow that would otherwise win on
+   source order. overflow:hidden hands scrolling to .agent-modal-body, so the header and the
+   action row stay put instead of scrolling away with the content. */
+.ct-modal.agent-modal{width:min(560px,94vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+.agent-modal-title{display:flex;align-items:center;gap:11px;min-width:0}
+.agent-modal-name{display:block;font-size:14.5px;font-weight:700;color:var(--navy)}
+.agent-modal-sub{display:block;font-size:11.5px;font-weight:500;color:var(--gray);margin-top:2px}
+.agent-modal-body{overflow-y:auto;flex:1;min-height:0;padding-top:4px}
+.agent-modal-desc{font-size:12.5px;color:var(--gray);line-height:1.65;padding-bottom:14px;margin-bottom:4px;border-bottom:1px solid var(--border)}
+.agent-modal-row{display:flex;align-items:flex-start;gap:14px;padding:11px 0;border-bottom:1px dashed var(--border)}
+.agent-modal-row:last-child{border-bottom:none}
+.agent-modal-key{width:96px;flex-shrink:0;font-size:11.5px;font-weight:600;color:var(--gray);padding-top:2px}
+.agent-modal-val{flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--navy);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.agent-modal-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:14px;flex-shrink:0}
+@media(max-width:520px){.agent-grid{grid-template-columns:1fr}}
 .ep-form-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
 .ep-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .ep-form-group{display:flex;flex-direction:column;gap:6px}
@@ -1208,10 +1353,13 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-journey-name{font-size:15.5px;font-weight:700;color:var(--navy);line-height:1.4;min-width:0}
 .ai-journey-desc{font-size:12px;color:var(--gray);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Dashboard: bigger journey cards, no coverage % */
-.ai-journey-grid-lg{grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:24px}
-.ai-journey-card-lg{padding:34px 32px 30px;gap:16px;min-height:220px}
-.ai-journey-card-lg .ai-journey-name{font-size:20px}
-.ai-journey-card-lg .ai-journey-desc{font-size:14px;line-height:1.65;white-space:normal;overflow:visible;text-overflow:clip}
+/* Compact journey cards. The old treatment (34px padding, 220px min-height, 20px title, a
+   full-width black CTA) made each card a hero section; three of them filled the screen. Sized
+   down so the grid reads as a set of options, not a stack of banners. */
+.ai-journey-grid-lg{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+.ai-journey-card-lg{padding:20px 22px 18px;gap:11px}
+.ai-journey-card-lg .ai-journey-name{font-size:16px}
+.ai-journey-card-lg .ai-journey-desc{font-size:12.5px;line-height:1.6;white-space:normal;overflow:visible;text-overflow:clip}
 .ai-journey-modules{display:flex;flex-wrap:wrap;gap:6px}
 .ai-journey-module-tag{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:6px;background:#f1f3f5;color:var(--gray)}
 .ai-journey-module-more{background:transparent;color:var(--gray);padding-left:2px}
@@ -1224,20 +1372,23 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-journey-actions .btn{flex:1;justify-content:center}
 /* Actor / type chips */
 .ai-chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;border:1.5px solid;letter-spacing:.1px;white-space:nowrap}
-.ai-chip-ai{background:#f1f5f9;color:var(--navy);border-color:#cbd5e1}
-.ai-chip-human{background:#eff6ff;color:#2563eb;border-color:#93c5fd}
+/* Monochrome chip family. Who acts is fill weight (solid ink = AI, outlined = human, tinted =
+   system/client); state chips are grey — except the two that demand a person's attention, which
+   keep their alert colours: amber for Approval Required, red for Exception. */
+.ai-chip-ai{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ai-chip-human{background:#fff;color:var(--navy);border-color:var(--navy)}
 .ai-chip-system{background:#f1f5f9;color:#475569;border-color:#cbd5e1}
-.ai-chip-client{background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe}
-.ai-chip-validation{background:#fefce8;color:#a16207;border-color:#fde68a}
-.ai-chip-approval{background:#fef2f2;color:#dc2626;border-color:#fca5a5}
-.ai-chip-exception{background:#fdf2f8;color:#db2777;border-color:#fbcfe8}
-.ai-chip-completed{background:#f0fdf4;color:#16a34a;border-color:#86efac}
-.ai-chip-queued{background:#f8fafc;color:#64748b;border-color:#cbd5e1}
+.ai-chip-client{background:#f8fafc;color:#475569;border-color:#cbd5e1;border-style:dashed}
+.ai-chip-validation{background:#f1f5f9;color:#475569;border-color:#cbd5e1}
+.ai-chip-approval{background:#fffbeb;color:#b45309;border-color:#fcd34d}
+.ai-chip-exception{background:#fef2f2;color:#dc2626;border-color:#fca5a5}
+.ai-chip-completed{background:#f1f5f9;color:var(--navy);border-color:#cbd5e1}
+.ai-chip-queued{background:#f8fafc;color:#94a3b8;border-color:var(--border)}
 .ai-chip-more{display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;color:var(--gray);padding:3px 4px}
 /* Run detail timeline dot states */
-.ai-timeline-dot.run-done{border-color:#22c55e;color:#16a34a;background:#dcfce7;font-size:13px}
-.ai-timeline-dot.run-current{border-color:#f59e0b;color:#b45309;background:#fef3c7;font-size:13px;animation:aicj-current-pulse-amber 1.8s ease-in-out infinite}
-@keyframes aicj-current-pulse-amber{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.18)}50%{box-shadow:0 0 0 5px rgba(245,158,11,.05)}}
+/* Done and current are structure, so they are ink; only the exception dot keeps colour. */
+.ai-timeline-dot.run-done{border-color:var(--navy);color:#fff;background:var(--navy);font-size:13px}
+.ai-timeline-dot.run-current{border-color:var(--navy);color:var(--navy);background:#fff;font-size:13px;animation:aicj-current-pulse 1.8s ease-in-out infinite}
 .ai-timeline-dot.run-exception{border-color:#ef4444;color:#dc2626;background:#fee2e2;font-size:13px}
 .ai-timeline-dot.run-pending{border-color:var(--border);color:#cbd5e1;background:#fff;font-size:13px}
 /* Active automation: meta row + runs table */
@@ -1249,7 +1400,7 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .cell-sub{font-size:11px;color:var(--gray);margin-top:2px;white-space:nowrap}
 .ai-run-progress{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:600;white-space:nowrap}
 .ai-run-progress-ai{color:var(--navy)}
-.ai-run-progress-human{color:#2563eb}
+.ai-run-progress-human{color:#64748b}
 .ai-run-table{min-width:960px}
 .ai-run-table th:first-child,.ai-run-table td:first-child{text-align:left;width:auto;font-weight:400}
 .ai-run-table td{height:auto;padding:14px 16px;white-space:nowrap}
@@ -1286,14 +1437,18 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-draft-pending-text{font-size:12px;color:#92400e;font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap}
 .ai-draft-pending-dot{width:7px;height:7px;border-radius:50%;background:var(--orange);flex-shrink:0;box-shadow:0 0 0 3px rgba(26,26,26,.18)}
 /* Dashboard: activated journey highlight + CTA */
-.ai-journey-card-active{border-color:#bbf7d0;background:linear-gradient(180deg,#f4fdf7,var(--card) 55%)}
-.ai-journey-card-active:hover{border-color:#86efac;box-shadow:0 14px 32px rgba(22,163,74,.16)}
-.ai-journey-active-badge{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;background:#dcfce7;color:#16a34a;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:5px 11px;border-radius:20px}
-.ai-journey-active-dot{width:6px;height:6px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.22)}
+.ai-journey-card-active{border-color:#94a3b8;background:linear-gradient(180deg,#f8fafc,var(--card) 55%)}
+.ai-journey-card-active:hover{border-color:#64748b;box-shadow:0 8px 22px rgba(15,23,42,.10)}
+/* Quiet status tag, not a solid pill — "activated" is context, and it was out-shouting the
+   journey name below it. Outlined, smaller, with the dot as the live signal. */
+.ai-journey-active-badge{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;background:#fff;border:1px solid #cbd5e1;color:var(--navy);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px}
+.ai-journey-active-dot{width:5px;height:5px;border-radius:50%;background:var(--navy);box-shadow:0 0 0 2.5px rgba(15,23,42,.12)}
 .ai-journey-card-locked{cursor:default;opacity:.55}
 .ai-journey-card-locked:hover{border-color:var(--border);box-shadow:none;transform:none}
 .ai-journey-lock-badge{display:inline-flex;align-items:center;gap:5px;min-width:72px;height:24px;padding:0 10px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid var(--border);color:var(--gray);background:#f8fafc;flex-shrink:0}
-.ai-journey-cta-btn{width:100%;justify-content:center;margin-top:4px}
+/* An action, not a banner: compact pill, left-aligned with the content it acts on. The
+   full-width black slab weighed more than everything it belonged to. */
+.ai-journey-cta-btn{width:auto;align-self:flex-start;justify-content:center;margin-top:2px;padding:8px 22px;border-radius:99px;font-size:12.5px}
 /* AI Executive: prompt-driven run flow (Create Employee / Run Payroll) */
 .ai-run-icon-wrap{width:52px;height:52px;border-radius:14px;background:var(--ol);color:var(--orange);display:flex;align-items:center;justify-content:center;margin:0 0 16px}
 .ai-run-icon-wrap svg{width:26px;height:26px}
@@ -1317,9 +1472,14 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-ct-assist-idle-text{font-size:12px;line-height:1.6;max-width:280px}
 @media(max-width:840px){.ai-ct-assist-split{flex-direction:column}.ai-ct-assist-left{flex:1 1 auto;width:100%}}
 /* Contract Creation Journey — persistent animated step bar */
-.aicj-wrap{display:flex;flex-direction:column;animation:fadeUp .35s cubic-bezier(.2,.8,.2,1)}
+/* Same measure as .ai-exec-page. In focus mode the sidebar is gone, so without a cap the stepper
+   and the step under it would stretch the full viewport on a wide monitor — trading a cramped
+   column for an unreadable one. */
+.aicj-wrap{display:flex;flex-direction:column;max-width:1180px;margin:0 auto;width:100%;animation:fadeUp .35s cubic-bezier(.2,.8,.2,1)}
 .aicj-label{display:flex;align-items:center;gap:10px;padding:0 4px;margin-bottom:10px;flex-wrap:wrap}
-.aicj-label-step{font-size:10.5px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;background:var(--ol);border:1px solid #f3cf8f;border-radius:20px;padding:3px 10px;white-space:nowrap}
+/* Solid ink chip — the step counter is the strongest label on the row, so it takes the strongest
+   monochrome treatment; the amber border it had was the last non-alert colour on this bar. */
+.aicj-label-step{font-size:10.5px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.5px;background:var(--navy);border:1px solid var(--navy);border-radius:20px;padding:3px 11px;white-space:nowrap}
 .aicj-label-name{font-size:13.5px;font-weight:700;color:var(--navy)}
 .aicj-agent-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--navy);background:#f1f5f9;border:1px solid #cbd5e1;border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap;transition:background .15s}
 .aicj-agent-badge:hover{background:#e5e7eb}
@@ -1379,16 +1539,22 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .aicj-stage-badge{position:absolute;top:-7px;right:-8px;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:#fff;padding:0 3px;pointer-events:none;box-shadow:0 0 0 2px #fff}
 .aicj-stage-badge.pending{background:#ca8a04}
 .aicj-stage-badge.exception{background:#dc2626}
-.aicj-dot{width:20px;height:20px;border-radius:50%;flex-shrink:0;border:3px solid var(--border);background:#fff;box-sizing:border-box;transition:border-color .3s cubic-bezier(.4,0,.2,1),background .3s cubic-bezier(.4,0,.2,1),box-shadow .3s cubic-bezier(.4,0,.2,1)}
-.aicj-dot.done{background:var(--green);border-color:var(--green)}
+/* MONOCHROME JOURNEY SYSTEM — progress is ink, not green. Done = solid ink disc with a drawn
+   check; current = ink ring with a soft pulse; pending = pale ring. Colour is reserved for the
+   two alert states (amber badge = waiting on someone, red = exception), so anything coloured on
+   this bar means "look here". */
+.aicj-dot{position:relative;width:20px;height:20px;border-radius:50%;flex-shrink:0;border:3px solid var(--border);background:#fff;box-sizing:border-box;transition:border-color .3s cubic-bezier(.4,0,.2,1),background .3s cubic-bezier(.4,0,.2,1),box-shadow .3s cubic-bezier(.4,0,.2,1)}
+.aicj-dot.done{background:var(--navy);border-color:var(--navy)}
+/* CSS-drawn check, so the done disc reads as "completed", not merely "filled". */
+.aicj-dot.done::after{content:'';position:absolute;left:4px;top:4.5px;width:7px;height:3.5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg)}
 .aicj-dot.current{background:#fff;border-color:var(--orange);box-shadow:0 0 0 4px rgba(26,26,26,.16);animation:aicj-current-pulse 1.8s ease-in-out infinite}
 .aicj-dot.pending{background:#fff;border-color:var(--border)}
 @keyframes aicj-current-pulse{0%,100%{box-shadow:0 0 0 4px rgba(26,26,26,.16)}50%{box-shadow:0 0 0 7px rgba(26,26,26,.09)}}
-.aicj-step-label{margin-top:8px;width:96px;text-align:center;font-size:10px;font-weight:600;color:var(--gray);line-height:1.35;transition:color .3s}
+.aicj-step-label{margin-top:9px;width:100px;text-align:center;font-size:10.5px;font-weight:600;color:#94a3b8;line-height:1.4;letter-spacing:.1px;transition:color .3s}
 .aicj-step-label.done{color:var(--navy)}
 .aicj-step-label.current{color:var(--orange);font-weight:800}
-.aicj-line{flex:1;height:3px;background:var(--border);margin:9px 4px 0;border-radius:2px;position:relative;overflow:hidden}
-.aicj-line-fill{position:absolute;inset:0;background:var(--green);transform:scaleX(0);transform-origin:left}
+.aicj-line{flex:1;height:2px;background:var(--border);margin:9px 6px 0;border-radius:2px;position:relative;overflow:hidden}
+.aicj-line-fill{position:absolute;inset:0;background:var(--navy);transform:scaleX(0);transform-origin:left}
 .aicj-line.filled .aicj-line-fill{transform:scaleX(1)}
 .aicj-line.grow .aicj-line-fill{animation:aicj-grow .7s cubic-bezier(.4,0,.2,1) forwards}
 @keyframes aicj-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
@@ -1400,9 +1566,11 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .aicj-box-num{width:24px;height:24px;border-radius:50%;background:#f1f5f9;color:var(--navy);font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .aicj-box-name{font-size:13px;font-weight:700;color:var(--navy);line-height:1.4}
 .aicj-box-resp{align-self:flex-start;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.2px}
-.aicj-box-resp.ai{background:#f0fdf4;color:#16a34a}
-.aicj-box-resp.human{background:#f1f5f9;color:var(--orange)}
-.aicj-box-resp.mixed{background:#eff6ff;color:#2563eb}
+/* Role encoded by fill weight, not hue: AI acts alone = solid ink; a human acts = white with an
+   ink border; mixed = grey tint. Distinct at a glance without spending colour on it. */
+.aicj-box-resp.ai{background:var(--navy);color:#fff}
+.aicj-box-resp.human{background:#fff;color:var(--navy);border:1.5px solid var(--navy);padding:2px 8px}
+.aicj-box-resp.mixed{background:#e2e8f0;color:#334155}
 .aicj-box-badge{align-self:flex-start;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;line-height:1.45;margin-top:auto}
 .aicj-box-badge.pending{background:#fef9c3;color:#854d0e}
 .aicj-box-badge.exception{background:#fee2e2;color:#dc2626}
@@ -1483,7 +1651,7 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .agrun-body{display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap}
 .agrun-timeline-col{flex:1 1 340px;min-width:300px}
 .agrun-details-col{flex:1 1 360px;min-width:300px}
-.agrun-success-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#f0fdf4;border:1px solid #86efac;color:#16a34a;border-radius:10px;padding:12px 16px;font-size:12.5px;font-weight:600;margin-bottom:18px;animation:fadeUp .35s ease}
+.agrun-success-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#f8fafc;border:1px solid #cbd5e1;color:var(--navy);border-radius:10px;padding:12px 16px;font-size:12.5px;font-weight:600;margin-bottom:18px;animation:fadeUp .35s ease}
 .agrun-noconfig{background:#fff7ed;border:1px solid #fed7aa;color:#9a4d09;border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:600;margin-top:2px;line-height:1.5}
 .agrun-approver-assigned{display:flex;align-items:center;gap:8px;margin-top:10px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
 .agrun-approver-name{font-size:12px;font-weight:700;color:var(--navy)}
@@ -1557,17 +1725,23 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-scope-manual-badge{flex:0 0 auto;font-size:11px;font-weight:600;color:#64748b;background:#f1f5f9;border:1px solid var(--border);border-radius:20px;padding:6px 14px}
 .prof-att-upload:hover{color:var(--orange);background:#f1f5f9}
 /* Manual Mode + Enable Agent journey layer */
-.cfg-journey-card{flex-direction:row;align-items:center;justify-content:space-between;gap:18px;padding:24px 28px;border-radius:14px;min-height:132px}
+/* min-height:132px was forcing every row to the size of its tallest possible content, so a
+   journey with a short description got the same footprint as one with four lines. Dropped, with
+   the padding tightened to match: three tight lines instead of four loose ones. */
+.cfg-journey-card{flex-direction:row;align-items:center;justify-content:space-between;gap:18px;padding:17px 22px;border-radius:14px}
 .cfg-journey-card:hover{transform:none;box-shadow:0 4px 14px rgba(15,23,42,.06);border-color:#d7dde6}
 .cfg-journey-main{flex:1;min-width:0}
-.cfg-journey-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.cfg-journey-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px}
 .cfg-journey-statuses{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.cfg-journey-desc{white-space:normal;overflow:visible;text-overflow:clip;max-width:720px;line-height:1.55}
-.cfg-journey-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+/* One line, ellipsised. The full text is on the row's title attribute. */
+.cfg-journey-desc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:720px;line-height:1.5}
+.cfg-journey-meta{font-size:11.5px;font-weight:500;color:#94a3b8;margin-top:6px}
 .cfg-journey-arrow{display:flex;align-items:center;justify-content:center;color:#64748b;flex:0 0 auto}
 .journey-mode-badge{display:inline-flex;align-items:center;gap:5px;height:23px;padding:0 9px;border-radius:999px;border:1px solid var(--border);font-size:10.5px;font-weight:800;color:#475569;background:#f8fafc}
-.journey-mode-badge.agent{border-color:#bbf7d0;background:#f0fdf4;color:#15803d}
-.journey-mode-badge.hybrid{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}
+/* Same fill-weight scale as the chips: fully automated = solid, part-automated = outlined,
+   manual = plain grey. Reads as a spectrum of automation without needing a legend. */
+.journey-mode-badge.agent{border-color:var(--navy);background:var(--navy);color:#fff}
+.journey-mode-badge.hybrid{border-color:var(--navy);background:#fff;color:var(--navy)}
 .journey-mode-badge.manual{border-color:var(--border);background:#f8fafc;color:#475569}
 .journey-activation-badge{display:inline-flex;align-items:center;height:23px;padding:0 9px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid var(--border);background:#f8fafc;color:#64748b}
 .journey-activation-badge.active{border-color:#bbf7d0;background:#f0fdf4;color:#16a34a}

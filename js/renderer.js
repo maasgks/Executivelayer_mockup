@@ -72,6 +72,7 @@ function renderPageContentImpl(id){
   if(page==='operations-cockpit'){el.innerHTML=buildOperationsCockpitPageHTML();return;}
   if(page==='ai-executive'){el.innerHTML=portalRole==='super-admin'?buildAIClientsListingHTML():buildAIExecutiveDashboardHTML();return;}
   if(page==='my-tasks'){el.innerHTML=buildMyTasksPageHTML();return;}
+  if(page==='my-runs'){el.innerHTML=buildMyRunsPageHTML();return;}
   if(page==='ai-journey-detail'){el.innerHTML=buildAIJourneyDetailHTML();return;}
   if(page==='manual-journey-run'){el.innerHTML=buildManualJourneyRunHTML();return;}
   if(page==='ai-automate-form'){el.innerHTML=buildAutomateJourneyFormHTML();return;}
@@ -109,7 +110,7 @@ function renderADTPage(){
   // Show/hide + button in topbar based on current page
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
-    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','operations-cockpit','journey-simulation','manual-journey-run','master-data'];
+    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','operations-cockpit','journey-simulation','manual-journey-run','master-data'];
     const show=!noAddPages.includes(page);
     addBtn.style.display=show?'':'none';
     if(show){
@@ -122,14 +123,85 @@ function renderADTPage(){
   buildSidebar('adt-sidebar',adtSidebarCollapsed,getSidebarActivePage(page));
   renderNotifBadge();
   const sidebar=document.getElementById('adt-sidebar');
-  // -- The USER intake flow is a linear task, not a browsing surface: it hides the sidebar the
-  // same way the cost calculator does, so the form owns the viewport and its fields can breathe.
-  // Its own top bar carries the exit route, so nobody is stranded. --
-  const focusedFlowPages=['cost-calculator','cfg-user-intake'];
-  if(sidebar)sidebar.style.display=focusedFlowPages.includes(page)?'none':'';
+  if(sidebar)sidebar.style.display=isFocusedFlowPage(page)?'none':'';
   renderPageContent('adt-content');
   aiScrollContentToTop();
+  focusFlowPrimaryField();
   persistAppState();
+}
+
+/* == FOCUS MODE =========================================================================
+   A journey is a task with a beginning and an end, not a place you browse from. While one is
+   running the sidebar is hidden, so the run owns the viewport and the only ways forward are
+   the step's own controls — you finish the step or you leave deliberately.
+
+   Safe to hide because injectPageBackBar guarantees an exit on every one of these pages: it
+   adds a back control unless the page already renders its own, so there is always exactly one
+   and never zero. == */
+function isJourneyFocusPage(pg){
+  return pg==='ai-journey-run'          // an activated journey mid-run
+    ||pg==='manual-journey-run'         // the same journey run by hand
+    ||pg==='journey-simulation'         // a dry run of a configured journey
+    ||pg==='ai-automate-form'           // the wizard that activates one
+    ||isAIContractWizardPage(pg);       // the whole contract-creation chain
+}
+// Plus the two linear flows that already worked this way: the cost calculator and the USER
+// intake form.
+function isFocusedFlowPage(pg){
+  return pg==='cost-calculator'||pg==='cfg-user-intake'||isJourneyFocusPage(pg);
+}
+
+/* == PRIMARY FIELD FOCUS ================================================================
+   Every step of a flow has one field it is really asking for. Landing with the caret already
+   in it removes a click the user makes every single time, and it answers "what does this
+   screen want from me" before they have read anything.
+
+   Deliberately keyed on page + step rather than fired on every render: renderADTPage runs on
+   any state change — a timeline tick, a toggle, a filter — and re-focusing on each of those
+   would yank the caret out of whatever the user had actually clicked into. == */
+function flowPrimaryFieldId(pg){
+  if(pg==='ai-journey-run')return 'ai-run-prompt';
+  if(pg==='ai-contract-assistant')return 'ai-ct-prompt';
+  if(pg==='contract-eor'||pg==='contract-peo'){
+    // Assisted mode renders all three steps at once for review, so the form's own first field wins.
+    if(typeof aiAssistedFlow!=='undefined'&&aiAssistedFlow)return 'peo-nationality';
+    const step=pg==='contract-eor'?eorStep:peoStep;
+    return step===1?'peo-jobtitle':step===2?'peo-prob':'peo-nationality';
+  }
+  if(pg==='cfg-user-intake')return 'cfg-ui-full_name';
+  if(pg==='cfg-system-add')return 'cfg-sys-add-name';
+  if(pg==='cfg-model-add')return 'cfg-model-add-name';
+  if(pg==='team-add')return 'team-name';
+  if(pg==='leave-add')return 'al-emp-search';
+  if(pg==='leave-policy-add')return 'ap-yearly';
+  return '';
+}
+// -- The step counters live outside `page`, so they have to be part of the key: moving from
+// Basic Details to Job Details is a new question and deserves a new focus. --
+function flowFocusKey(){
+  const step=page==='contract-eor'?eorStep
+    :page==='contract-peo'?peoStep
+    :page==='cfg-user-intake'?cfgUserIntakeStep
+    :'';
+  return page+':'+step;
+}
+let lastFlowFocusKey='';
+function focusFlowPrimaryField(){
+  const key=flowFocusKey();
+  if(key===lastFlowFocusKey)return;
+  const id=flowPrimaryFieldId(page);
+  // Nothing to focus here — record the key so this page stops being reconsidered every render.
+  if(!id){lastFlowFocusKey=key;return;}
+  const el=document.getElementById(id);
+  // Not rendered yet. The USER intake form, for one, waits on ADT's field schema before it has
+  // any inputs at all. Leaving the key unset means the next render tries again.
+  if(!el)return;
+  lastFlowFocusKey=key;
+  // preventScroll because aiScrollContentToTop has just put the page where it wants it, and a
+  // focus that scrolls would undo that on any step tall enough to matter.
+  requestAnimationFrame(function(){
+    try{el.focus({preventScroll:true});}catch(e){el.focus();}
+  });
 }
 
 // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ INIT ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
@@ -137,10 +209,10 @@ const dashboardContentHTML=document.getElementById('adt-content').innerHTML;
 loadAppState();
 renderADTPage();
 
-// -- Pull Master Data from the backend once on load, so records survive a refresh and show up
+// -- Pull Client records from the backend once on load, so they survive a refresh and show up
 // in every browser rather than only the one that ingested them. Deliberately after the first
 // render and non-blocking: the backend may not be running (this page still opens as a static
-// file), and everything except Master Data works without it. --
+// file), and everything except Client works without it. --
 (function hydrateFromBackend(){
   if(typeof mdRefreshFromBackend!=='function')return;
   mdRefreshFromBackend().then(function(){renderADTPage();});

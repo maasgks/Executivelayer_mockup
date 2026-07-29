@@ -267,8 +267,8 @@
 .lp-pg-btn:disabled{opacity:.4;cursor:default}
 .lp-pg-arrow{color:#64748b}
 
-/* -- Master Data: master-detail behaviour --------------------------------------------------
-   The shared split view overlays a 68%-wide drawer on top of the listing. Master Data's table
+/* -- Client: master-detail behaviour --------------------------------------------------
+   The shared split view overlays a 68%-wide drawer on top of the listing. Client's table
    has nine columns, so what stayed uncovered was three clipped columns — unreadable, and no
    help in choosing a different record. With a record selected the listing collapses to an
    identity-only list sized for the strip that remains. */
@@ -294,34 +294,28 @@
   .md-split--compact .lp-split-main{visibility:hidden}
 }
 
-/* -- Master Data: compact header bar --------------------------------------------------------
-   Replaces a stacked title + paragraph + four large stat cards, which together pushed the first
-   record roughly 200px down the page. Everything collapses to one ~52px row, and the counts are
-   the status filter rather than passive statistics. */
-.md-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
-  padding:12px 18px;background:#fff;border:1px solid var(--border);border-radius:12px;margin-bottom:12px}
-.md-bar-title{display:flex;align-items:baseline;gap:9px;font-size:14px;font-weight:700;color:var(--navy);flex-shrink:0}
-.md-chips{display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:1;min-width:0}
-.md-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;
-  border:1px solid var(--border);background:#fff;font-family:inherit;cursor:pointer;transition:.15s}
-.md-chip:hover{border-color:#cbd5e1;background:#f8fafc}
-.md-chip.is-on{border-color:#0d9488;background:#f0fdfa}
-.md-chip-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.md-chip-label{font-size:12px;font-weight:600;color:var(--gray)}
-.md-chip.is-on .md-chip-label{color:#0f766e}
-.md-chip-count{font-size:12px;font-weight:700;color:var(--navy);
-  background:var(--ol);border-radius:20px;padding:1px 7px;min-width:20px;text-align:center}
-.md-chip.is-on .md-chip-count{background:#ccfbf1;color:#0f766e}
-.md-refresh{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:8px;
+/* -- Shared listing header (Client, My Runs) -------------------------------------------------------------
+   The same two-part head every other listing uses: the "Select Filter" bar takes the free space
+   on the left, the quick status tiles sit flush right. align-items:flex-start so the tiles align
+   to the top of the bar rather than stretching when the filter row wraps to two lines. */
+.listing-head{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:4px}
+/* Refresh matches the height and pill geometry of the Reset/Search buttons it sits beside, so the
+   filter row reads as one row of controls rather than a row plus an afterthought. */
+.md-refresh{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:20px;
   border:1px solid var(--border);background:#fff;color:var(--navy);font-size:12.5px;font-weight:600;
   font-family:inherit;cursor:pointer;flex-shrink:0;transition:.15s}
 .md-refresh:hover{background:var(--ol);border-color:#cbd5e1}
+.md-refresh svg{flex-shrink:0}
+/* The tiles are a filter, so the whole tile is the hit area and the selected one is pinned by the
+   underline the other listings use. Total has no status of its own — it is the cleared state. */
+.listing-head .listing-stat{padding:11px 20px;min-width:84px}
 @media (max-width:760px){
-  .md-bar{gap:10px;padding:11px 14px}
+  .md-refresh{padding:0 11px}
   .md-refresh span{display:none}
+  .listing-head .listing-stat{padding:10px 14px;min-width:70px}
 }
 
-/* -- Master Data: status-save progress ------------------------------------------------------
+/* -- Client: status-save progress ------------------------------------------------------
    While a status change is in flight the form is replaced by these three steps — the same work
    the backend does in one transaction (row update, audit entry, workflow event). A disabled form
    would still invite interaction and would say nothing about what is happening server-side. */

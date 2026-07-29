@@ -59,7 +59,7 @@ async function execApiRequest(method, path, body){
 
 // Asks the backend to poll ADT Solution once. Returns:
 //   status 'idle'      — nothing new since the backend's cursor
-//   status 'ingested'  — a new submission became a master-data record (Pending)
+//   status 'ingested'  — a new submission became a client record (Pending)
 //   status 'duplicate' — the submission had already been ingested; no new row
 function execApiPollAdt(){
   return execApiRequest('POST', '/adt/poll');
