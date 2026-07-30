@@ -1819,13 +1819,7 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .manual-step-mode.agent{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
 .manual-step-mode.hybrid{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
 
-/* Operations cockpit */
-.cockpit-wrap{display:flex;flex-direction:column;gap:16px;margin-bottom:28px}
-.cockpit-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.cockpit-stats.stat-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
-.cockpit-stat-clickable{cursor:pointer;transition:.15s}
-.cockpit-stat-clickable:hover{border-color:#d1d5db;box-shadow:0 6px 16px rgba(26,26,26,.08);transform:translateY(-1px)}
-.cockpit-queue-panel .dash-panel-head{padding-left:2px;padding-right:2px;border-bottom:none;margin:0 16px 2px}
+/* Run + exception cards (My Tasks, persona dashboards, manual run preview) */
 .cockpit-run-panel{background:transparent;border:none;box-shadow:none;overflow:visible}
 .cockpit-run-panel .dash-panel-head{padding-left:2px;padding-right:2px;border-bottom:none;margin-bottom:2px}
 .cockpit-run-list{display:flex;flex-direction:column;gap:14px}
@@ -1834,59 +1828,25 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .cockpit-run-card.mt-card-selected{border-color:var(--orange);background:#f1f5f9}
 .cockpit-run-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .cockpit-run-head-main{flex:1;min-width:0}
-.cockpit-run-num{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#64748b;background:#fff;flex-shrink:0;margin-right:10px}
 .cockpit-run-id{font-size:13px;font-weight:900;color:var(--navy);line-height:1.3}
 .cockpit-run-entity{font-size:11.5px;color:#64748b;margin-top:2px}
-.cockpit-progress-ex{background:#eef2ec}
-.cockpit-progress-ex span{background:#a7d7b0}
-.cockpit-pill-ex.inactive{background:#f7ecec;color:#b56464;border-color:#e6cccc}
-.cockpit-pill-ex.unapproved{background:#f7f4df;color:#a68a2e;border-color:#e8dfb8}
-.cockpit-pill-ex.active{background:#eef4ec;color:#75a178;border-color:#cfe0cf}
 .cockpit-progress-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;font-size:10.5px;font-weight:700;color:#64748b}
 .cockpit-run-mini-sub{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11.5px;color:#64748b}
-.cockpit-filter-context{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:14px 16px;border-bottom:1px solid #eef2f7;background:#fafbfc}
-.cockpit-filter-context strong{display:block;font-size:13px;font-weight:900;color:var(--navy);margin-bottom:4px}
-.cockpit-filter-context span{display:block;font-size:12px;color:#64748b;line-height:1.45}
-.cockpit-filter-context em{font-style:normal;font-size:11px;font-weight:800;color:#b66430;background:#fdf3e7;border:1px solid #f5d9ab;border-radius:999px;padding:5px 10px;white-space:nowrap}
-.cockpit-filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid #eef2f7}
-.cockpit-filter-chip{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border:1px solid var(--border);border-radius:999px;background:#fff;color:#475569;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit}
-.cockpit-filter-chip:hover{border-color:#d7dde6;background:#fafbfc}
-.cockpit-filter-chip.active{border-color:#f5d9ab;background:#fdf3e7;color:#b66430}
-.cockpit-filter-chip span{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:10px}
-.cockpit-filter-chip.active span{background:#f7e4c4;color:#b66430}
 .cockpit-progress{height:5px;border-radius:999px;background:#eef2f7;overflow:hidden;margin-bottom:7px}
 .cockpit-progress span{display:block;height:100%;background:#86efac;border-radius:999px}
 .cockpit-notify-btn{display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
 .cockpit-notify-btn.notified{background:#f0fdf4;border-color:#bbf7d0;color:#15803d;cursor:default;opacity:1}
 .cockpit-empty-state{font-size:12px;color:#64748b;padding:16px;border:1px dashed var(--border);border-radius:12px;background:#fafbfc;margin:0 16px 16px}
-.cockpit-empty-clear{display:flex;align-items:center;gap:14px;border:1px solid #cfe8d4;background:#f3faf4;border-radius:14px;padding:20px}
-.cockpit-empty-clear svg{flex-shrink:0;color:#2f9e50}
-.cockpit-empty-clear strong{display:block;font-size:13.5px;color:#1f6b39;margin-bottom:3px}
-.cockpit-empty-clear span{display:block;font-size:12px;color:#3f7a52;line-height:1.5}
 .cockpit-sb-field{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
 .cockpit-sb-field:last-child{border-bottom:none}
 .cockpit-sb-flabel{font-size:10.5px;color:var(--gray);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
 .cockpit-sb-fval{font-size:12.5px;font-weight:700;color:var(--navy);text-align:right}
 .cockpit-sb-note{font-size:12.5px;color:#475569;line-height:1.6;margin:0}
-.cockpit-ex-group{padding:14px 16px 4px}
-.cockpit-ex-group:last-child{padding-bottom:16px}
-.cockpit-ex-group-head{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:10px}
-.cockpit-ex-group-head span{margin-left:2px;color:#94a3b8;font-weight:800}
-.cockpit-ex-group-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
-.cockpit-ex-group-head.high{color:#b04f4f}
-.cockpit-ex-group-head.high .cockpit-ex-group-dot{background:#c85656}
-.cockpit-ex-group-head.medium{color:#b66430}
-.cockpit-ex-group-head.medium .cockpit-ex-group-dot{background:#d38f3f}
-.cockpit-ex-group-head.low{color:#55855f}
-.cockpit-ex-group-head.low .cockpit-ex-group-dot{background:#5a9a6d}
 .cockpit-ex-list{display:flex;flex-direction:column;gap:10px}
 .cockpit-ex-card{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:1px solid #eef2f7;border-radius:12px;background:#fff;padding:13px 14px;transition:.15s;cursor:pointer}
 .cockpit-ex-card:hover{border-color:#f0c17a;background:#fffcf7;box-shadow:0 4px 12px rgba(15,23,42,.06)}
+.cockpit-ex-card-static,.cockpit-ex-card-static:hover{cursor:default;border-color:#eef2f7;background:#fff;box-shadow:none}
 .cockpit-ex-left{display:flex;align-items:flex-start;gap:10px;min-width:0}
-.cockpit-ex-indicator{width:8px;height:34px;border-radius:999px;background:#d38f3f;flex-shrink:0;margin-top:2px}
-.cockpit-ex-indicator.high{background:#c85656}
-.cockpit-ex-indicator.medium{background:#d38f3f}
-.cockpit-ex-indicator.low{background:#5a9a6d}
 .cockpit-ex-title{font-size:12.5px;font-weight:900;color:var(--navy);line-height:1.35;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .cockpit-ex-kind{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#5b8def;background:#f5f9ff;border:1px solid #e3edfc;border-radius:999px;padding:2px 7px}
 .cockpit-ex-new-flag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:var(--orange);border-radius:999px;padding:2px 7px}
@@ -1898,49 +1858,6 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .cockpit-ex-resolution{font-size:11.5px;color:#475569;line-height:1.45}
 .cockpit-ex-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;flex-shrink:0}
 .cockpit-ex-btn{white-space:nowrap}
-.cockpit-sb-hint{font-size:11.5px;color:#64748b;line-height:1.45;background:#fafbfc;border:1px dashed var(--border);border-radius:10px;padding:9px 10px;margin-top:8px}
-.cockpit-dept-panel,.cockpit-dept-detail{overflow:hidden}
-.cockpit-dept-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:18px}
-.cockpit-dept-card{border:1px solid #d6dce4;border-radius:14px;background:#fff;padding:18px;cursor:pointer;transition:.15s}
-.cockpit-dept-card:hover{border-color:#b8c6dc;background:#f8fbff;box-shadow:0 8px 18px rgba(37,99,235,.06);transform:translateY(-1px)}
-.cockpit-dept-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px}
-.cockpit-dept-identity{display:flex;align-items:center;gap:10px;min-width:0}
-.cockpit-dept-name{font-size:19px;font-weight:900;color:var(--navy);line-height:1.3}
-.cockpit-dept-members{font-size:11.5px;color:#64748b;font-weight:700;margin-top:2px}
-.cockpit-dept-journeys-tag{font-style:normal;font-size:11px;font-weight:900;color:#5b8def;background:#f5f9ff;border:1px solid #e3edfc;border-radius:999px;padding:5px 10px;white-space:nowrap;flex-shrink:0}
-.cockpit-dept-summary{font-size:12px;color:#475569;line-height:1.55;margin:0 0 16px;min-height:54px}
-.cockpit-dept-owner-row{display:flex;align-items:center;gap:10px;border-top:1px solid #eef2f7;padding-top:14px}
-.cockpit-dept-owner-avatar{width:28px;height:28px;border-radius:50%;background:#f1f5f9;color:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:900;flex-shrink:0}
-.cockpit-dept-owner-info{display:flex;flex-direction:column;gap:2px}
-.cockpit-dept-owner-info span{font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
-.cockpit-dept-owner-info strong{font-size:12.5px;color:var(--navy)}
-.cockpit-dept-detail-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px;border-bottom:1px solid #eef2f7;background:#fafbfc}
-.cockpit-dept-detail-hero strong{display:block;font-size:14px;color:var(--navy);line-height:1.45}
-.cockpit-dept-detail-hero p{font-size:12px;color:#64748b;line-height:1.45;margin:5px 0 0}
-.cockpit-role-block{padding:18px;border-bottom:1px solid #eef2f7}
-.cockpit-role-block:last-child{border-bottom:none}
-.cockpit-role-title{font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
-.cockpit-member-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.cockpit-member-card{display:flex;align-items:flex-start;gap:12px;border:1px solid #eef2f7;border-radius:13px;background:#fff;padding:14px}
-.cockpit-member-main{flex:1;min-width:0}
-.cockpit-member-card.admin{border-color:#d1d5db;background:#fffdf8}
-.cockpit-member-card.manager{border-color:#bfdbfe;background:#f8fbff}
-.cockpit-member-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#1a1a1a;font-size:11px;font-weight:900;flex-shrink:0}
-.cockpit-member-name{font-size:13px;font-weight:900;color:var(--navy);line-height:1.35}
-.cockpit-member-meta{font-size:11.5px;color:#64748b;line-height:1.45;margin-top:2px}
-.cockpit-member-journeys{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.cockpit-member-journeys span{display:inline-flex;align-items:center;min-height:22px;padding:3px 8px;border-radius:999px;background:#f8fafc;border:1px solid #eef2f7;color:#475569;font-size:10.5px;font-weight:800}
-.cockpit-member-side{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.cockpit-member-manage-btn{white-space:nowrap}
-.cockpit-member-remove{width:26px;height:26px;border-radius:50%;border:1px solid #eef2f7;background:#fff;color:#94a3b8;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:.15s}
-.cockpit-member-remove:hover{border-color:#fecaca;background:#fef2f2;color:#dc2626}
-.cockpit-add-member-modal{width:min(560px,94vw)}
-.cockpit-manage-meta{font-size:12px;color:#64748b;font-weight:700;margin-bottom:16px}
-.cockpit-add-checks{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:16px}
-.cockpit-add-check{display:flex;align-items:flex-start;gap:9px;border:1px solid #eef2f7;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:800;color:#334155;background:#fff}
-.cockpit-add-check input{accent-color:var(--orange);margin-top:2px}
-.cockpit-remove-modal{width:min(420px,94vw)}
-.cockpit-remove-body{font-size:13px;color:#334155;line-height:1.5;padding:4px 0 18px}
 .roi-card{position:relative;background:linear-gradient(180deg,#fffaf2 0%,#fff 72%);border:1px solid #d1d5db;border-left:4px solid var(--orange);color:var(--navy);border-radius:14px;padding:17px 18px;display:flex;flex-direction:column;gap:12px;margin-top:14px;box-shadow:0 8px 20px rgba(26,26,26,.08)}
 .roi-card::after{content:"";position:absolute;right:14px;top:14px;width:42px;height:42px;border-radius:50%;background:radial-gradient(circle,rgba(26,26,26,.18),rgba(26,26,26,0) 70%);pointer-events:none}
 .roi-topline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -2041,8 +1958,6 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .sim-finding-title{font-size:12.5px;font-weight:900;color:var(--navy);margin-bottom:3px}
 .sim-finding-copy{font-size:11.5px;color:#64748b;line-height:1.45}
 @media(max-width:1100px){
-  .cockpit-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .cockpit-dept-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .manual-run-grid{grid-template-columns:1fr}
   .manual-run-hero{flex-direction:column}
   .manual-run-actions{justify-content:flex-start}
@@ -2051,11 +1966,7 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
   .ai-resp-strip{flex-direction:column;align-items:flex-start;gap:8px}
 }
 @media(max-width:760px){
-  .cockpit-stats,.roi-metrics{grid-template-columns:1fr}
-  .cockpit-dept-grid,.cockpit-member-grid{grid-template-columns:1fr}
-  .cockpit-dept-detail-hero{flex-direction:column;align-items:flex-start}
-  .cockpit-filter-context{flex-direction:column}
-  .cockpit-filter-context em{white-space:normal}
+  .roi-metrics{grid-template-columns:1fr}
   .cockpit-ex-card{flex-direction:column}
   .cockpit-ex-actions{flex-direction:row;width:100%}
   .cockpit-ex-actions .btn{flex:1}
