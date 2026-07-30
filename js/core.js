@@ -114,58 +114,244 @@ const aiAutomationRuns={
    same state compressed to fit inside a status badge — the full sentences are far too long
    for a table cell. `internal` is what the Account Manager needs to know about the state,
    which the client is never shown. == */
+/* Three names per stage, for three readers, and the reason they differ is the whole design:
+     label  what the CLIENT is shown — verbatim from the operating model, never reworded here
+     short  what WE call it in the app — plain English, no jargon, fits a narrow column
+     plain  what it MEANS, in a sentence a new user can read without training
+   The old short names failed the third test badly. "Requested / Quoting / In review /
+   Approved / Signature / Contract / Active" gave a newcomer no way to tell which side was
+   holding the work, and used two words ("Signature", "Contract") for two different signings
+   by two different people. Naming the signer instead — "Client signing", "Worker signing" —
+   removes that collision without a legend. */
 const amPipelineStages=[
-  {id:'request-received',   n:1,track:'engagement',tone:'blue', label:'Request received',                       short:'Requested',   internal:'Intake logged &mdash; qualifying the requirement',       waitingOn:'Account Manager'},
-  {id:'quote-prep',         n:2,track:'engagement',tone:'blue', label:'Quote in preparation',                   short:'Quoting',     internal:'Costing, margin and compliance check in progress',       waitingOn:'Account Manager'},
-  {id:'quote-review',       n:3,track:'engagement',tone:'amber',label:'Quote ready &mdash; your review',        short:'In review',   internal:'Quote sent &mdash; waiting on the client to review it',  waitingOn:'Client',clientAction:true},
-  {id:'quote-approved',     n:4,track:'engagement',tone:'green',label:'Quote approved',                         short:'Approved',    internal:'Client accepted the commercials',                        waitingOn:'Account Manager'},
-  {id:'agreement-signature',n:5,track:'engagement',tone:'amber',label:'Agreement ready &mdash; your signature', short:'Signature',   internal:'Agreement issued &mdash; waiting on client signature',   waitingOn:'Client',clientAction:true},
-  {id:'deposit-due',        n:6,track:'placement', tone:'red',  label:'Deposit invoice due',                    short:'Deposit due', internal:'Placement is held until the deposit invoice clears',     waitingOn:'Client',clientAction:true,gate:true},
-  {id:'employment-contract',n:7,track:'placement', tone:'blue', label:'Employment contract in progress',        short:'Contract',    internal:'Contract generated and out for signature',               waitingOn:'Legal / Contracts'},
-  {id:'onboarding',         n:8,track:'placement', tone:'blue', label:'Onboarding in progress',                 short:'Onboarding',  internal:'Documents, compliance checks and payroll setup',         waitingOn:'HR'},
-  {id:'active',             n:9,track:'placement', tone:'green',label:'Active',                                 short:'Active',      internal:'Live and ready for payroll',                             waitingOn:'&mdash;',terminal:true}
+  {id:'request-received',   n:1,track:'engagement',tone:'blue', label:'Request received',                       short:'New request',    plain:'A client has asked us to find people. We are checking we can do it.',                    internal:'Intake logged, qualifying the requirement',       waitingOn:'Account Manager'},
+  {id:'quote-prep',         n:2,track:'engagement',tone:'blue', label:'Quote in preparation',                   short:'Building quote', plain:'We are working out the price, and checking the rules for that country.',                  internal:'Costing, margin and compliance check in progress',waitingOn:'Account Manager'},
+  {id:'quote-review',       n:3,track:'engagement',tone:'amber',label:'Quote ready &mdash; your review',        short:'Quote sent',     plain:'The price is with the client. Nothing moves until they reply, so chase it.',              internal:'Quote sent, waiting on the client to review it',  waitingOn:'Client',clientAction:true},
+  {id:'quote-approved',     n:4,track:'engagement',tone:'green',label:'Quote approved',                         short:'Quote accepted',plain:'The client agreed the price. We now set up their account.',                               internal:'Client accepted the commercials',                 waitingOn:'Account Manager'},
+  {id:'agreement-signature',n:5,track:'engagement',tone:'amber',label:'Agreement ready &mdash; your signature', short:'Client signing', plain:'The contract between us and the client is waiting for their signature.',                 internal:'Agreement issued, waiting on client signature',   waitingOn:'Client',clientAction:true},
+  {id:'deposit-due',        n:6,track:'placement', tone:'red',  label:'Deposit invoice due',                    short:'Deposit due',    plain:'We have invoiced the deposit. No hire can start until that money arrives.',              internal:'Placement is held until the deposit invoice clears',waitingOn:'Client',clientAction:true,gate:true},
+  {id:'employment-contract',n:7,track:'placement', tone:'blue', label:'Employment contract in progress',        short:'Worker signing', plain:'The person being hired is signing their employment contract.',                           internal:'Contract generated and out for signature',        waitingOn:'Legal / Contracts'},
+  {id:'onboarding',         n:8,track:'placement', tone:'blue', label:'Onboarding in progress',                 short:'Onboarding',     plain:'We are collecting their documents and setting them up to be paid.',                      internal:'Documents, compliance checks and payroll setup',   waitingOn:'HR'},
+  {id:'active',             n:9,track:'placement', tone:'green',label:'Active',                                 short:'Working',        plain:'Done. They are employed and on payroll.',                                                internal:'Live and ready for payroll',                      waitingOn:'&mdash;',terminal:true}
 ];
+/* "Engagement track" and "Placement track" are our words, not words a new user arrives with.
+   These say what actually happens in each half. */
 const amPipelineTracks=[
-  {id:'engagement',label:'Engagement track',sub:'Once per client request'},
-  {id:'placement', label:'Placement track', sub:'Repeats per hire'}
+  {id:'engagement',label:'Winning the client',sub:'Happens once per request',plain:'Agreeing the price and signing with the client. You do this once, no matter how many people they hire.'},
+  {id:'placement', label:'Placing each person',sub:'Repeats for every hire',plain:'Getting one named person hired and paid. This repeats for every single hire under that client.'}
 ];
+/* == ADMIN SUB-STATUSES ==================================================================
+   The operational steps inside each client-facing stage. These are INTERNAL and must never
+   reach a client-visible surface — the sub-steps themselves are why. "Partner cost requested"
+   discloses that we do not own the country and are sourcing through a partner. "Pricing
+   approval (if off-standard)" discloses that the client was quoted off-book. "Client entity
+   + sanctions check" discloses that they were screened. Each is commercially or legally
+   sensitive on its own, so the client sees only the nine parent stages and never this layer.
+
+   `owner` is per sub-step, not per stage, because that is what gates who may advance it. The
+   source table gives compound owners for some stages ("EOR Ops · Pricing", "System · AM") and
+   the split only makes sense at sub-step level: Pricing owns the pricing approval, EOR Ops
+   owns the cost build. `cond` marks a step that only applies in some cases and renders muted,
+   `decision` a branch point, `loop` a step that can legitimately repeat. == */
+const amSubStatuses={
+  'request-received':[
+    {label:'New intake',owner:'Account Manager'},
+    {label:'CSM assigned',owner:'Account Manager',sla:'1h'},
+    {label:'Qualified / Disqualified',owner:'Account Manager',decision:true}
+  ],
+  'quote-prep':[
+    {label:'Country data check',owner:'EOR Ops'},
+    {label:'Partner cost requested',owner:'EOR Ops',cond:'non-owned countries',sla:'48h'},
+    {label:'Cost calc built',owner:'EOR Ops',sla:'24h'},
+    {label:'Statutory floor check',owner:'Compliance'},
+    {label:'Pricing approval',owner:'Pricing',cond:'if off-standard'},
+    {label:'Quote QA',owner:'Pricing'}
+  ],
+  'quote-review':[
+    {label:'Sent',owner:'Account Manager'},
+    {label:'Viewed',owner:'Client'},
+    {label:'Follow-up 1 / 2 / 3',owner:'Account Manager',loop:true},
+    {label:'Change requested',owner:'Client',decision:true},
+    {label:'Re-issued v2',owner:'Account Manager',loop:true}
+  ],
+  'quote-approved':[
+    {label:'Won',owner:'Account Manager'},
+    {label:'Client tenant provisioned',owner:'System'},
+    {label:'CSM confirmed to client',owner:'Account Manager',sla:'Same day'}
+  ],
+  'agreement-signature':[
+    {label:'MSA drafted',owner:'Compliance'},
+    {label:'Legal & compliance review',owner:'Compliance',sla:'48h'},
+    {label:'Client entity + sanctions check',owner:'Compliance'},
+    {label:'Sent',owner:'Compliance'},
+    {label:'Signed',owner:'Client'}
+  ],
+  'deposit-due':[
+    {label:'Invoice raised',owner:'Finance'},
+    {label:'Awaiting funds',owner:'Client'},
+    {label:'Part-paid',owner:'Client',decision:true},
+    {label:'Cleared',owner:'Finance',sla:'Auto on webhook'}
+  ],
+  'employment-contract':[
+    {label:'Draft generated',owner:'EOR Ops',sla:'24h to issue'},
+    {label:'Clause compliance check',owner:'Compliance'},
+    {label:'Internal approval',owner:'EOR Ops'},
+    {label:'Sent to worker',owner:'EOR Ops'},
+    {label:'Worker signed',owner:'Worker'},
+    {label:'ADT countersigned',owner:'EOR Ops'}
+  ],
+  'onboarding':[
+    {label:'Worker KYC',owner:'Onboarding Ops'},
+    {label:'Documents',owner:'Onboarding Ops',cond:'n/n per country'},
+    {label:'Tax registration',owner:'Onboarding Ops'},
+    {label:'Social security enrolment',owner:'Onboarding Ops'},
+    {label:'Bank verified',owner:'Onboarding Ops'},
+    {label:'Payroll configured',owner:'Payroll Ops'}
+  ],
+  'active':[
+    {label:'Ready for payroll',owner:'Payroll Ops'},
+    {label:'First payroll run',owner:'Payroll Ops',sla:'Per payroll calendar'},
+    {label:'Active',owner:'Payroll Ops'}
+  ]
+};
+/* Who each owner role actually is, and which persona may advance its sub-steps. `persona`
+   null means nobody in this portal can advance it: Client and Worker steps land by webhook or
+   e-signature callback, and System steps are provisioning. Marking them null is what stops the
+   UI offering an Account Manager a button to tick "Worker signed" on the worker's behalf. */
+const amOwnerDirectory={
+  'Account Manager':{who:'Arjun Vaidya',   initials:'AV',persona:'account-manager'},
+  'EOR Ops':        {who:'Sunita Kulkarni',initials:'SK',persona:'ops-manager'},
+  'Pricing':        {who:'Karan Mehta',    initials:'KM',persona:'deal-manager'},
+  'Compliance':     {who:'Kavya Iyer',     initials:'KI',persona:'compliance-officer'},
+  'Finance':        {who:'Meera Iyer',     initials:'MI',persona:'finance-approver'},
+  'Onboarding Ops': {who:'Priyanka Bhatt', initials:'PB',persona:'hr'},
+  'Payroll Ops':    {who:'Priyanka Bhatt', initials:'PB',persona:'hr'},
+  'System':         {who:'AI Execution Layer',initials:'AI',persona:null},
+  'Client':         {who:'Client',         initials:'CL',persona:null},
+  'Worker':         {who:'Worker',         initials:'WK',persona:null}
+};
+function amOwnerInfo(role){return amOwnerDirectory[role]||{who:role,initials:'?',persona:null};}
+function amSubSteps(stageId){return amSubStatuses[stageId]||[];}
+// An Account Manager reads every sub-status but may only advance the ones their role owns.
+// Entity Admin and Super Admin oversee the whole entity, so they may advance any owned step.
+function amCanAdvance(ownerRole){
+  const info=amOwnerInfo(ownerRole);
+  if(!info.persona)return false;
+  if(portalRole==='entity-admin'||portalRole==='super-admin')return true;
+  return portalRole==='entity-user'&&activePersonaId===info.persona;
+}
 /* An engagement-track row is the client request itself, so its `subject` is the headcount
    being quoted rather than a person. A placement-track row is one named hire under an
    already-signed engagement, which is why the same client legitimately appears on several
    rows below the gate — one per hire. `age` is days in the current stage, which is what
    makes a stalled record visible without a separate ageing report. */
 const amDeals=[
-  {id:1, ref:'DL-4021',kind:'engagement',client:'Vantage Freight Pvt Ltd',   subject:'4 roles',        role:'Warehouse Ops',        country:'India',         value:'INR 18,40,000',updated:'29 Jul 2026',age:2, stage:'request-received'},
-  {id:2, ref:'DL-4024',kind:'engagement',client:'Kaira Textiles Ltd',        subject:'2 roles',        role:'Production Supervisor',country:'India',         value:'INR 7,20,000', updated:'29 Jul 2026',age:1, stage:'request-received'},
-  {id:3, ref:'DL-4026',kind:'engagement',client:'Helix Marine B.V.',         subject:'1 role',         role:'Marine Engineer',      country:'Netherlands',   value:'EUR 96,000',   updated:'28 Jul 2026',age:3, stage:'request-received'},
-  {id:4, ref:'DL-4009',kind:'engagement',client:'Norrbridge Logistics B.V.', subject:'6 roles',        role:'Fleet Coordinator',    country:'Netherlands',   value:'EUR 3,12,000', updated:'28 Jul 2026',age:4, stage:'quote-prep'},
-  {id:5, ref:'DL-4013',kind:'engagement',client:'Arcadia Retail GmbH',       subject:'3 roles',        role:'Store Manager',        country:'Germany',       value:'EUR 1,74,000', updated:'27 Jul 2026',age:5, stage:'quote-prep'},
-  {id:6, ref:'DL-3998',kind:'engagement',client:'Dhi Hyperlocal',            subject:'5 roles',        role:'Delivery Ops Lead',    country:'India',         value:'INR 22,50,000',updated:'26 Jul 2026',age:6, stage:'quote-review'},
-  {id:7, ref:'DL-4002',kind:'engagement',client:'Meridian Analytics Ltd',    subject:'2 roles',        role:'Data Analyst',         country:'United Kingdom',value:'GBP 88,000',   updated:'22 Jul 2026',age:9, stage:'quote-review'},
-  {id:8, ref:'DL-3981',kind:'engagement',client:'Vantage Freight Pvt Ltd',   subject:'3 roles',        role:'Customs Executive',    country:'India',         value:'INR 12,60,000',updated:'24 Jul 2026',age:7, stage:'quote-approved'},
-  {id:9, ref:'DL-3974',kind:'engagement',client:'Solvent Iberia S.L.',       subject:'2 roles',        role:'Process Chemist',      country:'Spain',         value:'EUR 1,08,000', updated:'21 Jul 2026',age:11,stage:'agreement-signature'},
-  {id:10,ref:'DL-3969',kind:'engagement',client:'Kaira Textiles Ltd',        subject:'1 role',         role:'Quality Lead',         country:'India',         value:'INR 5,40,000', updated:'20 Jul 2026',age:12,stage:'agreement-signature'},
-  {id:11,ref:'PL-2088',kind:'placement', client:'Dhi Hyperlocal',            subject:'Anika Shah',     role:'Delivery Ops Lead',    country:'India',         value:'INR 4,50,000', updated:'29 Jul 2026',age:3, stage:'deposit-due'},
-  {id:12,ref:'PL-2091',kind:'placement', client:'Norrbridge Logistics B.V.', subject:'Sanne de Vries', role:'Fleet Coordinator',    country:'Netherlands',   value:'EUR 52,000',   updated:'24 Jul 2026',age:8, stage:'deposit-due'},
-  {id:13,ref:'PL-2079',kind:'placement', client:'Arcadia Retail GmbH',       subject:'Nora Kim',       role:'Store Manager',        country:'Germany',       value:'EUR 58,000',   updated:'28 Jul 2026',age:2, stage:'employment-contract'},
-  {id:14,ref:'PL-2082',kind:'placement', client:'Meridian Analytics Ltd',    subject:'Owen Clark',     role:'Data Analyst',         country:'United Kingdom',value:'GBP 44,000',   updated:'27 Jul 2026',age:4, stage:'employment-contract'},
-  {id:15,ref:'PL-2064',kind:'placement', client:'Dhi Hyperlocal',            subject:'Rahul Mehta',    role:'Delivery Ops Lead',    country:'India',         value:'INR 4,20,000', updated:'26 Jul 2026',age:5, stage:'onboarding'},
-  {id:16,ref:'PL-2071',kind:'placement', client:'Solvent Iberia S.L.',       subject:'Luis Martin',    role:'Process Chemist',      country:'Spain',         value:'EUR 54,000',   updated:'25 Jul 2026',age:6, stage:'onboarding'},
-  {id:17,ref:'PL-2043',kind:'placement', client:'Norrbridge Logistics B.V.', subject:'Emma Schmidt',   role:'Fleet Coordinator',    country:'Netherlands',   value:'EUR 51,000',   updated:'14 Jul 2026',age:18,stage:'active'},
-  {id:18,ref:'PL-2049',kind:'placement', client:'Vantage Freight Pvt Ltd',   subject:'Sofia Romano',   role:'Customs Executive',    country:'India',         value:'INR 3,90,000', updated:'10 Jul 2026',age:22,stage:'active'},
-  {id:19,ref:'PL-2052',kind:'placement', client:'Kaira Textiles Ltd',        subject:'James Wilson',   role:'Quality Lead',         country:'India',         value:'INR 4,05,000', updated:'08 Jul 2026',age:24,stage:'active'}
+  {id:1, ref:'DL-4021',kind:'engagement',client:'Vantage Freight Pvt Ltd',   subject:'4 roles',        role:'Warehouse Ops',        country:'India',         value:'INR 18,40,000',updated:'29 Jul 2026',age:2, stage:'request-received',    sub:0},
+  {id:2, ref:'DL-4024',kind:'engagement',client:'Kaira Textiles Ltd',        subject:'2 roles',        role:'Production Supervisor',country:'India',         value:'INR 7,20,000', updated:'29 Jul 2026',age:1, stage:'request-received',    sub:1},
+  {id:3, ref:'DL-4026',kind:'engagement',client:'Helix Marine B.V.',         subject:'1 role',         role:'Marine Engineer',      country:'Netherlands',   value:'EUR 96,000',   updated:'28 Jul 2026',age:3, stage:'request-received',    sub:2},
+  {id:4, ref:'DL-4009',kind:'engagement',client:'Norrbridge Logistics B.V.', subject:'6 roles',        role:'Fleet Coordinator',    country:'Netherlands',   value:'EUR 3,12,000', updated:'28 Jul 2026',age:4, stage:'quote-prep',          sub:2},
+  {id:5, ref:'DL-4013',kind:'engagement',client:'Arcadia Retail GmbH',       subject:'3 roles',        role:'Store Manager',        country:'Germany',       value:'EUR 1,74,000', updated:'27 Jul 2026',age:5, stage:'quote-prep',          sub:4},
+  {id:6, ref:'DL-3998',kind:'engagement',client:'Dhi Hyperlocal',            subject:'5 roles',        role:'Delivery Ops Lead',    country:'India',         value:'INR 22,50,000',updated:'26 Jul 2026',age:6, stage:'quote-review',        sub:1},
+  {id:7, ref:'DL-4002',kind:'engagement',client:'Meridian Analytics Ltd',    subject:'2 roles',        role:'Data Analyst',         country:'United Kingdom',value:'GBP 88,000',   updated:'22 Jul 2026',age:9, stage:'quote-review',        sub:2,breach:true},
+  {id:8, ref:'DL-3981',kind:'engagement',client:'Vantage Freight Pvt Ltd',   subject:'3 roles',        role:'Customs Executive',    country:'India',         value:'INR 12,60,000',updated:'24 Jul 2026',age:7, stage:'quote-approved',      sub:1},
+  {id:9, ref:'DL-3974',kind:'engagement',client:'Solvent Iberia S.L.',       subject:'2 roles',        role:'Process Chemist',      country:'Spain',         value:'EUR 1,08,000', updated:'21 Jul 2026',age:11,stage:'agreement-signature',sub:1},
+  {id:10,ref:'DL-3969',kind:'engagement',client:'Kaira Textiles Ltd',        subject:'1 role',         role:'Quality Lead',         country:'India',         value:'INR 5,40,000', updated:'20 Jul 2026',age:12,stage:'agreement-signature',sub:3},
+  {id:11,ref:'PL-2088',kind:'placement', client:'Dhi Hyperlocal',            subject:'Anika Shah',     role:'Delivery Ops Lead',    country:'India',         value:'INR 4,50,000', updated:'29 Jul 2026',age:3, stage:'deposit-due',         sub:1},
+  {id:12,ref:'PL-2091',kind:'placement', client:'Norrbridge Logistics B.V.', subject:'Sanne de Vries', role:'Fleet Coordinator',    country:'Netherlands',   value:'EUR 52,000',   updated:'24 Jul 2026',age:8, stage:'deposit-due',         sub:2,breach:true},
+  {id:13,ref:'PL-2079',kind:'placement', client:'Arcadia Retail GmbH',       subject:'Nora Kim',       role:'Store Manager',        country:'Germany',       value:'EUR 58,000',   updated:'28 Jul 2026',age:2, stage:'employment-contract', sub:1},
+  {id:14,ref:'PL-2082',kind:'placement', client:'Meridian Analytics Ltd',    subject:'Owen Clark',     role:'Data Analyst',         country:'United Kingdom',value:'GBP 44,000',   updated:'27 Jul 2026',age:4, stage:'employment-contract', sub:4},
+  {id:15,ref:'PL-2064',kind:'placement', client:'Dhi Hyperlocal',            subject:'Rahul Mehta',    role:'Delivery Ops Lead',    country:'India',         value:'INR 4,20,000', updated:'26 Jul 2026',age:5, stage:'onboarding',          sub:2},
+  {id:16,ref:'PL-2071',kind:'placement', client:'Solvent Iberia S.L.',       subject:'Luis Martin',    role:'Process Chemist',      country:'Spain',         value:'EUR 54,000',   updated:'25 Jul 2026',age:6, stage:'onboarding',          sub:4},
+  {id:17,ref:'PL-2043',kind:'placement', client:'Norrbridge Logistics B.V.', subject:'Emma Schmidt',   role:'Fleet Coordinator',    country:'Netherlands',   value:'EUR 51,000',   updated:'14 Jul 2026',age:18,stage:'active',              sub:2},
+  {id:18,ref:'PL-2049',kind:'placement', client:'Vantage Freight Pvt Ltd',   subject:'Sofia Romano',   role:'Customs Executive',    country:'India',         value:'INR 3,90,000', updated:'10 Jul 2026',age:22,stage:'active',              sub:2},
+  {id:19,ref:'PL-2052',kind:'placement', client:'Kaira Textiles Ltd',        subject:'James Wilson',   role:'Quality Lead',         country:'India',         value:'INR 4,05,000', updated:'08 Jul 2026',age:24,stage:'active',              sub:1}
 ];
+function amCurrentSub(d){const steps=amSubSteps(d.stage);return steps[Math.min(d.sub||0,steps.length-1)]||null;}
+function amSubIndex(d){const steps=amSubSteps(d.stage);return Math.min(d.sub||0,Math.max(0,steps.length-1));}
+/* == THE NEXT ACTION =====================================================================
+   `d.sub` is the step IN PROGRESS, so the next action is always "finish the step you are on".
+   That one sentence replaced a fiddlier model where the action was the step *after* the
+   current one — which left a record sitting on the last step of a stage with no next step to
+   click and no way forward.
+
+   What the action IS depends on who owns that step, and only three cases matter to a user:
+     do    the signed-in role owns it, so there is a button that completes it
+     chase the client owns it, so the useful action is a reminder, not a tick
+     wait  a worker, another team, or the system owns it — nothing for this user to do
+   Returning the case explicitly means no screen has to re-derive it from the owner name. */
+function amNextAction(d){
+  const step=amCurrentSub(d);
+  if(!step)return {kind:'wait',label:'Nothing to do',owner:'&mdash;',step:null};
+  const owner=step.owner;
+  if(amCanAdvance(owner))return {kind:'do',label:'Mark done',owner:owner,step:step};
+  if(owner==='Client')return {kind:'chase',label:'Send reminder',owner:owner,step:step};
+  if(owner==='System')return {kind:'wait',label:'Runs automatically',owner:owner,step:step};
+  return {kind:'wait',label:'Waiting on '+owner,owner:owner,step:step};
+}
+/* Reminders are the one event the derived log cannot infer, because they do not move the
+   record — they are a thing the Account Manager did while standing still. Kept separately so
+   the derived history stays derived. */
+const amExtraLog={};
+/* == SUB-STATUS LOG ======================================================================
+   Derived, not stored. Every sub-status a record has already cleared — across every stage it
+   has passed through, not just the one it sits in — becomes one log entry stamped with the
+   owner who cleared it. Deriving it means the log can never drift out of agreement with the
+   record's stage/sub position, which is the failure mode of a hand-kept audit trail: the two
+   disagree and neither is trustworthy. Timestamps walk backwards from the record's own
+   `updated` date so ordering is stable and no clock is read at render time. */
+const amMonths=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function amShiftDate(dateStr,minusDays){
+  const base=new Date(dateStr+' 00:00:00');
+  if(isNaN(base.getTime()))return {date:dateStr,time:'09:00 AM'};
+  base.setDate(base.getDate()-minusDays);
+  const hour=9+(minusDays%8);
+  return {date:base.getDate()+' '+amMonths[base.getMonth()]+' '+base.getFullYear(),
+          time:(hour%12||12)+':'+(minusDays*7%60<10?'0':'')+(minusDays*7%60)+' '+(hour>=12?'PM':'AM')};
+}
+function amDealLog(d){
+  const curStageIdx=amStageIndex(d.stage);
+  const entries=[];
+  amPipelineStages.forEach(function(st,si){
+    if(si>curStageIdx)return;
+    const steps=amSubSteps(st.id);
+    // Every sub-step of a stage already passed; only the cleared ones of the live stage.
+    const upto=si<curStageIdx?steps.length:Math.min(d.sub||0,steps.length-1)+1;
+    steps.slice(0,upto).forEach(function(sub,i){
+      const isLive=si===curStageIdx&&i===upto-1;
+      const owner=amOwnerInfo(sub.owner);
+      entries.push({stage:st,stageNo:st.n,sub:sub,subNo:i+1,owner:owner,ownerRole:sub.owner,
+        state:isLive?'current':'done',
+        breach:!!(isLive&&d.breach)});
+    });
+  });
+  // Newest first, and the offset is derived from position so it is stable across renders.
+  const total=entries.length;
+  entries.forEach(function(e,i){
+    const stamp=amShiftDate(d.updated,(total-1-i)*2);
+    e.date=stamp.date;e.time=stamp.time;
+  });
+  entries.reverse();
+  // Reminders sit at the top: they are the most recent thing that happened, and they happened
+  // without the record moving, so they have no position in the derived sequence.
+  return (amExtraLog[d.id]||[]).concat(entries);
+}
 // '' = no stage selected, in which case the listing shows every record.
 let amPipelineStage='';
+// Same page size as every other listing in the app (see LP_PAGE_SIZE), so a user who has
+// learned the rhythm of one table does not have to relearn it here.
+const AM_PAGE_SIZE=10;
+let amPage=1;
 let amSelectedDealId=null,amDealTab='basic-details';
+/* Stage is the only filter axis now. The quick-filter axis that used to sit beside it
+   ("waiting on client", "running late", "waiting for payment") went with the KPI tiles that
+   were its only trigger — nothing could set it, so every cut it offered was unreachable. */
+function amFilteredDeals(){
+  return amDealsForStage(amPipelineStage);
+}
 function amStageById(id){return amPipelineStages.find(function(s){return s.id===id;})||null;}
 function amStageIndex(id){return amPipelineStages.findIndex(function(s){return s.id===id;});}
 function amStageCount(id){return amDeals.filter(function(d){return d.stage===id;}).length;}
 function amDealsForStage(id){return id?amDeals.filter(function(d){return d.stage===id;}):amDeals.slice();}
-// A record is "waiting on client" when the stage it sits in is one the client has to act on.
-function amWaitingOnClient(){
-  return amDeals.filter(function(d){const s=amStageById(d.stage);return !!(s&&s.clientAction);}).length;
-}
 
 let openDropdowns=new Set();
 let activeSidebarItem='dashboard';
@@ -820,6 +1006,12 @@ function dashboardTabsForRole(role){
       'it-systems-admin':[{id:'it-admin',label:'IT Systems Dashboard'}],
       'finance-approver':[{id:'finance-approval',label:'Finance Approval'},{id:'finance-admin',label:'Finance Admin'}]
     };
+    // -- Account Manager is the exception: its Deal Desk view IS the dashboard, so it lands
+    // straight on it with no tab bar at all (buildDashboardTabsHTML renders nothing below two
+    // tabs). The employee self-service figures the standard dashboard carried stay reachable
+    // through the sidebar — Leaves, My Timesheet, My Profile — so nothing is lost, only the
+    // extra click and the tab strip above a page that already fills the viewport. --
+    if(activePersonaId==='account-manager')return [{id:'sales',label:'Deal Desk'}];
     // -- Personas with no dashboard of their own keep the role-scoped hero view under "My
     // Workspace", so moving the standard dashboard onto the `employee` id does not cost them it. --
     return [employeeTab].concat(map[activePersonaId]||[{id:'my-work',label:'My Workspace'}]);

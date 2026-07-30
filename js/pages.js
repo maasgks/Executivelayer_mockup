@@ -391,12 +391,57 @@ function toggleOpenDealsPanel(){
   renderADTPage();
 }
 function buildSalesDashboardHTML(p,tab){
-  const isManager=tab==='sales-approvals';
-  const openDealsCount=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.createdBy===p.id;}).length;
-  return dashHeader(isManager?'Deal Approvals Dashboard':'Deal Desk Dashboard',isManager?'Review proposal approvals, exceptions, and team deal movement.':'Track owned deals, proposals, client acceptance, and contract creation work.')
-    +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Open Deals',String(openDealsCount),'Owned by this role',null,dashIcoDoc,null,'toggleOpenDealsPanel()')+dashStatNav('Proposal Drafts','3','Ready for review','orange',dashIcoDoc)+dashStatNav('Client Responses','5','Awaiting acceptance','orange',dashIcoUser)+dashStatNav('Exceptions','1','Needs attention','red',dashIcoAlert)+'</div>'
-    +(isManager||!salesOpenDealsOpen?'':buildMyCreatedRunsPanelHTML(p.id))
-    +(isManager?'':buildAmPipelineHTML()+buildAmDealsListingHTML())+'</div>';
+  if(tab==='sales-approvals'){
+    const openDealsCount=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.createdBy===p.id;}).length;
+    return dashHeader('Deal Approvals Dashboard','Review proposal approvals, exceptions, and team deal movement.')
+      +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Open Deals',String(openDealsCount),'Owned by this role',null,dashIcoDoc,null,'toggleOpenDealsPanel()')+dashStatNav('Proposal Drafts','3','Ready for review','orange',dashIcoDoc)+dashStatNav('Client Responses','5','Awaiting acceptance','orange',dashIcoUser)+dashStatNav('Exceptions','1','Needs attention','red',dashIcoAlert)+'</div></div>';
+  }
+  /* == ACCOUNT MANAGER PAGE ==============================================================
+     Three bands and nothing else: who I am (header), where everything is (rail), what to do
+     next (listing). No stat tiles in any form. The first set was hardcoded; the set that
+     replaced them was computed but still asserted headline counts a few inches above the rail
+     that counts the same records by stage. Two numbers for one question is worse than either
+     alone, so the rail is the only place the page counts anything. == */
+  return '<div class="am-page">'
+    +buildAmHeaderHTML(p)
+    +buildAmPipelineHTML()
+    +buildAmDealsListingHTML()
+    +'</div>';
+}
+function buildAmHeaderHTML(p){
+  /* No page title. The dashboard is the only thing on this route now, so a heading naming it
+     would be a label for a page with nothing to distinguish it from. What earns the primary
+     line instead is whose queue this is — the identity that scopes every figure below it.
+
+     The four KPI tiles that sat opposite it are gone. They were filters over the same records
+     the rail below already filters, and the rail is the better instrument: it covers every
+     stage rather than three hand-picked cuts, and it does not put a second set of headline
+     numbers on screen for the reader to reconcile against the first. */
+  return '<div class="am-head">'
+    +'<div class="am-head-left">'
+      +'<div class="am-head-title">'+p.name+' <span class="am-head-role">'+p.label+'</span></div>'
+      +'<div class="am-head-sub">You are looking after '+amDeals.length+' pieces of work.</div>'
+    +'</div></div>';
+}
+/* Ten rows a page, matching the rest of the app. Changing page closes any open drawer, since
+   the record it describes is by definition no longer in the table. */
+function amGoToPage(n){
+  amPage=Math.max(1,n);amSelectedDealId=null;
+  renderADTPage();
+}
+function amListPaginationHTML(total,totalPages,start){
+  const prev='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>';
+  const next='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>';
+  const buttons=Array.from({length:totalPages},function(_,i){
+    return '<button class="lp-pg-btn'+(amPage===i+1?' active':'')+'" onclick="amGoToPage('+(i+1)+')">'+(i+1)+'</button>';
+  }).join('');
+  return '<div class="lp-pagination">'
+    +'<span class="lp-pagination-info">Showing '+(total===0?0:start+1)+'&ndash;'+Math.min(start+AM_PAGE_SIZE,total)+' of '+total+' entries</span>'
+    +'<div class="lp-pagination-controls">'
+    +'<button class="lp-pg-btn lp-pg-arrow" onclick="amGoToPage('+(amPage-1)+')"'+(amPage===1?' disabled':'')+'>'+prev+'</button>'
+    +buttons
+    +'<button class="lp-pg-btn lp-pg-arrow" onclick="amGoToPage('+(amPage+1)+')"'+(amPage===totalPages?' disabled':'')+'>'+next+'</button>'
+    +'</div></div>';
 }
 
 /* == ACCOUNT MANAGER — CLIENT PIPELINE ===================================================
@@ -406,104 +451,132 @@ function buildSalesDashboardHTML(p,tab){
    flat row of nine boxes has no way to know that. The divider between the two groups carries
    that "repeats per hire" fan-out, so the shape of the pipeline explains itself.
 
-   Stage 6 is a payment gate, so it is the one card drawn as a stop rather than a step — it is
-   also the only place in this flow where the whole placement stalls on something the client
-   owes us, which is exactly what an Account Manager needs surfaced first. == */
-function amStageFlagHTML(s){
-  if(s.gate)return '<span class="am-stage-flag gate">Gate</span>';
-  if(s.clientAction)return '<span class="am-stage-flag client">Client</span>';
-  return '';
-}
-function amStageCardHTML(s){
+   The deposit stage is a payment gate — the one place in this flow where the whole placement
+   stalls on something the client owes us. The rail no longer marks it with a badge; the
+   drawer's client-facing view spells it out in words, which is the surface where a reader has
+   room to be told. == */
+/* == THE RAIL ============================================================================
+   Nine segments that divide the available width with flex:1 and min-width:0, which is the
+   whole point: the previous version used fixed 134px cards inside a horizontal scroller, so
+   stages 8 and 9 were off-screen and the pipeline stopped being a pipeline — you cannot read
+   a sequence you have to scroll to finish. Flex division means it fits at any width by
+   construction and there is no overflow to scroll.
+
+   The cost of fitting is label length, so the segments carry the SHORT status and the full
+   client-facing sentence moves to the listing header, where it is needed once rather than
+   nine times, and to the tooltip. Counts stay because they are why anyone looks here.
+
+   A segment is now three things: a count, a name, and a rule above it. The step number and
+   the C / G corner badges are gone. The number was ordinal information the rail already
+   states by being a left-to-right sequence, and the badges were single letters that had to
+   be decoded — a legend the page never printed. Both meanings survive in the tooltip, which
+   is where a label nobody can read on sight belonged in the first place. == */
+function amSegmentHTML(s){
   const count=amStageCount(s.id);
   const selected=amPipelineStage===s.id;
-  const cls='am-stage tone-'+s.tone+(selected?' selected':'')+(count?'':' empty');
-  return '<button type="button" class="'+cls+'" onclick="amSelectPipelineStage(\''+s.id+'\')" title="'+attrSafe(String(s.internal).replace(/&mdash;/g,'—'))+'">'
-    +'<span class="am-stage-rail"></span>'
-    +'<span class="am-stage-top"><span class="am-stage-n">'+s.n+'</span>'+amStageFlagHTML(s)+'</span>'
-    +'<span class="am-stage-count">'+count+'</span>'
-    +'<span class="am-stage-label">'+s.label+'</span>'
+  const flagTitle=s.gate?' · payment gate':s.clientAction?' · waiting on client':'';
+  return '<button type="button" class="am-seg tone-'+s.tone+(selected?' selected':'')+(count?'':' empty')+'"'
+    +' onclick="amSelectPipelineStage(\''+s.id+'\')"'
+    +' title="'+attrSafe(String(s.label).replace(/&mdash;/g,'—')+flagTitle+' — '+String(s.internal).replace(/&mdash;/g,'—'))+'">'
+    +'<span class="am-seg-bar"></span>'
+    +'<span class="am-seg-top"><span class="am-seg-count">'+count+'</span></span>'
+    +'<span class="am-seg-label">'+s.short+'</span>'
     +'</button>';
 }
-const amStageArrow='<span class="am-stage-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>';
-function amTrackHTML(track){
+/* The two halves carry no heading of their own any more — the dashed divider is enough to show
+   that the sequence changes character there, and the tour explains what changes. The track's
+   own wording survives as the group tooltip and as the tour copy, which is where a user goes
+   when they actually want the explanation. */
+function amTrackGroupHTML(track,idx){
   const stages=amPipelineStages.filter(function(s){return s.track===track.id;});
-  const cards=stages.map(function(s,i){return (i?amStageArrow:'')+amStageCardHTML(s);}).join('');
-  const total=stages.reduce(function(sum,s){return sum+amStageCount(s.id);},0);
-  return '<div class="am-track">'
-    +'<div class="am-track-head"><span class="am-track-label">'+track.label+'</span><span class="am-track-sub">'+track.sub+'</span><span class="am-track-count">'+total+'</span></div>'
-    +'<div class="am-track-stages">'+cards+'</div>'
-    +'</div>';
+  return '<div class="am-bar-group" style="flex:'+stages.length+'"'
+    +' title="'+attrSafe(track.label+' — '+track.plain)+'">'
+    +stages.map(amSegmentHTML).join('')+'</div>';
 }
 function buildAmPipelineHTML(){
-  const waiting=amWaitingOnClient();
-  const atGate=amStageCount('deposit-due');
-  const live=amDeals.filter(function(d){return d.stage!=='active';}).length;
-  const metric=function(val,label,tone){return '<div class="am-metric'+(tone?' '+tone:'')+'"><b>'+val+'</b><span>'+label+'</span></div>';};
-  return '<div class="am-pipe-card">'
-    +'<div class="am-pipe-head">'
-      +'<div class="am-pipe-headings"><div class="am-pipe-title">Client Pipeline</div>'
-      +'<div class="am-pipe-sub">The nine statuses your client sees, in the order they see them. Select a stage to list the records sitting in it.</div></div>'
-      +'<div class="am-pipe-metrics">'+metric(live,'In flight')+metric(waiting,'Waiting on client','amber')+metric(atGate,'At the deposit gate','red')+'</div>'
-    +'</div>'
-    +'<div class="am-pipe-scroll"><div class="am-pipe-rail">'
-      +amTrackHTML(amPipelineTracks[0])
-      +'<div class="am-pipe-fork"><span class="am-pipe-fork-line"></span><span class="am-pipe-fork-note">Per hire</span><span class="am-pipe-fork-line"></span></div>'
-      +amTrackHTML(amPipelineTracks[1])
-    +'</div></div></div>';
+  return '<div class="am-bar-card">'
+    +'<div class="am-bar">'+amTrackGroupHTML(amPipelineTracks[0],0)+'<span class="am-bar-div"></span>'+amTrackGroupHTML(amPipelineTracks[1],1)+'</div>'
+    +'</div>';
 }
 // Changing the stage drops any open record drawer: the row it belonged to is usually filtered out.
 function amSelectPipelineStage(id){
   amPipelineStage=amPipelineStage===id?'':id;
-  amSelectedDealId=null;
+  amSelectedDealId=null;amPage=1;
   renderADTPage();
 }
 function amClearPipelineStage(){
-  amPipelineStage='';amSelectedDealId=null;
+  amPipelineStage='';amSelectedDealId=null;amPage=1;
   renderADTPage();
 }
+/* == THE LISTING =========================================================================
+   Six columns, no min-width, so nothing is ever off-screen. Getting there meant deciding what
+   an Account Manager actually triages on, and everything else went to the drawer:
+
+     kept   Client (who) · Candidate/Scope (what) · Stage + sub-status (where exactly) ·
+            Owner (who is holding it) · Age (is it late)
+     moved  Value, full date, country as its own column, Ref ID as its own column
+     cut    S.No — a row counter that costs a column and answers nothing
+
+   Two merges did most of the work. Client Sees and Sub-status became one cell, because the
+   parent stage and the step inside it are one fact read together, and repeating the parent in
+   its own column is dead width. Owner moved out of the sub-status cell into its own narrow
+   column, which is what let the sub-status text stop truncating. == */
 function buildAmDealsListingHTML(){
   const hamburger='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const stage=amPipelineStage?amStageById(amPipelineStage):null;
-  const rows=amDealsForStage(amPipelineStage);
+  const all=amFilteredDeals();
+  const total=all.length;
+  // Clamp rather than trust: a filter or a completed step can shrink the result set while the
+  // user is on a later page, and an out-of-range page would render an empty table over real data.
+  const totalPages=Math.max(1,Math.ceil(total/AM_PAGE_SIZE));
+  if(amPage>totalPages)amPage=totalPages;
+  if(amPage<1)amPage=1;
+  const start=(amPage-1)*AM_PAGE_SIZE;
+  const rows=all.slice(start,start+AM_PAGE_SIZE);
+  // Validated against the visible page, not the whole result set — a drawer describing a record
+  // that is not in the table under it reads as a bug.
   if(amSelectedDealId&&!rows.some(function(d){return d.id===amSelectedDealId;}))amSelectedDealId=null;
-  const title=stage?stage.label:'All stages';
-  const sub=stage
-    ?'Stage '+stage.n+' of 9 &middot; '+(stage.track==='engagement'?'Engagement track':'Placement track')+' &middot; Waiting on '+stage.waitingOn
-    :'Every record you own across the pipeline';
-  const body=rows.length?rows.map(function(d,i){
-    const s=amStageById(d.stage)||{};
+  const title=stage?stage.short:'All your work';
+  const sub=stage?String(stage.plain).replace(/&mdash;/g,'—')+' &nbsp;·&nbsp; Should take: '+(amStageSla[stage.id]||'&mdash;')
+    :'Everything you own, in one list. Click a step above to narrow it down.';
+  /* One list defines the columns, and the colgroup, the header row and every cell are all
+     generated from it. That is the fix for a real bug: the drawer-open view used to hide two
+     columns with `display:none` while leaving all six <col> elements in place, and under
+     table-layout:fixed the browser maps the Nth *rendered* cell to the Nth <col>. So the four
+     surviving cells silently took the widths of cols 1-4 (34% / 0% / 36% / 0%), collapsing
+     "Where it is now" and the action button to nothing and stranding 30% of empty table on the
+     right. Generating both sides from one source makes that class of drift impossible. */
+  const compact=!!amSelectedDealId;
+  const columns=[
+    {w:'19%',cw:'32%',th:'Client',
+     cell:function(d){return '<div class="cell-primary am-c-client">'+d.client+'</div><div class="cell-sub">'+d.ref+'</div>';}},
+    {w:'18%',hideWhenCompact:true,th:'Who we are placing',
+     cell:function(d){return '<div class="cell-primary am-c-client">'+d.subject+'</div><div class="cell-sub">'+d.role+' &middot; '+d.country+'</div>';}},
+    {w:'27%',cw:'36%',th:'Where it is now',cell:amSubCellHTML},
+    {w:'9%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
+     cell:function(d){return '<span class="am-c-age'+(d.breach?' breach':'')+'">'+d.age+'d</span>'
+       +(d.breach?'<div class="cell-sub am-c-late">Too long</div>':'');}},
+    {w:'19%',cw:'24%',th:'What to do next',cell:amNextActionCellHTML},
+    {w:'8%',cw:'8%',th:'',
+     cell:function(d){return '<button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>';}}
+  ].filter(function(c){return !(compact&&c.hideWhenCompact);});
+  const colgroup='<colgroup>'+columns.map(function(c){return '<col style="width:'+(compact?c.cw:c.w)+'">';}).join('')+'</colgroup>';
+  const head='<thead><tr>'+columns.map(function(c){return '<th'+(c.thTitle?' title="'+attrSafe(c.thTitle)+'"':'')+'>'+c.th+'</th>';}).join('')+'</tr></thead>';
+  const body=rows.length?rows.map(function(d){
     return '<tr class="am-row'+(amSelectedDealId===d.id?' lp-row-selected':'')+'" id="am-row-'+d.id+'" style="cursor:pointer" onclick="openAmDealSidebar('+d.id+')">'
-      +'<td style="color:#6b7280;font-size:13px">'+(i+1)+'</td>'
-      +'<td style="font-weight:600;color:var(--navy)">'+d.ref+'</td>'
-      +'<td style="font-weight:600;color:var(--navy)">'+d.client+'</td>'
-      +'<td><div class="cell-primary">'+d.subject+'</div><div class="cell-sub">'+d.role+'</div></td>'
-      +'<td>'+d.country+'</td>'
-      +'<td style="white-space:nowrap">'+d.value+'</td>'
-      +'<td><div class="cell-primary" style="font-weight:500">'+d.updated+'</div><div class="cell-sub">'+d.age+'d in stage</div></td>'
-      +'<td><span class="lp-status-badge '+amBadgeClass(d.stage)+'">'+(s.short||'')+'</span></td>'
-      +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="More actions">'+hamburger+'</button></td>'
+      +columns.map(function(c){return '<td>'+c.cell(d)+'</td>';}).join('')
       +'</tr>';
   }).join('')
-    :'<tr><td colspan="9" style="padding:28px;text-align:center;color:var(--gray);font-size:12.5px">Nothing is sitting at &ldquo;'+title+'&rdquo; right now.</td></tr>';
+    :'<tr><td colspan="'+columns.length+'" style="padding:34px;text-align:center;color:var(--gray);font-size:12.5px">Nothing here right now.</td></tr>';
   return '<div class="am-list-block">'
     +'<div class="am-list-head">'
       +'<div><div class="am-list-title">'+title+'</div><div class="am-list-sub">'+sub+'</div></div>'
-      +'<div class="am-list-right"><span class="am-list-count">'+rows.length+' of '+amDeals.length+'</span>'
-      +(stage?'<button class="lp-pill-reset" onclick="amClearPipelineStage()">Clear stage</button>':'')+'</div>'
+      +'<div class="am-list-right"><span class="am-list-count">'+total+' of '+amDeals.length+'</span>'
+      +(stage?'<button class="lp-pill-reset" onclick="amClearPipelineStage()">Show all</button>':'')+'</div>'
     +'</div>'
-    +(stage?'<div class="am-list-note '+stage.tone+'">'+stage.internal+'</div>':'')
     +'<div class="lp-split-wrap"><div class="lp-split-main">'
-    +'<table class="lp-table am-table"><thead><tr>'
-    +'<th>S.No</th><th>Ref ID</th><th>Client</th><th>Candidate / Scope</th><th>Country</th><th>Value</th><th>Last Update</th><th>Status</th><th>Action</th>'
-    +'</tr></thead><tbody>'+body+'</tbody></table>'
-    +'<div class="lp-pagination">'
-    +'<span class="lp-pagination-info">Showing 1&ndash;'+rows.length+' of '+rows.length+' entries</span>'
-    +'<div class="lp-pagination-controls">'
-    +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>'
-    +'<button class="lp-pg-btn active">1</button>'
-    +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></button>'
-    +'</div></div>'
+    +'<table class="lp-table am-table">'+colgroup+head+'<tbody>'+body+'</tbody></table>'
+    +amListPaginationHTML(total,totalPages,start)
     +'</div>'
     +'<div class="lp-split-sb'+(amSelectedDealId?' open':'')+'" id="am-split-sb"><div class="lp-isb" id="am-isb-inner">'+(amSelectedDealId?renderAmDealSidebar():'')+'</div></div>'
     +'</div></div>';
@@ -516,6 +589,93 @@ function amBadgeClass(stageId){
   if(s.tone==='red')return 'inactive';
   if(s.tone==='amber')return 'pending';
   return 'expired';
+}
+/* == SUB-STATUS CELL + POPOVER ===========================================================
+   The listing cell answers "how far into this stage" in one glance — current sub-step and
+   n of m — and the popover carries the same numbered treatment as the Contracts status menu
+   so it reads as one product rather than a bolted-on panel.
+
+   Unlike that menu, this one is owner-gated. Only the single NEXT sub-step is actionable, and
+   only when the signed-in role owns it; everything else states who is holding it. The existing
+   Contracts picker lets any role click any future step (see buildContractsListingHTML), which
+   makes the owner and SLA columns of the operating model unenforceable — not a pattern to
+   copy into a surface that now carries per-step ownership. == */
+/* Read-only now. The 41-step popover that used to hang off this cell was the opposite of
+   "show me the next action" — it presented every step of the stage and made the user work out
+   which one mattered. The single step in progress is the answer, and everything else moved
+   into the drawer, where Logs carries the action and Workflow carries the history. */
+function amSubCellHTML(d){
+  const s=amStageById(d.stage)||{};
+  const steps=amSubSteps(d.stage);
+  if(!steps.length)return '<span class="lp-dash">&mdash;</span>';
+  const idx=amSubIndex(d);
+  const cur=steps[idx];
+  return '<div class="am-where"'
+    +' title="'+attrSafe(String(s.plain).replace(/&mdash;/g,'—'))+'">'
+    +'<span class="am-sub-pill '+amBadgeClass(d.stage)+'">'+s.short+'</span>'
+    +'<span class="am-where-step">'+cur.label+(cur.cond?'<i class="am-sub-cond">'+cur.cond+'</i>':'')+'</span>'
+    +'<span class="am-where-prog">Step '+(idx+1)+' of '+steps.length+'</span>'
+    +'</div>';
+}
+/* The one column a new user should be able to act from without reading anything else. */
+function amNextActionCellHTML(d){
+  const a=amNextAction(d);
+  if(a.kind==='do')return '<button class="am-act do" onclick="event.stopPropagation();amCompleteStep('+d.id+')">'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> '+a.label+'</button>';
+  if(a.kind==='chase')return '<button class="am-act chase" onclick="event.stopPropagation();amRemindClient('+d.id+')">'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4h16v12H7l-3 3z"/></svg> '+a.label+'</button>';
+  return '<span class="am-act wait">'+a.label+'</span>';
+}
+// Stage-level SLA straight off the operating model, kept beside the stages it annotates.
+const amStageSla={'request-received':'1 hour','quote-prep':'1 day, or 2 if a partner is involved','quote-review':'Follow up every few days','quote-approved':'Same day','agreement-signature':'2 days','deposit-due':'Clears automatically when paid','employment-contract':'1 day to issue','onboarding':'Depends on the country','active':'Next payroll run'};
+function amStampToday(d){
+  const now=new Date();
+  d.updated=now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear();
+  d.age=0;
+}
+/* One action, one meaning: finish the step this record is sitting on. If it was the last step
+   of the stage, the record moves to the next stage — the client-facing status is always a
+   consequence of the steps underneath it, never set on its own. */
+function amCompleteStep(dealId){
+  const d=amDeals.find(function(x){return x.id===dealId;});if(!d)return;
+  const steps=amSubSteps(d.stage);
+  const idx=amSubIndex(d);
+  const cur=steps[idx];if(!cur)return;
+  if(!amCanAdvance(cur.owner)){showAiToast('Not yours to complete','&ldquo;'+cur.label+'&rdquo; belongs to '+cur.owner+'.');return;}
+  d.breach=false;amStampToday(d);
+  if(idx<steps.length-1){
+    d.sub=idx+1;
+    showAiToast(cur.label+' &mdash; done',d.ref+' &middot; next up: '+steps[idx+1].label);
+  }else{
+    const nextStage=amPipelineStages[amStageIndex(d.stage)+1];
+    if(nextStage){
+      d.stage=nextStage.id;d.sub=0;
+      showAiToast('Moved to &ldquo;'+nextStage.short+'&rdquo;',d.ref+' &middot; the client now sees &ldquo;'+String(nextStage.label).replace(/&mdash;/g,'—')+'&rdquo;.');
+    }else{
+      showAiToast('All done',d.ref+' is employed and on payroll.');
+    }
+  }
+  renderADTPage();
+}
+/* The useful action on a step the client owns. It does not move the record — it records that
+   we chased, which is exactly the thing an Account Manager needs evidence of later. */
+function amRemindClient(dealId){
+  const d=amDeals.find(function(x){return x.id===dealId;});if(!d)return;
+  const cur=amCurrentSub(d)||{};
+  const stage=amStageById(d.stage)||{};
+  const now=new Date();
+  const h=now.getHours();
+  (amExtraLog[d.id]=amExtraLog[d.id]||[]).unshift({
+    stage:stage,stageNo:stage.n,subNo:amSubIndex(d)+1,
+    sub:{label:'Reminder sent to client'},
+    owner:amOwnerInfo('Account Manager'),ownerRole:'Account Manager',
+    state:'note',reminder:true,
+    date:now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear(),
+    time:(h%12||12)+':'+String(now.getMinutes()).padStart(2,'0')+' '+(h>=12?'PM':'AM'),
+    note:'Chased &ldquo;'+cur.label+'&rdquo;.'
+  });
+  showAiToast('Reminder sent',d.client+' &middot; chased &ldquo;'+cur.label+'&rdquo;.');
+  renderADTPage();
 }
 function openAmDealSidebar(id){
   amSelectedDealId=id;amDealTab='basic-details';
@@ -536,10 +696,23 @@ function navAmDealTab(tab){
    shows, but walked for one record, worded exactly as the client is shown them. An Account
    Manager on a call needs to answer "where are we and what are you waiting on me for" —
    which is a per-record question the rail can't answer. */
+/* == THE RECORD DRAWER ===================================================================
+   Four tabs, and the split between the middle two is the point of it:
+
+     Details          the facts about this record
+     Logs             where you ACT, and the fine-grained trail of every step event
+     Workflow         the coarse story — which of the nine stages are done, who finished them
+     What client sees the client mirror, with no internal steps in it at all
+
+   Logs and Workflow are not two views of one list. Logs is every step event including the ones
+   that did not move the record (a chase, a reminder) and it is the only place that can change
+   the record. Workflow is stage-level and read-only: nine rows, the shape of the journey. That
+   is the same division the rest of this app already uses between its Logs and Workflow tabs,
+   so a user who has read one record here can read any record anywhere. */
 function renderAmDealSidebar(){
   const d=amDeals.find(function(x){return x.id===amSelectedDealId;});if(!d)return '';
   const s=amStageById(d.stage)||{};
-  const tabs=[{id:'basic-details',label:'Basic Details'},{id:'client-view',label:'Client View'}];
+  const tabs=[{id:'basic-details',label:'Details'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'},{id:'client-view',label:'What client sees'}];
   const tabBar='<div class="lp-isb-tabbar">'
     +'<div class="lp-isb-tabs" id="am-isb-tabs">'+tabs.map(function(t){return '<button class="lp-isb-tab'+(amDealTab===t.id?' active':'')+'" onclick="navAmDealTab(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'
     +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeAmDealSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
@@ -549,35 +722,111 @@ function renderAmDealSidebar(){
   const iGlobe='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
   const iMoney='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
   const iClock='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
-  const iCheck='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
   const iTag='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
   const fc=function(ico,label,val){return '<div class="lp-sb-field-card"><div class="lp-sb-field-icon">'+ico+'</div><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+label+'</div><div class="lp-sb-field-value">'+val+'</div></div></div>';};
   let body='';
+
   if(amDealTab==='basic-details'){
-    const badge='<span class="lp-status-badge '+amBadgeClass(d.stage)+'">'+(s.short||'')+'</span>';
-    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.client+'</span>'+badge+'</div>'
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.client+'</span>'
+      +'<span class="lp-status-badge '+amBadgeClass(d.stage)+'">'+s.short+'</span></div>'
+      +'<div class="am-sb-plain">'+s.plain+'</div>'
       +'<div class="lp-sb-detail-grid">'
-      +fc(iId,'Ref ID',d.ref)+fc(iTag,'Record Type',d.kind==='engagement'?'Engagement (client request)':'Placement (one hire)')
-      +fc(iUser,d.kind==='engagement'?'Scope':'Candidate',d.subject)+fc(iUser,'Role',d.role)
-      +fc(iGlobe,'Country',d.country)+fc(iMoney,'Value','<span style="color:var(--orange)">'+d.value+'</span>')
-      +fc(iClock,'Last Update',d.updated)+fc(iClock,'Time in Stage',d.age+' day'+(d.age===1?'':'s'))
-      +fc(iCheck,'Client Sees','<span style="font-weight:700">'+s.label+'</span>')+fc(iUser,'Waiting On',s.waitingOn||'&mdash;')
-      +'</div>'
-      +'<div class="am-sb-internal"><div class="am-sb-internal-label">Internal note</div>'+s.internal+'</div>';
+      +fc(iId,'Reference',d.ref)+fc(iTag,'Type of record',d.kind==='engagement'?'A client request':'One person being hired')
+      +fc(iUser,d.kind==='engagement'?'How many roles':'Person',d.subject)+fc(iUser,'Job',d.role)
+      +fc(iGlobe,'Country',d.country)+fc(iMoney,'Worth','<span style="color:var(--orange)">'+d.value+'</span>')
+      +fc(iClock,'Last touched',d.updated)+fc(iClock,'Days on this step',d.age+' day'+(d.age===1?'':'s'))
+      +'</div>';
+
+  }else if(amDealTab==='logs'){
+    /* The action lives here, at the top, above the trail it writes into. One step, one button —
+       the same next action the listing shows, so the two can never disagree. */
+    const a=amNextAction(d);
+    const steps=amSubSteps(d.stage);
+    const idx=amSubIndex(d);
+    const actionBtn=a.kind==='do'
+      ?'<button class="am-sb-advance" onclick="amCompleteStep('+d.id+')">Mark &ldquo;'+a.step.label+'&rdquo; done</button>'
+      :a.kind==='chase'
+        ?'<button class="am-sb-chase" onclick="amRemindClient('+d.id+')">Send the client a reminder</button>'
+        :'<div class="am-sb-waiting">'+a.label+' &mdash; nothing for you to do here</div>';
+    const actionCard='<div class="am-sb-next '+a.kind+'">'
+      +'<div class="am-sb-next-kicker">Next thing to happen</div>'
+      +'<div class="am-sb-next-step">'+(a.step?a.step.label:'&mdash;')+(a.step&&a.step.cond?'<i class="am-sub-cond">'+a.step.cond+'</i>':'')+'</div>'
+      +'<div class="am-sb-next-meta">Step '+(idx+1)+' of '+steps.length+' in &ldquo;'+s.short+'&rdquo;'
+        +' &middot; owned by '+a.owner+(a.step&&a.step.sla?' &middot; should take '+a.step.sla:'')+'</div>'
+      +actionBtn+'</div>';
+    const log=amDealLog(d);
+    const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const clkSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    const timeline=log.length?log.map(function(e,i){
+      const sk=e.reminder?'default':e.state==='current'?'default':'active';
+      return '<div class="lp-log-row">'
+        +'<div class="lp-log-avatar-col"><div class="lp-log-avatar lp-log-avatar--'+sk+'">'+personSvg+'</div>'+(i<log.length-1?'<div class="lp-log-connector"></div>':'')+'</div>'
+        +'<div class="lp-log-card">'
+        +'<div class="lp-log-status-row"><span class="lp-log-dot lp-log-dot--'+sk+'"></span>'
+          +'<span class="lp-log-status-text lp-log-status-text--'+sk+'">'+e.sub.label+'</span>'
+          +(e.reminder?'<span class="am-sub-tag loop">reminder</span>':'')
+          +(e.state==='current'?'<span class="am-sub-tag loop">happening now</span>':'')
+          +(e.breach?'<span class="am-sub-tag breach">took too long</span>':'')+'</div>'
+        +'<div class="lp-log-meta-row"><span class="lp-log-meta-item">'+personSvg+'<span>'+e.owner.who+'</span></span>'
+          +'<span class="lp-log-meta-item">'+calSvg+'<span>'+e.date+'</span></span>'
+          +'<span class="lp-log-meta-item">'+clkSvg+'<span>'+e.time+'</span></span></div>'
+        +'<div class="lp-log-comment-row"><span class="lp-log-comment-label">In:</span>'+e.stageNo+'. '+e.stage.short
+          +' &middot; '+(e.note?e.note:e.state==='current'?'In progress.':'Finished.')+'</div>'
+        +'</div></div>';
+    }).join(''):'<div class="lp-logs-empty">Nothing has happened yet.</div>';
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.subject+'</span>'
+      +'<span class="am-int-chip">Internal</span></div>'
+      +actionCard
+      +'<div class="am-sb-loghead">Everything that has happened <span>'+log.length+' entr'+(log.length===1?'y':'ies')+', newest first</span></div>'
+      +'<div class="lp-logs-timeline">'+timeline+'</div>';
+
+  }else if(amDealTab==='workflow'){
+    /* Stage-level and read-only: the nine steps of the journey, which are done, which one is
+       live, and who finished each. This is the answer to "what has been done to get here". */
+    const curIdx=amStageIndex(d.stage);
+    const log=amDealLog(d);
+    const rows=amPipelineStages.map(function(st,i){
+      const state=i<curIdx?'done':i===curIdx?'current':'upcoming';
+      const steps=amSubSteps(st.id);
+      const doneCount=i<curIdx?steps.length:i===curIdx?amSubIndex(d)+1:0;
+      // Who last touched this stage, taken from the derived trail rather than restated.
+      const last=log.filter(function(e){return e.stage.id===st.id&&!e.reminder;})[0];
+      const mark=state==='done'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>':String(st.n);
+      return '<div class="am-cv-row '+state+'">'
+        +'<div class="am-cv-markcol"><div class="am-cv-mark">'+mark+'</div>'+(i<amPipelineStages.length-1?'<div class="am-cv-line"></div>':'')+'</div>'
+        +'<div class="am-cv-body"><div class="am-cv-label">'+st.short
+          +(st.gate?'<span class="am-sub-tag breach">payment gate</span>':'')+'</div>'
+        +'<div class="am-cv-sub">'
+          +(state==='done'?doneCount+' of '+steps.length+' tasks done'+(last?' &middot; last by '+last.owner.who+' on '+last.date:'')
+            :state==='current'?'On task '+doneCount+' of '+steps.length+' &middot; '+(amCurrentSub(d)||{}).label+' &middot; waiting on '+((amCurrentSub(d)||{}).owner||'&mdash;')
+            :'Not started &middot; '+steps.length+' tasks &middot; '+st.waitingOn)
+        +'</div></div></div>';
+    }).join('');
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">How far this has got</span>'
+      +'<span class="am-int-chip">Internal</span></div>'
+      +'<div class="am-cv-intro">The nine steps every piece of work goes through, and what has already been done on this one. To change anything, use the Logs tab.</div>'
+      +'<div class="am-cv-list">'+rows+'</div>';
+
   }else{
+    /* Deliberately free of the internal tasks. This tab is the client mirror, and those tasks
+       name partner sourcing, off-standard pricing approvals and sanctions screening — so the
+       tab is labelled client-visible to make it obvious in a demo that nothing internal is on
+       this screen by accident. */
     const cur=amStageIndex(d.stage);
     const steps=amPipelineStages.map(function(st,i){
       const state=i<cur?'done':i===cur?'current':'upcoming';
       const mark=state==='done'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>':String(st.n);
-      const flag=st.gate?'<span class="am-stage-flag gate">Gate</span>':st.clientAction?'<span class="am-stage-flag client">Client</span>':'';
+      const flag=st.gate?'<span class="am-stage-flag gate">Gate</span>':st.clientAction?'<span class="am-stage-flag client">Your turn</span>':'';
       return '<div class="am-cv-row '+state+'">'
         +'<div class="am-cv-markcol"><div class="am-cv-mark">'+mark+'</div>'+(i<amPipelineStages.length-1?'<div class="am-cv-line"></div>':'')+'</div>'
         +'<div class="am-cv-body"><div class="am-cv-label">'+st.label+flag+'</div>'
-        +'<div class="am-cv-sub">'+(state==='current'?st.internal:state==='done'?'Completed':'Not started &middot; waiting on '+st.waitingOn)+'</div></div>'
+        +'<div class="am-cv-sub">'+(state==='current'?'Where you are now':state==='done'?'Done':'Still to come')+'</div></div>'
         +'</div>';
     }).join('');
-    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.subject+'</span></div>'
-      +'<div class="am-cv-intro">Exactly what '+d.client+' is shown for this record. Stage '+(cur+1)+' of 9 is live now.</div>'
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.subject+'</span>'
+      +'<span class="am-int-chip client">Client-visible</span></div>'
+      +'<div class="am-cv-intro">Exactly what '+d.client+' sees for this record &mdash; the nine headline stages only. The internal tasks under them are never shown here.</div>'
       +'<div class="am-cv-list">'+steps+'</div>';
   }
   return tabBar+'<div class="lp-isb-body">'+body+'</div>';
@@ -3722,7 +3971,7 @@ function buildLeavePoliciesHTML(){
   const nextArrow='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
   const pageButtons=Array.from({length:totalPages},(_,i)=>'<button class="lp-pg-btn'+(lpCurrentPage===i+1?' active':'')+'" onclick="lpGoToPage('+(i+1)+')">'+(i+1)+'</button>').join('');
   const pagination='<div class="lp-pagination">'
-    +'<span class=”lp-pagination-info”>Showing '+(total===0?0:start+1)+'&ndash;'+Math.min(start+LP_PAGE_SIZE,total)+' of '+total+' entries</span>'
+    +'<span class="lp-pagination-info">Showing '+(total===0?0:start+1)+'&ndash;'+Math.min(start+LP_PAGE_SIZE,total)+' of '+total+' entries</span>'
     +'<div class="lp-pagination-controls">'
     +'<button class="lp-pg-btn lp-pg-arrow" onclick="lpGoToPage('+(lpCurrentPage-1)+')" '+(lpCurrentPage===1?'disabled':'')+'>'+prevArrow+'</button>'
     +pageButtons

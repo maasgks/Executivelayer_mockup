@@ -1,75 +1,95 @@
-/* ===== ACCOUNT MANAGER — CLIENT PIPELINE =====================================
-   One horizontal rail, nine client-facing stages, grouped into the two tracks the
-   work actually runs on. The rail scrolls rather than wraps: a pipeline that
-   reflows into two rows stops reading as a sequence, which is the only thing it
-   is there to communicate. Stage tone drives the top rail, the count colour and
-   the flag pill, so a stage that needs the client (amber) or is a hard payment
-   gate (red) is legible before any label is read. */
-.am-pipe-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px 20px;margin-bottom:4px}
-.am-pipe-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:18px}
-.am-pipe-title{font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px}
-.am-pipe-sub{font-size:11.5px;color:var(--gray);margin-top:4px;max-width:540px;line-height:1.55}
-.am-pipe-metrics{display:flex;align-items:stretch;border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-shrink:0}
-.am-metric{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px 16px;border-right:1px solid var(--border);min-width:96px}
-.am-metric:last-child{border-right:none}
-.am-metric b{font-size:19px;font-weight:800;color:var(--navy);line-height:1.15}
-.am-metric span{font-size:10px;font-weight:600;color:var(--gray);white-space:nowrap}
-.am-metric.amber b{color:#b45309}
-.am-metric.red b{color:#dc2626}
-.am-pipe-scroll{overflow-x:auto;overflow-y:hidden;padding:2px 2px 6px}
-.am-pipe-scroll::-webkit-scrollbar{height:6px}
-.am-pipe-scroll::-webkit-scrollbar-track{background:transparent}
-.am-pipe-scroll::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:3px}
-.am-pipe-rail{display:flex;align-items:stretch;min-width:max-content}
-.am-track{display:flex;flex-direction:column;gap:9px}
-.am-track-head{display:flex;align-items:center;gap:8px;padding-left:2px}
-.am-track-label{font-size:10.5px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
-.am-track-sub{font-size:10.5px;color:var(--gray);white-space:nowrap}
-.am-track-count{font-size:10px;font-weight:700;color:var(--gray);background:#f1f5f9;border-radius:20px;padding:1px 8px}
-.am-track-stages{display:flex;align-items:stretch}
-.am-stage{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:134px;padding:11px 12px 12px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:.16s;overflow:hidden}
-.am-stage:hover{border-color:#94a3b8;box-shadow:0 3px 10px rgba(15,23,42,.07);transform:translateY(-1px)}
-.am-stage-rail{position:absolute;top:0;left:0;right:0;height:3px;background:#cbd5e1}
-.am-stage.tone-blue .am-stage-rail{background:#2563eb}
-.am-stage.tone-amber .am-stage-rail{background:#f59e0b}
-.am-stage.tone-green .am-stage-rail{background:#16a34a}
-.am-stage.tone-red .am-stage-rail{background:#dc2626}
-.am-stage-top{display:flex;align-items:center;gap:6px;width:100%;margin-bottom:2px}
-.am-stage-n{width:17px;height:17px;border-radius:50%;background:#f1f5f9;color:var(--gray);font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-.am-stage-flag{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 6px;border-radius:20px;margin-left:auto;white-space:nowrap;line-height:1.4}
-.am-stage-flag.client{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
-.am-stage-flag.gate{background:#fff0f0;color:#dc2626;border:1px solid #fca5a5}
-.am-stage-count{font-size:25px;font-weight:800;color:var(--navy);line-height:1.2}
-.am-stage.tone-amber .am-stage-count{color:#b45309}
-.am-stage.tone-red .am-stage-count{color:#dc2626}
-.am-stage.tone-green .am-stage-count{color:#16a34a}
-.am-stage-label{font-size:11px;font-weight:600;color:var(--navy);line-height:1.35}
-.am-stage.empty{background:#fafbfc}
-.am-stage.empty .am-stage-count{color:#cbd5e1}
-.am-stage.empty .am-stage-label{color:var(--gray)}
-.am-stage.selected{border-color:var(--navy);background:#f8fafc;box-shadow:0 0 0 3px rgba(15,23,42,.07)}
-.am-stage.selected .am-stage-n{background:var(--navy);color:#fff}
-.am-stage-arrow{display:flex;align-items:center;justify-content:center;width:18px;color:#cbd5e1;flex-shrink:0}
-.am-stage-arrow svg{width:13px;height:13px}
-/* The fan-out between the tracks: everything to the right of this line repeats once
-   per hire, which is why one client can hold more than one row below it. */
-.am-pipe-fork{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;padding:24px 15px;flex-shrink:0}
-.am-pipe-fork-line{width:0;flex:1;min-height:8px;border-left:1.5px dashed #cbd5e1}
-.am-pipe-fork-note{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:2px 7px;white-space:nowrap;line-height:1.4}
+/* ===== ACCOUNT MANAGER — DEAL DESK ===========================================
+   Three bands and nothing else: header (who I am), rail (where everything is),
+   listing (what to do next). The header carries no figures — the rail counts the
+   same records by stage a few inches below it, and one set of counts per page.
 
-/* ----- records behind the selected stage ----- */
-.am-list-block{margin-top:20px}
-.am-list-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:11px}
-.am-list-title{font-size:14px;font-weight:800;color:var(--navy);line-height:1.3}
-.am-list-sub{font-size:11.5px;color:var(--gray);margin-top:3px}
+   The rail divides the available width with flex instead of laying out fixed-width
+   cards in a scroller. That is a correctness property, not a style choice: a nine
+   stage sequence whose last two stages sit off-screen is not readable as a
+   sequence, and no amount of scroll affordance fixes that. Flex division means it
+   fits at any viewport by construction.
+
+   The listing carries no min-width for the same reason. Six columns chosen from
+   what an Account Manager triages on; value, dates and identifiers live in the
+   drawer, because they are things you look up about one record, not things you
+   scan across twenty.
+
+   ----- status colour ------------------------------------------------------
+   Statuses are monochrome. Amber, green, red, blue and purple all carried real
+   meaning individually and none of it survived contact with the others: a table
+   row could show a green stage pill, an amber sub-status chip, a red age and a
+   green action button at once, which is four alarms and therefore none. The page
+   now has one ink scale, and the three steps below are the whole vocabulary.
+   Emphasis is weight and darkness, not hue. */
+:root{
+  --am-quiet-bg:#f8fafc;   /* nothing to say — upcoming, empty, inert */
+  --am-tint-bg:#f1f5f9;    /* the default status ground */
+  --am-tint-line:#e2e8f0;
+  --am-tint-ink:#475569;
+  --am-strong-bg:#e2e8f0;  /* the one that wants you — late, gate, blocked */
+  --am-strong-line:#cbd5e1;
+}
+
+.am-page{display:flex;flex-direction:column;gap:16px;min-width:0;width:100%}
+
+/* ----- header: who this queue belongs to, and nothing else ----- */
+.am-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.am-head-title{font-size:19px;font-weight:800;color:var(--navy);letter-spacing:-.3px;line-height:1.2;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.am-head-role{font-size:10.5px;font-weight:700;color:var(--gray);background:var(--am-tint-bg);border:1px solid var(--border);border-radius:20px;padding:3px 10px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.am-head-sub{font-size:12px;color:var(--gray);margin-top:5px;line-height:1.5}
+
+/* ----- the rail ----- */
+.am-bar-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.am-bar{display:flex;align-items:stretch;min-width:0}
+/* All that marks the change of character between the two halves now the headings are gone. */
+.am-bar-div{width:17px;flex:0 0 17px;display:flex;align-items:center;justify-content:center}
+.am-bar-div::before{content:'';width:0;height:70%;border-left:1.5px dashed #cbd5e1}
+.am-bar-group{display:flex;align-items:stretch;gap:5px;min-width:0}
+
+/* flex:1 + min-width:0 is what guarantees nine segments always fit */
+.am-seg{flex:1 1 0;min-width:0;position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 10px 10px;border:1.5px solid var(--border);border-radius:9px;background:#fff;cursor:pointer;font-family:inherit;text-align:left;overflow:hidden;transition:.15s}
+.am-seg:hover{border-color:#94a3b8;background:#fafbfc}
+/* The accent strip is one grey for all nine stages. Colour-coding the tones told the reader
+   a stage was "good" or "bad" when the only thing a stage is, is later or earlier. */
+.am-seg-bar{position:absolute;top:0;left:0;right:0;height:3px;background:var(--am-strong-line)}
+/* Just the count now — the ordinal badge and the C / G corner flags are gone from the markup,
+   so the row has nothing to distribute and no `gap` to reserve for them. */
+.am-seg-top{display:flex;align-items:center;width:100%;min-width:0}
+.am-seg-count{font-size:19px;font-weight:800;color:var(--navy);line-height:1.1}
+.am-seg-label{font-size:10.5px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.3}
+.am-seg.empty{background:var(--am-quiet-bg)}
+.am-seg.empty .am-seg-count{color:var(--am-strong-line)}
+.am-seg.empty .am-seg-label{color:#9ca3af}
+/* Selection is the border and the ring alone now that the numbered chip it used to fill
+   is gone — which is enough, since only one segment can carry it at a time. */
+.am-seg.selected{border-color:var(--navy);background:#f8fafc;box-shadow:0 0 0 2.5px rgba(15,23,42,.07)}
+.am-seg.selected .am-seg-bar{background:var(--navy)}
+
+/* ----- listing ----- */
+.am-list-block{display:flex;flex-direction:column;gap:11px;min-width:0}
+.am-list-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.am-list-title{font-size:15px;font-weight:800;color:var(--navy);line-height:1.3}
+.am-list-sub{font-size:11.5px;color:var(--gray);margin-top:3px;line-height:1.5}
 .am-list-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
-.am-list-count{font-size:11px;font-weight:700;color:var(--gray);background:#f1f5f9;border-radius:20px;padding:4px 11px;white-space:nowrap}
-.am-list-note{font-size:11.5px;font-weight:600;padding:9px 13px;border-radius:8px;border:1px solid;margin-bottom:12px;line-height:1.5}
-.am-list-note.blue{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
-.am-list-note.amber{background:#fffbeb;border-color:#fde68a;color:#b45309}
-.am-list-note.green{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
-.am-list-note.red{background:#fff0f0;border-color:#fca5a5;color:#dc2626}
-.am-table{min-width:960px}
+.am-list-count{font-size:11px;font-weight:700;color:var(--gray);background:var(--am-tint-bg);border-radius:20px;padding:4px 11px;white-space:nowrap}
+
+/* no min-width: the table is sized by its colgroup and never overflows */
+.am-table{min-width:0;table-layout:fixed}
+.am-table td,.am-table th{padding:11px 14px}
+/* table-layout:fixed does not stop a nowrap heading painting over the next column — this does. */
+.am-table th{overflow:hidden;text-overflow:ellipsis}
+.am-table td{vertical-align:middle}
+.am-c-client{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.am-table .cell-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* Late is said in weight, not in red: the number goes to full black and the row grows a
+   "Too long" line under it. The words were always doing the work anyway. */
+.am-c-age{font-size:13px;font-weight:700;color:var(--gray)}
+.am-c-age.breach{color:var(--navy);font-weight:800}
+.am-c-late{color:var(--navy)!important;font-weight:700}
+/* With the drawer open only a narrow strip of the table is visible, so the columns
+   that cannot be read in it are dropped rather than clipped mid-word. */
+/* Keeps Client, Where it is now and What to do next — you can still pick the next record and
+   still act on it from the strip the drawer leaves free. */
 
 /* ----- record drawer ----- */
 .am-sb-internal{margin-top:14px;padding:12px 14px;border-radius:9px;background:#f8fafc;border:1px solid var(--border);font-size:12px;color:var(--navy);line-height:1.55}
@@ -78,20 +98,106 @@
 .am-cv-list{display:flex;flex-direction:column}
 .am-cv-row{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px}
 .am-cv-markcol{display:flex;flex-direction:column;align-items:center}
-.am-cv-mark{width:23px;height:23px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:#f1f5f9;color:var(--gray);border:1.5px solid var(--border);flex-shrink:0}
+.am-cv-mark{width:23px;height:23px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:var(--am-tint-bg);color:var(--gray);border:1.5px solid var(--border);flex-shrink:0}
 .am-cv-line{flex:1;width:1.5px;min-height:12px;background:var(--border);margin:4px 0}
 .am-cv-body{padding-bottom:16px;min-width:0}
 .am-cv-label{font-size:12.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:7px;flex-wrap:wrap;line-height:1.4}
 .am-cv-sub{font-size:11px;color:var(--gray);margin-top:3px;line-height:1.5}
-.am-cv-row.done .am-cv-mark{background:#16a34a;border-color:#16a34a;color:#fff}
-.am-cv-row.done .am-cv-line{background:#86efac}
+/* Done and current are both filled, and the ring is what separates them — done is mid-grey
+   and settled, current is black with a halo. Two greys read as a sequence; green and navy
+   read as two unrelated states. */
+.am-cv-row.done .am-cv-mark{background:#64748b;border-color:#64748b;color:#fff}
+.am-cv-row.done .am-cv-line{background:var(--am-strong-line)}
 .am-cv-row.current .am-cv-mark{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 0 0 3px rgba(15,23,42,.1)}
 .am-cv-row.current .am-cv-label{font-weight:800}
-.am-cv-row.current .am-cv-sub{color:#b45309;font-weight:600}
+.am-cv-row.current .am-cv-sub{color:var(--navy);font-weight:600}
 .am-cv-row.upcoming .am-cv-label{color:var(--gray);font-weight:600}
 
-@media(max-width:820px){
-  .am-pipe-metrics{width:100%}
-  .am-metric{flex:1;min-width:0;padding:8px 10px}
+@media(max-width:1100px){
+  .am-seg-label{font-size:10px}
+  .am-seg{padding:8px 7px 9px}
+  .am-seg-count{font-size:17px}
+}
+@media(max-width:880px){
+  .am-head{align-items:stretch;flex-direction:column;gap:14px}
   .am-list-head{align-items:flex-start;flex-direction:column;gap:10px}
 }
+
+/* ===== ADMIN SUB-STATUSES ====================================================
+   Internal layer. Every surface that carries it is marked, because the parent
+   stage is client-facing and the sub-steps under it are not. */
+.am-th-int{display:inline-block;margin-left:5px;font-size:8.5px;font-weight:800;letter-spacing:.4px;color:var(--am-tint-ink);background:var(--am-tint-bg);border:1px solid var(--am-tint-line);border-radius:20px;padding:1px 6px;text-transform:uppercase;vertical-align:middle}
+.am-int-chip{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:20px;background:var(--am-tint-bg);color:var(--am-tint-ink);border:1px solid var(--am-tint-line);white-space:nowrap}
+/* Internal vs client-facing is the one distinction worth keeping visible here, so it is
+   carried by fill weight — client-facing sits on the darker ground. */
+.am-int-chip.client{background:var(--am-strong-bg);color:var(--navy);border-color:var(--am-strong-line)}
+
+/* listing cell */
+
+/* drawer: sub-status + logs tabs */
+.am-sb-advance{margin-top:7px;padding:5px 13px;border:none;border-radius:7px;background:var(--navy);color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+.am-sb-advance:hover{background:#1e293b}
+.am-sb-waiting{margin-top:7px;font-size:11px;font-weight:600;color:var(--am-tint-ink);background:var(--am-tint-bg);border:1px solid var(--am-tint-line);border-radius:7px;padding:5px 10px;display:inline-block}
+.am-log-stage-head{display:flex;align-items:center;gap:8px;margin:14px 0 10px;font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px}
+.am-log-stage-head:first-child{margin-top:0}
+.am-log-stage-n{width:18px;height:18px;border-radius:50%;background:var(--navy);color:#fff;font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.am-log-stage-sla{margin-left:auto;font-size:9.5px;font-weight:600;color:var(--gray);text-transform:none;letter-spacing:0}
+/* new two-line sub-status cell: parent stage pill above, live sub-status below */
+.am-sub-parent{display:flex;align-items:center;min-width:0}
+
+/* ===== PLAIN-LANGUAGE LAYER ==================================================
+   Everything added so a first-time user can work the page without training. */
+
+/* "Where it is now" — read-only, three lines, no popover */
+.am-where{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+/* One pill, one ground. The stage-tone classes amBadgeClass still emits (approved / pending /
+   expired) all resolve to the base now; only `inactive` — the stalled stages — is darkened,
+   because that is the single case where the pill itself is the thing to notice. */
+.am-sub-pill{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.35px;padding:2px 8px;border-radius:20px;background:var(--am-tint-bg);color:var(--am-tint-ink);border:1px solid var(--am-tint-line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.am-sub-pill.inactive{background:var(--am-strong-bg);color:var(--navy);border-color:var(--am-strong-line)}
+.am-where-step{font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.am-where-prog{font-size:10.5px;color:var(--gray)}
+
+/* "What to do next" — one control per row, or plain text when it is not yours */
+.am-act{display:inline-flex;align-items:center;gap:6px;font-family:inherit;white-space:nowrap;max-width:100%}
+/* Solid black is "you can finish this"; outlined is "you can only nudge someone else". The
+   hierarchy that green-vs-amber was carrying is carried by fill instead. */
+button.am-act{padding:6px 13px;border-radius:8px;border:1.5px solid transparent;font-size:11.5px;font-weight:700;cursor:pointer;transition:.15s}
+button.am-act.do{background:var(--navy);border-color:var(--navy);color:#fff}
+button.am-act.do:hover{background:#1e293b;border-color:#1e293b}
+button.am-act.chase{background:#fff;border-color:var(--am-strong-line);color:var(--navy)}
+button.am-act.chase:hover{background:var(--am-tint-bg)}
+.am-act.wait{font-size:11.5px;color:#94a3b8;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+
+/* drawer: plain summary + the next-action card at the top of Logs */
+.am-sb-plain{font-size:12px;color:var(--gray);line-height:1.6;margin:-6px 0 14px}
+.am-sb-next{border:1.5px solid var(--am-strong-line);background:var(--am-quiet-bg);border-radius:11px;padding:13px 15px;margin-bottom:18px}
+.am-sb-next-kicker{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--navy);margin-bottom:5px}
+.am-sb-next-step{font-size:14px;font-weight:800;color:var(--navy);line-height:1.3;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.am-sb-next-meta{font-size:11px;color:var(--gray);margin-top:4px;line-height:1.5}
+.am-sb-advance{margin-top:11px;padding:7px 15px;border:none;border-radius:8px;background:var(--navy);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+.am-sb-advance:hover{background:#1e293b}
+.am-sb-chase{margin-top:11px;padding:7px 15px;border:1.5px solid var(--am-strong-line);border-radius:8px;background:#fff;color:var(--navy);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+.am-sb-chase:hover{background:var(--am-tint-bg)}
+.am-sb-waiting{margin-top:10px;font-size:11.5px;font-weight:600;color:var(--gray)}
+/* Tone set by a class from the renderer rather than :has(), so the card is styled by the same
+   `kind` the button is built from and there is one source of truth for which case this is. */
+.am-sb-next.wait{border-color:var(--border);background:#fff}
+.am-sb-next.wait .am-sb-next-kicker{color:var(--gray)}
+.am-sb-next.chase{border-color:var(--am-tint-line);background:var(--am-tint-bg)}
+.am-sb-next.chase .am-sb-next-kicker{color:var(--am-tint-ink)}
+.am-sb-loghead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px}
+.am-sb-loghead span{font-size:10.5px;font-weight:600;color:var(--gray);text-transform:none;letter-spacing:0}
+
+/* ----- small shared bits -------------------------------------------------------
+   `.am-row` is deliberately absent: it is a querySelectorAll hook for the drawer's
+   row-highlighting, not a style. Everything else here is rendered by the drawer. */
+.am-head-left{min-width:0}
+/* An optional or conditional task ("non-owned countries", "if off-standard") */
+.am-sub-cond{font-size:10px;font-style:italic;color:#9ca3af;font-weight:500}
+/* Inline tags in the Logs trail and the Workflow list */
+.am-sub-tag{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:1px 6px;border-radius:20px;white-space:nowrap;line-height:1.5;background:var(--am-tint-bg);color:var(--am-tint-ink);border:1px solid var(--am-tint-line)}
+.am-sub-tag.breach{background:var(--am-strong-bg);color:var(--navy);border-color:var(--am-strong-line)}
+/* "Your turn" / "Gate" markers in the client-facing tab */
+.am-stage-flag{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:20px;white-space:nowrap;line-height:1.5;background:var(--am-tint-bg);color:var(--am-tint-ink);border:1px solid var(--am-tint-line)}
+.am-stage-flag.gate{background:var(--am-strong-bg);color:var(--navy);border-color:var(--am-strong-line)}
