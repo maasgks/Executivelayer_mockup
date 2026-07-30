@@ -1441,7 +1441,7 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-journey-card-active:hover{border-color:#64748b;box-shadow:0 8px 22px rgba(15,23,42,.10)}
 /* Quiet status tag, not a solid pill — "activated" is context, and it was out-shouting the
    journey name below it. Outlined, smaller, with the dot as the live signal. */
-.ai-journey-active-badge{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;background:#fff;border:1px solid #cbd5e1;color:var(--navy);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px}
+.ai-journey-active-badge{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;background:#fff;border:1px solid #cbd5e1;color:var(--navy);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px;flex-shrink:0;white-space:nowrap}
 .ai-journey-active-dot{width:5px;height:5px;border-radius:50%;background:var(--navy);box-shadow:0 0 0 2.5px rgba(15,23,42,.12)}
 .ai-journey-card-locked{cursor:default;opacity:.55}
 .ai-journey-card-locked:hover{border-color:var(--border);box-shadow:none;transform:none}
@@ -1449,6 +1449,20 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 /* An action, not a banner: compact pill, left-aligned with the content it acts on. The
    full-width black slab weighed more than everything it belonged to. */
 .ai-journey-cta-btn{width:auto;align-self:flex-start;justify-content:center;margin-top:2px;padding:8px 22px;border-radius:99px;font-size:12.5px}
+/* Journey card header: icon, then title block, then the status tag pinned right. The icon is what
+   makes a card identifiable before it is read — three cards of near-identical text length were
+   otherwise distinguishable only by their titles. */
+.ai-journey-card-head{display:flex;align-items:flex-start;gap:12px;min-width:0}
+.ai-journey-icon{width:38px;height:38px;border-radius:11px;background:#fff;border:1px solid var(--border);color:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.2s}
+.ai-journey-icon svg{width:19px;height:19px}
+.ai-journey-card:hover .ai-journey-icon{background:var(--ol);border-color:#f1c27a;color:var(--orange)}
+.ai-journey-card-locked:hover .ai-journey-icon{background:#fff;border-color:var(--border);color:var(--navy)}
+.ai-journey-head-text{flex:1;min-width:0;padding-top:2px}
+.ai-journey-name-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0}
+/* Facts about the journey, not actions on it: quiet, uppercase-free, and clearly subordinate to
+   both the title above and the CTA below. */
+.ai-journey-meta-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:2px}
+.ai-journey-meta-chip{font-size:11px;font-weight:600;color:var(--gray);background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:3px 8px;white-space:nowrap}
 /* AI Executive: prompt-driven run flow (Create Employee / Run Payroll) */
 .ai-run-icon-wrap{width:52px;height:52px;border-radius:14px;background:var(--ol);color:var(--orange);display:flex;align-items:center;justify-content:center;margin:0 0 16px}
 .ai-run-icon-wrap svg{width:26px;height:26px}

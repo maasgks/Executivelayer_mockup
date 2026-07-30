@@ -20,7 +20,7 @@ let aiH2rAnimatedStage=-1,aiH2rData={},aiH2rOffboardStep=-1;
 // -- Agent Mode: chat-driven journey run (typed prompt -> live journey execution in form-col) --
 let pendingAgentAttachment=null,agentUploadTargetId=null,agentRunData=null;
 const enterprisePersonas=[
-  {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@dhihyperlocal.com',focus:'Deals, proposals, client acceptance, and commercial exceptions.',journeys:['contract-creation'],steps:['J1-S1','J1-S3','J1-S5'],approvals:0,owned:3,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
+  {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@dhihyperlocal.com',focus:'Client master data, deals, proposals, client acceptance, and commercial exceptions.',journeys:['user-master-data','contract-creation'],steps:['J0-S1','J0-S2','J0-S4','J1-S1','J1-S3','J1-S5'],approvals:0,owned:6,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
   {id:'deal-manager',name:'Karan Mehta',label:'Deal Manager',department:'Sales / Deal Desk',function:'Approver',initials:'KM',email:'karan.mehta@dhihyperlocal.com',focus:'Internal proposal approvals and sales escalations.',journeys:['contract-creation'],steps:['J1-S4'],approvals:1,owned:1,kpis:[['Approval Queue','2'],['SLA Breaches','0'],['Rework Loops','1'],['Team Tasks','9']]},
   {id:'compliance-officer',name:'Kavya Iyer',label:'Compliance Officer',department:'Compliance',function:'Executor + Consultant',initials:'KI',email:'kavya.iyer@dhihyperlocal.com',focus:'Country compliance checks, statutory rules, and compliance exceptions.',journeys:['contract-creation','h2r-lifecycle'],steps:['J1-S2','J3-S4'],approvals:0,owned:2,kpis:[['Country Checks','14'],['Missing Configs','1'],['Payroll Blocks','2'],['Resolved Today','6']]},
   {id:'legal-contracts-manager',name:'Devendra Rao',label:'Legal / Contracts Manager',department:'Legal / Contracts',function:'Executor',initials:'DR',email:'devendra.rao@dhihyperlocal.com',focus:'Contract generation, signature tracking, and legal document corrections.',journeys:['contract-creation'],steps:['J1-S6'],approvals:0,owned:1,kpis:[['Contracts Sent','6'],['Signature Pending','4'],['Bounced Requests','1'],['Templates Used','3']]},
@@ -85,6 +85,10 @@ let liveRunSeq=9000;
 let aiJourneyDetailSelectedStage=-1;
 let aiRunStatusFilter='';
 const aiAutomationRuns={
+  'user-master-data':[
+    {runId:'RUN-1001',client:'Meridian Retail Group',country:'India',contractType:'Enterprise',currentStepIdx:2,status:'Active',lastActivity:'25 minutes ago'},
+    {runId:'RUN-1002',client:'Harbourline Freight',country:'Netherlands',contractType:'Growth',currentStepIdx:3,status:'Completed',lastActivity:'Yesterday'}
+  ],
   'contract-creation':[
     {runId:'RUN-2001',client:'Rashi Singh',country:'Netherlands',contractType:'EOR',currentStepIdx:2,status:'Waiting for Approval',lastActivity:'3 hours ago'},
     {runId:'RUN-2002',client:'Rajdeep Singh',country:'Netherlands',contractType:'EOR',currentStepIdx:4,status:'Exception',lastActivity:'1 hour ago',exceptionNote:'Signed document could not be verified against the approved contract terms.'},
@@ -395,9 +399,12 @@ const sidebarItems=[
   // focused flow page that hides the sidebar outright, so nothing marks it active. Entity Admin
   // only: Super Admin configures what the objects are (Data Foundation), it does not fill them
   // in, so it sees All Clients alone. --
-  {dropdown:'Client',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
-    {id:'create-client',label:'Create Client',roles:['entity-admin'],color:'orange',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
-    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'}
+  // Entity User gets it too, but only for the Account Manager persona: that is the role that owns
+  // the User Master Data Creation Journey, so it is the only Entity User that has business creating
+  // or browsing client records. Every other persona's sidebar is unchanged.
+  {dropdown:'Client',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
+    {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],personas:['account-manager'],color:'orange',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
+    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'}
   ]},
   {dropdown:'Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',children:[
     {id:'direct',label:'Direct Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
@@ -432,7 +439,14 @@ const sidebarItems=[
 ];
 
 
-function sidebarRoleAllows(it){return !it.roles||it.roles.includes(portalRole);}
+// -- `roles` gates by portal role. `personas` narrows further inside Entity User, which is one role
+// standing in for nine enterprise personas: an entry with `personas` is shown only to the personas
+// that actually own that work, and is left alone for every other role. --
+function sidebarRoleAllows(it){
+  if(it.roles&&!it.roles.includes(portalRole))return false;
+  if(it.personas&&portalRole==='entity-user'&&!it.personas.includes(activePersonaId))return false;
+  return true;
+}
 // -- Drops the children this role cannot see; a dropdown left with none is filtered out by the caller. --
 function filterSidebarEntry(it){
   if(!it.dropdown)return it;
@@ -940,8 +954,11 @@ function closeAgent(){stopAmThreeJS();hideAgentWorkspaceButton();agentRunData=nu
 const pageRoleMap={
   'cfg-overview':['super-admin'],'cfg-data-foundation':['super-admin'],'cfg-model-detail':['super-admin'],'cfg-model-add':['super-admin'],'cfg-system-add':['super-admin'],
   'cfg-systems':['super-admin','entity-admin'],'cfg-system-detail':['super-admin','entity-admin'],
-  'cfg-user-intake':['super-admin','entity-admin'],
-  'master-data':['super-admin','entity-admin'],
+  // -- Entity User is allowed through so the Account Manager can run the User Master Data Creation
+  // Journey end to end: Create Client opens the intake form, and submitting it lands on All Clients.
+  // Which personas actually see the entries is decided by the sidebar (`personas`), not here. --
+  'cfg-user-intake':['super-admin','entity-admin','entity-user'],
+  'master-data':['super-admin','entity-admin','entity-user'],
   'cfg-context-journey':['super-admin','entity-admin'],'cfg-journey-detail':['super-admin','entity-admin'],
   'cfg-agents':['super-admin','entity-admin'],'operations-cockpit':['entity-admin'],
   'my-runs':['entity-admin','entity-user'],
@@ -1685,12 +1702,22 @@ let ctJourneyContextRunId=null;
 
 // -- AI EXECUTIVE MODULE --
 const aiJourneys=[
+  // -- Sits first because it is first in the real sequence: a client's master record has to exist
+  // before a deal can be raised against it. Its entry action is Create Client (the NewForce intake
+  // form), the same action the sidebar's Client > Create Client opens. --
+  {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client through the intake form, de-duplicates and validates it, then publishes the verified master record to every downstream journey.',modules:['Client','Master Data','Compliance Hub','Data Foundation'],coverage:78,humanSteps:1,aiSteps:3,status:'Active',risk:'Low',updated:'29 Jul 2026, 9:45 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3"/><path d="M20 5.5v6"/><path d="M4 12c0 1.7 3.6 3 8 3"/><path d="M18 15v6M15 18h6"/></svg>'},
   {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
   {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
 ];
 
 const aiJourneyEvents={
+  'user-master-data':[
+    {name:'Master Data Intake',chips:['Human Required','Client'],source:'Account Manager',desc:"The Account Manager captures the client's legal, contact, and billing master data on the intake form.",validation:'Mandatory identity, contact, and billing fields are checked before the form can be submitted.',human:'Required — Account Manager completes the intake form.',failure:'Missing mandatory fields block the submit and stay flagged on the form.',next:'Duplicate & Identity Check',fields:['Client Legal Name','Country','Primary Contact','Billing Entity']},
+    {name:'Duplicate & Identity Check',chips:['AI Automated','Master Data'],source:'AI Master Data Matcher',desc:'AI matches the submitted record against the existing client master and flags duplicates or near-matches before a new record is minted.',validation:'Legal name, registration number, and email domain are matched against existing clients.',human:'None — fully automated.',failure:'A near-match is routed back to the Account Manager to merge or confirm as new.',next:'Compliance & Tax Validation',fields:['Client ID','Registration Number','Match Confidence']},
+    {name:'Compliance & Tax Validation',chips:['AI Automated','Compliance Hub'],source:'AI Compliance Hub Sync',desc:'AI validates tax identifiers and country registration requirements against the Compliance Hub before the record is published.',validation:'Tax ID format and country statutory requirements are verified.',human:'None — fully automated.',failure:'An unrecognised tax ID raises an exception for the compliance team.',next:'Master Record Published',fields:['Tax ID','Country Rules','Statutory Status']},
+    {name:'Master Record Published',chips:['AI Automated','Client'],source:'AI Master Data Publisher',desc:'The verified client record is written to the client master and made available to every downstream journey.',validation:'The published record is readable from Client > All Clients.',human:'None — fully automated.',failure:'A write failure raises an exception for retry.',next:'Journey Complete — Client Master Data Created',fields:['Client ID','Record Status','Published At']}
+  ],
   'contract-creation':[
     {name:'Deal Created (Employee Created)',chips:['AI Automated','Deal Desk','Employee'],source:'AI Prompt Parser',desc:"AI parses a natural-language prompt to create the deal and, if the person doesn't already exist, creates or matches the Employee record in the same step.",validation:'Employee name and ID are matched or created against existing records.',human:'None — fully automated.',failure:'Ambiguous name matches are flagged for manual employee selection.',next:'Proposal Sent',fields:['Employee Name','Employee ID','Country','Client','Contract Type']},
     {name:'Proposal Sent',chips:['AI Automated','Proposal'],source:'AI Contract Assistant',desc:'AI drafts commercial terms and compliance items, then sends the proposal for internal approval.',validation:'Commercial terms are validated against country rate rules.',human:'None — AI-supported drafting.',failure:'Missing rate data blocks the send and raises an exception.',next:'Proposal Approved',fields:['Billing Rate','Pay Rate','Margin %','Compliance Checklist']},
@@ -1875,7 +1902,8 @@ const entityLockedCategories=['P2P','F2A'];
 // -- ENTITY ADMIN: journey activation + request queue (shared session-wide, not per-entity) --
 // contract-creation ships pre-activated so Entity User lands on a working "Create Contract" action out of the box;
 // payroll-creation/h2r-lifecycle start locked so the request -> approve -> unlock flow has something real to demo.
-const entityJourneyActivation={'contract-creation':true};
+// user-master-data ships pre-activated alongside it: the client record it creates is what a deal is raised against, so locking it would strand Create Contract with nothing to point at.
+const entityJourneyActivation={'contract-creation':true,'user-master-data':true};
 function formatEntityTimestamp(date){
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const day=String(date.getDate()).padStart(2,'0');
@@ -1992,6 +2020,13 @@ function declineJourneyRequest(id){
 }
 
 const cfgJourneys=[
+  {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client through the intake form, de-duplicates and validates it, then publishes the verified master record to every downstream journey.',status:'Active',tags:['4 steps','Client, Compliance Hub'],
+    steps:[
+      {name:'Master Data Intake',src:'Account Manager',type:'rule'},
+      {name:'Duplicate & Identity Check',src:'AI Master Data Matcher',type:'src'},
+      {name:'Compliance & Tax Validation',src:'AI Compliance Hub Sync',type:'src'},
+      {name:'Master Record Published',src:'AI Master Data Publisher',type:'src'}
+    ]},
   {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['8 steps','Deal Desk, Contracts'],
     steps:[
       {name:'Create Deal & Employee Record',src:'AI Prompt Parser',type:'src'},
@@ -2058,6 +2093,12 @@ const cockpitDepartmentDirectory=[
   {id:'admin',name:'Admin',summary:'Entity governance, activation requests, system setup, and operational ownership.',admin:{name:'Entity Admin',email:'entity.admin@dhi.com',title:'Entity Team Lead',journeys:['Contract Creation Journey','Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Rahul Mehta',email:'rahul.mehta@dhi.com',title:'Entity Coordinator',journeys:['Contract Creation Journey']},{name:'Deepak Joshi',email:'deepak.joshi@dhi.com',title:'Systems Coordinator',journeys:['Hire to Retire (H2R) Journey']}]}
 ];
 const manualJourneyStepCatalog={
+  'user-master-data':[
+    {name:'Master Data Intake',ownerRole:'Account Manager',modulePage:'master-data',manualAction:"Capture the client's legal, contact, and billing details on the intake form.",sla:'2h',agentCapable:false},
+    {name:'Duplicate & Identity Check',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Search the client master for an existing record before creating a new one.',sla:'2h',agentCapable:true,exceptionType:'Possible duplicate client'},
+    {name:'Compliance & Tax Validation',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Verify the tax ID and country registration requirements in Compliance Hub.',sla:'4h',agentCapable:true,exceptionType:'Unrecognised tax identifier'},
+    {name:'Master Record Published',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Publish the verified client record so downstream journeys can reference it.',sla:'2h',agentCapable:true}
+  ],
   'contract-creation':[
     {name:'Deal & Employee Record',ownerRole:'Account Manager',modulePage:'contracts',manualAction:'Create or match the employee record and capture deal basics manually.',sla:'4h',agentCapable:true},
     {name:'Compliance Check',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Open Compliance Hub, check country rules, statutory obligations, tax rates, and work permit rules.',sla:'4h',agentCapable:true,exceptionType:'Missing compliance rule'},
@@ -2096,6 +2137,7 @@ const manualJourneyStepCatalog={
   ]
 };
 const cfgToManualStepIndexMap={
+  'user-master-data':[0,1,2,3],
   'contract-creation':[0,2,3,5,6,7,8,9],
   'payroll-creation':[0,1,2,3,4,7],
   'h2r-lifecycle':[0,3,6,7,11]

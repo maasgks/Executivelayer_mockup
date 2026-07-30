@@ -5860,12 +5860,28 @@ function buildAIExecutiveDashboardHTML(){
     const lockedTap=locked&&portalRole!=='super-admin';
     const isActive=!locked&&j.status==='Active';
     const cta=isActive?aiJourneyCTA(j):null;
+    // -- The card leads with an icon and closes with a meta strip so the grid can be scanned by
+    // shape and size, not just by reading three similar-length sentences. Roadmap journeys come
+    // from cfgJourneys and carry neither `icon` nor `modules`, so both fall back. --
+    const stepCount=(aiJourneyEvents[j.id]||j.steps||[]).length;
+    const moduleList=j.modules||(j.tags&&j.tags[1]?j.tags[1].split(',').map(function(s){return s.trim();}):[]);
+    const metaChips=[];
+    if(stepCount)metaChips.push(stepCount+' step'+(stepCount===1?'':'s'));
+    if(moduleList.length)metaChips.push(moduleList.slice(0,2).join(' &middot; ')+(moduleList.length>2?' +'+(moduleList.length-2):''));
+    if(isActive)metaChips.push(journeyModeLabel(j.id));
+    const metaRow=(!locked&&metaChips.length)
+      ?'<div class="ai-journey-meta-row">'+metaChips.map(function(m){return '<span class="ai-journey-meta-chip">'+m+'</span>';}).join('')+'</div>'
+      :'';
     return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
-      +(isActive?'<div class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</div>':'')
-      +'<div class="ai-journey-card-top">'
-      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="ai-journey-name">'+j.name+'</div>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
+      +'<div class="ai-journey-card-head">'
+      +'<span class="ai-journey-icon">'+(j.icon||'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>')+'</span>'
+      +'<div class="ai-journey-head-text">'
+      +'<div class="ai-journey-name-row"><span class="ai-journey-name">'+j.name+'</span>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
+      +'</div>'
+      +(isActive?'<span class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</span>':'')
       +'</div>'
       +'<div class="ai-journey-desc">'+j.desc+'</div>'
+      +metaRow
       +(!locked&&j.status==='Draft'
         ?'<div class="ai-journey-draft-banner" onclick="event.stopPropagation();startAutomateJourney(\''+j.id+'\')"><span class="ai-journey-draft-banner-text">Draft pending</span><span class="ai-journey-draft-banner-cta">Continue now to automate your journey &rarr;</span></div>'
         :'')
@@ -8553,6 +8569,9 @@ function aiJourneyCTA(j){
   const mode=journeyModeLabel(j.id);
   // -- Contract Creation's first step *is* capturing the real deal/employee details, so it always opens the real contract form (whatever name gets typed in becomes the run's subject) rather than the generic placeholder-subject manual-run starter used by other journeys. --
   if(j.id==='contract-creation')return {label:'Create Contract',action:"addListingItem('contracts')"};
+  // -- Same entry point as the sidebar's Client > Create Client: the journey's first step *is* the
+  // intake form, so the card opens that form rather than a placeholder-subject manual run. --
+  if(j.id==='user-master-data')return {label:'Create Client',action:"startContractIntake()"};
   if(mode==='Manual Mode'||mode==='Hybrid')return {label:(mode==='Hybrid'?'Start Hybrid Run':'Start Manual Run'),action:"startManualJourneyRun('"+j.id+"')"};
   if(aiRunFlows[j.id])return {label:aiRunFlows[j.id].entryLabel,action:"startAIJourneyRun('"+j.id+"')"};
   return null;
