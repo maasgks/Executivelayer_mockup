@@ -9278,7 +9278,7 @@ function agentRunMockFields(d,idx){
 function agentRunNarration(ev){
   const map={
     'New request':'Deal and employee record created.',
-    'Building quote':'Country rules resolved and the cost model built.',
+    'Quote in preparation':'Country rules resolved and the cost model built.',
     'Quote sent':'Commercial terms drafted and compliance checklist completed.',
     'Client signing':'Agreement generated and sent for signature via Docuseal.',
     'Deposit due':'Deposit invoice raised and matched to a cleared receipt.',
@@ -9604,7 +9604,7 @@ function aiCtSyncLinkedRun(stage){
   if(stage===8){run.status='Completed';run.currentStepIdx=steps.length-1;}
 }
 // Stage indices are positions in aiJourneyEvents['contract-creation'] (9 stages, mirroring
-// amPipelineStages): 0 New request, 1 Building quote, 2 Quote sent, 3 Quote accepted,
+// amPipelineStages): 0 New request, 1 Quote in preparation, 2 Quote sent, 3 Quote accepted,
 // 4 Client signing, 5 Deposit due, 6 Worker signing, 7 Onboarding, 8 Working.
 function aiCtJourneyStage(){
   if(page==='ai-contract-assistant')return 0;
