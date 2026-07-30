@@ -633,19 +633,23 @@ function amStampToday(d){
   d.updated=now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear();
   d.age=0;
 }
-/* One action, one meaning: finish the step this record is sitting on. If it was the last step
-   of the stage, the record moves to the next stage — the client-facing status is always a
-   consequence of the steps underneath it, never set on its own. */
-function amCompleteStep(dealId){
+/* Shared body behind both the real completion and the simulated one. */
+function amAdvanceStep(dealId,simulated){
   const d=amDeals.find(function(x){return x.id===dealId;});if(!d)return;
   const steps=amSubSteps(d.stage);
   const idx=amSubIndex(d);
   const cur=steps[idx];if(!cur)return;
-  if(!amCanAdvance(cur.owner)){showAiToast('Not yours to complete','&ldquo;'+cur.label+'&rdquo; belongs to '+cur.owner+'.');return;}
+  // The ownership gate still stands for a real completion. Simulation is the demo's stand-in
+  // for the webhook, e-signature callback or other team that would move this step in
+  // production, so it deliberately bypasses the gate — and says so in the toast, so a
+  // simulated advance is never mistaken for the owner having actually done it.
+  if(!simulated&&!amCanAdvance(cur.owner)){showAiToast('Not yours to complete','&ldquo;'+cur.label+'&rdquo; belongs to '+cur.owner+'.');return;}
+  const who=amOwnerInfo(cur.owner).who;
   d.breach=false;amStampToday(d);
   if(idx<steps.length-1){
     d.sub=idx+1;
-    showAiToast(cur.label+' &mdash; done',d.ref+' &middot; next up: '+steps[idx+1].label);
+    showAiToast(simulated?'Simulated &mdash; '+cur.label:cur.label+' &mdash; done',
+      (simulated?who+' completed this. ':'')+d.ref+' &middot; next up: '+steps[idx+1].label);
   }else{
     const nextStage=amPipelineStages[amStageIndex(d.stage)+1];
     if(nextStage){
@@ -657,6 +661,13 @@ function amCompleteStep(dealId){
   }
   renderADTPage();
 }
+/* One action, one meaning: finish the step this record is sitting on. If it was the last step
+   of the stage, the record moves to the next stage — the client-facing status is always a
+   consequence of the steps underneath it, never set on its own. */
+function amCompleteStep(dealId){amAdvanceStep(dealId,false);}
+// Stands in for the party that owns the step when that party is not the signed-in user, so a
+// demo can walk the whole nine-stage journey without switching persona at every handoff.
+function amSimulateStep(dealId){amAdvanceStep(dealId,true);}
 /* The useful action on a step the client owns. It does not move the record — it records that
    we chased, which is exactly the thing an Account Manager needs evidence of later. */
 function amRemindClient(dealId){
@@ -743,17 +754,52 @@ function renderAmDealSidebar(){
     const a=amNextAction(d);
     const steps=amSubSteps(d.stage);
     const idx=amSubIndex(d);
-    const actionBtn=a.kind==='do'
+    const own=amOwnerInfo(a.owner);
+    const mine=a.kind==='do';
+    /* Exactly one button, always. When the step is the signed-in role's, that button completes
+       it for real. When it belongs to anyone else the button simulates them doing it, because
+       the alternative — a dead "nothing for you to do here" — left the journey unwalkable at
+       every handoff, and six of the nine stages are owned by someone other than the AM. The
+       reminder survives as a secondary link on client-owned steps only: it is a real thing an
+       Account Manager does, and it does not move the record. */
+    const simLabel=a.step&&a.step.decision?'Simulate: '+own.who+' approves'
+      :'Simulate: '+own.who+' completes this';
+    const actionBtn=mine
       ?'<button class="am-sb-advance" onclick="amCompleteStep('+d.id+')">Mark &ldquo;'+a.step.label+'&rdquo; done</button>'
-      :a.kind==='chase'
-        ?'<button class="am-sb-chase" onclick="amRemindClient('+d.id+')">Send the client a reminder</button>'
-        :'<div class="am-sb-waiting">'+a.label+' &mdash; nothing for you to do here</div>';
-    const actionCard='<div class="am-sb-next '+a.kind+'">'
+      :(a.step?'<button class="am-sb-simulate" onclick="amSimulateStep('+d.id+')">'+simLabel+'</button>':'')
+        +(a.kind==='chase'?'<button class="am-sb-chase-link" onclick="amRemindClient('+d.id+')">Send the client a reminder instead</button>':'');
+    // Who has to act, stated as a person rather than only a role name.
+    const ownerRow='<div class="am-sb-owner'+(mine?' mine':'')+'">'
+      +'<span class="am-sb-owner-av">'+own.initials+'</span>'
+      +'<span class="am-sb-owner-txt"><b>'+own.who+'</b><i>'+a.owner+'</i></span>'
+      +'<span class="am-sb-owner-flag">'+(mine?'Your step':'Not your step')+'</span>'
+      +'</div>';
+    const actionCard='<div class="am-sb-next '+(mine?'do':'wait')+'">'
       +'<div class="am-sb-next-kicker">Next thing to happen</div>'
       +'<div class="am-sb-next-step">'+(a.step?a.step.label:'&mdash;')+(a.step&&a.step.cond?'<i class="am-sub-cond">'+a.step.cond+'</i>':'')+'</div>'
       +'<div class="am-sb-next-meta">Step '+(idx+1)+' of '+steps.length+' in &ldquo;'+s.short+'&rdquo;'
-        +' &middot; owned by '+a.owner+(a.step&&a.step.sla?' &middot; should take '+a.step.sla:'')+'</div>'
-      +actionBtn+'</div>';
+        +(a.step&&a.step.sla?' &middot; should take '+a.step.sla:'')+'</div>'
+      +ownerRow+actionBtn+'</div>';
+    /* The rest of the stage's sub-statuses, kept visible so the one live step reads as a
+       position in a sequence rather than the only thing that exists. Read-only — the action
+       card is the single place anything advances. */
+    const subList='<div class="am-sb-steps">'
+      +'<div class="am-sb-steps-head">Steps in &ldquo;'+s.short+'&rdquo;<span>'+(idx+1)+' of '+steps.length+'</span></div>'
+      +steps.map(function(st,i){
+        const state=i<idx?'done':i===idx?'current':'upcoming';
+        const o=amOwnerInfo(st.owner);
+        return '<div class="am-sb-step '+state+'">'
+          +'<span class="am-sb-step-mark">'+(state==='done'
+            ?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"><polyline points="20 6 9 17 4 12"/></svg>'
+            :(i+1))+'</span>'
+          +'<span class="am-sb-step-label">'+st.label
+            +(st.cond?'<i class="am-sub-cond">'+st.cond+'</i>':'')
+            +(st.decision?'<span class="am-sub-tag loop">decision</span>':'')
+            +(st.loop?'<span class="am-sub-tag loop">can repeat</span>':'')+'</span>'
+          +'<span class="am-sb-step-owner">'+o.who+'</span>'
+          +'</div>';
+      }).join('')
+      +'</div>';
     const log=amDealLog(d);
     const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
@@ -778,6 +824,7 @@ function renderAmDealSidebar(){
     body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.subject+'</span>'
       +'<span class="am-int-chip">Internal</span></div>'
       +actionCard
+      +subList
       +'<div class="am-sb-loghead">Everything that has happened <span>'+log.length+' entr'+(log.length===1?'y':'ies')+', newest first</span></div>'
       +'<div class="lp-logs-timeline">'+timeline+'</div>';
 
