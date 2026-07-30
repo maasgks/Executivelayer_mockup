@@ -127,7 +127,15 @@ const sidebarItems=[
       {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
       {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'},
       {id:'operations-cockpit',label:'Operations Cockpit',roles:['entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
-    ]}
+    ]},
+    // -- Create Contract is an action, not a page: it starts the contract-creation journey the
+    // same way the "+" on the Contracts listing does — the AI assistant when that journey's agent
+    // is enabled, the manual wizard when it is not. It sits in the AI layer so the run can be
+    // kicked off from the layer that owns the journey instead of going out to the Contracts
+    // module for it, and last in the group because it is the one entry that leaves the layer
+    // rather than opening part of it. Nothing marks it active in the sidebar because every page
+    // it leads to is a focused flow page, which hides the sidebar outright. --
+    {id:'create-contract',label:'Create Contract',roles:['super-admin','entity-admin'],color:'orange',action:()=>addListingItem('contracts'),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'}
   ]},
   {divider:true},
   {section:'Workspace'},
@@ -384,7 +392,10 @@ function renderSidebarEntry(item,box,el,id,collapsed,activePg,scope){
   const badgeCount=item.id==='my-tasks'&&typeof myTasksPendingCount==='function'?myTasksPendingCount():0;
   d.innerHTML='<div class="sb-ico-wrap">'+(item.icon||'')+'</div><span>'+item.label+'</span>'+(badgeCount?'<span class="sb-item-badge">'+badgeCount+'</span>':'');
   d.title=item.label+(badgeCount?' ('+badgeCount+' pending)':'');
-  d.onclick=item.placeholder?()=>{}:()=>{activeSidebarItem=item.id;navigatePage(item.id);};
+  // -- An entry with `action` runs it instead of routing: the thing it opens is a flow, not a
+  // page id the router knows. `activeSidebarItem` is left alone so the sidebar keeps pointing at
+  // wherever the user actually is. --
+  d.onclick=item.placeholder?()=>{}:item.action?()=>item.action():()=>{activeSidebarItem=item.id;navigatePage(item.id);};
   box.appendChild(d);
 }
 const defaultChildIcon='<svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="4"/><path d="M5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg>';
