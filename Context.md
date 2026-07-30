@@ -83,7 +83,7 @@ The product is deliberately split into **three decision scopes**, not one app wi
 | `portalRole` value | Who | Lands on | Sees |
 |---|---|---|---|
 | `'super-admin'` | Platform admin | Dashboard | Everything — full Configure (Overview, Systems, Data Foundation, Context & Journey, Agents incl. skill.md editing), All Users, Company Settings, every journey unlocked |
-| `'entity-admin'` | Tenant admin | Dashboard (entity-scoped stat cards + "Your Requests" panel) | Configure minus Overview/Data Foundation; self-serve **Activate** on default systems/journeys; **Request** anything not yet unlocked (feeds a Super-Admin approval queue) |
+| `'entity-admin'` | Tenant admin | Dashboard (entity-scoped stat cards + "Your Requests" panel) | Configure minus Overview (Data Foundation is visible — browse + edit, but no **+ New Model** and no **Remove model**); self-serve **Activate** on default systems/journeys; **Request** anything not yet unlocked (feeds a Super-Admin approval queue) |
 | `'entity-user'` | Day-to-day operator | **AI Executive** directly | No Configure at all; only unlocked journeys (locked ones show a lock badge, non-interactive); every operational module (Employee, Teams, Payroll, Leaves, Payments, Compliance Hub read-only, Support) |
 
 Mechanics:
@@ -138,7 +138,7 @@ Simpler than Contract Creation: a single prompt box (`aiRunFlows[journeyId]`, co
 Dropdown `Configure` in the sidebar, children gated per §4:
 - **Overview** (`cfg-overview`, super-admin only) — landing summary.
 - **Systems** (`cfg-systems`) — connected external systems (`cfgSystems[]`: SAP S/4HANA, Infor ERP, Vendor Portal — each `isDefault:true`, `activatedForEntity:false`). Super Admin gets full CRUD + API list + test; Entity Admin gets a self-serve Activate/Request variant.
-- **Data Foundation** (`cfg-data-foundation`, super-admin only) — the two canonical data models (`cfgModels[]`: Material, Vendor) with field mapping, enrichment fields, validation rules, sample data.
+- **Data Foundation** (`cfg-data-foundation`, super-admin + entity-admin) — the two canonical data models (`cfgModels[]`: Material, Vendor) with field mapping, enrichment fields, validation rules, sample data. Same split as Systems: both roles browse, open (`cfg-model-detail`) and edit a model; only Super Admin mints one (`cfg-model-add`) or removes one, since a model is platform-level and shared by every entity.
 - **Context & Journey** (`cfg-context-journey`) — the *authoring* side of the same journeys AI Executive *runs*. Organized by `cfgJourneyCategories` (O2C, P2P, H2R, F2A — only O2C/H2R have real journeys built; P2P/F2A are `entityLockedCategories`, browsable by Super Admin only). `cfgJourneys[]` mirrors `aiJourneys[]` by id/name/category but is a **separate array, not synced** — a known pre-existing gap noted in `RBAC Plan.md`; don't assume editing one updates the other.
 - **Agents** (`cfg-agents`) — the agent catalog + skill.md viewer/editor (Super Admin only sees the edit button; Entity Admin sees the same functional card details read-only).
 

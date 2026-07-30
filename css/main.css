@@ -363,6 +363,12 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:#f1f5f9;color:var(--navy);letter-spacing:.4px}
 .badge.cfg-agent-recommend{background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;cursor:pointer;transition:background .15s}
 .badge.cfg-agent-recommend:hover{background:#ccfbf1}
+/* The Source System badge on a NewForce-sourced client is a link out to NewForce. It keeps the
+   badge's own shape and colour — it is still the same fact about the row — and only picks up the
+   affordances that say "this goes somewhere": pointer, a tint on hover, a focus ring for keyboard. */
+.badge.md-source-link{display:inline-block;text-decoration:none;cursor:pointer;transition:background .15s}
+.badge.md-source-link:hover{background:#ccfbf1!important}
+.badge.md-source-link:focus-visible{outline:2px solid #0d9488;outline-offset:2px}
 .cfg-cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:6px}
 /* gap:11px — the three lines each say a different kind of thing (what it is called, what it is
    named, what it covers), so they need air between them to read as three facts rather than one

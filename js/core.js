@@ -20,7 +20,7 @@ let aiH2rAnimatedStage=-1,aiH2rData={},aiH2rOffboardStep=-1;
 // -- Agent Mode: chat-driven journey run (typed prompt -> live journey execution in form-col) --
 let pendingAgentAttachment=null,agentUploadTargetId=null,agentRunData=null;
 const enterprisePersonas=[
-  {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@dhihyperlocal.com',focus:'Client master data, deals, proposals, client acceptance, and commercial exceptions.',journeys:['user-master-data','contract-creation'],steps:['J0-S1','J0-S2','J0-S4','J1-S1','J1-S3','J1-S5'],approvals:0,owned:6,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
+  {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@dhihyperlocal.com',focus:'Client master data, deals, proposals, client acceptance, and commercial exceptions.',journeys:['user-master-data','contract-creation'],steps:['J0-S1','J0-S2','J0-S3','J1-S1','J1-S3','J1-S5'],approvals:0,owned:6,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
   {id:'deal-manager',name:'Karan Mehta',label:'Deal Manager',department:'Sales / Deal Desk',function:'Approver',initials:'KM',email:'karan.mehta@dhihyperlocal.com',focus:'Internal proposal approvals and sales escalations.',journeys:['contract-creation'],steps:['J1-S4'],approvals:1,owned:1,kpis:[['Approval Queue','2'],['SLA Breaches','0'],['Rework Loops','1'],['Team Tasks','9']]},
   {id:'compliance-officer',name:'Kavya Iyer',label:'Compliance Officer',department:'Compliance',function:'Executor + Consultant',initials:'KI',email:'kavya.iyer@dhihyperlocal.com',focus:'Country compliance checks, statutory rules, and compliance exceptions.',journeys:['contract-creation','h2r-lifecycle'],steps:['J1-S2','J3-S4'],approvals:0,owned:2,kpis:[['Country Checks','14'],['Missing Configs','1'],['Payroll Blocks','2'],['Resolved Today','6']]},
   {id:'legal-contracts-manager',name:'Devendra Rao',label:'Legal / Contracts Manager',department:'Legal / Contracts',function:'Executor',initials:'DR',email:'devendra.rao@dhihyperlocal.com',focus:'Contract generation, signature tracking, and legal document corrections.',journeys:['contract-creation'],steps:['J1-S6'],approvals:0,owned:1,kpis:[['Contracts Sent','6'],['Signature Pending','4'],['Bounced Requests','1'],['Templates Used','3']]},
@@ -86,8 +86,10 @@ let aiJourneyDetailSelectedStage=-1;
 let aiRunStatusFilter='';
 const aiAutomationRuns={
   'user-master-data':[
-    {runId:'RUN-1001',client:'Meridian Retail Group',country:'India',contractType:'Enterprise',currentStepIdx:2,status:'Active',lastActivity:'25 minutes ago'},
-    {runId:'RUN-1002',client:'Harbourline Freight',country:'Netherlands',contractType:'Growth',currentStepIdx:3,status:'Completed',lastActivity:'Yesterday'}
+    // -- currentStepIdx is an index into the three-step flow, so it tops out at 2. It read 2/3
+    // back when the journey claimed four steps; leaving 3 here would point past the end. --
+    {runId:'RUN-1001',client:'Meridian Retail Group',country:'India',contractType:'Enterprise',currentStepIdx:1,status:'Active',lastActivity:'25 minutes ago'},
+    {runId:'RUN-1002',client:'Harbourline Freight',country:'Netherlands',contractType:'Growth',currentStepIdx:2,status:'Completed',lastActivity:'Yesterday'}
   ],
   'contract-creation':[
     {runId:'RUN-2001',client:'Rashi Singh',country:'Netherlands',contractType:'EOR',currentStepIdx:3,status:'Waiting for Approval',lastActivity:'3 hours ago'},
@@ -378,7 +380,12 @@ const sidebarItems=[
     {id:'my-tasks',label:'My Tasks',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
     {dropdown:'Configure',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',children:[
       {id:'cfg-systems',label:'Systems',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg>'},
-      {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
+      // -- Entity Admin sees Data Foundation now. It is the same shape as Systems one row up:
+      // the objects a journey reads and writes are context an entity admin needs when wiring
+      // Context & Journey, so hiding them made the layer above harder to reason about. What
+      // stays Super Admin is bringing a new object into being (cfg-model-add) and destroying
+      // one — the same split Systems already draws with cfg-system-add. --
+      {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
       {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
       {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'}
     ]}
@@ -951,7 +958,12 @@ function closeAgent(){stopAmThreeJS();hideAgentWorkspaceButton();agentRunData=nu
 
 // -- ROLE ACCESS GUARD --
 const pageRoleMap={
-  'cfg-overview':['super-admin'],'cfg-data-foundation':['super-admin'],'cfg-model-detail':['super-admin'],'cfg-model-add':['super-admin'],'cfg-system-add':['super-admin'],
+  'cfg-overview':['super-admin'],'cfg-system-add':['super-admin'],
+  // -- Data Foundation and a model's detail are open to Entity Admin; minting a new model is not,
+  // mirroring Systems (browse + open + edit, but cfg-system-add is Super Admin). cfg-model-detail
+  // has to travel with the list — the cards on it are links, and a guard that bounced them would
+  // make the page a dead end. --
+  'cfg-data-foundation':['super-admin','entity-admin'],'cfg-model-detail':['super-admin','entity-admin'],'cfg-model-add':['super-admin'],
   'cfg-systems':['super-admin','entity-admin'],'cfg-system-detail':['super-admin','entity-admin'],
   // -- Entity User is allowed through so the Account Manager can run the User Master Data Creation
   // Journey end to end: Create Client opens the intake form, and submitting it lands on All Clients.
@@ -1704,7 +1716,12 @@ const aiJourneys=[
   // -- Sits first because it is first in the real sequence: a client's master record has to exist
   // before a deal can be raised against it. Its entry action is Create Client (the NewForce intake
   // form), the same action the sidebar's Client > Create Client opens. --
-  {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client through the intake form, de-duplicates and validates it, then publishes the verified master record to every downstream journey.',modules:['Client','Master Data','Compliance Hub','Data Foundation'],coverage:78,humanSteps:1,aiSteps:3,status:'Active',risk:'Low',updated:'29 Jul 2026, 9:45 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3"/><path d="M20 5.5v6"/><path d="M4 12c0 1.7 3.6 3 8 3"/><path d="M18 15v6M15 18h6"/></svg>'},
+  // -- Three steps, no agents, because that is what Create Client actually does: fill the intake
+  // form, submit it to NewForce, ingest the registered submission back as a client record
+  // (cfgUserIntakeStages, js/pages.js). It used to claim four steps and three AI agents — a
+  // matcher, a compliance sync and a publisher — none of which exist anywhere in the build. The
+  // one journey wired to a real backend is the one that should not be describing imaginary work. --
+  {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',modules:['Client','Master Data','NewForce Solutions'],coverage:0,humanSteps:3,aiSteps:0,status:'Active',risk:'Low',updated:'29 Jul 2026, 9:45 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3"/><path d="M20 5.5v6"/><path d="M4 12c0 1.7 3.6 3 8 3"/><path d="M18 15v6M15 18h6"/></svg>'},
   {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
   {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
@@ -1712,10 +1729,13 @@ const aiJourneys=[
 
 const aiJourneyEvents={
   'user-master-data':[
-    {name:'Master Data Intake',chips:['Human Required','Client'],source:'Account Manager',desc:"The Account Manager captures the client's legal, contact, and billing master data on the intake form.",validation:'Mandatory identity, contact, and billing fields are checked before the form can be submitted.',human:'Required — Account Manager completes the intake form.',failure:'Missing mandatory fields block the submit and stay flagged on the form.',next:'Duplicate & Identity Check',fields:['Client Legal Name','Country','Primary Contact','Billing Entity']},
-    {name:'Duplicate & Identity Check',chips:['AI Automated','Master Data'],source:'AI Master Data Matcher',desc:'AI matches the submitted record against the existing client master and flags duplicates or near-matches before a new record is minted.',validation:'Legal name, registration number, and email domain are matched against existing clients.',human:'None — fully automated.',failure:'A near-match is routed back to the Account Manager to merge or confirm as new.',next:'Compliance & Tax Validation',fields:['Client ID','Registration Number','Match Confidence']},
-    {name:'Compliance & Tax Validation',chips:['AI Automated','Compliance Hub'],source:'AI Compliance Hub Sync',desc:'AI validates tax identifiers and country registration requirements against the Compliance Hub before the record is published.',validation:'Tax ID format and country statutory requirements are verified.',human:'None — fully automated.',failure:'An unrecognised tax ID raises an exception for the compliance team.',next:'Master Record Published',fields:['Tax ID','Country Rules','Statutory Status']},
-    {name:'Master Record Published',chips:['AI Automated','Client'],source:'AI Master Data Publisher',desc:'The verified client record is written to the client master and made available to every downstream journey.',validation:'The published record is readable from Client > All Clients.',human:'None — fully automated.',failure:'A write failure raises an exception for retry.',next:'Journey Complete — Client Master Data Created',fields:['Client ID','Record Status','Published At']}
+    // -- One event per stage of the real intake flow, in the order the operator sees them. Every
+    // one is Human Required: the Account Manager fills the form and presses Submit, and what
+    // happens after that is a plain REST round-trip to NewForce, not an agent deciding anything.
+    // Calling ingestion "AI Automated" would put an agent badge on an HTTP call. --
+    {name:'Master Data Intake',chips:['Human Required','Client'],source:'Account Manager',desc:"The Account Manager captures the client's legal, contact, and billing master data on the NewForce intake form.",validation:'Mandatory identity, contact, and billing fields are checked before the form can be submitted.',human:'Required — Account Manager completes the intake form.',failure:'Missing mandatory fields block the submit and stay flagged on the form.',next:'Submission & Ingestion',fields:['Client Legal Name','Country','Primary Contact','Billing Entity']},
+    {name:'Submission & Ingestion',chips:['Human Required','NewForce Solutions'],source:'Account Manager',desc:'Submitting posts the form to NewForce Solutions, which registers it and returns its own submission id; the Executive Layer then reads that submission back through the intake API.',validation:'NewForce must accept the submission and return a submission id before ingestion starts.',human:'Required — Account Manager presses Submit.',failure:'An unreachable NewForce leaves the form filled and says why it could not be submitted, so nothing is lost.',next:'Client Record Created',fields:['Submission ID','Source System','Payload']},
+    {name:'Client Record Created',chips:['Human Required','Client'],source:'Account Manager',desc:'The Executive Layer mints a Client ID, links it to the NewForce submission, and writes the record to Client > All Clients as Pending.',validation:'The new record is readable from Client > All Clients and carries both ids.',human:'Required — Account Manager opens the record to confirm it landed.',failure:'A write failure leaves the submission registered in NewForce and no local record, so it can be re-ingested.',next:'Journey Complete — Client Master Data Created',fields:['Client ID','Submission ID','Record Status']}
   ],
   /* Step names here are the nine amPipelineStages `short` labels, verbatim and in the same
      order, so the journey bar and the Account Manager pipeline read as one vocabulary. A user
@@ -1814,12 +1834,24 @@ const cfgSystems=[
   // to fill that form in. Create Contract in the AI Execution Layer owns that job now, so what is
   // left here is the integration contract, exactly like every other system. --
   {id:'adt-solution',name:'NewForce Solutions',type:'NewForce',method:'REST / JSON',endpoint:'http://localhost:4100/api/',auth:'Bearer Token',apis:1,lastTested:'Just now',status:'Connected',isDefault:true,activatedForEntity:true,
-    // -- One entry, not three. The integration is a single forms capability that reads the form
-    // definition and submissions and writes a submission back, so it is listed as one read+write
-    // API rather than split per route. The routes themselves are unchanged: the backend still
-    // calls employee-intake/schema, /submit and /latest (backend/server.js). --
+    // -- One entry, not three. The integration is a single intake capability that reads the record
+    // definition and prior submissions and writes a submission back, so it is listed as one
+    // read+write API rather than split per route. The routes themselves are unchanged: the backend
+    // still calls employee-intake/schema, /submit and /latest (backend/server.js).
+    //
+    // Named for the record it captures, not the screen it is captured on — the same submission
+    // lands here whether it came from the NewForce website form or from Create Contract in this
+    // layer, and every sibling API in this list is named after its business object too. "Client
+    // Master Data" says which object: it is a client record, landing under Master Data Creation,
+    // feeding the Master Data Intake step of the User Master Data Creation Journey (journeySteps
+    // below) — the step is the act, this is the data.
+    //
+    // The code chip is EmployeeIntake, not the raw employee-intake path: renderer splits this
+    // string on the dot and treats part one as an API object name, so it has to read like the
+    // WorkforceRoster / EntityRegistry / SupplierMaster it sits beside. Same token as NewForce's
+    // route, just cased to match, so it stays traceable to /api/employee-intake/*. --
     apiList:[
-      {name:'employee-intake/forms · Forms',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'}
+      {name:'EmployeeIntake · Client Master Data',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'}
     ]},
   {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.vyoma.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
@@ -2030,12 +2062,14 @@ function declineJourneyRequest(id){
 }
 
 const cfgJourneys=[
-  {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client through the intake form, de-duplicates and validates it, then publishes the verified master record to every downstream journey.',status:'Active',tags:['4 steps','Client, Compliance Hub'],
+  // -- Mirrors the aiJourneys entry above: three steps, all type 'rule' (human-run), no agent
+  // sources. buildAIResponsibilitySplitHTML pairs these names with aiJourneyEvents positionally
+  // and only when the two lengths match, so these must stay the same length as that array. --
+  {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',status:'Active',tags:['3 steps','Client, NewForce Solutions'],
     steps:[
       {name:'Master Data Intake',src:'Account Manager',type:'rule'},
-      {name:'Duplicate & Identity Check',src:'AI Master Data Matcher',type:'src'},
-      {name:'Compliance & Tax Validation',src:'AI Compliance Hub Sync',type:'src'},
-      {name:'Master Record Published',src:'AI Master Data Publisher',type:'src'}
+      {name:'Submission & Ingestion',src:'Account Manager',type:'rule'},
+      {name:'Client Record Created',src:'Account Manager',type:'rule'}
     ]},
   {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['8 steps','Deal Desk, Contracts'],
     steps:[
@@ -2098,11 +2132,14 @@ const cockpitDepartmentDirectory=[
   {id:'admin',name:'Admin',summary:'Entity governance, activation requests, system setup, and operational ownership.',admin:{name:'Entity Admin',email:'entity.admin@dhi.com',title:'Entity Team Lead',journeys:['Contract Creation Journey','Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Rahul Mehta',email:'rahul.mehta@dhi.com',title:'Entity Coordinator',journeys:['Contract Creation Journey']},{name:'Deepak Joshi',email:'deepak.joshi@dhi.com',title:'Systems Coordinator',journeys:['Hire to Retire (H2R) Journey']}]}
 ];
 const manualJourneyStepCatalog={
+  // -- Every step agentCapable:false, which is what makes this journey read as Manual Mode with no
+  // Agent control: journeyModeLabel returns 'Manual Mode' when nothing is capable, and the
+  // Context & Journey detail hides the toggle on the same test. Turn one of these true and both
+  // come back on their own — the mode is derived from the steps, never set alongside them. --
   'user-master-data':[
-    {name:'Master Data Intake',ownerRole:'Account Manager',modulePage:'master-data',manualAction:"Capture the client's legal, contact, and billing details on the intake form.",sla:'2h',agentCapable:false},
-    {name:'Duplicate & Identity Check',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Search the client master for an existing record before creating a new one.',sla:'2h',agentCapable:true,exceptionType:'Possible duplicate client'},
-    {name:'Compliance & Tax Validation',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Verify the tax ID and country registration requirements in Compliance Hub.',sla:'4h',agentCapable:true,exceptionType:'Unrecognised tax identifier'},
-    {name:'Master Record Published',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Publish the verified client record so downstream journeys can reference it.',sla:'2h',agentCapable:true}
+    {name:'Master Data Intake',ownerRole:'Account Manager',modulePage:'master-data',manualAction:"Capture the client's legal, contact, and billing details on the NewForce intake form.",sla:'2h',agentCapable:false},
+    {name:'Submission & Ingestion',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Submit the form to NewForce Solutions and wait for the submission to be read back.',sla:'2h',agentCapable:false},
+    {name:'Client Record Created',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Open the new client record in All Clients and confirm it carries both ids.',sla:'2h',agentCapable:false}
   ],
   'contract-creation':[
     {name:'Deal & Employee Record',ownerRole:'Account Manager',modulePage:'contracts',manualAction:'Create or match the employee record and capture deal basics manually.',sla:'4h',agentCapable:true},
@@ -2142,7 +2179,7 @@ const manualJourneyStepCatalog={
   ]
 };
 const cfgToManualStepIndexMap={
-  'user-master-data':[0,1,2,3],
+  'user-master-data':[0,1,2],
   'contract-creation':[0,2,3,5,6,7,8,9],
   'payroll-creation':[0,1,2,3,4,7],
   'h2r-lifecycle':[0,3,6,7,11]

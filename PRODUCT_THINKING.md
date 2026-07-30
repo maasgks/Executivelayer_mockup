@@ -17,7 +17,7 @@ The framework is a three-stage pipeline mapped one-to-one onto the three portals
 **Build** (platform-wide, Super Admin) → **Govern** (per-tenant, Entity Admin) → **Run** (per-user, Entity User)
 
 Within each portal, **progressive disclosure** decides what's visible:
-- Platform-internal concerns (Data Foundation, agent authoring/skill.md) never surface below Super Admin — not a permission, a relevance filter.
+- Platform *authoring* never surfaces below Super Admin — bringing an object or agent into being (a new data model, skill.md) is a Build-stage act. Reading what already exists is not: Entity Admin sees Data Foundation, because the objects a journey reads and writes are exactly the context needed to govern that journey. The filter is relevance, not permission, and it cuts between *define* and *inspect* rather than around a whole page.
 - The journey *catalog* is shown one layer further down than the *capability to change it* — Entity Admin sees every journey, locked or not, because it's the product menu; Entity User sees only what's already unlocked, because by the time work reaches them, governance is already resolved.
 
 This is why requests flow *up* (Entity Admin → Super Admin's approval queue) and unlocks flow *down* (approval → Entity Admin's tenant → Entity User's workspace) — the framework is directional, not just tiered access.

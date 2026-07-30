@@ -1483,6 +1483,26 @@ function applyMdSearch(){
   renderADTPage();
 }
 function mdSourceLabel(e){return e.source==='adt_solution'?'NewForce Solutions':'Manual';}
+// -- The Source System badge names a system that exists outside this app, so it behaves like a
+// way in to it rather than a label: clicking NewForce Solutions redirects to the NewForce console.
+// Only the NewForce badge links — "Manual" names no system to open, so it stays plain text rather
+// than a link that goes nowhere.
+//
+// Same tab, no target="_blank": this is a hand-off to the system that issued the record, so the
+// operator goes there rather than accumulating a second window they have to come back through.
+// Ctrl/Cmd-click still opens a tab for anyone who wants one — that stays the browser's call.
+//
+// stopPropagation matters here: the whole row is clickable (it opens the record drawer), so
+// without it a click on the badge would both leave for NewForce and open the drawer behind it. --
+function mdSourceSystemCell(e){
+  const label=mdSourceLabel(e);
+  const style='color:#0d9488;background:#f0fdfa;border-color:#99f6e4';
+  const url=(window.EXEC_CONFIG&&window.EXEC_CONFIG.adtConsoleUrl)||'';
+  if(e.source!=='adt_solution'||!url)return '<span class="badge" style="'+style+'">'+label+'</span>';
+  return '<a class="badge md-source-link" href="'+attrSafe(url)+'" rel="noreferrer"'
+    +' onclick="event.stopPropagation()" title="Go to '+label+' — the system this client came from"'
+    +' style="'+style+'">'+label+'</a>';
+}
 // -- "Last Updated" in the listing. Stored as one UTC instant; shown short, because the column
 // answers "is this stale" rather than "exactly when" — the Logs tab carries the precise trail.
 // Falls back to created_at for rows never touched since ingest, so the cell is never blank on a
@@ -1899,7 +1919,7 @@ function buildMasterDataHTML(){
         +'<td style="color:var(--gray);font-size:13px">'+(i+1)+'</td>'
         +'<td style="font-family:monospace;font-size:12px;font-weight:600;color:var(--navy)">'+(e.empId||d)+'</td>'
         +'<td style="font-weight:600;color:var(--navy)">'+(e.companyName&&e.companyName!=='--'?e.companyName:d)+'</td>'
-        +'<td><span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">'+mdSourceLabel(e)+'</span></td>'
+        +'<td>'+mdSourceSystemCell(e)+'</td>'
         +'<td>'+(e.sourceRecordId?('<span style="font-family:monospace;font-size:12px;color:#0d9488;font-weight:600">'+e.sourceRecordId+'</span>'):d)+'</td>'
         +'<td>'+(e.country||d)+'</td>'
         +'<td><span class="lp-status-badge '+String(e.status).toLowerCase()+'">'+e.status+'</span></td>'
@@ -6239,15 +6259,21 @@ function buildAIResponsibilitySplitHTML(journeyId){
   const aiEvents=labeled.filter(function(e){return e.chips.includes('AI Automated');});
   const humanEvents=labeled.filter(function(e){return e.chips.includes('Human Required')||e.chips.includes('Approval Required')||e.chips.includes('Client Action');});
   const chip=function(e,cls){return '<span class="ai-resp-chip '+cls+'"><span class="ai-resp-chip-dot"></span>'+e.name+'</span>';};
-  const strip=function(label,cls,list){
+  // -- An empty side says so in words. A fully manual journey leaves "AI Will Handle" with nothing
+  // in it, and a bare 0 / 3 beside an empty band reads as a strip that failed to render rather
+  // than as the answer. Either side can be empty, so the note is not specific to the AI one. --
+  const strip=function(label,cls,list,emptyNote){
+    const body=list.length
+      ?list.map(function(e){return chip(e,cls);}).join('')
+      :'<span class="ai-resp-empty" style="font-size:12px;color:var(--gray)">'+emptyNote+'</span>';
     return '<div class="ai-resp-strip ai-resp-'+cls+'">'
       +'<div class="ai-resp-strip-label"><b>'+label+'</b><span>'+list.length+' / '+events.length+' events</span></div>'
-      +'<div class="ai-resp-chips">'+list.map(function(e){return chip(e,cls);}).join('')+'</div>'
+      +'<div class="ai-resp-chips">'+body+'</div>'
       +'</div>';
   };
   return '<div class="ai-resp-split">'
-    +strip('AI Will Handle','ai',aiEvents)
-    +strip('Human Will Handle','human',humanEvents)
+    +strip('AI Will Handle','ai',aiEvents,'No step on this journey is agent-capable — it runs manually end to end.')
+    +strip('Human Will Handle','human',humanEvents,'Every step is automated — nothing is routed to a person.')
     +'</div>';
 }
 function aiTimelineDotClass(chips){
@@ -7216,7 +7242,10 @@ function buildCfgDataFoundationHTML(){
   return '<div class="ai-exec-page">'
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap">'
     +'<div><p style="font-size:14px;font-weight:600;margin-bottom:4px">Data Foundation</p><p style="font-size:12px;color:var(--gray);margin:0;max-width:600px">Your unified objects — mapped from source systems, plus enrichment held in Data Foundation.</p></div>'
-    +'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="navigatePage(\'cfg-model-add\')">+ New Model</button>'
+    // -- Super Admin only: cfg-model-add is guarded, so for anyone else this button would navigate
+    // straight into a bounce back to the dashboard. Entity Admin reads this page, it does not
+    // define new objects on it. --
+    +(portalRole==='super-admin'?'<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="navigatePage(\'cfg-model-add\')">+ New Model</button>':'')
     +'</div>'
     +'<div class="ai-journey-grid">'+cards+'</div>'
     +'</div>';
@@ -7479,7 +7508,11 @@ function buildCfgModelDetailHTML(){
         +'</div>'
       :'<div class="review-section" style="margin-top:14px"><div style="font-size:12.5px;color:var(--gray)">No fields mapped yet &mdash; add a field mapping above, then test again.</div></div>')
     :'';
-  const removeSection=editing?'':'<div style="margin-top:22px"><button type="button" class="ep-cancel-btn" style="color:#dc2626;border-color:#fca5a5" onclick="confirmRemoveCfgModel(\''+m.id+'\')">Remove model</button></div>';
+  // -- Removing a model is Super Admin's alone. A model is platform-level, shared by every entity,
+  // so a delete here is not a scoped action the way editing this entity's mapping is — it would
+  // strand journeys and agents that reference the object elsewhere. Edit stays open to Entity
+  // Admin, matching what the system detail page already allows. --
+  const removeSection=(editing||portalRole!=='super-admin')?'':'<div style="margin-top:22px"><button type="button" class="ep-cancel-btn" style="color:#dc2626;border-color:#fca5a5" onclick="confirmRemoveCfgModel(\''+m.id+'\')">Remove model</button></div>';
   const saveCancelBar=editing?'<div style="display:flex;gap:10px;margin-bottom:18px"><button class="ep-cancel-btn" onclick="cancelCfgModelEdit()">Cancel</button><button class="ep-save-btn" onclick="saveCfgModelEdit(\''+m.id+'\')">Save changes</button></div>':'';
   const fetchSampleSection=editing?'':'<div class="ep-form-card">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">'
@@ -7599,7 +7632,12 @@ function cfgStepTypeTag(type){
 function buildCfgJourneyDetailHTML(){
   const j=cfgJourneys.find(function(x){return x.id===selectedCfgJourneyId;})||cfgJourneys[0];
   const agentOn=isJourneyAgentEnabled(j.id);
-  const detailActions=portalRole!=='super-admin'?'<div class="cfg-detail-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div></div>':'';
+  // -- No Agent control on a journey no agent can run. The toggle only ever flipped agentCapable
+  // steps (toggleJourneyAgent, js/core.js), so on an all-manual journey it was a switch that
+  // changed nothing while implying the work could be automated. Derived from the steps rather
+  // than listed per journey, so it stays right as journeys change. --
+  const hasAgentCapableStep=manualJourneySteps(j.id).some(function(st){return st.agentCapable&&!st.approvalRequired;});
+  const detailActions=(portalRole!=='super-admin'&&hasAgentCapableStep)?'<div class="cfg-detail-actions"><div class="cfg-agent-control"><span>Agent</span>'+enableAgentToggleHTML(j.id,true)+'</div></div>':'';
   const timeline=j.steps.map(function(st,i){
     const key=j.id+'__'+i;
     const assign=cfgStepAssignments[key];
@@ -7607,8 +7645,12 @@ function buildCfgJourneyDetailHTML(){
     const manualStep=cfgManualStep(j.id,i);
     const canShowAgent=agentOn&&!isHuman&&manualStep.agentCapable&&!manualStep.approvalRequired;
     const rec=(!assign&&canShowAgent)?cfgRecommendedAgentForStep(st):null;
+    // -- "Human approval required" only where an approval is actually required. A human-run step
+    // is not the same as an approval gate: the intake steps are type 'rule' because a person does
+    // them, not because anyone signs them off, and the badge was calling every one of them an
+    // approval. The Manual chip beside it already says who runs the step. --
     const assignBadge=isHuman
-      ?'<span class="badge" style="margin-left:6px">Human approval required</span>'
+      ?(manualStep.approvalRequired?'<span class="badge" style="margin-left:6px">Human approval required</span>':'')
       :!agentOn
         ?''
         :(assign||rec)
