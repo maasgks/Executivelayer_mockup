@@ -304,7 +304,7 @@ function ingestAdtSubmission(raw) {
       'Awaiting HR review: department, job title, branch and joining date are not captured by the ADT form.',
       'ADT Solution Sync');
     insertWorkflow(row.id, 'Intake Form Submitted',
-      'USER intake form submitted on ADT Solution. Submission ' + mapped.source_record_id
+      'USER intake form submitted on ADT Solution. Submission ' + referenceId
       + (mapped.company_name ? (' from ' + mapped.company_name) : '') + '.', 'ADT Solution');
     insertWorkflow(row.id, 'Record Ingested',
       'Executive Layer retrieved the submission and minted Employee ID ' + employeeCode

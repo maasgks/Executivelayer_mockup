@@ -106,7 +106,7 @@
 .uif-success-title{font-size:14.5px;font-weight:700;color:#15803d;margin-bottom:3px}
 .uif-success-sub{font-size:12.5px;color:#166534;line-height:1.6}
 
-.uif-idrow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+.uif-idrow{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:22px}
 .uif-idcard{padding:13px 15px;border:1px solid var(--border);border-radius:10px;background:var(--light);min-width:0}
 .uif-idcard-label{font-size:10.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-bottom:5px}
 .uif-idcard-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;

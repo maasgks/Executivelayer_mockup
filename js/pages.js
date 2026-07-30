@@ -6501,7 +6501,7 @@ function viewCfgModel(id,from){
 
 const cfgUserIntakeStages=[
   {label:'Intake Form',sub:'Fill in the details'},
-  {label:'Ingestion',sub:'ADT to Executive Layer'},
+  {label:'Ingestion',sub:'Executive Layer to ADT'},
   {label:'Client',sub:'Record created'}
 ];
 // The ingestion feed. These are the real steps the request goes through — the submission is
@@ -6708,11 +6708,11 @@ function cfgUserIntakeProgressHTML(){
     const mark=cfgUserIntakeProgress>i
       ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>'
       : (cfgUserIntakeProgress===i?'<span class="uif-spin"></span>':'');
-    // Once known, the real ADT submission id and minted identifiers replace the generic wording,
-    // so the feed reports what happened rather than what was planned.
+    // Once known, the minted identifiers replace the generic wording, so the feed reports
+    // what happened rather than what was planned.
     let note=s.note;
     const e=cfgUserIntakeResult&&cfgUserIntakeResult.employee;
-    if(e&&i===1)note='ADT Solution assigned submission '+e.source_record_id+'.';
+    if(e&&i===1)note='ADT Solution assigned submission '+e.reference_id+'.';
     if(e&&i===3)note='Employee ID '+e.employee_code+' &middot; Reference ID '+e.reference_id+'.';
     return '<div class="uif-proc-item '+state+'">'
       +'<div class="uif-proc-rail"><div class="uif-proc-dot">'+mark+'</div>'
@@ -6742,7 +6742,6 @@ function buildCfgUserIntakeHTML(){
       +'<div class="uif-idrow">'
       +'<div class="uif-idcard"><div class="uif-idcard-label">Employee ID</div><div class="uif-idcard-value">'+e.employee_code+'</div></div>'
       +'<div class="uif-idcard accent"><div class="uif-idcard-label">Reference ID</div><div class="uif-idcard-value">'+e.reference_id+'</div></div>'
-      +'<div class="uif-idcard"><div class="uif-idcard-label">ADT Submission</div><div class="uif-idcard-value">'+e.source_record_id+'</div></div>'
       +'</div>'
       +'<p class="uif-section-label">Submitted details</p>'
       +'<div style="margin-bottom:4px">'
