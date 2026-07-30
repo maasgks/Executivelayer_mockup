@@ -9261,22 +9261,29 @@ function agentRunSetupStep(){
 }
 function agentRunMockFields(d,idx){
   const email=d.name.toLowerCase().replace(/[^a-z ]/g,'').trim().replace(/\s+/g,'.')+'@dhihyperlocal-mock.com';
+  // Keyed by position in aiJourneyEvents['contract-creation']. Stages 3 (Quote accepted) and
+  // 6 (Worker signing) are approval stages — agentRunSimulateApproval supplies their fields,
+  // so they are absent here by design.
   const table={
     0:{'Employee Name':d.name,'Employee ID':d.empId,'Country':d.country,'Client':'Dhi Hyperlocal','Contract Type':d.country==='India'?'PEO':'EOR'},
-    1:{'Billing Rate':'$9,500 / mo','Pay Rate':'$7,600 / mo','Margin %':'20%','Compliance Checklist':'6 / 6 verified'},
-    3:{'Contract Number':d.contractId,'Signatory Email':email,'Docuseal Status':'Sent &mdash; awaiting signature'},
-    5:{'Onboarding Checklist':'5 / 5 complete','Document Status':'Verified','Compliance Status':'Cleared'},
-    6:{'Bank Details':'On file (&bull;&bull;&bull;&bull;4821)','Compensation Mapping':'Mapped to '+d.country+' payroll structure','Tax Info':'Complete'}
+    1:{'Country Rules':d.country+' statutory set resolved','Cost Build':'Complete','Margin %':'20%'},
+    2:{'Billing Rate':'$9,500 / mo','Pay Rate':'$7,600 / mo','Margin %':'20%','Compliance Checklist':'6 / 6 verified'},
+    4:{'Contract Number':d.contractId,'Signatory Email':email,'Docuseal Status':'Sent &mdash; awaiting signature'},
+    5:{'Deposit Invoice':'INV-'+(d.contractId||'').replace(/^CTR-/,''),'Amount Due':'$9,500','Cleared On':'Just now'},
+    7:{'Onboarding Checklist':'5 / 5 complete','Document Status':'Verified','Compliance Status':'Cleared'},
+    8:{'Bank Details':'On file (&bull;&bull;&bull;&bull;4821)','Compensation Mapping':'Mapped to '+d.country+' payroll structure','Tax Info':'Complete'}
   };
   return table[idx]||{};
 }
 function agentRunNarration(ev){
   const map={
-    'Deal Created (Employee Created)':'Deal and employee record created.',
-    'Proposal Sent':'Commercial proposal drafted and compliance checklist completed.',
-    'Contract Sent':'Contract generated and sent for signature via Docuseal.',
+    'New request':'Deal and employee record created.',
+    'Building quote':'Country rules resolved and the cost model built.',
+    'Quote sent':'Commercial terms drafted and compliance checklist completed.',
+    'Client signing':'Agreement generated and sent for signature via Docuseal.',
+    'Deposit due':'Deposit invoice raised and matched to a cleared receipt.',
     'Onboarding':'Onboarding checklist completed &mdash; documents and access provisioned.',
-    'Ready for Payroll':'All payroll-required fields validated. Ready for the next payroll cycle.'
+    'Working':'All payroll-required fields validated. Live and ready for the next payroll cycle.'
   };
   return '<b>'+ev.name+'</b> &mdash; '+(map[ev.name]||'completed.');
 }
@@ -9574,11 +9581,13 @@ function renderAgentRunPanel(){
 
 // -- AI CONTRACT ASSISTANT (Contracts "+" flow, gated on the contract-creation journey being Active) --
 // -- Contract Creation Journey: persistent animated step bar (bound to aiJourneyEvents['contract-creation']) --
-// Maps an AI-assisted journey stage (aiCtJourneyStage(), 0-7) to the furthest step it implies
+// Maps an AI-assisted journey stage (aiCtJourneyStage(), 0-8) to the furthest step it implies
 // in manualJourneyStepCatalog['contract-creation'] (0-9). The AI flow moves faster than the
 // manual catalog's granularity (e.g. no separate "Client Acceptance" step), so this is a
 // monotonic "at least this far along" mapping rather than a 1:1 step match.
-const AI_CT_STAGE_TO_MANUAL_STEP={1:2,2:3,3:5,4:6,6:8,7:9};
+// Stage 5 ("Deposit due") has no page of its own, so it never appears as a key — same as the
+// folded approval stage it replaced.
+const AI_CT_STAGE_TO_MANUAL_STEP={1:1,2:2,3:3,4:5,6:6,7:8,8:9};
 // Keeps the linked manualJourneyRuns entry (the "step" dropdown shown against the contract in
 // the Contracts list) moving forward as the AI-assisted journey advances, instead of freezing
 // at "Compliance Check" — the step it's initialized to right after the contract is created.
@@ -9592,18 +9601,21 @@ function aiCtSyncLinkedRun(stage){
   if(targetIdx===undefined)return;
   const steps=manualJourneySteps(run.journeyId);
   if(targetIdx>run.currentStepIdx)run.currentStepIdx=Math.min(targetIdx,steps.length-1);
-  if(stage===7){run.status='Completed';run.currentStepIdx=steps.length-1;}
+  if(stage===8){run.status='Completed';run.currentStepIdx=steps.length-1;}
 }
+// Stage indices are positions in aiJourneyEvents['contract-creation'] (9 stages, mirroring
+// amPipelineStages): 0 New request, 1 Building quote, 2 Quote sent, 3 Quote accepted,
+// 4 Client signing, 5 Deposit due, 6 Worker signing, 7 Onboarding, 8 Working.
 function aiCtJourneyStage(){
   if(page==='ai-contract-assistant')return 0;
   if(page==='ai-employee-created')return 0;
   if((page==='contract-type-select'||page==='contract-eor'||page==='contract-peo')&&aiAssistedFlow)return 1;
-  if(page==='ai-proposal-created')return 1;
-  if(page==='ai-proposal-waiting-approval')return 2;
-  if(page==='ai-contract-document')return 3;
-  if(page==='ai-contract-awaiting-signature')return 4;
-  if(page==='ai-onboarding-run')return 6;
-  if(page==='ai-journey-complete')return 7;
+  if(page==='ai-proposal-created')return 2;
+  if(page==='ai-proposal-waiting-approval')return 3;
+  if(page==='ai-contract-document')return 4;
+  if(page==='ai-contract-awaiting-signature')return 6;
+  if(page==='ai-onboarding-run')return 7;
+  if(page==='ai-journey-complete')return 8;
   return -1;
 }
 function isAIContractWizardPage(pg){
@@ -9628,27 +9640,59 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   else if(animationKey==='h2r'){if(animateThisRender)aiH2rAnimatedStage=stage;}
   else if(animateThisRender){aiCtAnimatedStage=stage;}
   const current=events[stage];
+  // Who is holding the work is the one thing a run view is asked for most and the old bar never
+  // answered — the name and the chips say what the step is, not who to chase.
+  const waitLabel=current&&current.waitingOn&&current.waitingOn!=='&mdash;'
+    ?'<span class="aicj-label-wait">Waiting on <b>'+current.waitingOn+'</b></span>':'';
   const label=current?(
     '<div class="aicj-label">'
     +'<span class="aicj-label-step">Step '+(stage+1)+' of '+events.length+'</span>'
     +'<span class="aicj-label-name">'+current.name+'</span>'
     +aiChipsCompact(current.chips)
     +aiAgentBadgeHTML(current.source)
+    +waitLabel
     +'</div>'
   ):'';
-  return label+'<div class="aicj-bar">'+events.map(function(e,i){
+  // Numbered pending dots: at nine stages an unlabelled circle gives no sense of position, and
+  // the number is already the thing the header counts ("Step 4 of 9").
+  const stepHTML=function(e,i,connect){
     const state=i<stage?'done':i===stage?'current':'pending';
-    let html='<div class="aicj-step">'
-      +'<div class="aicj-dot '+state+'"></div>'
+    let h='<div class="aicj-step">'
+      +'<div class="aicj-dot '+state+'">'+(state==='done'?'':(i+1))+'</div>'
       +'<div class="aicj-step-label '+state+'">'+aiCjShortLabel(e.name)+'</div>'
       +'</div>';
-    if(i<events.length-1){
+    if(connect){
       const filled=i<stage;
       const grow=filled&&i===stage-1&&animateThisRender;
-      html+='<div class="aicj-line'+(filled?' filled':'')+(grow?' grow':'')+'"><div class="aicj-line-fill"></div></div>';
+      h+='<div class="aicj-line'+(filled?' filled':'')+(grow?' grow':'')+'"><div class="aicj-line-fill"></div></div>';
     }
-    return html;
-  }).join('')+'</div>';
+    return h;
+  };
+  // Journeys that declare `track` (contract-creation mirrors amPipelineTracks) draw the same
+  // engagement/placement split the Account Manager pipeline board shows, so the two surfaces
+  // read as one model. Journeys without tracks keep the original single run of steps.
+  const trackIds=[];
+  events.forEach(function(e){if(e.track&&trackIds.indexOf(e.track)===-1)trackIds.push(e.track);});
+  if(trackIds.length<2){
+    return label+'<div class="aicj-bar"><div class="aicj-bar-scroll">'
+      +events.map(function(e,i){return stepHTML(e,i,i<events.length-1);}).join('')
+      +'</div></div>';
+  }
+  const tracks=(typeof amPipelineTracks!=='undefined'?amPipelineTracks:[]);
+  const groups=trackIds.map(function(tid){
+    const idxs=[];
+    events.forEach(function(e,i){if(e.track===tid)idxs.push(i);});
+    const t=tracks.find(function(x){return x.id===tid;});
+    const doneAll=idxs[idxs.length-1]<stage;
+    const inTrack=idxs.indexOf(stage)>-1;
+    const capState=inTrack?' current':doneAll?' done':'';
+    return '<div class="aicj-track" style="flex:'+idxs.length+' 1 0">'
+      +'<div class="aicj-track-cap'+capState+'">'+(t?t.label:tid)+'</div>'
+      +'<div class="aicj-track-steps">'
+      +idxs.map(function(i,n){return stepHTML(events[i],i,n<idxs.length-1);}).join('')
+      +'</div></div>';
+  }).join('<div class="aicj-track-split" aria-hidden="true"></div>');
+  return label+'<div class="aicj-bar"><div class="aicj-bar-scroll aicj-bar-tracked">'+groups+'</div></div>';
 }
 function buildAIContractJourneyBarHTML(stage){return buildAIJourneyBarHTML('contract-creation',stage,'contract');}
 function aiCtLoaderTarget(){return document.getElementById('aicj-inner')||document.getElementById('adt-content');}
@@ -10185,7 +10229,7 @@ function aiSubmitAssistedContract(type){
     contractRecordId:newId,
     runId:'RUN-'+(liveRunSeq++)
   };
-  aiUpsertRun('contract-creation',aiProposalDraft.runId,{client:aiProposalDraft.name,country:aiProposalDraft.country,contractType:aiProposalDraft.type,currentStepIdx:1,status:'In Progress',lastActivity:'Just now'});
+  aiUpsertRun('contract-creation',aiProposalDraft.runId,{client:aiProposalDraft.name,country:aiProposalDraft.country,contractType:aiProposalDraft.type,currentStepIdx:2,status:'In Progress',lastActivity:'Just now'});
   aiShowLoader('Creating Proposal&hellip;','Compiling contract data into a proposal for '+aiProposalDraft.name);
   setTimeout(function(){page='ai-proposal-created';renderADTPage();},2000);
 }
@@ -10404,14 +10448,14 @@ function buildAIWaitingApprovalHTML(opts){
 function buildAIProposalWaitingApprovalHTML(){
   const d=aiProposalDraft||{};
   const rec=contractsData.find(function(c){return c.id===d.contractRecordId;})||{};
-  if(d.runId)aiUpsertRun('contract-creation',d.runId,{client:d.name,country:d.country,contractType:d.type,currentStepIdx:2,status:'Waiting for Approval',lastActivity:'Just now'});
+  if(d.runId)aiUpsertRun('contract-creation',d.runId,{client:d.name,country:d.country,contractType:d.type,currentStepIdx:3,status:'Waiting for Approval',lastActivity:'Just now'});
   return buildAIWaitingApprovalHTML({
     description:'We\'ve notified <strong style="color:var(--navy)">'+aiDealManager.name+'</strong> (Deal Manager) to review proposal <strong>'+d.proposalId+'</strong> for <strong>'+d.name+'</strong>. Once approved, this journey will automatically continue to contract generation.',
     entityUserDescription:'Proposal <strong>'+d.proposalId+'</strong> for <strong>'+d.name+'</strong> is ready for your review. Approve it to continue to contract generation, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
     timelineItems:[
-      {label:'Proposal Created',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Quote sent',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
       {label:'Waiting for '+aiDealManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
-      {label:'Contract Generation (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
+      {label:'Client signing (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
     ],
     onApprove:'aiSimulateApproval()',
     approveLabel:'Simulate: '+aiDealManager.name+' Approves',
@@ -10425,7 +10469,7 @@ function buildAIContractAwaitingSignatureHTML(){
   const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;})||{};
   const pd=aiProposalDraft||{};
   const empName=rec.empName||pd.name||'the employee';
-  if(pd.runId)aiUpsertRun('contract-creation',pd.runId,{client:pd.name,country:pd.country,contractType:pd.type,currentStepIdx:4,status:'Waiting for Approval',lastActivity:'Just now'});
+  if(pd.runId)aiUpsertRun('contract-creation',pd.runId,{client:pd.name,country:pd.country,contractType:pd.type,currentStepIdx:6,status:'Waiting for Approval',lastActivity:'Just now'});
   const docPanel=buildAIContractDocCardHTML(rec,pd);
   return buildAIWaitingApprovalHTML({
     backLabel:'Back to AI Executive',
@@ -10433,8 +10477,8 @@ function buildAIContractAwaitingSignatureHTML(){
     description:'Contract <strong>'+(rec.contractId||'')+'</strong> has been countersigned by <strong style="color:var(--navy)">'+empName+'</strong> via Docuseal. We\'ve notified <strong style="color:var(--navy)">'+aiOpsManager.name+'</strong> (Ops Manager) to review the signed contract. Once approved, this journey will automatically continue to onboarding.',
     entityUserDescription:'The signed contract <strong>'+(rec.contractId||'')+'</strong> for <strong>'+empName+'</strong> is ready for your review. Approve it to continue to onboarding, or notify your <strong style="color:var(--navy)">Entity Admin</strong> if you\'d like a second opinion.',
     timelineItems:[
-      {label:'Contract Generated',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
-      {label:'Signature Received',dotClass:'client',chips:[{cls:'ai-chip-client',label:'Client Action'}]},
+      {label:'Client signing',dotClass:'ai',chips:[{cls:'ai-chip-ai',label:'AI Automated'}]},
+      {label:'Worker signing',dotClass:'client',chips:[{cls:'ai-chip-client',label:'Client Action'}]},
       {label:'Waiting for '+aiOpsManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
       {label:'Onboarding (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
     ],
@@ -10461,7 +10505,7 @@ function aiSimulateContractApproval(){
         showAiToast(aiOpsManager.name+' approved the contract',rec.empName?'Onboarding for '+rec.empName+' is starting':'Onboarding is starting');
       }
     }
-    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:6,status:'In Progress',lastActivity:'Just now'});
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:7,status:'In Progress',lastActivity:'Just now'});
     page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
   },2000);
 }
@@ -10596,7 +10640,7 @@ function aiCtRunOnboardingStep(){
       const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
       if(rec)rec.status='Ready for Payroll';
     }
-    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:7,status:'Completed',lastActivity:'Just now'});
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:8,status:'Completed',lastActivity:'Just now'});
     page='ai-journey-complete';renderADTPage();
     return;
   }
@@ -11061,7 +11105,7 @@ function buildAIActiveAutomationHTML(){
     return '<tr style="cursor:pointer" onclick="viewAIRun(\''+r.runId+'\')">'
       +'<td><div class="cell-primary">'+r.client+'</div><div class="cell-sub">'+r.runId+'</div></td>'
       +'<td><div class="cell-primary">'+r.country+'</div><div class="cell-sub">'+r.contractType+'</div></td>'
-      +'<td>'+(r.status==='Completed'?'Ready for Payroll':(step?step.name:'—'))+'</td>'
+      +'<td>'+(r.status==='Completed'?lastStepName:(step?step.name:'—'))+'</td>'
       +'<td><div class="ai-run-progress"><span class="ai-run-progress-ai">'+counts.aiCompleted+' AI</span><span class="ai-run-progress-human">'+counts.humanPending+' pending</span></div></td>'
       +'<td><span class="status-pill '+aiRunStatusPillClass(r.status)+'">'+r.status+'</span></td>'
       +'<td class="cell-sub">'+r.lastActivity+'</td>'
@@ -11226,7 +11270,7 @@ function aiSimulateApproval(){
         showAiToast(aiDealManager.name+' approved the proposal','Generating the contract now');
       }
     }
-    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:3,status:'In Progress',lastActivity:'Just now'});
+    if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:4,status:'In Progress',lastActivity:'Just now'});
     aiContractEditMode=false;
     page='ai-contract-document';renderADTPage();
   },2000);
