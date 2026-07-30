@@ -1,6 +1,6 @@
 // Starts everything the demo needs, so it is one command rather than several terminals and a
 // chance to start only some of them:
-//   - the mock ADT Solution site (the external system, port 4100)
+//   - the mock NewForce Solutions site (the external system, port 4100)
 //   - the Executive Layer storage backend (port 4000)
 //   - the frontend (port 5500)
 // Zero dependencies, same as everything else here. Ctrl-C stops all of them.
@@ -54,6 +54,6 @@ process.on('SIGTERM', shutdown);
 
 console.log('Starting the Executive Layer demo:\n');
 console.log('  >> OPEN THIS       http://localhost:5500/index.html');
-console.log('     ADT Solution    http://localhost:4100');
+console.log('     NewForce Sol.   http://localhost:4100');
 console.log('     Backend API     http://localhost:4000/health');
 console.log('\n  Ctrl-C stops all three.\n');

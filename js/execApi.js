@@ -1,10 +1,10 @@
 // Client for the Executive Layer storage backend (backend/server.js).
 //
-// Replaces the previous js/adtApi.js, which called ADT Solution straight from the browser.
+// Replaces the previous js/adtApi.js, which called NewForce Solutions straight from the browser.
 // That arrangement put the ADT API key in client-side JS and gave every browser tab its own
-// sync cursor and its own ADTEMP-#### counter — so two operators watching at once both minted
-// ADTEMP-0001 for different people. All three concerns now live server-side; this file just
-// talks to our own backend.
+// sync cursor and its own Client ID counter — so two operators watching at once both minted the
+// same client code for different clients. All three concerns now live server-side; this file
+// just talks to our own backend.
 //
 // Every call resolves to {ok:true, data} or {ok:false, error} rather than throwing, because
 // each caller here is a UI handler that has to render the failure rather than propagate it.
@@ -57,7 +57,7 @@ async function execApiRequest(method, path, body){
 
 /* ------------------------------------------------------------------ ADT sync -- */
 
-// Asks the backend to poll ADT Solution once. Returns:
+// Asks the backend to poll NewForce Solutions once. Returns:
 //   status 'idle'      — nothing new since the backend's cursor
 //   status 'ingested'  — a new submission became a client record (Pending)
 //   status 'duplicate' — the submission had already been ingested; no new row
@@ -106,10 +106,14 @@ function execApiToDirectEmpRow(row, localId){
     id: localId,
     backendId: row.id,
     name: row.name,
+    // The two ids a client has, and the reason they never match: empId is the one WE minted for
+    // it, sourceRecordId is the one the SOURCE system minted for the same client in its own
+    // store. Nothing derives one from the other.
     empId: row.employee_code,
-    referenceId: row.reference_id,
     sourceRecordId: row.source_record_id,
     source: row.source,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
     // Not captured by the ADT intake form — HR fills these in, which is why the record is Pending.
     dept: row.department || '--',
     branch: row.branch || '--',

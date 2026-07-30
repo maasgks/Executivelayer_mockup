@@ -1,26 +1,31 @@
-/* USER intake flow (Configure > Systems > ADT Solution > USER).
+/* Client intake flow (AI Execution Layer > Create Contract).
    A focused, linear task surface rather than another browsing page: the app sidebar is hidden
    for the duration (renderer.js), the three stages stay visible as a stepper so the journey
    reads as one continuation, and the form itself gets the whole viewport so its fields can
    breathe. Fields are deliberately larger than the app's dense table-oriented controls — this
    is a data-entry moment, and 13px inputs at 34px tall are for grids, not for typing into. */
 
-.uif-page{min-height:100vh;background:var(--light);display:flex;flex-direction:column}
+.uif-page{position:relative;min-height:100vh;background:var(--light);display:flex;flex-direction:column}
 
-/* -- Slim top bar: exit route + context, so hiding the sidebar never strands anyone. -- */
-.uif-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
-  padding:14px 26px;background:#fff;border-bottom:1px solid var(--border);flex-wrap:wrap}
+/* -- Exit route. Floats over the page rather than sitting in a bar of its own: a full-width
+   strip carrying one button is a band of chrome the form has to begin underneath, and the only
+   thing it added was vertical distance to the first field. Floating keeps the way out exactly
+   where the eye looks for it while giving the whole viewport back to the form.
+
+   Absolute, not fixed — the flow scrolls as one page, and a button pinned to the glass would
+   hang over the card once it does. -- */
 .uif-exit{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:8px;
   border:1px solid var(--border);background:#fff;color:var(--navy);font-size:12.5px;font-weight:600;
   font-family:inherit;cursor:pointer;transition:.15s}
 .uif-exit:hover{background:var(--ol);border-color:#cbd5e1}
-.uif-context{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gray)}
-.uif-context strong{color:var(--navy);font-weight:600}
-.uif-context-dot{width:5px;height:5px;border-radius:50%;background:#0d9488;flex-shrink:0}
+.uif-exit--float{position:absolute;top:18px;left:22px;z-index:3;
+  box-shadow:0 1px 3px rgba(15,23,42,.06)}
 
-/* -- Stepper: the whole journey, always visible, so step 1 already shows what follows. -- */
+/* -- Stepper: the whole journey, always visible, so step 1 already shows what follows.
+   Top padding clears the floating exit button on narrow viewports, where the two would
+   otherwise overlap; on wide ones the stepper is centred and the button sits well clear. -- */
 .uif-stepper{display:flex;align-items:flex-start;justify-content:center;gap:0;
-  padding:30px 26px 8px;max-width:760px;margin:0 auto;width:100%}
+  padding:22px 26px 8px;max-width:760px;margin:0 auto;width:100%}
 .uif-step{display:flex;flex-direction:column;align-items:center;gap:9px;flex:0 0 auto;width:132px;text-align:center}
 .uif-step-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:13px;font-weight:700;border:2px solid var(--border);background:#fff;color:#9ca3af;transition:.25s}
@@ -37,7 +42,7 @@
 
 /* align-items:flex-start matters — the default `stretch` made the card grow to the full height
    of the flex row, leaving a tall empty white block under short content. */
-.uif-body{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:22px 26px 56px}
+.uif-body{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:16px 26px 56px}
 .uif-card{width:100%;max-width:680px;background:#fff;border:1px solid var(--border);border-radius:14px;
   padding:30px 32px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
 .uif-card-head{margin-bottom:24px}
@@ -106,13 +111,19 @@
 .uif-success-title{font-size:14.5px;font-weight:700;color:#15803d;margin-bottom:3px}
 .uif-success-sub{font-size:12.5px;color:#166534;line-height:1.6}
 
-.uif-idrow{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:22px}
+/* -- The two ids the client now has. Side by side and visually distinct, because the point being
+   made is that they are two ids from two systems for one client — not one id and its copy. The
+   note under each names the system that issued it, which is the whole reason they differ. -- */
+.uif-idrow{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:12px}
 .uif-idcard{padding:13px 15px;border:1px solid var(--border);border-radius:10px;background:var(--light);min-width:0}
 .uif-idcard-label{font-size:10.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-bottom:5px}
 .uif-idcard-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;
   color:var(--navy);overflow-wrap:anywhere}
+.uif-idcard-note{font-size:11px;color:var(--gray);margin-top:5px;line-height:1.4}
 .uif-idcard.accent{background:#f0fdfa;border-color:#99f6e4}
 .uif-idcard.accent .uif-idcard-value{color:#0d9488}
+.uif-idcard.accent .uif-idcard-note{color:#0f766e}
+.uif-idnote{font-size:11.5px;color:var(--gray);line-height:1.6;margin:0 0 22px}
 
 .uif-section-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
   color:var(--gray);margin:0 0 11px}
@@ -134,4 +145,8 @@
   .uif-step-sub{display:none}
   .uif-card{padding:24px 20px}
   .uif-body{padding:18px 14px 40px}
+  /* Narrow enough that the stepper reaches the left edge, so the floating button would land on
+     top of the first step. It returns to the flow and the stepper follows it down. */
+  .uif-exit--float{position:static;margin:14px 0 -4px 14px}
+  .uif-stepper{padding-top:14px}
 }

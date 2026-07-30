@@ -1,9 +1,11 @@
-// Storage backend for Direct Employee master data in the Executive Layer.
+// Storage backend for the Client store in the Executive Layer.
 //
 // Owns three things the browser used to own, and could not own correctly:
-//   1. Identity  — employee_code / reference_id are minted here, inside the insert
-//                  transaction, so they are unique across every operator rather than per
-//                  browser (two tabs previously both minted ADTEMP-0001).
+//   1. Identity  — the Client ID (employee_code) is minted here, inside the insert
+//                  transaction, so it is unique across every operator rather than per
+//                  browser (two tabs previously both minted the same code). The source
+//                  system's own id for the client rides along in source_record_id; we
+//                  record it, we do not mint it.
 //   2. The ADT credential — the API key lives in this process, not in client-side JS.
 //   3. The sync cursor — "what have we already ingested" is one row in sync_state, not a
 //                  private localStorage value per browser.
@@ -50,9 +52,10 @@ const FALLBACK_INTAKE_FIELDS = [
 const VALID_STATUSES = ['Pending', 'Active', 'Inactive'];
 const VALID_SOURCES = ['manual', 'adt_solution'];
 // Columns a caller may edit through PATCH /employees/:code. Deliberately excludes identity and
-// provenance (employee_code, reference_id, source_record_id, source) — those are set once, by
-// this server, and an edit endpoint that could rewrite them would defeat the point of minting
-// them here. Also excludes status, which has its own endpoint so the audit log cannot be skipped.
+// provenance (employee_code, source_record_id, source) — the first is set once by this server,
+// the second is the source system's own id and ours to record rather than rewrite. An edit
+// endpoint able to change either would defeat the point of minting them here.
+// Also excludes status, which has its own endpoint so the audit log cannot be skipped.
 const EDITABLE_FIELDS = [
   'name', 'email', 'phone_country_code', 'contact', 'company_name', 'country',
   'looking_for', 'heard_about_us', 'department', 'branch', 'job_title', 'join_date', 'description'
@@ -255,16 +258,16 @@ async function fetchLatestAdtSubmission(sinceId) {
       signal: controller.signal
     });
   } catch (e) {
-    throw new HttpError(502, 'Could not reach ADT Solution: ' + e.message);
+    throw new HttpError(502, 'Could not reach NewForce Solutions: ' + e.message);
   } finally {
     clearTimeout(timer);
   }
   if (res.status === 204) return null;          // nothing newer than the cursor
-  if (res.status === 401) throw new HttpError(502, 'ADT Solution rejected our credentials');
-  if (!res.ok) throw new HttpError(502, 'ADT Solution returned ' + res.status + ' ' + res.statusText);
+  if (res.status === 401) throw new HttpError(502, 'NewForce Solutions rejected our credentials');
+  if (!res.ok) throw new HttpError(502, 'NewForce Solutions returned ' + res.status + ' ' + res.statusText);
   let body;
   try { body = await res.json(); }
-  catch { throw new HttpError(502, 'ADT Solution response was not valid JSON'); }
+  catch { throw new HttpError(502, 'NewForce Solutions response was not valid JSON'); }
   return body && body.data ? body.data : body;
 }
 
@@ -282,33 +285,40 @@ function ingestAdtSubmission(raw) {
   if (existing) return { employee: hydrateEmployee(existing), created: false };
 
   const employee = transaction(() => {
+    // The only id minted here is ours. The source system's id for this same client arrived with
+    // the submission and is stored as-is — inventing a second id of our own on top of it is what
+    // the retired reference_id did, and it only ever confused which system named what.
+    //
+    // 'CLI-' rather than the historical 'ADTEMP-': these records are clients, not employees.
+    // The sequence is not reset, so numbering continues past the ADTEMP-#### rows already in the
+    // store and no id is ever issued twice.
     const seq = nextSequenceValue('adt_employee');
-    const employeeCode = 'ADTEMP-' + String(seq).padStart(4, '0');
-    const referenceId = 'ADT-REF-' + String(seq).padStart(4, '0');
+    const employeeCode = 'CLI-' + String(seq).padStart(4, '0');
+    const sourceRecordId = mapped.source_record_id;
     const ts = nowIso();
     const info = db.prepare(
       `INSERT INTO direct_employees
-         (employee_code, reference_id, source_record_id, source, name, email, phone_country_code,
+         (employee_code, source_record_id, source, name, email, phone_country_code,
           contact, company_name, country, looking_for, heard_about_us, status, raw_source_payload,
           created_at, updated_at)
-       VALUES (?, ?, ?, 'adt_solution', ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)`
+       VALUES (?, ?, 'adt_solution', ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)`
     ).run(
-      employeeCode, referenceId, mapped.source_record_id, mapped.name, mapped.email,
+      employeeCode, sourceRecordId, mapped.name, mapped.email,
       mapped.phone_country_code, mapped.contact, mapped.company_name, mapped.country,
       mapped.looking_for, mapped.heard_about_us, JSON.stringify(raw), ts, ts
     );
     const row = db.prepare('SELECT * FROM direct_employees WHERE id = ?').get(info.lastInsertRowid);
     insertLog(row.id, 'Created',
-      'Record received from ADT Solution intake form — Reference ' + referenceId + '.', 'ADT Solution Sync');
+      'Client received from the NewForce Solutions intake form — source record ' + sourceRecordId + '.', 'NewForce Solutions Sync');
     insertLog(row.id, 'Pending',
-      'Awaiting HR review: department, job title, branch and joining date are not captured by the ADT form.',
-      'ADT Solution Sync');
+      'Awaiting HR review: department, job title, branch and joining date are not captured by the NewForce form.',
+      'NewForce Solutions Sync');
     insertWorkflow(row.id, 'Intake Form Submitted',
-      'USER intake form submitted on ADT Solution. Submission ' + referenceId
-      + (mapped.company_name ? (' from ' + mapped.company_name) : '') + '.', 'ADT Solution');
+      'Client intake form submitted on NewForce Solutions, filed there as ' + sourceRecordId
+      + (mapped.company_name ? (' from ' + mapped.company_name) : '') + '.', 'NewForce Solutions');
     insertWorkflow(row.id, 'Record Ingested',
-      'Executive Layer retrieved the submission and minted Employee ID ' + employeeCode
-      + ' and Reference ID ' + referenceId + '.', 'ADT Solution Sync');
+      'Executive Layer retrieved the submission and created Client ID ' + employeeCode
+      + ', linked to NewForce Solutions source record ' + sourceRecordId + '.', 'NewForce Solutions Sync');
     insertWorkflow(row.id, 'Pending HR Review',
       'Record held as Pending. HR must supply department, job title, branch and joining date before activation.',
       'Executive Layer');
@@ -349,7 +359,10 @@ async function handle(req, res, url, segments) {
     const params = [];
     if (status) { where.push('status = ?'); params.push(status); }
     if (q) {
-      where.push('(name LIKE ? OR employee_code LIKE ? OR reference_id LIKE ? OR email LIKE ? OR company_name LIKE ?)');
+      // Both ids are searchable: an operator holding a NewForce ticket knows the source record
+      // id, one working inside the Executive Layer knows the client id, and neither should have
+      // to translate before they can find the row.
+      where.push('(name LIKE ? OR employee_code LIKE ? OR source_record_id LIKE ? OR email LIKE ? OR company_name LIKE ?)');
       const like = '%' + q + '%';
       params.push(like, like, like, like, like);
     }
@@ -387,12 +400,15 @@ async function handle(req, res, url, segments) {
       const ts = nowIso();
       const info = db.prepare(
         `INSERT INTO direct_employees
-           (employee_code, reference_id, source_record_id, source, name, email, phone_country_code,
+           (employee_code, source_record_id, source, name, email, phone_country_code,
             contact, company_name, country, looking_for, heard_about_us, department, branch,
             job_title, join_date, description, status, raw_source_payload, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        code, body.reference_id || null, body.source_record_id || null, body.source || 'manual',
+        // A manually created client has no source system, so it has no source record id —
+        // null, not a stand-in. The column stays available for rows keyed into an external
+        // system by hand.
+        code, body.source_record_id || null, body.source || 'manual',
         body.name, body.email || null, body.phone_country_code || null, body.contact || null,
         body.company_name || null, body.country || null, body.looking_for || null,
         body.heard_about_us || null, body.department || null, body.branch || null,
@@ -498,7 +514,7 @@ async function handle(req, res, url, segments) {
     return;
   }
 
-  // GET /adt/status — what the "Live ADT Solution Sync" panel shows before anything arrives.
+  // GET /adt/status — what the "Live NewForce Solutions Sync" panel shows before anything arrives.
   if (req.method === 'GET' && segments[0] === 'adt' && segments[1] === 'status' && segments.length === 2) {
     sendJson(res, 200, {
       baseUrl: ADT_BASE_URL,
@@ -509,7 +525,7 @@ async function handle(req, res, url, segments) {
     return;
   }
 
-  // POST /adt/poll — one poll of ADT Solution. The frontend calls this on an interval; the
+  // POST /adt/poll — one poll of NewForce Solutions. The frontend calls this on an interval; the
   // credential and the cursor both stay on this side of the wire.
   if (req.method === 'POST' && segments[0] === 'adt' && segments[1] === 'poll' && segments.length === 2) {
     const since = getSyncState('adt_last_seen_source_id');
@@ -543,7 +559,7 @@ async function handle(req, res, url, segments) {
     return;
   }
 
-  // POST /adt/submit — fill in ADT Solution's intake form from inside the Executive Layer.
+  // POST /adt/submit — fill in NewForce Solutions's intake form from inside the Executive Layer.
   // Deliberately routed THROUGH ADT rather than written straight to our own tables: the record
   // must originate in the source system, get its ADT submission id there, and come back to us
   // through the same ingest path a form filled on ADT's website would take. Anything else would
@@ -565,12 +581,12 @@ async function handle(req, res, url, segments) {
         body: JSON.stringify(body),
         signal: controller.signal
       });
-      if (!r.ok) throw new HttpError(502, 'ADT Solution rejected the submission (' + r.status + ')');
+      if (!r.ok) throw new HttpError(502, 'NewForce Solutions rejected the submission (' + r.status + ')');
       const payload = await r.json();
       submitted = payload && payload.data ? payload.data : payload;
     } catch (e) {
       if (e instanceof HttpError) throw e;
-      throw new HttpError(502, 'Could not reach ADT Solution: ' + e.message);
+      throw new HttpError(502, 'Could not reach NewForce Solutions: ' + e.message);
     } finally {
       clearTimeout(timer);
     }
@@ -633,7 +649,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 server.listen(PORT, () => {
   console.log('Executive Layer storage backend listening on http://localhost:' + PORT);
   console.log('  Data file:     ' + DB_PATH);
-  console.log('  ADT Solution:  ' + ADT_BASE_URL + ADT_LATEST_PATH);
+  console.log('  NewForce Solutions:  ' + ADT_BASE_URL + ADT_LATEST_PATH);
   if (!API_TOKEN) console.log('  Auth:          DISABLED (set EXEC_API_TOKEN before exposing this beyond localhost)');
   if (ALLOWED_ORIGINS.includes('*')) console.log('  CORS:          open to all origins (set ALLOWED_ORIGINS to restrict)');
 });

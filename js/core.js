@@ -76,7 +76,7 @@ let mtReqSelectedId=null,mtReqTab='journeys';
 let mtTaskSelectedRunId=null;
 let aiClientSelectedId=null,aiClientTab='journeys';
 let liveRunSeq=9000;
-// -- ADT Solution live sync. The ADTEMP-####/ADT-REF-#### pair and the "what have we already
+// -- NewForce Solutions live sync. The ADTEMP-####/ADT-REF-#### pair and the "what have we already
 // seen" cursor are both minted by the backend now (see backend/server.js) rather than from
 // counters kept here: two browsers running this page each had their own counter, so both
 // issued ADTEMP-0001 to different people and each re-ingested submissions the other had
@@ -378,15 +378,10 @@ const sidebarItems=[
       {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
       {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'},
       {id:'operations-cockpit',label:'Operations Cockpit',roles:['entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="12" rx="1"/></svg>'}
-    ]},
-    // -- Create Contract is an action, not a page: it starts the contract-creation journey the
-    // same way the "+" on the Contracts listing does — the AI assistant when that journey's agent
-    // is enabled, the manual wizard when it is not. It sits in the AI layer so the run can be
-    // kicked off from the layer that owns the journey instead of going out to the Contracts
-    // module for it, and last in the group because it is the one entry that leaves the layer
-    // rather than opening part of it. Nothing marks it active in the sidebar because every page
-    // it leads to is a focused flow page, which hides the sidebar outright. --
-    {id:'create-contract',label:'Create Contract',roles:['super-admin','entity-admin'],color:'orange',action:()=>addListingItem('contracts'),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'}
+    ]}
+    // -- The intake form action used to sit here as "Create Contract". It now lives under
+    // Client as "Create Client": the form writes a client record, so the action belongs beside
+    // the module that lists those records rather than in the AI layer. --
   ]},
   {divider:true},
   {section:'Workspace'},
@@ -394,8 +389,16 @@ const sidebarItems=[
   // -- Client holds the records ingested from connected systems, with their provenance, audit log
   // and workflow. It lives with the connected SaaS product's own modules rather than in the AI
   // layer group: the AI layer is what runs and configures journeys, and this is the data those
-  // journeys land in. Sits above Employee/Teams because those mirror what it holds. --
-  {id:'master-data',label:'Client',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
+  // journeys land in. Sits above Employee/Teams because those mirror what it holds.
+  // Two children, in the order the work happens: create one, then look at all of them.
+  // Create Client is an action, not a page — it opens the NewForce Solutions intake form, a
+  // focused flow page that hides the sidebar outright, so nothing marks it active. Entity Admin
+  // only: Super Admin configures what the objects are (Data Foundation), it does not fill them
+  // in, so it sees All Clients alone. --
+  {dropdown:'Client',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
+    {id:'create-client',label:'Create Client',roles:['entity-admin'],color:'orange',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
+    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'}
+  ]},
   {dropdown:'Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',children:[
     {id:'direct',label:'Direct Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
     {id:'global',label:'Global Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
@@ -477,7 +480,7 @@ function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return 'cfg-data-foundation';if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return cfgUserIntakeBackPage;if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':manualJourneyBackPage==='operations-cockpit'?'operations-cockpit':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -619,7 +622,10 @@ function renderSidebarEntry(item,box,el,id,collapsed,activePg,scope){
         cd.className='sb-item'+(child.id===activePg?' active':'');
         cd.innerHTML='<div class="sb-ico-wrap">'+(child.icon||'')+'</div><span>'+child.label+'</span>';
         cd.title=child.label;
-        cd.onclick=()=>{activeSidebarItem=child.id;navigatePage(child.id);};
+        // -- Same rule as a top-level entry: a child with `action` runs it instead of routing,
+        // because what it opens is a flow rather than a page id the router knows, and
+        // `activeSidebarItem` is left pointing at wherever the user actually is. --
+        cd.onclick=child.action?()=>child.action():()=>{activeSidebarItem=child.id;navigatePage(child.id);};
         childrenDiv.appendChild(cd);
       });
       parentBtn.onclick=()=>{
@@ -948,7 +954,7 @@ function navigatePage(pg){
   const resolved=canAccessPage(pg,portalRole)?pg:defaultPageForRole(portalRole);
   // Any deliberate navigation ends the All Timesheet drill-down, including the back button itself.
   tsFromAllTimesheet=false;
-  // -- The "Live ADT Solution Sync" listener (aiH2rStartAdtListening, js/pages.js) only makes sense while the operator is looking at the H2R live-run screen ('ai-journey-run'). Navigating anywhere else stops it, so a background poll can never silently pull the operator back into a run they've already left. --
+  // -- The "Live NewForce Solutions Sync" listener (aiH2rStartAdtListening, js/pages.js) only makes sense while the operator is looking at the H2R live-run screen ('ai-journey-run'). Navigating anywhere else stops it, so a background poll can never silently pull the operator back into a run they've already left. --
   if(resolved!=='ai-journey-run'&&typeof adtPollTimerId!=='undefined'&&adtPollTimerId)aiH2rStopAdtListening();
   if(resolved!==page){
     if(view==='adt'&&navStack.length&&navStack[navStack.length-1]===resolved){
@@ -1466,8 +1472,8 @@ let mdSelectedId=null,mdTab='basic-details',mdStatusFilter='';
 // -- Client listing filters. Status is deliberately NOT among them: it is owned by the stat tiles,
 // which carry live counts and so say strictly more than an "All Statuses" dropdown could. Source
 // is the one dimension left worth a dropdown — which system sent the record — and mdSearchQuery
-// matches name, employee id, reference id, company and email in one box. Empty string means
-// "no filter on this dimension". --
+// matches name, both ids (ours and the source system's), company and email in one box. Empty
+// string means "no filter on this dimension". --
 let mdFilterSource='',mdSearchQuery='';
 // 'loading' until the first fetch settles, then 'ok' or 'offline'. Lets the empty listing say
 // which kind of empty it is instead of implying nothing has ever been ingested.
@@ -1730,16 +1736,16 @@ const aiClientJourneys=[
 let aiClientJourneySeq=6;
 
 // -- Configure: Systems (full parity with reference config console) --
-// Dhi ADT is an EOR/global-payroll platform, not a supply-chain business, so there's no genuine
-// Order-to-Cash flow here — these client-side ERPs (SAP/Infor) treat Dhi ADT as their staffing
-// *vendor*, so "Procure to Pay" reflects the client's own AP process for paying Dhi ADT (PO ->
-// service confirmation -> invoice), alongside Hire to Retire (workforce/org master sync) and
-// Finance & Payroll Postings (GL). Each API is tagged Transactional (business documents/events)
-// vs Transformational (master/reference data consumed by Data Foundation).
-const cfgApiCategories=['Procure to Pay','Hire to Retire','Finance & Payroll Postings','Others'];
+// These client-side ERPs (SAP/Infor) treat Dhi ADT as their staffing *vendor*, so "Procure to
+// Pay" reflects the client's own AP process for paying Dhi ADT (PO -> service confirmation ->
+// invoice), alongside Order to Cash (client/workforce master data creation and the attendance
+// feed that bills against it) and Finance & Payroll Postings (GL). Each API is tagged
+// Transactional (business documents/events) vs Transformational (master/reference data consumed
+// by Data Foundation).
+const cfgApiCategories=['Procure to Pay','Order to Cash','Finance & Payroll Postings','Others'];
 const cfgApiSubcats={
   'Procure to Pay':['Vendor & Service Master','Purchasing','Service Confirmation & Invoicing'],
-  'Hire to Retire':['Employee & Org Master','Time & Attendance'],
+  'Order to Cash':['Master Data Creation','Time & Attendance'],
   'Finance & Payroll Postings':['GL Postings'],
   'Others':['Compliance & Documentation','General']
 };
@@ -1752,7 +1758,7 @@ const cfgSystems=[
       {name:'API_PURCHASEORDER_PROCESS · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
       {name:'API_SRVENTRYSHEET_SRV · Service Confirmation',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'},
       {name:'API_SUPPLIERINVOICE · Vendor Invoice',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'},
-      {name:'API_COSTCENTER · Cost Center Master',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'},
+      {name:'API_COSTCENTER · Cost Center Master',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
       {name:'API_GLACCOUNTLINEITEM · GL Posting',dir:'r',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
   {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:true,
@@ -1761,31 +1767,34 @@ const cfgSystems=[
       {name:'PurchaseOrder · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
       {name:'GoodsReceipt · Service Confirmation',dir:'r',cat:'Procure to Pay',sub:'Service Confirmation & Invoicing',type:'Transactional'}
     ]},
-  // -- ADT Solution is the one system here that is genuinely wired up rather than described:
-  // its endpoint is served by backend/mock-adt-server.js today and repoints at the real ADT
-  // host through ADT_BASE_URL. dataModelIds is what puts the USER card on its detail page. --
-  // -- internal:true marks a platform that is ours rather than a third-party ERP. Its detail page
-  // hides the Connection block and the released-API list: endpoint, auth scheme and API inventory
-  // are implementation detail of our own stack, not an integration contract someone reviews here.
-  // What stays is what the platform contributes — its Data Foundation objects. --
-  {id:'adt-solution',name:'ADT Solution',type:'ADT',method:'REST / JSON',endpoint:'http://localhost:4100/api/',auth:'Bearer Token',apis:3,lastTested:'Just now',status:'Connected',isDefault:true,activatedForEntity:true,
-    internal:true,dataModelIds:['user'],
+  // -- NewForce Solutions is the one system here that is genuinely wired up rather than described:
+  // its endpoint is served by backend/mock-adt-server.js today and repoints at the real host
+  // through ADT_BASE_URL.
+  //
+  // It reads as an ordinary connected system now — Connection block, released APIs, nothing else
+  // — because that is all a system page is for. It used to carry internal:true (which hides both
+  // of those) and a USER card that opened the intake form, back when this page was where you went
+  // to fill that form in. Create Contract in the AI Execution Layer owns that job now, so what is
+  // left here is the integration contract, exactly like every other system. --
+  {id:'adt-solution',name:'NewForce Solutions',type:'NewForce',method:'REST / JSON',endpoint:'http://localhost:4100/api/',auth:'Bearer Token',apis:1,lastTested:'Just now',status:'Connected',isDefault:true,activatedForEntity:true,
+    // -- One entry, not three. The integration is a single forms capability that reads the form
+    // definition and submissions and writes a submission back, so it is listed as one read+write
+    // API rather than split per route. The routes themselves are unchanged: the backend still
+    // calls employee-intake/schema, /submit and /latest (backend/server.js). --
     apiList:[
-      {name:'employee-intake/submit · USER Intake Form',dir:'rw',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transactional'},
-      {name:'employee-intake/latest · Latest Submission',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transactional'},
-      {name:'employee-intake/schema · Form Definition',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'}
+      {name:'employee-intake/forms · Forms',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'}
     ]},
   {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.vyoma.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
-      {name:'WorkforceRoster · Field Workforce',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'},
-      {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Hire to Retire',sub:'Time & Attendance',type:'Transactional'},
+      {name:'WorkforceRoster · Field Workforce',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Order to Cash',sub:'Time & Attendance',type:'Transactional'},
       {name:'PayoutBatch · Contractor Payouts',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
   {id:'nfadmin',name:'NFAdmin',type:'NFAdmin',method:'REST / SOAP',endpoint:'https://nfadmin.vyoma.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'EntityRegistry · Legal Entity Master',dir:'r',cat:'Others',sub:'General',type:'Transformational'},
       {name:'ComplianceFiling · Statutory Filings',dir:'rw',cat:'Others',sub:'General',type:'Transactional'},
-      {name:'UserDirectory · Admin Users',dir:'r',cat:'Hire to Retire',sub:'Employee & Org Master',type:'Transformational'}
+      {name:'UserDirectory · Admin Users',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'}
     ]}
 ];
 
@@ -1801,13 +1810,34 @@ const cfgModels=[
     enrichment:[{name:'Risk Category',type:'string'},{name:'ESG Score',type:'string'},{name:'Preferred Status',type:'string'}],
     rules:{makerChecker:true,validation:'Vendor rating ≥ 3.0'},
     sample:[['Vendor ID','VEN-2044'],['Vendor Name','Bharat Steel Traders'],['Country','India'],['Payment Terms','Net 30'],['Rating','4.2'],['Bank Details','HDFC •••• 2210']]},
-  // -- USER is the live one: its mapped fields are exactly what ADT Solution's intake form
+  // -- Client is the live one: its mapped fields are exactly what NewForce Solutions's intake form
   // submits, and its enrichment fields are exactly what that form does NOT capture — which is
-  // why an ingested record sits in Pending until HR supplies them. systemId puts this card on
-  // the ADT Solution system page; intakeFormPage is the form the card opens. --
-  {id:'user',name:'USER',source:'ADT Solution',systemId:'adt-solution',intakeFormPage:'cfg-user-intake',
-    desc:'People captured by the ADT Solution intake form, unified into the Executive Layer Client store.',
+  // why an ingested record sits in Pending until HR supplies them. intakeFormPage marks this as
+  // the object Create Contract fills in, and names the page that renders its form
+  // (startContractIntake, js/pages.js). No systemId: the card belongs on Data Foundation, where
+  // objects are described, and the system page it used to also appear on is now just the
+  // integration contract. --
+  // The object id stays 'user': it is wired through routing, RBAC and the intake page's own
+  // state. Only the label changed — what this object holds was always a client.
+  {id:'user',name:'Client',source:'NewForce Solutions',intakeFormPage:'cfg-user-intake',
+    desc:'Client captured by the NewForce Solutions intake form, unified into the Executive Layer Client store.',
+    // -- The ids the object carries, and who mints each. Declared separately from mapped and
+    // enrichment because it is neither: a mapped field is copied from the source, an enrichment
+    // field is typed in afterwards, and an identifier is *issued* — by us or by the source — at
+    // the moment the record comes into existence. Filing them under either of the other two was
+    // what let the store carry a third id nobody could say the origin of.
+    //
+    // Only this object declares `identity`; the section does not render for models without it.
+    identity:[
+      {name:'Client ID',column:'employee_code',mintedBy:'Executive Layer',example:'CLI-0010',
+       note:'Issued by us when the client is created here. Unique across the whole Executive Layer — minted inside the insert transaction, not per browser.'},
+      {name:'Source Record ID',column:'source_record_id',mintedBy:'NewForce Solutions',example:'ADT-SUB-0011',
+       note:'The id the source system gave this same client in its own store. Recorded as received, never rewritten, and the key ingest deduplicates on.'}
+    ],
     mapped:[
+      // Arrives with the submission as `id` — the source system's own reference for it, which is
+      // why it is mapped rather than minted.
+      ['Source Record ID','id','string'],
       ['Full Name','full_name','string'],
       ['Work Email','work_email','string'],
       ['Phone Country Code','phone_country_code','string'],
@@ -1821,8 +1851,8 @@ const cfgModels=[
       {name:'Department',type:'string'},{name:'Job Title',type:'string'},
       {name:'Branch',type:'string'},{name:'Joining Date',type:'date'},{name:'Status',type:'string'}
     ],
-    rules:{makerChecker:true,validation:'Full name and work email are required; record enters as Pending until enrichment fields are supplied'},
-    sample:[['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Status','Pending']]}
+    rules:{makerChecker:true,validation:'Full name and work email are required. Client ID is minted here and unique; Source Record ID must be unique too — a repeat resolves to the existing client instead of creating a second one. Record enters as Pending until enrichment fields are supplied'},
+    sample:[['Client ID','CLI-0010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Status','Pending']]}
 ];
 let cfgModelTested={};
 let cfgModelEditing=false;
@@ -2679,17 +2709,19 @@ let selectedCfgSystemId=null,selectedCfgModelId=null,selectedCfgJourneyId=null;
 // models without an intake form, and a system's own page — so its back button and the sidebar
 // highlight have to follow the one actually used rather than assume Data Foundation. --
 let cfgModelBackPage='cfg-data-foundation';
-// -- Configure > Data Foundation > USER: the intake form page. cfgUserIntakeFields is
-// fetched from ADT's own /schema endpoint (via our backend) rather than hardcoded, so the form
-// tracks whatever ADT actually asks for. cfgUserIntakeResult holds the created Client
-// record after a successful submit, which is what the success panel reports. --
-let cfgUserIntakeModelId=null,cfgUserIntakeFields=null,cfgUserIntakeResult=null,cfgUserIntakeError='',cfgUserIntakeBusy=false,cfgUserIntakeOffline=false;
+// -- The intake form page, opened by Create Contract in the AI Execution Layer.
+// cfgUserIntakeFields is fetched from NewForce's own /schema endpoint (via our backend) rather
+// than hardcoded, so the form tracks whatever NewForce actually asks for. cfgUserIntakeResult holds the
+// created Client record after a successful submit, which is what the success panel reports.
+// cfgUserIntakeBackPage is whatever page the operator was on when they hit Create Contract:
+// the form is a sidebar-less focused flow, so Exit has to be told where to put them back. --
+let cfgUserIntakeModelId=null,cfgUserIntakeFields=null,cfgUserIntakeResult=null,cfgUserIntakeError='',cfgUserIntakeBusy=false,cfgUserIntakeOffline=false,cfgUserIntakeBackPage='ai-executive';
 // cfgUserIntakeStep is the stage of the three-part journey (0 form, 1 ingestion, 2 record);
 // cfgUserIntakeProgress indexes the ingestion feed within stage 1. cfgUserIntakeDraft holds what
 // has been typed, because re-rendering to show a validation error rebuilds the inputs and would
 // otherwise wipe the form. Errors are keyed by field name so each message sits on its own control.
 let cfgUserIntakeStep=0,cfgUserIntakeProgress=-1,cfgUserIntakeFieldErrors={},cfgUserIntakeDraft={};
-// -- Used when ADT's schema endpoint can't be reached — most often because the backend simply
+// -- Used when NewForce's schema endpoint can't be reached — most often because the backend simply
 // isn't running. The page renders these fields instead of sitting on "Loading…" forever, so the
 // form is always visible and the reason it can't be submitted is stated rather than implied.
 // Mirrors backend/server.js's FALLBACK_INTAKE_FIELDS. --
@@ -2710,13 +2742,14 @@ let cfgDrawerJourneyId=null,cfgDrawerStepIdx=-1;
 
 // -- AI Executive: live run flows for activated journeys (Create Contract / Create Employee / Run Payroll) --
 let aiRunFlowJourneyId=null,aiRunFlowStep=-1,aiRunFlowData={};
-// -- ADT Solution live sync (H2R "Create Employee" entry only): aiH2rAdtFeedStep drives buildAIRunTimelineHTML's reuse for the ingestion feed (-1 idle, 0 listening, 1-4 ingesting). aiH2rAdtLastSubmission holds the raw form fields as ADT sent them; aiH2rAdtLastEmployee holds the client record the backend created from them. adtPollTimerId is the setInterval handle (never persisted — a fresh page load always starts idle and requires re-arming). --
+// -- NewForce Solutions live sync (H2R "Create Employee" entry only): aiH2rAdtFeedStep drives buildAIRunTimelineHTML's reuse for the ingestion feed (-1 idle, 0 listening, 1-4 ingesting). aiH2rAdtLastSubmission holds the raw form fields as NewForce sent them; aiH2rAdtLastEmployee holds the client record the backend created from them. adtPollTimerId is the setInterval handle (never persisted — a fresh page load always starts idle and requires re-arming). --
 let aiH2rAdtFeedStep=-1,aiH2rAdtLastSubmission=null,aiH2rAdtLastEmployee=null,aiH2rAdtLastLocalId=null,aiH2rAdtError='',adtPollTimerId=null;
 const aiH2rAdtIngestSteps=[
-  {label:'Listening',running:'Connected to ADT Solution — waiting for a new intake form submission…',type:'ai'},
-  {label:'Fetching Submission',running:'New submission detected — retrieving it from ADT Solution…',type:'ai'},
+  {label:'Listening',running:'Connected to NewForce Solutions — waiting for a new intake form submission…',type:'ai'},
+  {label:'Fetching Submission',running:'New submission detected — retrieving it from NewForce Solutions…',type:'ai'},
   {label:'Form Details Received',running:'Reading the submitted form fields…',type:'ai'},
-  {label:'Generating Identifiers',running:'Minting the Employee ID and Reference ID for this record…',type:'ai'},
+  // Only one identifier is minted — ours. The source system's id arrived with the submission.
+  {label:'Generating Client ID',running:'Minting the Client ID and linking it to the NewForce source record…',type:'ai'},
   {label:'Creating Client Record',running:'Creating the Client record — status Pending until HR completes it…',type:'ai'}
 ];
 const aiRunFlows={

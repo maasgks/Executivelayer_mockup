@@ -2,7 +2,7 @@
 -- MySQL-dialect twin: sql/schema_direct_employees.sql (repo root). Same design, different
 -- DDL syntax — keep both in sync when the design changes.
 --
--- Column set mirrors the REAL ADT Solution intake form, which captures a lead/enquiry:
+-- Column set mirrors the REAL NewForce Solutions intake form, which captures a lead/enquiry:
 -- Full name, Work email, Phone (country code + number), Company name, Country hiring in,
 -- What are you looking for, How did you hear about us. Note what that form does NOT ask
 -- for: job title, department, branch, join date. Those are completed by HR after ingest,
@@ -14,18 +14,28 @@
 CREATE TABLE IF NOT EXISTS direct_employees (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
 
-  -- Identity. Both are minted server-side inside the insert transaction (see mintAdtIds in
-  -- server.js) so they are unique across every browser and operator, not per-session.
-  employee_code       TEXT    NOT NULL UNIQUE,   -- 'ADTEMP-0001' (ADT-sourced) | 'EMP001' (manual)
-  reference_id        TEXT    UNIQUE,            -- 'ADT-REF-0001'; NULL for manual rows with no external origin
-
-  -- Provenance. source_record_id is ADT's OWN id for the submission, which makes ingest
-  -- idempotent: replaying the same submission resolves to the same row instead of a duplicate.
-  -- Distinct from reference_id, which is an id WE mint for display.
+  -- A client carries exactly two ids, and they are two because they are minted by two different
+  -- systems. Anything beyond these would be an id nobody outside this table can resolve.
+  --
+  --   employee_code    OUR id for the client. Minted server-side inside the insert transaction
+  --                    so it is unique across every browser and operator, not per-session.
+  --                    Surfaced in the UI as "Client ID".
+  --   source_record_id THEIR id — the id the source system gave this same client in its own
+  --                    store ('ADT-SUB-0001' from NewForce Solutions). Surfaced as "Source
+  --                    Record ID". Also what makes ingest idempotent: replaying a submission
+  --                    resolves to the row it already created instead of duplicating it.
+  --
+  -- The two never match, and are not meant to: they are two systems' names for one client.
+  -- (A third id, reference_id, used to sit here — 'ADT-REF-0001', minted by US but displayed as
+  -- though it were the source system's. It was the same id as employee_code wearing a different
+  -- prefix, so it is gone. Databases created before this still carry the column; it is nullable,
+  -- nothing writes it, and nothing reads it.)
+  employee_code       TEXT    NOT NULL UNIQUE,   -- 'CLI-0010' (client) | 'EMP001' (manual)
   source_record_id    TEXT    UNIQUE,
+  -- Which system the client came from. Rendered as the "Source System" column.
   source              TEXT    NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','adt_solution')),
 
-  -- ---- Fields the ADT Solution intake form actually submits ----
+  -- ---- Fields the NewForce Solutions intake form actually submits ----
   name                TEXT    NOT NULL,          -- "Full name"
   email               TEXT,                      -- "Work email"
   phone_country_code  TEXT,                      -- "Phone number" — the country dropdown
@@ -60,7 +70,7 @@ CREATE TABLE IF NOT EXISTS direct_employee_logs (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id  INTEGER NOT NULL,
   occurred_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  actor_user   TEXT    NOT NULL,   -- 'Admin', 'ADT Solution Sync'
+  actor_user   TEXT    NOT NULL,   -- 'Admin', 'NewForce Solutions Sync'
   status_label TEXT    NOT NULL,   -- 'Created' | 'Pending' | 'Active' | 'Inactive' | 'Updated'
   action_note  TEXT    NOT NULL,
   FOREIGN KEY (employee_id) REFERENCES direct_employees(id) ON DELETE CASCADE

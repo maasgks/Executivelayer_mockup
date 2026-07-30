@@ -1,5 +1,5 @@
-// Stand-in for the real ADT Solution website, so the Executive Layer demo has a genuine
-// external system to connect to before the ADT team hands over staging access.
+// Stand-in for the real NewForce Solutions website, so the Executive Layer demo has a genuine
+// external system to connect to before the NewForce team hands over staging access.
 //
 // It runs on its OWN port and holds its OWN data deliberately: the Executive Layer backend
 // reaches it over HTTP with a bearer token, exactly as it will reach the real thing. Swapping
@@ -44,7 +44,7 @@ function formPage(justSubmitted) {
       + ' The Executive Layer will pick this up on its next poll.</div>'
     : '';
   return '<!doctype html><html><head><meta charset="utf-8">'
-    + '<title>ADT Solution — Get Started</title>'
+    + '<title>NewForce Solutions — Get Started</title>'
     + '<meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<style>'
     + 'body{font-family:Inter,system-ui,Segoe UI,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;color:#0f172a}'
@@ -65,7 +65,7 @@ function formPage(justSubmitted) {
     + '.tag{display:inline-block;background:#f1f5f9;color:#475569;font-size:11px;font-weight:600;'
     + 'padding:3px 9px;border-radius:20px;margin-bottom:14px}'
     + '</style></head><body><div class="card">'
-    + '<div class="tag">ADT SOLUTION</div>'
+    + '<div class="tag">NEWFORCE SOLUTIONS</div>'
     + '<h1>Get started</h1>'
     + '<p class="sub">Tell us what you need and our team will get in touch.</p>'
     + banner
@@ -134,7 +134,7 @@ const server = http.createServer(async (req, res) => {
 
   // Programmatic submission — the same intake the HTML form above posts to, in JSON.
   // Used when the form is filled from inside the Executive Layer (Configure > Systems >
-  // ADT Solution > USER), so that path still goes through ADT rather than shortcutting to
+  // NewForce Solutions > USER), so that path still goes through ADT rather than shortcutting to
   // our own database. Requires the same bearer token as the polling endpoint.
   if (req.method === 'POST' && url.pathname === '/api/employee-intake/submit') {
     const auth = req.headers.authorization || '';
@@ -220,7 +220,7 @@ server.on('error', (err) => {
 });
 
 server.listen(PORT, () => {
-  console.log('Mock ADT Solution site listening on http://localhost:' + PORT);
+  console.log('Mock NewForce Solutions site listening on http://localhost:' + PORT);
   console.log('  Form:  http://localhost:' + PORT + '/');
   console.log('  API:   GET /api/employee-intake/latest  (Bearer ' + API_KEY + ')');
 });

@@ -30,13 +30,14 @@ There are two ways in. Both end at the same master data record, because both go 
 
 1. **Configure → Systems.** ADT Solution, Bhaiyaa and NFAdmin show as **Connected** alongside
    SAP and Infor. ADT Solution is the one that is genuinely wired up rather than described.
-2. **Open ADT Solution.** Its **Data Foundation** section holds one card: **USER**.
-3. **Open USER.** It renders ADT Solution's intake form — fetched from ADT's own
-   `/api/employee-intake/schema`, not a hardcoded copy — above a map of where each field lands.
-4. **Submit.** The Executive Layer posts it to ADT Solution, ADT assigns the submission id, and
-   the Executive Layer ingests it back. Success shows the created record: Employee ID
-   `ADTEMP-####`, Reference ID `ADT-REF-####`, ADT Submission ID, and every submitted field.
-5. **Open master data record** jumps to it in Direct Employee.
+2. **Configure → Data Foundation.** One card describes the object this flow fills in: **Client**.
+3. **AI Execution Layer → Create Contract.** It renders ADT Solution's intake form — fetched from
+   ADT's own `/api/employee-intake/schema`, not a hardcoded copy.
+4. **Submit.** The Executive Layer posts it to ADT Solution, ADT assigns its own record id, and
+   the Executive Layer ingests it back. Success shows the two ids the client now has — our
+   **Client ID** `CLI-####` and ADT's **Source Record ID** `ADT-SUB-####` — plus every submitted
+   field.
+5. **Open client record** jumps to it in Client.
 
 ### B — from AI Executive (the live-sync story)
 
@@ -80,9 +81,9 @@ There are two ways in. Both end at the same master data record, because both go 
 
 The browser used to own all three, and could not own any of them correctly:
 
-- **Identity.** `ADTEMP-####` came from a counter in `localStorage`, so two operators with the
-  page open both issued `ADTEMP-0001` to different people. They are now minted inside the
-  insert transaction, from `id_sequences`.
+- **Identity.** The Client ID came from a counter in `localStorage`, so two operators with the
+  page open both issued the same code to different clients. It is now minted inside the insert
+  transaction, from `id_sequences`.
 - **The ADT credential.** It shipped in client-side JS because the browser called ADT directly.
   It is now an env var in this process; the browser talks only to us.
 - **The sync cursor.** "What have we already ingested" was per-browser, so one submission could
@@ -90,6 +91,12 @@ The browser used to own all three, and could not own any of them correctly:
 
 Ingest is idempotent on `source_record_id` — ADT's own id for the submission — so a retry,
 restart or cursor reset resolves to the existing record instead of duplicating it.
+
+A client therefore carries two ids and only two: `employee_code` is **our** name for it (the
+Client ID), `source_record_id` is the **source system's** name for the same client (the Source
+Record ID). They differ because two different systems minted them, and neither can be derived
+from the other. A third id, `reference_id` (`ADT-REF-####`), used to sit between them — we minted
+it but presented it as ADT's, which made it the Client ID in a different prefix. It is gone.
 
 ## Config
 

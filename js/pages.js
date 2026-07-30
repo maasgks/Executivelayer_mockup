@@ -1435,7 +1435,19 @@ function applyMdSearch(){
   mdSelectedId=null;
   renderADTPage();
 }
-function mdSourceLabel(e){return e.source==='adt_solution'?'ADT Solution':'Manual';}
+function mdSourceLabel(e){return e.source==='adt_solution'?'NewForce Solutions':'Manual';}
+// -- "Last Updated" in the listing. Stored as one UTC instant; shown short, because the column
+// answers "is this stale" rather than "exactly when" — the Logs tab carries the precise trail.
+// Falls back to created_at for rows never touched since ingest, so the cell is never blank on a
+// record that plainly does have a date. --
+function mdLastUpdated(e){
+  const raw=e.updatedAt||e.createdAt;
+  if(!raw)return '';
+  const d=new Date(raw);
+  if(isNaN(d.getTime()))return '';
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})
+    +', '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+}
 // -- Distinct values actually present, so a dropdown never offers a country that would return
 // nothing. '--' is the placeholder for a field HR has not filled in, not a real value. --
 function mdDistinct(pick){
@@ -1455,8 +1467,10 @@ function mdRowsBeforeStatus(){
     if(mdFilterSource&&mdSourceLabel(e)!==mdFilterSource)return false;
     if(!q)return true;
     // -- Country and company have no dropdown of their own, so the search box carries them:
-    // typing a country or an employer still narrows the list. --
-    return [e.name,e.empId,e.referenceId,e.companyName,e.country,e.email].some(function(f){
+    // typing a country or an employer still narrows the list. Both ids are matched — someone
+    // holding a NewForce ticket knows the source record id, someone working inside the
+    // Executive Layer knows the client id, and neither should have to translate first. --
+    return [e.name,e.empId,e.sourceRecordId,e.companyName,e.country,e.email].some(function(f){
       return f&&String(f).toLowerCase().indexOf(q)!==-1;
     });
   });
@@ -1480,12 +1494,22 @@ function mdRefreshFromBackend(){
     Object.keys(mdLogsData).forEach(function(k){delete mdLogsData[k];});
     Object.keys(mdWorkflowData).forEach(function(k){delete mdWorkflowData[k];});
     if(mdSelectedId&&!res.data.employees.length)mdSelectedId=null;
-    // Oldest first, so the newest backend record ends up at the top of masterData.
-    return Promise.all(res.data.employees.slice().reverse().map(function(row){
-      return execApiGetEmployee(row.employee_code).then(function(full){
+    // -- Oldest first, so the newest backend record ends up at the top of masterData.
+    //
+    // The requests still go out together, but the rows are inserted only once they have ALL
+    // arrived, in the order they were issued. Inserting inside each .then() instead — which is
+    // what this did — meant each record prepended itself the moment its own response landed, so
+    // the final order was whatever order the network happened to answer in. The list came back
+    // shuffled on every refresh, and no amount of sorting upstream could hold, because the
+    // scrambling happened after it. Ordering the list is what makes SR. NO mean anything. --
+    const ordered=res.data.employees.slice().reverse();
+    return Promise.all(ordered.map(function(row){
+      return execApiGetEmployee(row.employee_code);
+    })).then(function(fulls){
+      fulls.forEach(function(full){
         if(full.ok&&full.data)syncEmpFromBackend(full.data.employee,full.data.logs,full.data.workflow);
       });
-    })).then(function(){
+    }).then(function(){
       // The drawer's selection is an index into the list we just rebuilt, so drop it if the
       // record it pointed at is gone.
       if(mdSelectedId&&!masterData.some(function(e){return e.id===mdSelectedId;}))mdSelectedId=null;
@@ -1657,22 +1681,25 @@ function renderMdSidebar(){
   let body='';
 
   if(mdTab==='basic-details'){
-    // -- Identity strip: the two ids that make this record traceable back to the system it came
-    // from. Both are minted by the backend, so they are unique across the whole Executive Layer
-    // rather than per browser session. First thing shown, because "which record is this and
-    // where did it come from" is the first question asked of a client record. --
+    // -- Identity strip: the two ids that make this record traceable, and the systems that own
+    // them. Client ID is ours, minted by our backend and unique across the whole Executive
+    // Layer; Source Record ID is the source system's own id for the same client, recorded as
+    // received. They differ because two systems named the same client, so the badge says whose
+    // id each one is rather than leaving the reader to guess. First thing shown, because "which
+    // client is this and where did it come from" is the first question asked of the record. --
+    const srcSys=rec.source==='adt_solution'?'NewForce Solutions':'Manual';
     const idStrip='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'
-      +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source: '+(rec.source==='adt_solution'?'ADT Solution':'Manual')+'</span>'
-      +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Employee ID: '+rec.empId+'</span>'
-      +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Reference ID: '+(rec.referenceId||'--')+'</span>'
+      +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Client ID: '+rec.empId+'</span>'
+      +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source System: '+srcSys+'</span>'
+      +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source Record ID: '+(rec.sourceRecordId||'--')+'</span>'
       +'<span class="lp-status-badge '+String(rec.status).toLowerCase()+'">'+rec.status+'</span>'
       +'</div>';
-    // -- Records ingested from ADT Solution sit in Pending because the intake form simply does
+    // -- Records ingested from NewForce Solutions sit in Pending because the intake form simply does
     // not ask for department, job title, branch or joining date. Naming the missing fields is
     // more useful than a bare badge — it tells the operator exactly what is outstanding. --
     const pendingNote=rec.status==='Pending'
       ? '<div style="font-size:12px;color:#8a6d10;background:#fdf6d8;border:1px solid #f0dfa0;border-radius:8px;padding:10px 12px;margin-bottom:14px;line-height:1.6">'
-        +'<strong>Pending completion.</strong> The ADT Solution intake form does not capture department, job title, branch or joining date. Once those are filled in, set this record to Active from the Logs tab.'
+        +'<strong>Pending completion.</strong> The NewForce Solutions intake form does not capture department, job title, branch or joining date. Once those are filled in, set this record to Active from the Logs tab.'
         +'</div>'
       : '';
     body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+rec.name+'</span></div>'
@@ -1794,7 +1821,7 @@ function buildMasterDataHTML(){
   // -- With the drawer open only about a third of the table stays uncovered, so the listing
   // switches to a compact identity-only form that actually fits it: name, the two ids, and a
   // status dot. That is all you need to pick a different record while reading one — the full
-  // nine-column table returns the moment the drawer closes. --
+  // table returns the moment the drawer closes. --
   const compact=!!mdSelectedId;
   const statusDotColor={Pending:'#d9b64a',Active:'#16a34a',Inactive:'#ef4444'};
   const tableBody=rows.length
@@ -1806,20 +1833,30 @@ function buildMasterDataHTML(){
           +'<div class="md-compact-cell">'
           +'<span class="md-compact-dot" style="background:'+(statusDotColor[e.status]||'#94a3b8')+'"></span>'
           +'<div style="min-width:0">'
-          +'<div class="md-compact-name">'+e.name+'</div>'
-          +'<div class="md-compact-meta">'+(e.empId||'--')+(e.referenceId?(' &middot; '+e.referenceId):'')+'</div>'
+          // Same column as the full table, just narrow — so it leads with the company too. The
+          // two ids on the line below still tell one row from another when a company is blank.
+          +'<div class="md-compact-name">'+(e.companyName&&e.companyName!=='--'?e.companyName:'--')+'</div>'
+          +'<div class="md-compact-meta">'+(e.empId||'--')+(e.sourceRecordId?(' &middot; '+e.sourceRecordId):'')+'</div>'
           +'</div></div></td>'
           +'</tr>';
       }
+      // -- The client is the company. The person on the record is that company's point of
+      // contact — whoever filled the intake form — so their name belongs to the record, not to
+      // the row's identity, and is read in the drawer rather than the listing.
+      //
+      // Source System and Source Record ID sit together directly after it: the id means nothing
+      // without the system that issued it, and splitting them was what made the old "Reference
+      // ID" column read as though it were ours. --
+      const lastUpd=mdLastUpdated(e);
       return '<tr class="md-row'+(sel?' lp-row-selected':'')+'" id="md-row-'+e.id+'" style="cursor:pointer" onclick="openMdSidebar('+e.id+')">'
         +'<td style="color:var(--gray);font-size:13px">'+(i+1)+'</td>'
-        +'<td style="font-weight:600;color:var(--navy)">'+e.name+'</td>'
-        +'<td style="font-family:monospace;font-size:12px">'+(e.empId||d)+'</td>'
-        +'<td>'+(e.referenceId?('<span style="font-family:monospace;font-size:12px;color:#0d9488;font-weight:600">'+e.referenceId+'</span>'):d)+'</td>'
+        +'<td style="font-family:monospace;font-size:12px;font-weight:600;color:var(--navy)">'+(e.empId||d)+'</td>'
+        +'<td style="font-weight:600;color:var(--navy)">'+(e.companyName&&e.companyName!=='--'?e.companyName:d)+'</td>'
         +'<td><span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">'+mdSourceLabel(e)+'</span></td>'
-        +'<td>'+(e.companyName||d)+'</td>'
+        +'<td>'+(e.sourceRecordId?('<span style="font-family:monospace;font-size:12px;color:#0d9488;font-weight:600">'+e.sourceRecordId+'</span>'):d)+'</td>'
         +'<td>'+(e.country||d)+'</td>'
         +'<td><span class="lp-status-badge '+String(e.status).toLowerCase()+'">'+e.status+'</span></td>'
+        +'<td style="color:var(--gray);font-size:12px;white-space:nowrap">'+(lastUpd||d)+'</td>'
         +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openMdSidebar('+e.id+')"><svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg></button></td>'
         +'</tr>';
     }).join('')
@@ -1840,7 +1877,7 @@ function buildMasterDataHTML(){
             +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Client records are held by the Executive Layer backend, which isn\'t reachable — so this list can\'t be shown, not that it is empty. Start it with <span style="font-family:monospace">node backend/dev.js</span>, then '
             +'<button onclick="mdRefreshClicked()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">refresh</button>.</div>'
           :'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No clients yet</div>'
-            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Records arrive here when a connected system sends one. Submit the USER intake form under <strong>Configure &rsaquo; Data Foundation &rsaquo; USER</strong>, or arm the live sync from <strong>AI Executive &rsaquo; Hire to Retire</strong>.</div>')
+            +'<div style="font-size:12px;color:var(--gray);line-height:1.7;max-width:460px;margin:0 auto">Records arrive here when a connected system sends one. Submit the client intake form from <strong>AI Execution Layer &rsaquo; Create Contract</strong>, or arm the live sync from <strong>AI Executive &rsaquo; Hire to Retire</strong>.</div>')
       +'</td></tr>';
 
   // -- Same listing chrome as Contracts, Direct Employee and the rest: a "Select Filter" bar on
@@ -1871,7 +1908,7 @@ function buildMasterDataHTML(){
     // -- Fixed width rather than flex:1: the box only ever holds a short term, so letting it eat
     // the whole row made it the loudest control on a bar where it is not the primary one. The
     // full list of searched fields moves to the tooltip, keeping the placeholder from truncating. --
-    +'<input class="ct-search-input" id="md-search-input" type="text" placeholder="Search clients..." title="Matches name, employee ID, reference ID, company and country" value="'+attrSafe(mdSearchQuery)+'" style="flex:0 1 210px;min-width:150px;height:34px;border-radius:20px" onkeydown="if(event.key===\'Enter\')applyMdSearch()">'
+    +'<input class="ct-search-input" id="md-search-input" type="text" placeholder="Search clients..." title="Matches name, client ID, source record ID, company and country" value="'+attrSafe(mdSearchQuery)+'" style="flex:0 1 210px;min-width:150px;height:34px;border-radius:20px" onkeydown="if(event.key===\'Enter\')applyMdSearch()">'
     +'<button class="lp-pill-reset" onclick="resetMdFilters()">Reset</button>'
     +'<button class="lp-pill-search" onclick="applyMdSearch()">Search</button>'
     // -- Refresh sits with Reset and Search because all three act on this list, not on a record.
@@ -1887,7 +1924,7 @@ function buildMasterDataHTML(){
     +'<table class="lp-table"><thead><tr>'
     +(compact
       ?'<th>'+rows.length+' record'+(rows.length===1?'':'s')+'</th>'
-      :'<th>SR. NO</th><th>NAME</th><th>EMPLOYEE ID</th><th>REFERENCE ID</th><th>SOURCE</th><th>COMPANY</th><th>COUNTRY</th><th>STATUS</th><th>ACTION</th>')
+      :'<th>SR. NO</th><th>CLIENT ID</th><th>CLIENT\'S COMPANY</th><th>SOURCE SYSTEM</th><th>SOURCE RECORD ID</th><th>COUNTRY</th><th>STATUS</th><th>LAST UPDATED</th><th>ACTION</th>')
     +'</tr></thead><tbody>'+tableBody+'</tbody></table>'
     // -- Hidden in compact mode: with the drawer open the listing is a narrow identity strip and
     // a row of pagination chrome under it would take more of it than the records do. --
@@ -6760,7 +6797,7 @@ function buildCfgSystemDetailHTML(){
   const internal=!!s.internal;
   const heading=editing
     ?'<div class="ep-form-group" style="margin-bottom:8px;max-width:360px"><input class="ep-form-input" id="cfg-sys-edit-name" value="'+attrSafe(d.name)+'" style="font-size:16px;font-weight:700"></div>'
-    :'<p style="font-size:17px;font-weight:700;margin-bottom:6px">'+s.name+'</p>'
+    :'<p style="font-size:17px;font-weight:700;margin-bottom:6px">'+s.name+(s.domain?' <span style="font-weight:500;color:var(--gray)">('+s.domain+')</span>':'')+'</p>'
       +'<p style="font-size:12.5px;color:var(--gray);margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +(internal
         ?'<span class="badge" style="color:#475569;background:#f1f5f9;border-color:#cbd5e1">Internal platform</span>'
@@ -6786,7 +6823,7 @@ function buildCfgSystemDetailHTML(){
       +cfgKVRow('Endpoint','<span style="font-family:monospace">'+s.endpoint+'</span>')
       +cfgKVRow('Authentication',s.auth)
       +cfgKVRow('Status','<span class="status-pill '+(s.status==='Connected'?'active':'inactive')+'">'+s.status+'</span>')
-      +cfgKVRow('Last tested',s.lastTested+' &middot; '+s.apis+' APIs')
+      +cfgKVRow('Last tested',s.lastTested+' &middot; '+s.apis+(s.apis===1?' API':' APIs'))
       +(s.lastTestResult==='fail'?'<div style="margin-top:10px;padding:11px 14px;border-radius:9px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:12px;line-height:1.6">Test failed &mdash; the endpoint looks incomplete or unreachable. Update the endpoint (Edit) and test again.</div>':'')
       +(s.lastTestResult==='ok'?'<div style="margin-top:10px;padding:11px 14px;border-radius:9px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:12px;line-height:1.6">Connection verified &mdash; the endpoint responded successfully.</div>':'')
       +'</div>';
@@ -6846,13 +6883,12 @@ function buildCfgSystemDetailHTML(){
       +'<button type="button" class="btn btn-secondary btn-sm" onclick="addCfgApiRow(\''+s.id+'\')">+ Add API</button>'
       +'</div>'
     :'';
-  // -- Data Foundation objects sourced from this system. Shown on the system page (not only
-  // under Configure > Data Foundation) because "what does this system give us" is the question
-  // being asked here. Systems with no models of their own simply omit the section.
-  //
-  // Opening a model here shows its structure — mapping, enrichment, rules, sample test — which is
-  // what the question deserves. The intake form lives on the model itself, under Data Foundation:
-  // a system page describes the contract, not the act of submitting through it. --
+  // -- Data Foundation objects sourced from this system, for any system that claims one through
+  // a model's systemId. None do at the moment: NewForce Solutions used to claim USER, and its
+  // page is now the plain integration contract every other system shows. Kept because "what does
+  // this system give us" is a fair question for a system page to answer, and answering it costs
+  // nothing while no model opts in. Opening a model here shows its structure — mapping,
+  // enrichment, rules, sample test — never a form to fill in. --
   const systemModels=cfgModels.filter(function(m){return m.systemId===s.id;});
   const dataFoundationBlock=systemModels.length
     ?'<div class="review-title" style="margin-bottom:12px">Data Foundation</div>'
@@ -6927,36 +6963,49 @@ function viewCfgModel(id,from){
   cfgModelBackPage=from==='cfg-system-detail'?'cfg-system-detail':'cfg-data-foundation';
   navigatePage('cfg-model-detail');
 }
-/* -- Configure > Data Foundation > USER (intake form) -------------------------------------------
+/* -- Create Contract (AI Execution Layer > intake form) ------------------------------------------
    A three-stage flow rather than three unrelated screens: Intake Form -> Ingestion -> Master
    Data Record, with the stepper visible throughout so the journey reads as one continuation.
    The app sidebar is hidden for the duration (renderer.js) so the form owns the viewport —
-   this is a data-entry task, not a page to browse away from. Styles: css/intake-flow.css. */
+   this is a data-entry task, not a page to browse away from. Styles: css/intake-flow.css.
+
+   Entered from the Create Contract sidebar item. Data Foundation used to open it and no longer
+   does: that page documents what the object is, and its cards now all open the same thing —
+   the model's structure. */
 
 const cfgUserIntakeStages=[
   {label:'Intake Form',sub:'Fill in the details'},
-  {label:'Ingestion',sub:'Executive Layer to ADT'},
+  {label:'Ingestion',sub:'Executive Layer to NewForce'},
   {label:'Client',sub:'Record created'}
 ];
 // The ingestion feed. These are the real steps the request goes through — the submission is
-// posted to ADT, ADT assigns its id, and the Executive Layer ingests what comes back — so the
+// posted to NewForce, NewForce assigns its id, and the Executive Layer ingests what comes back — so the
 // wait explains itself instead of being a blank spinner.
 const cfgUserIntakeProgressSteps=[
-  {title:'Submitting to ADT Solution',note:'Posting the intake form to the source system…'},
-  {title:'Submission accepted',note:'ADT Solution has registered the submission.'},
+  {title:'Submitting to NewForce Solutions',note:'Posting the intake form to the source system…'},
+  {title:'Submission accepted',note:'NewForce Solutions has registered the submission.'},
   {title:'Retrieving into the Executive Layer',note:'Reading the submission back through the intake API…'},
-  {title:'Minting identifiers',note:'Assigning the Employee ID and Reference ID…'},
+  {title:'Creating the client record',note:'Minting the Client ID and linking the source record…'},
   {title:'Client record created',note:'Written to the Executive Layer store as Pending.'}
 ];
 
+// -- The Create Contract entry point. The object to open is found by its intakeFormPage rather
+// than named outright, so declaring an intake form on a different Data Foundation object is all
+// it takes to repoint this button. The page in view is remembered first, because that is where
+// Exit has to land — the form itself shows no sidebar to navigate away with. --
+function startContractIntake(){
+  const m=cfgModels.find(function(x){return x.intakeFormPage;});
+  cfgUserIntakeBackPage=canAccessPage(page,portalRole)&&page!=='cfg-user-intake'?page:defaultPageForRole(portalRole);
+  viewCfgUserIntake(m?m.id:'user');
+}
 function viewCfgUserIntake(modelId){
   cfgUserIntakeModelId=modelId;
   cfgUserIntakeResult=null;cfgUserIntakeError='';cfgUserIntakeBusy=false;
   cfgUserIntakeFields=null;cfgUserIntakeOffline=false;
   cfgUserIntakeStep=0;cfgUserIntakeProgress=-1;cfgUserIntakeFieldErrors={};cfgUserIntakeDraft={};
   navigatePage('cfg-user-intake');
-  // Ask ADT (through our backend) what its form actually asks for, rather than shipping a
-  // second copy of the field list that drifts the moment ADT changes the form. If that call
+  // Ask NewForce (through our backend) what its form actually asks for, rather than shipping a
+  // second copy of the field list that drifts the moment NewForce changes the form. If that call
   // fails, fall back to the known field set: an unreachable backend should leave the form
   // visible and say why it can't be submitted, not strand the page on a loading message.
   execApiRequest('GET','/adt/form-schema').then(function(res){
@@ -6978,8 +7027,9 @@ function cfgUserIntakeRetry(){
   viewCfgUserIntake(cfgUserIntakeModelId||'user');
   cfgUserIntakeDraft=draft;
 }
-// -- Back to Data Foundation, which is where the form is now entered from. --
-function cfgUserIntakeExit(){navigatePage('cfg-data-foundation');}
+// -- Back to whatever Create Contract was pressed from, rather than a fixed page: the button
+// lives in the sidebar and can therefore be hit from anywhere. --
+function cfgUserIntakeExit(){navigatePage(cfgUserIntakeBackPage||defaultPageForRole(portalRole));}
 function cfgUserIntakeReset(){
   cfgUserIntakeResult=null;cfgUserIntakeError='';cfgUserIntakeBusy=false;
   cfgUserIntakeStep=0;cfgUserIntakeProgress=-1;cfgUserIntakeFieldErrors={};cfgUserIntakeDraft={};
@@ -7054,13 +7104,13 @@ function submitCfgUserIntake(){
   renderADTPage();
 
   let response=null,responseArrived=false;
-  // Posts to ADT Solution through our backend, which forwards it to ADT and then ingests what
-  // ADT returns. The record therefore originates in the source system and carries a real ADT
+  // Posts to NewForce Solutions through our backend, which forwards it on and then ingests what
+  // NewForce returns. The record therefore originates in the source system and carries a real
   // submission id — writing straight to our own tables would demo a path that does not exist.
   const request=execApiRequest('POST','/adt/submit',payload).then(function(res){
     response=res;responseArrived=true;
     // Publish the result as soon as it lands, while still on stage 1, so the feed can name the
-    // real ADT submission id and the minted identifiers as it reaches those steps instead of
+    // real NewForce submission id and the minted identifiers as it reaches those steps instead of
     // narrating placeholders. The success stage is gated on cfgUserIntakeStep, not on this.
     if(res.ok)cfgUserIntakeResult=res.data;
     return res;
@@ -7121,16 +7171,17 @@ function cfgUserIntakeStepperHTML(){
 }
 
 function cfgUserIntakeShellHTML(inner){
-  const m=cfgModels.find(function(x){return x.id===cfgUserIntakeModelId;})||cfgModels.find(function(x){return x.id==='user';});
-  const sys=cfgSystems.find(function(x){return x.id===(m&&m.systemId);});
+  // -- No top bar. It was a full-width white strip holding one button and a context pill, and on
+  // a page whose entire job is a single form it read as chrome the form had to start beneath —
+  // pushing the first field down without telling the reader anything the card below does not.
+  // The exit route floats over the page instead, and the stepper is now the first thing on it.
+  //
+  // The context pill went with the bar rather than moving: the card already names the object and
+  // the system it submits to in its own title and subtitle, so the pill was a third copy. --
   return '<div class="uif-page">'
-    +'<div class="uif-topbar">'
-    // -- Exit names Data Foundation, the page this form is opened from. The system stays named in
-    // the context line beside it, since that is still where the submission goes. --
-    +'<button class="uif-exit" onclick="cfgUserIntakeExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>Data Foundation</button>'
-    +'<div class="uif-context"><span class="uif-context-dot"></span>'
-    +'<span><strong>'+(m?m.name:'USER')+'</strong> &middot; '+(sys?sys.name:'ADT Solution')+' intake</span></div>'
-    +'</div>'
+    // -- Exit names the page Create Contract was pressed from, so it reads as a way back rather
+    // than a jump somewhere new. --
+    +'<button class="uif-exit uif-exit--float" onclick="cfgUserIntakeExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>'+getPageTitle(cfgUserIntakeBackPage||defaultPageForRole(portalRole))+'</button>'
     +cfgUserIntakeStepperHTML()
     +'<div class="uif-body">'+inner+'</div>'
     +'</div>';
@@ -7146,8 +7197,12 @@ function cfgUserIntakeProgressHTML(){
     // what happened rather than what was planned.
     let note=s.note;
     const e=cfgUserIntakeResult&&cfgUserIntakeResult.employee;
-    if(e&&i===1)note='ADT Solution assigned submission '+e.reference_id+'.';
-    if(e&&i===3)note='Employee ID '+e.employee_code+' &middot; Reference ID '+e.reference_id+'.';
+    // Step 2 reports the id NewForce gave the submission, step 4 the id we gave the client —
+    // in that order, because that is the order they come into existence, and seeing them minted
+    // by two different systems one after the other is the clearest way to show they are two
+    // ids for one client rather than one id copied twice.
+    if(e&&i===1)note='NewForce Solutions filed it as '+e.source_record_id+'.';
+    if(e&&i===3)note='Client ID '+e.employee_code+', linked to source record '+e.source_record_id+'.';
     return '<div class="uif-proc-item '+state+'">'
       +'<div class="uif-proc-rail"><div class="uif-proc-dot">'+mark+'</div>'
       +(i<cfgUserIntakeProgressSteps.length-1?'<div class="uif-proc-line"></div>':'')+'</div>'
@@ -7171,12 +7226,18 @@ function buildCfgUserIntakeHTML(){
       +'<div class="uif-success-head">'
       +'<div class="uif-success-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
       +'<div><div class="uif-success-title">Client record created</div>'
-      +'<div class="uif-success-sub">Submitted to ADT Solution, retrieved by the Executive Layer, and stored with its own identifiers.</div></div>'
+      +'<div class="uif-success-sub">Submitted to NewForce Solutions, retrieved by the Executive Layer, and stored here under its own Client ID.</div></div>'
       +'</div>'
+      // -- Two ids, two systems, said outright. The client now exists in both stores, and each
+      // store knows it by its own id — so each card names the system that issued the id under
+      // it. Presenting them as a bare pair is what previously read as one id duplicated. --
       +'<div class="uif-idrow">'
-      +'<div class="uif-idcard"><div class="uif-idcard-label">Employee ID</div><div class="uif-idcard-value">'+e.employee_code+'</div></div>'
-      +'<div class="uif-idcard accent"><div class="uif-idcard-label">Reference ID</div><div class="uif-idcard-value">'+e.reference_id+'</div></div>'
+      +'<div class="uif-idcard"><div class="uif-idcard-label">Client ID</div><div class="uif-idcard-value">'+e.employee_code+'</div>'
+      +'<div class="uif-idcard-note">In the Executive Layer</div></div>'
+      +'<div class="uif-idcard accent"><div class="uif-idcard-label">Source Record ID</div><div class="uif-idcard-value">'+(e.source_record_id||'--')+'</div>'
+      +'<div class="uif-idcard-note">In NewForce Solutions</div></div>'
       +'</div>'
+      +'<div class="uif-idnote">The same client, held in two systems that each mint their own id &mdash; so the two never match. The Executive Layer keeps both, which is what lets this record be traced back to its NewForce submission.</div>'
       +'<p class="uif-section-label">Submitted details</p>'
       +'<div style="margin-bottom:4px">'
       +kv('Status','<span class="lp-status-badge '+String(e.status).toLowerCase()+'">'+e.status+'</span>')
@@ -7202,7 +7263,7 @@ function buildCfgUserIntakeHTML(){
     return cfgUserIntakeShellHTML('<div class="uif-card">'
       +'<div class="uif-card-head">'
       +'<div class="uif-card-title">Ingesting the submission</div>'
-      +'<div class="uif-card-sub">The form goes to ADT Solution first, then comes back into the Executive Layer through the same route a form filled on ADT\'s own site would take.</div>'
+      +'<div class="uif-card-sub">The form goes to NewForce Solutions first, then comes back into the Executive Layer through the same route a form filled on NewForce\'s own site would take.</div>'
       +'</div>'
       +'<div class="uif-proc" id="cfg-ui-progress">'+cfgUserIntakeProgressHTML()+'</div>'
       +'</div>');
@@ -7211,7 +7272,7 @@ function buildCfgUserIntakeHTML(){
   /* ---------- Stage 1: the form ---------- */
   if(!cfgUserIntakeFields){
     return cfgUserIntakeShellHTML('<div class="uif-card">'
-      +'<div class="uif-card-sub" style="text-align:center;padding:26px 0">Loading the form definition from ADT Solution…</div>'
+      +'<div class="uif-card-sub" style="text-align:center;padding:26px 0">Loading the form definition from NewForce Solutions…</div>'
       +'</div>');
   }
 
@@ -7234,7 +7295,7 @@ function buildCfgUserIntakeHTML(){
   const fieldHTML=[];
   for(let i=0;i<cfgUserIntakeFields.length;i++){
     const f=cfgUserIntakeFields[i];
-    // The phone row is the one composite on ADT's form — a dial-code select and a free-text
+    // The phone row is the one composite on NewForce's form — a dial-code select and a free-text
     // number sharing a single "Phone number" label — so it renders as one full-width cell.
     if(f.name==='phone_country_code'){
       const next=cfgUserIntakeFields[i+1];
@@ -7269,13 +7330,13 @@ function buildCfgUserIntakeHTML(){
   }
 
   const banner=cfgUserIntakeOffline
-    ? '<div class="uif-banner warn"><div><strong>Not connected.</strong> The Executive Layer backend isn\'t reachable, so these are the last known fields rather than ADT Solution\'s live definition &mdash; and submitting won\'t work yet. Start it with <code>node backend/dev.js</code>, then <button onclick="cfgUserIntakeRetry()">retry</button>.</div></div>'
+    ? '<div class="uif-banner warn"><div><strong>Not connected.</strong> The Executive Layer backend isn\'t reachable, so these are the last known fields rather than NewForce Solutions\'s live definition &mdash; and submitting won\'t work yet. Start it with <code>node backend/dev.js</code>, then <button onclick="cfgUserIntakeRetry()">retry</button>.</div></div>'
     : (cfgUserIntakeError?'<div class="uif-banner error"><div>'+cfgUserIntakeError+'</div></div>':'');
 
   return cfgUserIntakeShellHTML('<div class="uif-card">'
     +'<div class="uif-card-head">'
-    +'<div class="uif-card-title">'+(m?m.name:'USER')+' intake form</div>'
-    +'<div class="uif-card-sub">ADT Solution\'s own form, rendered from its published field definition. Submitting sends it to ADT Solution and creates the matching client record here.</div>'
+    +'<div class="uif-card-title">'+(m?m.name:'Client')+' intake form</div>'
+    +'<div class="uif-card-sub">NewForce Solutions\'s own form, rendered from its published field definition. Submitting sends it to NewForce Solutions and creates the matching client record here.</div>'
     +'</div>'
     +banner
     +'<div class="uif-grid">'+fieldHTML.join('')+'</div>'
@@ -7291,22 +7352,23 @@ function buildCfgUserIntakeHTML(){
 
 function buildCfgDataFoundationHTML(){
   cfgModelEditing=false;cfgModelDraft=null;
-  // -- A model that publishes an intake form opens straight into it: the form IS how you put a
-  // record into that object, so it belongs to the object rather than to the system it happens to
-  // be submitted through. Models without one open their structure as before. --
+  // -- Every card opens the same thing: the object's structure. The USER card used to open NewForce's
+  // intake form instead, which made one card behave unlike the rest and put a data-entry task
+  // inside a page that otherwise only describes configuration. Filling the form in now belongs to
+  // Create Contract in the AI Execution Layer. --
   const cards=cfgModels.length
     ?cfgModels.map(function(m){
-      const openAction=m.intakeFormPage
-        ?'viewCfgUserIntake(\''+m.id+'\')'
-        :'viewCfgModel(\''+m.id+'\')';
-      return '<div class="ai-journey-card" onclick="'+openAction+'">'
+      return '<div class="ai-journey-card" onclick="viewCfgModel(\''+m.id+'\')">'
         +'<div class="ai-journey-card-top"><div class="ai-journey-name">'+m.name+'</div></div>'
         +'<div class="ai-journey-desc">'+m.desc+'</div>'
         +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'
+        // Identity first, and only when the object declares one — how many ids a record carries
+        // is the first thing worth knowing about it, and the count is what makes a third id
+        // showing up somewhere visible rather than something to discover in a table.
+        +((m.identity&&m.identity.length)?'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">'+m.identity.length+' identity</span>':'')
         +'<span class="badge">'+m.mapped.length+' mapped</span>'
         +'<span class="badge" style="color:var(--navy);border-color:#cbd5e1;background:#f1f5f9">'+m.enrichment.length+' enrichment</span>'
         +'<span class="badge">'+m.source+'</span>'
-        +(m.intakeFormPage?'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Intake form</span>':'')
         +'</div></div>';
     }).join('')
     :'<div class="ep-form-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">No models yet — define your first one.</div>';
@@ -7324,6 +7386,27 @@ function cfgMapRow(unified,source,type){
     +'<div style="color:#cbd5e1">&larr;</div>'
     +'<div style="flex:1;font-family:monospace;font-size:12px;color:var(--gray)">'+source+'</div>'
     +'<div style="width:60px;text-align:right;font-size:11px;color:#9ca3af">'+type+'</div>'
+    +'</div>';
+}
+// -- One identifier the object carries. Reads as "name — minted by X — lands in column Y", in
+// that order, because "who issued it" is the fact that separates the two ids and the fact this
+// page previously left unsaid. Read-only even in edit mode: identity is issued by a system, so
+// an operator retyping it here would be describing something the backend would not honour. --
+function cfgIdentityRow(idf){
+  const ours=idf.mintedBy==='Executive Layer';
+  const col=ours?'#475569':'#0d9488';
+  const bg=ours?'#f8fafc':'#f0fdfa';
+  const bd=ours?'#cbd5e1':'#99f6e4';
+  return '<div style="display:flex;align-items:flex-start;gap:14px;padding:13px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:170px">'
+    +'<div style="font-size:13px;font-weight:600;color:var(--navy)">'+idf.name+'</div>'
+    +'<div style="font-size:11.5px;color:var(--gray);margin-top:3px;line-height:1.5">'+idf.note+'</div>'
+    +'</div>'
+    +'<div style="flex:0 0 auto;display:flex;flex-direction:column;gap:5px;align-items:flex-end">'
+    +'<span class="badge" style="color:'+col+';background:'+bg+';border-color:'+bd+'">Minted by '+idf.mintedBy+'</span>'
+    +'<span style="font-family:monospace;font-size:12px;color:'+col+';font-weight:600">'+idf.example+'</span>'
+    +'<span style="font-family:monospace;font-size:11px;color:#9ca3af">'+idf.column+'</span>'
+    +'</div>'
     +'</div>';
 }
 function cfgEnrichRow(e){
@@ -7471,6 +7554,17 @@ function buildCfgModelDetailHTML(){
       +'</div>'
     :'<div style="margin-bottom:24px"><p style="font-size:17px;font-weight:700;margin-bottom:6px">'+m.name+'</p><p style="font-size:12.5px;color:var(--gray);margin:0">Unified object &middot; source: '+m.source+'</p><p style="font-size:12.5px;color:var(--gray);margin-top:4px">'+m.desc+'</p></div>';
   const actionBtns=editing?'':'<div style="display:flex;gap:10px;flex-shrink:0"><button class="btn btn-secondary btn-sm" onclick="startCfgModelEdit()">Edit</button></div>';
+  // -- Identity leads the sections: before anything about what a record contains, the page has
+  // to answer what names it, and by whom. Only objects that declare identity get the section. --
+  const identitySection=(m.identity&&m.identity.length)
+    ?'<div class="ep-form-card" style="margin-bottom:18px">'
+      +'<div class="ep-form-title">Identity &middot; the ids this object carries</div>'
+      +m.identity.map(cfgIdentityRow).join('')
+      +'<div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin-top:12px">'
+      +'Two ids, because two systems each name this client in their own store &mdash; so they never match, and neither can be derived from the other. Holding both is what lets a record here be traced back to the submission it came from.'
+      +'</div>'
+      +'</div>'
+    :'';
   const mapSection=editing
     ?'<div class="ep-form-card" style="margin-bottom:18px">'
       +'<div class="ep-form-title">Field mapping &middot; from '+attrSafe(dm.source)+'</div>'
@@ -7517,7 +7611,13 @@ function buildCfgModelDetailHTML(){
       +'<div style="flex:1;min-width:220px"><div style="font-size:11px;color:var(--gray);margin-bottom:5px">Maker-checker</div><div style="font-size:13px;font-weight:600;color:'+(m.rules.makerChecker?'#16a34a':'#6b7280')+'">'+(m.rules.makerChecker?'On · AI drafts, human approves':'Off · no review required')+'</div></div>'
       +'<div style="flex:1;min-width:220px"><div style="font-size:11px;color:var(--gray);margin-bottom:5px">Validation</div><div style="font-size:13px;font-weight:600;color:var(--navy)">'+(m.rules.validation||'&mdash;')+'</div></div>'
       +'</div></div>';
-  const allFields=m.mapped.map(function(f){return{name:f[0],type:f[2]};}).concat(m.enrichment);
+  // -- The sample is what one whole record looks like coming through, so it leads with the ids
+  // that name it. Identity fields are prepended rather than mapped in: Source Record ID is
+  // already a mapped field and would otherwise appear twice. --
+  const identityFields=(m.identity||[])
+    .filter(function(idf){return !m.mapped.some(function(f){return f[0]===idf.name;});})
+    .map(function(idf){return {name:idf.name,type:'string'};});
+  const allFields=identityFields.concat(m.mapped.map(function(f){return{name:f[0],type:f[2]};})).concat(m.enrichment);
   const sample=cfgModelTested[m.id]
     ?(allFields.length
       ?'<div class="review-section" style="border-color:#93c5fd;background:#eff6ff;margin-top:14px">'
@@ -7525,6 +7625,15 @@ function buildCfgModelDetailHTML(){
         +'<div class="review-grid" style="grid-template-columns:1fr">'
         +allFields.map(function(f){return aiDrawerRow(f.name,cfgSampleValueFor(m,f.name,f.type));}).join('')
         +'</div>'
+        // -- The panel header says "fetched from <source>", which is true of every mapped field
+        // but not of an id we mint ourselves. Said plainly here rather than left to imply the
+        // source issued the Client ID — the whole point of the identity section above. --
+        +(identityFields.length
+          ?'<div style="font-size:11px;color:#1d4ed8;margin-top:10px;line-height:1.5">'
+            +identityFields.map(function(f){return f.name;}).join(' and ')
+            +(identityFields.length===1?' is':' are')+' minted by the Executive Layer, not fetched &mdash; shown here because a whole record carries '
+            +(identityFields.length===1?'it':'them')+'.</div>'
+          :'')
         +'<div style="font-size:11px;color:#1d4ed8;margin-top:10px;display:flex;align-items:center;gap:7px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Fetched live &middot; not stored, 0 records kept after this view</div>'
         +'</div>'
       :'<div class="review-section" style="margin-top:14px"><div style="font-size:12.5px;color:var(--gray)">No fields mapped yet &mdash; add a field mapping above, then test again.</div></div>')
@@ -7545,6 +7654,7 @@ function buildCfgModelDetailHTML(){
     +(editing
       ?heading
       :'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px"><div style="flex:1;min-width:0">'+heading+'</div>'+actionBtns+'</div>')
+    +identitySection
     +mapSection
     +enrichSection
     +rulesSection
@@ -8904,9 +9014,9 @@ function buildAIPayrollCompleteHTML(){
     +'</div></div></div>';
 }
 
-// -- Reused wherever a real ADT Solution-sourced record needs to be visibly distinguished from simulated/mock runs — same teal "Source" badge style as cfgStepTypeTag() (js/pages.js:5930), just with the reference id appended. --
+// -- Reused wherever a real NewForce Solutions-sourced record needs to be visibly distinguished from simulated/mock runs — same teal "Source" badge style as cfgStepTypeTag() (js/pages.js:5930), just with the reference id appended. --
 function adtSourceBadgeHTML(refId){
-  return '<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source: ADT Solution'+(refId?(' — Ref: '+refId):'')+'</span>';
+  return '<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source: NewForce Solutions'+(refId?(' — Ref: '+refId):'')+'</span>';
 }
 // -- HIRE TO RETIRE (H2R) JOURNEY: full bespoke run through all 5 stages of aiJourneyEvents['h2r-lifecycle'] --
 function buildAIH2rJourneyHTML(flow,j){
@@ -8944,12 +9054,12 @@ function buildAIH2rAdtPanelHTML(){
   if(aiH2rAdtFeedStep===-1){
     const adtFormUrl=(window.EXEC_CONFIG&&EXEC_CONFIG.adtFormUrl)||'http://localhost:4100';
     return '<div class="ep-form-card" style="text-align:left">'
-      +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">Live ADT Solution Sync</div>'
-      +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:14px">Nothing to type here. Start listening, then fill in the intake form on ADT Solution — the moment it is submitted, the Executive Layer pulls the record across and creates its client record.</div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">Live NewForce Solutions Sync</div>'
+      +'<div style="font-size:12px;color:var(--gray);line-height:1.6;margin-bottom:14px">Nothing to type here. Start listening, then fill in the intake form on NewForce Solutions — the moment it is submitted, the Executive Layer pulls the record across and creates its client record.</div>'
       +(aiH2rAdtError?'<div style="font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin-bottom:12px">'+aiH2rAdtError+'</div>':'')
       +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
-      +'<button class="btn btn-secondary" onclick="aiH2rStartAdtListening()">Listen for ADT Solution Submissions</button>'
-      +'<a href="'+adtFormUrl+'" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#0d9488;text-decoration:none">Open the ADT Solution form &rarr;</a>'
+      +'<button class="btn btn-secondary" onclick="aiH2rStartAdtListening()">Listen for NewForce Solutions Submissions</button>'
+      +'<a href="'+adtFormUrl+'" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#0d9488;text-decoration:none">Open the NewForce Solutions form &rarr;</a>'
       +'</div>'
       +'</div>';
   }
@@ -8960,11 +9070,11 @@ function buildAIH2rAdtPanelHTML(){
   }
   if(aiH2rAdtLastEmployee){
     const e=aiH2rAdtLastEmployee;
-    steps[3].skipNote='Minted by Executive Layer — Employee ID '+e.employee_code+', Reference '+e.reference_id;
+    steps[3].skipNote='Minted by Executive Layer — Client ID '+e.employee_code+', linked to source record '+(e.source_record_id||'--');
     steps[4].skipNote='Client record created — status '+e.status+', pending HR completion';
   }
   return '<div class="ep-form-card" style="text-align:left">'
-    +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">Live ADT Solution Sync</div>'
+    +'<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">Live NewForce Solutions Sync</div>'
     +'<div class="ai-timeline">'+buildAIRunTimelineHTML({steps:steps},aiH2rAdtFeedStep)+'</div>'
     +(aiH2rAdtError?'<div style="font-size:12px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:9px 11px;margin-top:12px">'+aiH2rAdtError+'</div>':'')
     +'</div>';
@@ -8984,18 +9094,18 @@ function aiH2rStartAdtListening(){
 function aiH2rStopAdtListening(){
   if(adtPollTimerId){clearInterval(adtPollTimerId);adtPollTimerId=null;}
 }
-// -- One poll of ADT Solution, made by the backend on our behalf: the API credential and the
+// -- One poll of NewForce Solutions, made by the backend on our behalf: the API credential and the
 // "already seen" cursor both live there, so this side only has to react to the verdict. --
 function aiH2rAdtPollTick(){
   if(!adtPollTimerId)return;
   execApiPollAdt().then(function(res){
     if(!adtPollTimerId)return;
     if(!res.ok){
-      // Keep listening on a transient failure — the backend or ADT being briefly unreachable
+      // Keep listening on a transient failure — the backend or NewForce being briefly unreachable
       // is not a reason to make the operator re-arm the panel. Surface it and try again.
       aiH2rAdtError=res.offline
         ? 'Cannot reach the Executive Layer backend. Start it with: node backend/server.js'
-        : ('ADT Solution sync error: '+res.error);
+        : ('NewForce Solutions sync error: '+res.error);
       patchAIH2rAdtPanel();
       return;
     }
