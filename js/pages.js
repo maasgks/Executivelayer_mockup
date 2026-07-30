@@ -395,7 +395,192 @@ function buildSalesDashboardHTML(p,tab){
   const openDealsCount=manualJourneyRuns.filter(function(r){return r.journeyId==='contract-creation'&&r.createdBy===p.id;}).length;
   return dashHeader(isManager?'Deal Approvals Dashboard':'Deal Desk Dashboard',isManager?'Review proposal approvals, exceptions, and team deal movement.':'Track owned deals, proposals, client acceptance, and contract creation work.')
     +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Open Deals',String(openDealsCount),'Owned by this role',null,dashIcoDoc,null,'toggleOpenDealsPanel()')+dashStatNav('Proposal Drafts','3','Ready for review','orange',dashIcoDoc)+dashStatNav('Client Responses','5','Awaiting acceptance','orange',dashIcoUser)+dashStatNav('Exceptions','1','Needs attention','red',dashIcoAlert)+'</div>'
-    +(isManager||!salesOpenDealsOpen?'':buildMyCreatedRunsPanelHTML(p.id))+'</div>';
+    +(isManager||!salesOpenDealsOpen?'':buildMyCreatedRunsPanelHTML(p.id))
+    +(isManager?'':buildAmPipelineHTML()+buildAmDealsListingHTML())+'</div>';
+}
+
+/* == ACCOUNT MANAGER — CLIENT PIPELINE ===================================================
+   One horizontal rail of the nine client-facing statuses, then the records behind whichever
+   stage is selected. The rail is grouped rather than flat: the five engagement stages happen
+   once per client request, the four placement stages repeat per hire, and a client reading a
+   flat row of nine boxes has no way to know that. The divider between the two groups carries
+   that "repeats per hire" fan-out, so the shape of the pipeline explains itself.
+
+   Stage 6 is a payment gate, so it is the one card drawn as a stop rather than a step — it is
+   also the only place in this flow where the whole placement stalls on something the client
+   owes us, which is exactly what an Account Manager needs surfaced first. == */
+function amStageFlagHTML(s){
+  if(s.gate)return '<span class="am-stage-flag gate">Gate</span>';
+  if(s.clientAction)return '<span class="am-stage-flag client">Client</span>';
+  return '';
+}
+function amStageCardHTML(s){
+  const count=amStageCount(s.id);
+  const selected=amPipelineStage===s.id;
+  const cls='am-stage tone-'+s.tone+(selected?' selected':'')+(count?'':' empty');
+  return '<button type="button" class="'+cls+'" onclick="amSelectPipelineStage(\''+s.id+'\')" title="'+attrSafe(String(s.internal).replace(/&mdash;/g,'—'))+'">'
+    +'<span class="am-stage-rail"></span>'
+    +'<span class="am-stage-top"><span class="am-stage-n">'+s.n+'</span>'+amStageFlagHTML(s)+'</span>'
+    +'<span class="am-stage-count">'+count+'</span>'
+    +'<span class="am-stage-label">'+s.label+'</span>'
+    +'</button>';
+}
+const amStageArrow='<span class="am-stage-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span>';
+function amTrackHTML(track){
+  const stages=amPipelineStages.filter(function(s){return s.track===track.id;});
+  const cards=stages.map(function(s,i){return (i?amStageArrow:'')+amStageCardHTML(s);}).join('');
+  const total=stages.reduce(function(sum,s){return sum+amStageCount(s.id);},0);
+  return '<div class="am-track">'
+    +'<div class="am-track-head"><span class="am-track-label">'+track.label+'</span><span class="am-track-sub">'+track.sub+'</span><span class="am-track-count">'+total+'</span></div>'
+    +'<div class="am-track-stages">'+cards+'</div>'
+    +'</div>';
+}
+function buildAmPipelineHTML(){
+  const waiting=amWaitingOnClient();
+  const atGate=amStageCount('deposit-due');
+  const live=amDeals.filter(function(d){return d.stage!=='active';}).length;
+  const metric=function(val,label,tone){return '<div class="am-metric'+(tone?' '+tone:'')+'"><b>'+val+'</b><span>'+label+'</span></div>';};
+  return '<div class="am-pipe-card">'
+    +'<div class="am-pipe-head">'
+      +'<div class="am-pipe-headings"><div class="am-pipe-title">Client Pipeline</div>'
+      +'<div class="am-pipe-sub">The nine statuses your client sees, in the order they see them. Select a stage to list the records sitting in it.</div></div>'
+      +'<div class="am-pipe-metrics">'+metric(live,'In flight')+metric(waiting,'Waiting on client','amber')+metric(atGate,'At the deposit gate','red')+'</div>'
+    +'</div>'
+    +'<div class="am-pipe-scroll"><div class="am-pipe-rail">'
+      +amTrackHTML(amPipelineTracks[0])
+      +'<div class="am-pipe-fork"><span class="am-pipe-fork-line"></span><span class="am-pipe-fork-note">Per hire</span><span class="am-pipe-fork-line"></span></div>'
+      +amTrackHTML(amPipelineTracks[1])
+    +'</div></div></div>';
+}
+// Changing the stage drops any open record drawer: the row it belonged to is usually filtered out.
+function amSelectPipelineStage(id){
+  amPipelineStage=amPipelineStage===id?'':id;
+  amSelectedDealId=null;
+  renderADTPage();
+}
+function amClearPipelineStage(){
+  amPipelineStage='';amSelectedDealId=null;
+  renderADTPage();
+}
+function buildAmDealsListingHTML(){
+  const hamburger='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
+  const stage=amPipelineStage?amStageById(amPipelineStage):null;
+  const rows=amDealsForStage(amPipelineStage);
+  if(amSelectedDealId&&!rows.some(function(d){return d.id===amSelectedDealId;}))amSelectedDealId=null;
+  const title=stage?stage.label:'All stages';
+  const sub=stage
+    ?'Stage '+stage.n+' of 9 &middot; '+(stage.track==='engagement'?'Engagement track':'Placement track')+' &middot; Waiting on '+stage.waitingOn
+    :'Every record you own across the pipeline';
+  const body=rows.length?rows.map(function(d,i){
+    const s=amStageById(d.stage)||{};
+    return '<tr class="am-row'+(amSelectedDealId===d.id?' lp-row-selected':'')+'" id="am-row-'+d.id+'" style="cursor:pointer" onclick="openAmDealSidebar('+d.id+')">'
+      +'<td style="color:#6b7280;font-size:13px">'+(i+1)+'</td>'
+      +'<td style="font-weight:600;color:var(--navy)">'+d.ref+'</td>'
+      +'<td style="font-weight:600;color:var(--navy)">'+d.client+'</td>'
+      +'<td><div class="cell-primary">'+d.subject+'</div><div class="cell-sub">'+d.role+'</div></td>'
+      +'<td>'+d.country+'</td>'
+      +'<td style="white-space:nowrap">'+d.value+'</td>'
+      +'<td><div class="cell-primary" style="font-weight:500">'+d.updated+'</div><div class="cell-sub">'+d.age+'d in stage</div></td>'
+      +'<td><span class="lp-status-badge '+amBadgeClass(d.stage)+'">'+(s.short||'')+'</span></td>'
+      +'<td><button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="More actions">'+hamburger+'</button></td>'
+      +'</tr>';
+  }).join('')
+    :'<tr><td colspan="9" style="padding:28px;text-align:center;color:var(--gray);font-size:12.5px">Nothing is sitting at &ldquo;'+title+'&rdquo; right now.</td></tr>';
+  return '<div class="am-list-block">'
+    +'<div class="am-list-head">'
+      +'<div><div class="am-list-title">'+title+'</div><div class="am-list-sub">'+sub+'</div></div>'
+      +'<div class="am-list-right"><span class="am-list-count">'+rows.length+' of '+amDeals.length+'</span>'
+      +(stage?'<button class="lp-pill-reset" onclick="amClearPipelineStage()">Clear stage</button>':'')+'</div>'
+    +'</div>'
+    +(stage?'<div class="am-list-note '+stage.tone+'">'+stage.internal+'</div>':'')
+    +'<div class="lp-split-wrap"><div class="lp-split-main">'
+    +'<table class="lp-table am-table"><thead><tr>'
+    +'<th>S.No</th><th>Ref ID</th><th>Client</th><th>Candidate / Scope</th><th>Country</th><th>Value</th><th>Last Update</th><th>Status</th><th>Action</th>'
+    +'</tr></thead><tbody>'+body+'</tbody></table>'
+    +'<div class="lp-pagination">'
+    +'<span class="lp-pagination-info">Showing 1&ndash;'+rows.length+' of '+rows.length+' entries</span>'
+    +'<div class="lp-pagination-controls">'
+    +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>'
+    +'<button class="lp-pg-btn active">1</button>'
+    +'<button class="lp-pg-btn lp-pg-arrow" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></button>'
+    +'</div></div>'
+    +'</div>'
+    +'<div class="lp-split-sb'+(amSelectedDealId?' open':'')+'" id="am-split-sb"><div class="lp-isb" id="am-isb-inner">'+(amSelectedDealId?renderAmDealSidebar():'')+'</div></div>'
+    +'</div></div>';
+}
+// The badge palette reuses the listing's existing status classes so this table reads
+// identically to every other listing in the app; only the stage->tone mapping is new.
+function amBadgeClass(stageId){
+  const s=amStageById(stageId);if(!s)return 'pending';
+  if(s.tone==='green')return 'approved';
+  if(s.tone==='red')return 'inactive';
+  if(s.tone==='amber')return 'pending';
+  return 'expired';
+}
+function openAmDealSidebar(id){
+  amSelectedDealId=id;amDealTab='basic-details';
+  const sb=document.getElementById('am-split-sb');if(sb)sb.classList.add('open');
+  const inner=document.getElementById('am-isb-inner');if(inner)inner.innerHTML=renderAmDealSidebar();
+  document.querySelectorAll('.am-row').forEach(function(r){r.classList.toggle('lp-row-selected',r.id==='am-row-'+id);});
+}
+function closeAmDealSidebar(){
+  amSelectedDealId=null;
+  const sb=document.getElementById('am-split-sb');if(sb)sb.classList.remove('open');
+  document.querySelectorAll('.am-row').forEach(function(r){r.classList.remove('lp-row-selected');});
+}
+function navAmDealTab(tab){
+  amDealTab=tab;
+  const inner=document.getElementById('am-isb-inner');if(inner)inner.innerHTML=renderAmDealSidebar();
+}
+/* The drawer's second tab is the point of the whole screen: the same nine stages the rail
+   shows, but walked for one record, worded exactly as the client is shown them. An Account
+   Manager on a call needs to answer "where are we and what are you waiting on me for" —
+   which is a per-record question the rail can't answer. */
+function renderAmDealSidebar(){
+  const d=amDeals.find(function(x){return x.id===amSelectedDealId;});if(!d)return '';
+  const s=amStageById(d.stage)||{};
+  const tabs=[{id:'basic-details',label:'Basic Details'},{id:'client-view',label:'Client View'}];
+  const tabBar='<div class="lp-isb-tabbar">'
+    +'<div class="lp-isb-tabs" id="am-isb-tabs">'+tabs.map(function(t){return '<button class="lp-isb-tab'+(amDealTab===t.id?' active':'')+'" onclick="navAmDealTab(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeAmDealSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'</div>';
+  const iId='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>';
+  const iUser='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const iGlobe='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+  const iMoney='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const iClock='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  const iCheck='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+  const iTag='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
+  const fc=function(ico,label,val){return '<div class="lp-sb-field-card"><div class="lp-sb-field-icon">'+ico+'</div><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+label+'</div><div class="lp-sb-field-value">'+val+'</div></div></div>';};
+  let body='';
+  if(amDealTab==='basic-details'){
+    const badge='<span class="lp-status-badge '+amBadgeClass(d.stage)+'">'+(s.short||'')+'</span>';
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.client+'</span>'+badge+'</div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iId,'Ref ID',d.ref)+fc(iTag,'Record Type',d.kind==='engagement'?'Engagement (client request)':'Placement (one hire)')
+      +fc(iUser,d.kind==='engagement'?'Scope':'Candidate',d.subject)+fc(iUser,'Role',d.role)
+      +fc(iGlobe,'Country',d.country)+fc(iMoney,'Value','<span style="color:var(--orange)">'+d.value+'</span>')
+      +fc(iClock,'Last Update',d.updated)+fc(iClock,'Time in Stage',d.age+' day'+(d.age===1?'':'s'))
+      +fc(iCheck,'Client Sees','<span style="font-weight:700">'+s.label+'</span>')+fc(iUser,'Waiting On',s.waitingOn||'&mdash;')
+      +'</div>'
+      +'<div class="am-sb-internal"><div class="am-sb-internal-label">Internal note</div>'+s.internal+'</div>';
+  }else{
+    const cur=amStageIndex(d.stage);
+    const steps=amPipelineStages.map(function(st,i){
+      const state=i<cur?'done':i===cur?'current':'upcoming';
+      const mark=state==='done'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>':String(st.n);
+      const flag=st.gate?'<span class="am-stage-flag gate">Gate</span>':st.clientAction?'<span class="am-stage-flag client">Client</span>':'';
+      return '<div class="am-cv-row '+state+'">'
+        +'<div class="am-cv-markcol"><div class="am-cv-mark">'+mark+'</div>'+(i<amPipelineStages.length-1?'<div class="am-cv-line"></div>':'')+'</div>'
+        +'<div class="am-cv-body"><div class="am-cv-label">'+st.label+flag+'</div>'
+        +'<div class="am-cv-sub">'+(state==='current'?st.internal:state==='done'?'Completed':'Not started &middot; waiting on '+st.waitingOn)+'</div></div>'
+        +'</div>';
+    }).join('');
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.subject+'</span></div>'
+      +'<div class="am-cv-intro">Exactly what '+d.client+' is shown for this record. Stage '+(cur+1)+' of 9 is live now.</div>'
+      +'<div class="am-cv-list">'+steps+'</div>';
+  }
+  return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
 function buildContractsAdminDashboardHTML(){
   return dashHeader('Contracts Dashboard','Generate contracts, monitor signatures, and resolve legal document exceptions.')

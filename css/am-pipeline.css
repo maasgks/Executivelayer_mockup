@@ -1,0 +1,97 @@
+/* ===== ACCOUNT MANAGER — CLIENT PIPELINE =====================================
+   One horizontal rail, nine client-facing stages, grouped into the two tracks the
+   work actually runs on. The rail scrolls rather than wraps: a pipeline that
+   reflows into two rows stops reading as a sequence, which is the only thing it
+   is there to communicate. Stage tone drives the top rail, the count colour and
+   the flag pill, so a stage that needs the client (amber) or is a hard payment
+   gate (red) is legible before any label is read. */
+.am-pipe-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px 20px;margin-bottom:4px}
+.am-pipe-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:18px}
+.am-pipe-title{font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px}
+.am-pipe-sub{font-size:11.5px;color:var(--gray);margin-top:4px;max-width:540px;line-height:1.55}
+.am-pipe-metrics{display:flex;align-items:stretch;border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-shrink:0}
+.am-metric{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px 16px;border-right:1px solid var(--border);min-width:96px}
+.am-metric:last-child{border-right:none}
+.am-metric b{font-size:19px;font-weight:800;color:var(--navy);line-height:1.15}
+.am-metric span{font-size:10px;font-weight:600;color:var(--gray);white-space:nowrap}
+.am-metric.amber b{color:#b45309}
+.am-metric.red b{color:#dc2626}
+.am-pipe-scroll{overflow-x:auto;overflow-y:hidden;padding:2px 2px 6px}
+.am-pipe-scroll::-webkit-scrollbar{height:6px}
+.am-pipe-scroll::-webkit-scrollbar-track{background:transparent}
+.am-pipe-scroll::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:3px}
+.am-pipe-rail{display:flex;align-items:stretch;min-width:max-content}
+.am-track{display:flex;flex-direction:column;gap:9px}
+.am-track-head{display:flex;align-items:center;gap:8px;padding-left:2px}
+.am-track-label{font-size:10.5px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.am-track-sub{font-size:10.5px;color:var(--gray);white-space:nowrap}
+.am-track-count{font-size:10px;font-weight:700;color:var(--gray);background:#f1f5f9;border-radius:20px;padding:1px 8px}
+.am-track-stages{display:flex;align-items:stretch}
+.am-stage{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:134px;padding:11px 12px 12px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;text-align:left;transition:.16s;overflow:hidden}
+.am-stage:hover{border-color:#94a3b8;box-shadow:0 3px 10px rgba(15,23,42,.07);transform:translateY(-1px)}
+.am-stage-rail{position:absolute;top:0;left:0;right:0;height:3px;background:#cbd5e1}
+.am-stage.tone-blue .am-stage-rail{background:#2563eb}
+.am-stage.tone-amber .am-stage-rail{background:#f59e0b}
+.am-stage.tone-green .am-stage-rail{background:#16a34a}
+.am-stage.tone-red .am-stage-rail{background:#dc2626}
+.am-stage-top{display:flex;align-items:center;gap:6px;width:100%;margin-bottom:2px}
+.am-stage-n{width:17px;height:17px;border-radius:50%;background:#f1f5f9;color:var(--gray);font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.am-stage-flag{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 6px;border-radius:20px;margin-left:auto;white-space:nowrap;line-height:1.4}
+.am-stage-flag.client{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+.am-stage-flag.gate{background:#fff0f0;color:#dc2626;border:1px solid #fca5a5}
+.am-stage-count{font-size:25px;font-weight:800;color:var(--navy);line-height:1.2}
+.am-stage.tone-amber .am-stage-count{color:#b45309}
+.am-stage.tone-red .am-stage-count{color:#dc2626}
+.am-stage.tone-green .am-stage-count{color:#16a34a}
+.am-stage-label{font-size:11px;font-weight:600;color:var(--navy);line-height:1.35}
+.am-stage.empty{background:#fafbfc}
+.am-stage.empty .am-stage-count{color:#cbd5e1}
+.am-stage.empty .am-stage-label{color:var(--gray)}
+.am-stage.selected{border-color:var(--navy);background:#f8fafc;box-shadow:0 0 0 3px rgba(15,23,42,.07)}
+.am-stage.selected .am-stage-n{background:var(--navy);color:#fff}
+.am-stage-arrow{display:flex;align-items:center;justify-content:center;width:18px;color:#cbd5e1;flex-shrink:0}
+.am-stage-arrow svg{width:13px;height:13px}
+/* The fan-out between the tracks: everything to the right of this line repeats once
+   per hire, which is why one client can hold more than one row below it. */
+.am-pipe-fork{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;padding:24px 15px;flex-shrink:0}
+.am-pipe-fork-line{width:0;flex:1;min-height:8px;border-left:1.5px dashed #cbd5e1}
+.am-pipe-fork-note{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:2px 7px;white-space:nowrap;line-height:1.4}
+
+/* ----- records behind the selected stage ----- */
+.am-list-block{margin-top:20px}
+.am-list-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:11px}
+.am-list-title{font-size:14px;font-weight:800;color:var(--navy);line-height:1.3}
+.am-list-sub{font-size:11.5px;color:var(--gray);margin-top:3px}
+.am-list-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.am-list-count{font-size:11px;font-weight:700;color:var(--gray);background:#f1f5f9;border-radius:20px;padding:4px 11px;white-space:nowrap}
+.am-list-note{font-size:11.5px;font-weight:600;padding:9px 13px;border-radius:8px;border:1px solid;margin-bottom:12px;line-height:1.5}
+.am-list-note.blue{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+.am-list-note.amber{background:#fffbeb;border-color:#fde68a;color:#b45309}
+.am-list-note.green{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
+.am-list-note.red{background:#fff0f0;border-color:#fca5a5;color:#dc2626}
+.am-table{min-width:960px}
+
+/* ----- record drawer ----- */
+.am-sb-internal{margin-top:14px;padding:12px 14px;border-radius:9px;background:#f8fafc;border:1px solid var(--border);font-size:12px;color:var(--navy);line-height:1.55}
+.am-sb-internal-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);margin-bottom:4px}
+.am-cv-intro{font-size:11.5px;color:var(--gray);line-height:1.55;margin-bottom:16px}
+.am-cv-list{display:flex;flex-direction:column}
+.am-cv-row{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px}
+.am-cv-markcol{display:flex;flex-direction:column;align-items:center}
+.am-cv-mark{width:23px;height:23px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:#f1f5f9;color:var(--gray);border:1.5px solid var(--border);flex-shrink:0}
+.am-cv-line{flex:1;width:1.5px;min-height:12px;background:var(--border);margin:4px 0}
+.am-cv-body{padding-bottom:16px;min-width:0}
+.am-cv-label{font-size:12.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:7px;flex-wrap:wrap;line-height:1.4}
+.am-cv-sub{font-size:11px;color:var(--gray);margin-top:3px;line-height:1.5}
+.am-cv-row.done .am-cv-mark{background:#16a34a;border-color:#16a34a;color:#fff}
+.am-cv-row.done .am-cv-line{background:#86efac}
+.am-cv-row.current .am-cv-mark{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 0 0 3px rgba(15,23,42,.1)}
+.am-cv-row.current .am-cv-label{font-weight:800}
+.am-cv-row.current .am-cv-sub{color:#b45309;font-weight:600}
+.am-cv-row.upcoming .am-cv-label{color:var(--gray);font-weight:600}
+
+@media(max-width:820px){
+  .am-pipe-metrics{width:100%}
+  .am-metric{flex:1;min-width:0;padding:8px 10px}
+  .am-list-head{align-items:flex-start;flex-direction:column;gap:10px}
+}
