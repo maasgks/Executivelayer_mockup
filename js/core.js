@@ -473,52 +473,56 @@ const sidebarItems=[
   {divider:true},
   {section:'Workspace'},
   {id:'dashboard',label:'Dashboard',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'},
-  // -- Client holds the records ingested from connected systems, with their provenance, audit log
-  // and workflow. It lives with the connected SaaS product's own modules rather than in the AI
-  // layer group: the AI layer is what runs and configures journeys, and this is the data those
-  // journeys land in. Sits above Employee/Teams because those mirror what it holds.
-  // Two children, in the order the work happens: create one, then look at all of them.
-  // Create Client is an action, not a page — it opens the NewForce Solutions intake form, a
-  // focused flow page that hides the sidebar outright, so nothing marks it active. Entity Admin
-  // only: Super Admin configures what the objects are (Data Foundation), it does not fill them
-  // in, so it sees All Clients alone. --
-  // Entity User gets it too, but only for the Account Manager persona: that is the role that owns
-  // the User Master Data Creation Journey, so it is the only Entity User that has business creating
-  // or browsing client records. Every other persona's sidebar is unchanged.
-  {dropdown:'Client',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
-    {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],personas:['account-manager'],color:'orange',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
-    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'}
-  ]},
   /* == THE SAAS PRODUCT'S OWN MODULES =====================================================
-     Six domain groups, each one an answer to "whose job is this". The previous shape grouped
-     by noun — an "Employee" dropdown holding two views of the same list, a "Leaves" dropdown,
-     a "Compliance Hub" dropdown — which meant the four pages of pre-employment legal setup
-     (Contracts, Contract Templates, Compliance Hub, Rates & Rules) were split across
-     "Workforce Operations" and "Compliance Hub" for no reason a user could name, and Payroll
-     sat under a heading whose other children were timesheets and contracts.
+     Seven domain groups, each one an answer to "whose job is this". The previous shape grouped
+     by noun — an "Employee" dropdown holding two views of the same list, a "Leaves" dropdown —
+     which left the pages of pre-employment legal setup split across "Workforce Operations" and
+     "Compliance Hub" for no reason a user could name, and Payroll under a heading whose other
+     children were timesheets and contracts.
 
      What changed, and why:
-       Workforce               Employees + Teams. Direct and Global were never two modules,
-                               only two filters over one list, so they are one nav item with
-                               the filter inside the page (see buildEmployeesPageHTML).
-       Contracts & Compliance  The four pre-employment legal pages, together at last.
-       Time & Payroll          Everything that feeds a pay run. My/All Timesheet collapse the
-                               same way Employees did — one page, two tabs.
-       Finance                 Payments alone, deliberately. Client billing has a different
-                               owner (Finance) than payroll (Ops/HR), and the domain map has
-                               it growing into invoices, vouchers and receivables — folding it
-                               into Payroll now to save one row would only have to be undone.
-       Administration          Company Settings + Users. "All Users" loses its qualifier; under
-                               an Administration heading, "Users" is unambiguous.
-       Support                 Untouched, on purpose. == */
+       Workforce          Employees + Teams. Direct and Global were never two modules, only two
+                          filters over one list, so they are one nav item with the filter inside
+                          the page (see buildEmployeesPageHTML).
+       Client & Contracts The commercial chain, in the order it happens: create the client,
+                          browse clients, then their contracts, then the templates behind them.
+                          Client used to be a module of its own one row up, which put the record
+                          and the contract written against it in different places.
+       Compliance Hub     Its own module again. Compliance Items and Rates & Rules are reference
+                          data an entity maintains once and reads against many contracts — a
+                          different rhythm from the per-deal work above, and a different owner.
+       Time & Payroll     Everything that feeds a pay run. My/All Timesheet collapse the same
+                          way Employees did — one page, two tabs.
+       Finance            Payments alone, deliberately. Client billing has a different owner
+                          (Finance) than payroll (Ops/HR), and the domain map has it growing
+                          into invoices, vouchers and receivables — folding it into Payroll now
+                          to save one row would only have to be undone.
+       Administration     Company Settings + Users. "All Users" loses its qualifier; under an
+                          Administration heading, "Users" is unambiguous.
+       Support            Untouched, on purpose. == */
   {dropdown:'Workforce',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',children:[
     {id:'employees',label:'Employees',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
     {id:'teams',label:'Teams',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'}
   ]},
-  {dropdown:'Contracts & Compliance',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',children:[
+  /* -- Create Client and All Clients keep the `personas` gate they carried as their own module:
+     inside Entity User only the Account Manager owns the User Master Data Creation Journey, so
+     only that persona has business creating or browsing client records. The gate stays on the
+     two children rather than moving to the group — a group-level gate would have taken Contracts
+     and Contract Templates away from every other persona along with them.
+     Create Client is an action, not a page. It opens the NewForce Solutions intake form, a
+     focused flow that hides the sidebar outright, so nothing marks it active. Super Admin does
+     not get it: it configures what the objects are (Data Foundation), it does not fill them in,
+     so it sees All Clients alone. -- */
+  {dropdown:'Client & Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
+    {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],personas:['account-manager'],color:'amber',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
+    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
     {id:'contracts',label:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
-    {id:'contract-templates',label:'Contract Templates',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'},
-    {id:'compliance',label:'Compliance Hub',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'},
+    {id:'contract-templates',label:'Contract Templates',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'}
+  ]},
+  // -- Compliance Hub carries the module name, so the child under it goes back to naming what it
+  // actually lists (Compliance Items) rather than repeating its parent. --
+  {dropdown:'Compliance Hub',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',children:[
+    {id:'compliance',label:'Compliance Items',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>'},
     {id:'rates-rules',label:'Rates & Rules',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>'}
   ]},
   // -- Leave Policies is not in the module spec but is a live page, and it is the settings
@@ -2138,7 +2142,7 @@ function acknowledgeManagerNotify(id){
   renderADTPage();
   showAiToast('Marked as reviewed','You\'ve acknowledged this note from your Entity User.');
 }
-// -- Notes flagged for a second opinion route into the linked deal's own Logs tab in Contracts & Compliance > Contracts, so the reviewer approves/rejects in the record itself rather than inline in the notes list. --
+// -- Notes flagged for a second opinion route into the linked deal's own Logs tab in Client & Contracts > Contracts, so the reviewer approves/rejects in the record itself rather than inline in the notes list. --
 function resolveManagerNotify(id){
   const req=entityRequests.find(function(r){return r.id===id&&r.type==='manager-notify';});if(!req||req.status!=='Pending')return;
   if(!req.contractRecordId){acknowledgeManagerNotify(id);return;}

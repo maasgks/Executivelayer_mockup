@@ -200,15 +200,9 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
 .am-sb-steps{border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:18px;background:#fff}
 .am-sb-steps-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:10px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:9px}
 .am-sb-steps-head span{font-size:10px;font-weight:700;color:var(--gray);text-transform:none;letter-spacing:0}
-.am-sb-step{display:flex;align-items:flex-start;gap:9px;padding:5px 0;border-top:1px solid #f1f5f9}
-.am-sb-step:first-of-type{border-top:none}
-.am-sb-step-mark{width:17px;height:17px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;border:1.5px solid var(--border);color:#94a3b8;background:#fff;margin-top:1px}
-.am-sb-step.done .am-sb-step-mark{background:var(--navy);border-color:var(--navy);color:#fff}
-.am-sb-step.current .am-sb-step-mark{border-color:var(--orange);color:var(--navy);box-shadow:0 0 0 3px rgba(26,26,26,.10)}
-.am-sb-step-label{flex:1;min-width:0;font-size:11.5px;font-weight:600;color:#94a3b8;line-height:1.45;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.am-sb-step.done .am-sb-step-label{color:var(--navy)}
-.am-sb-step.current .am-sb-step-label{color:var(--navy);font-weight:800}
-.am-sb-step-owner{font-size:10px;color:var(--gray);white-space:nowrap;margin-top:1px}
+/* The `.am-sb-step` row rules that used to live here went with the "Manual steps in <stage>"
+   checklist they styled. The container above them stays: the Workflow tab's "Automated by the
+   system" panel is the other thing built out of it, and it draws its own row (.am-auto-row). */
 /* Tone set by a class from the renderer rather than :has(), so the card is styled by the same
    `kind` the button is built from and there is one source of truth for which case this is. */
 .am-sb-next.wait{border-color:var(--border);background:#fff}
