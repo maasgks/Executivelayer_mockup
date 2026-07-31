@@ -1533,6 +1533,40 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-ct-assist-idle-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px}
 .ai-ct-assist-idle-text{font-size:12px;line-height:1.6;max-width:280px}
 @media(max-width:840px){.ai-ct-assist-split{flex-direction:column}.ai-ct-assist-left{flex:1 1 auto;width:100%}}
+/* Waiting on the engagement model — the assistant panel is held back until a type is chosen, so
+   this stands in its place rather than leaving the step empty. */
+.ai-ct-await{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:280px;margin-top:20px;border:1.5px dashed var(--border);border-radius:16px;padding:38px 28px;background:#fff}
+.ai-ct-await-icon{width:40px;height:40px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:var(--gray);margin-bottom:14px}
+.ai-ct-await-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:7px}
+.ai-ct-await-text{font-size:12.5px;color:var(--gray);line-height:1.65;max-width:400px}
+.ai-ct-await-text b{color:var(--navy);font-weight:700}
+/* Engagement model chooser — EOR / PEO / Contract based, above the journey rail on every step */
+.ai-ct-type-row{display:flex;gap:12px;margin-bottom:14px}
+.ai-ct-type-card{flex:1 1 0;min-width:0;display:flex;align-items:flex-start;gap:12px;padding:14px 15px;border:1.5px solid var(--border);border-radius:14px;background:#fff;font-family:inherit;text-align:left;transition:.16s}
+.ai-ct-type-card.live{cursor:pointer}
+.ai-ct-type-card.live:hover{border-color:#94a3b8;box-shadow:0 2px 12px rgba(15,23,42,.07)}
+.ai-ct-type-card.selected{border-color:var(--navy);background:#f8fafc;box-shadow:0 0 0 2.5px rgba(15,23,42,.07)}
+.ai-ct-type-card.locked{background:#f8fafc;border-style:dashed;cursor:not-allowed}
+/* Past intake the chosen card is locked but still the answer to "what model is this run?" — it
+   keeps the selected treatment and only loses the pressable affordance. */
+.ai-ct-type-card.locked.selected{border-style:solid;cursor:default}
+.ai-ct-type-ico{width:34px;height:34px;border-radius:10px;background:#f1f5f9;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--navy)}
+.ai-ct-type-card.selected .ai-ct-type-ico{background:var(--navy);border-color:var(--navy);color:#fff}
+.ai-ct-type-card.locked .ai-ct-type-ico{color:#9ca3af;opacity:.7}
+.ai-ct-type-body{display:flex;flex-direction:column;min-width:0}
+.ai-ct-type-title{font-size:13.5px;font-weight:800;color:var(--navy);line-height:1.25}
+.ai-ct-type-sub{font-size:10.5px;font-weight:600;color:var(--gray);margin-top:2px;line-height:1.35}
+.ai-ct-type-desc{font-size:11px;color:#94a3b8;line-height:1.5;margin-top:6px}
+.ai-ct-type-card.locked .ai-ct-type-title,.ai-ct-type-card.locked .ai-ct-type-sub{color:#9ca3af}
+.ai-ct-type-card.locked.selected .ai-ct-type-title{color:var(--navy)}
+.ai-ct-type-card.locked.selected .ai-ct-type-sub{color:var(--gray)}
+.ai-ct-type-card.locked.selected .ai-ct-type-ico{background:var(--navy);border-color:var(--navy);color:#fff;opacity:1}
+.ai-ct-type-flag{align-self:flex-start;margin-top:9px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px;background:#f1f5f9;color:var(--navy);white-space:nowrap}
+.ai-ct-type-flag.on{background:var(--navy);color:#fff}
+.ai-ct-type-flag.locked{background:transparent;border:1px dashed #cbd5e1;color:#9ca3af}
+@media(max-width:900px){.ai-ct-type-row{flex-wrap:wrap}.ai-ct-type-card{flex:1 1 240px}.ai-ct-type-desc{display:none}}
+/* The nine-stage card rail that used to live here is gone — Contract Creation now draws the
+   same numbered dot rail as every other journey (see .aicj-bar / .aicj-track below). */
 /* Contract Creation Journey — persistent animated step bar */
 /* Same measure as .ai-exec-page. In focus mode the sidebar is gone, so without a cap the stepper
    and the step under it would stretch the full viewport on a wide monitor — trading a cramped

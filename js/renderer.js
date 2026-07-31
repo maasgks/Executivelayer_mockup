@@ -50,7 +50,9 @@ function renderPageContentImpl(id){
     const cjStage=aiCtJourneyStage();
     if(cjStage>=0){
       aiCtSyncLinkedRun(cjStage);
-      el.innerHTML='<div class="aicj-wrap">'+buildAIContractJourneyBarHTML(cjStage)+'<div id="aicj-inner"></div></div>';
+      // Engagement model above the rail, on every step: it is the one decision that shapes the
+      // whole run, so it reads as the run's header rather than a question asked once and lost.
+      el.innerHTML='<div class="aicj-wrap">'+buildAIContractTypeCardsHTML()+buildAIJourneyBarHTML('contract-creation',cjStage,'ct')+'<div id="aicj-inner"></div></div>';
       dispatchAIContractWizardPage(document.getElementById('aicj-inner'));
     }else{
       dispatchAIContractWizardPage(el);

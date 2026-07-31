@@ -10049,6 +10049,24 @@ function aiCtCurrentAgentBadge(){
   const current=events[aiCtJourneyStage()];
   return aiAgentBadgeHTML(current&&current.source);
 }
+// The step header (counter, name, chips, owning agent, who we're waiting on) is the same on every
+// journey surface, so it lives on its own rather than being restated by each rail that sits under it.
+function aiJourneyLabelHTML(journeyId,stage){
+  const events=aiJourneyEvents[journeyId]||[];
+  const current=events[stage];
+  if(!current)return '';
+  // Who is holding the work is the one thing a run view is asked for most and the old bar never
+  // answered — the name and the chips say what the step is, not who to chase.
+  const waitLabel=current.waitingOn&&current.waitingOn!=='&mdash;'
+    ?'<span class="aicj-label-wait">Waiting on <b>'+current.waitingOn+'</b></span>':'';
+  return '<div class="aicj-label">'
+    +'<span class="aicj-label-step">Step '+(stage+1)+' of '+events.length+'</span>'
+    +'<span class="aicj-label-name">'+current.name+'</span>'
+    +aiChipsCompact(current.chips)
+    +aiAgentBadgeHTML(current.source)
+    +waitLabel
+    +'</div>';
+}
 function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   const events=aiJourneyEvents[journeyId]||[];
   const prev=animationKey==='payroll'?aiPayrollAnimatedStage:animationKey==='h2r'?aiH2rAnimatedStage:aiCtAnimatedStage;
@@ -10056,20 +10074,7 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   if(animationKey==='payroll'){if(animateThisRender)aiPayrollAnimatedStage=stage;}
   else if(animationKey==='h2r'){if(animateThisRender)aiH2rAnimatedStage=stage;}
   else if(animateThisRender){aiCtAnimatedStage=stage;}
-  const current=events[stage];
-  // Who is holding the work is the one thing a run view is asked for most and the old bar never
-  // answered — the name and the chips say what the step is, not who to chase.
-  const waitLabel=current&&current.waitingOn&&current.waitingOn!=='&mdash;'
-    ?'<span class="aicj-label-wait">Waiting on <b>'+current.waitingOn+'</b></span>':'';
-  const label=current?(
-    '<div class="aicj-label">'
-    +'<span class="aicj-label-step">Step '+(stage+1)+' of '+events.length+'</span>'
-    +'<span class="aicj-label-name">'+current.name+'</span>'
-    +aiChipsCompact(current.chips)
-    +aiAgentBadgeHTML(current.source)
-    +waitLabel
-    +'</div>'
-  ):'';
+  const label=aiJourneyLabelHTML(journeyId,stage);
   // Numbered pending dots: at nine stages an unlabelled circle gives no sense of position, and
   // the number is already the thing the header counts ("Step 4 of 9").
   const stepHTML=function(e,i,connect){
@@ -10111,7 +10116,71 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   }).join('<div class="aicj-track-split" aria-hidden="true"></div>');
   return label+'<div class="aicj-bar"><div class="aicj-bar-scroll aicj-bar-tracked">'+groups+'</div></div>';
 }
-function buildAIContractJourneyBarHTML(stage){return buildAIJourneyBarHTML('contract-creation',stage,'contract');}
+/* == CONTRACT CREATION — THE STAGE RAIL ==================================================
+   The contract journey used to draw its nine stages as cards while payroll and H2R drew the
+   numbered dot-and-line rail, so the product showed two different shapes for the same idea.
+   It now renders through buildAIJourneyBarHTML like every other journey — one rail vocabulary
+   across the whole system.
+
+   Nothing about the stages themselves changed: the labels still come from
+   aiJourneyEvents['contract-creation'] through aiCjShortLabel(), so the names under the
+   circles read exactly as they did on the cards. The engagement / placement split survives
+   too — buildAIJourneyBarHTML groups by each event's `track` and draws the same dashed
+   divider the Account Manager pipeline board uses, with the five stages left of it happening
+   once per client request and the four right of it repeating per hire. == */
+/* == THE ENGAGEMENT MODEL CHOOSER ========================================================
+   Three cards above the rail. EOR is the automated path and the only live one; PEO and
+   Contract based are drawn in the same shape but locked, because showing the full menu and
+   marking what isn't wired yet is honest, where hiding them would imply the product only
+   ever does EOR. The chosen card stays visible on every later step as run context. == */
+const AI_CT_TYPE_CARDS=[
+  {id:'EOR',title:'EOR',sub:'Employer of Record',
+   desc:'We employ the worker in-country on your behalf and carry the compliance.',live:true,
+   ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 21V10h8v11"/><path d="M12 7h.01"/></svg>'},
+  {id:'PEO',title:'PEO',sub:'Professional Employer Organization',
+   desc:'Co-employment — you keep the relationship, we run payroll and filings.',live:false,
+   ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>'},
+  {id:'CONTRACTOR',title:'Contract based',sub:'Independent contractor',
+   desc:'A direct contractor agreement, invoiced against the engagement.',live:false,
+   ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'}
+];
+function aiCtActiveType(){return aiCtTypeChoice||aiCtPendingEmpType||'';}
+function buildAIContractTypeCardsHTML(){
+  const active=aiCtActiveType();
+  // Past the intake step the row is read-only context: the form behind it was built for the model
+  // that was picked, so a card that still looked pressable would be offering a change it can't make.
+  const editable=page==='ai-contract-assistant';
+  return '<div class="ai-ct-type-row">'+AI_CT_TYPE_CARDS.map(function(t){
+    const selected=active===t.id;
+    const clickable=t.live&&editable;
+    const cls='ai-ct-type-card '+(clickable?'live':'locked')+(selected?' selected':'');
+    const flag=t.live
+      ?'<span class="ai-ct-type-flag'+(selected?' on':'')+'">'+(selected?'Selected':'AI Automated')+'</span>'
+      :'<span class="ai-ct-type-flag locked">Not automated yet</span>';
+    const tip=t.live?(editable?t.sub+' — '+t.desc:t.sub+' — chosen at intake'):t.sub+' — not automated yet';
+    return '<'+(clickable?'button type="button"':'div')+' class="'+cls+'"'
+      +(clickable?' onclick="aiCtChooseType(\''+t.id+'\')"':' aria-disabled="true"')
+      +' title="'+attrSafe(tip)+'">'
+      +'<span class="ai-ct-type-ico">'+t.ico+'</span>'
+      +'<span class="ai-ct-type-body">'
+      +'<span class="ai-ct-type-title">'+t.title+'</span>'
+      +'<span class="ai-ct-type-sub">'+t.sub+'</span>'
+      +'<span class="ai-ct-type-desc">'+t.desc+'</span>'
+      +flag
+      +'</span>'
+      +'</'+(clickable?'button':'div')+'>';
+  }).join('')+'</div>';
+}
+// Only the intake step lets the choice change — once the run has an employee and a form behind
+// it, switching the engagement model would silently invalidate what's already been captured.
+function aiCtChooseType(id){
+  const t=AI_CT_TYPE_CARDS.find(function(x){return x.id===id;});
+  if(!t||!t.live)return;
+  if(page!=='ai-contract-assistant')return;
+  aiCtTypeChoice=id;
+  if(!aiCtPendingEmpType)aiCtPendingEmpType=id;
+  renderADTPage();
+}
 function aiCtLoaderTarget(){return document.getElementById('aicj-inner')||document.getElementById('adt-content');}
 function aiScrollContentToTop(){
   const el=document.getElementById('adt-content');
@@ -10142,8 +10211,23 @@ function findExistingEmployee(name){
     || null;
 }
 function buildAIContractAssistantHTML(){
+  const back='<button class="ep-back" onclick="page=\'ai-executive\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>';
+  // The assistant is the second beat, not the first: the engagement model decides which form the
+  // run lands on, so the page asks for it before opening the chat rather than asking the chat to
+  // guess it out of a sentence.
+  if(aiCtActiveType()!=='EOR'){
+    return '<div class="ep-page" style="max-width:1040px;margin:0 auto">'
+      +back
+      +'<div class="ai-ct-await">'
+      +'<div class="ai-ct-await-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>'
+      +'<div class="ai-ct-await-title">Choose an engagement model to begin</div>'
+      +'<div class="ai-ct-await-text">Pick <b>EOR</b> above and the AI Contract Assistant opens here &mdash; simulate an existing or new employee, or describe the hire in your own words.</div>'
+      +'<button class="add-link" style="margin-top:14px" onclick="page=\'contract-type-select\';renderADTPage()">Skip &mdash; create manually</button>'
+      +'</div>'
+      +'</div>';
+  }
   return '<div class="ep-page" style="max-width:1040px;margin:0 auto">'
-    +'<button class="ep-back" onclick="page=\'ai-executive\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +back
     +'<div class="ai-ct-assist-split">'
     +'<div class="ai-ct-assist-left">'
     +'<div class="ep-form-card" style="text-align:center;padding:32px 30px">'
@@ -10244,7 +10328,7 @@ function aiCtRenderMatchCard(emp,parsed){
 function aiCtNotFoundPanel(parsed){
   const nameParts=(parsed.name||'').trim().split(' ');
   const fname=nameParts[0]||'',lname=nameParts.slice(1).join(' ')||'';
-  const country=parsed.country||'',empType=parsed.empType||'',jobTitle=parsed.jobTitle||'';
+  const country=parsed.country||'',empType=parsed.empType||aiCtTypeChoice||'',jobTitle=parsed.jobTitle||'';
   const countryOpts=['','Netherlands','India','Germany','Spain','United Kingdom','France','Italy'].map(function(c){return '<option value="'+c+'"'+(c===country?' selected':'')+'>'+(c||'Select Country')+'</option>';}).join('');
   const empTypeOpts=['','EOR','PEO','Contractor'].map(function(t){return '<option value="'+t+'"'+(t===empType?' selected':'')+'>'+(t||'Select Type')+'</option>';}).join('');
   return '<div class="ep-form-card">'
@@ -10413,7 +10497,7 @@ function aiCtUseEmployee(empId){
   const parts=emp.name.split(' ');
   aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||'',pay:aiCtMockSalary(emp).replace(/,/g,'')};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
-  aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||'';aiCtJourneyIsSimulated=false;
+  aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||aiCtTypeChoice||'';aiCtJourneyIsSimulated=false;
   const promptEl=document.getElementById('ai-ct-prompt');
   aiCtChatMsgs=[
     {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+emp.name)},
@@ -10433,7 +10517,7 @@ function aiCtUseManualEntry(){
   const rec=Object.assign({id:newId,name:fullName,empId:empId,dept:'—',jobTitle:jobTitle||'—',joinDate:now.date,desc:'Created via AI Contract Assistant',contact:'—',email:'—',status:'Active'},
     isGlobal?{country:country,workerType:empType||'EOR'}:{branch:'—'});
   arr.push(rec);
-  aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||'';aiCtJourneyIsSimulated=true;
+  aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||aiCtTypeChoice||'';aiCtJourneyIsSimulated=true;
   aiContractPrefill={fname:fname,lname:lname,email:'',country:country,jobTitle:jobTitle};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
   const promptEl=document.getElementById('ai-ct-prompt');
