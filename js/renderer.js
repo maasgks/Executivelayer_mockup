@@ -84,9 +84,11 @@ function renderPageContentImpl(id){
   if(page==='cost-calculator'){el.innerHTML=buildCostCalculatorPageHTML();initCostCalcPage();return;}
   if(page==='leave-policies'){el.innerHTML=buildLeavePoliciesHTML();return;}
   if(page==='master-data'){mdEnsureLoaded();el.innerHTML=buildMasterDataHTML();return;}
-  if(page==='direct'){el.innerHTML=buildDirectListingHTML();return;}
+  // -- Employees and Timesheet are single pages with a scope switch inside; the ids they
+  // replaced ('direct', 'global', 'my-timesheet', 'all-timesheet') are translated to these two
+  // by resolvePageAlias before they ever reach the router. --
+  if(page==='employees'){el.innerHTML=buildEmployeesPageHTML();return;}
   if(page==='payroll'){el.innerHTML=buildPayrollListingHTML();return;}
-  if(page==='global'){el.innerHTML=buildGlobalListingHTML();return;}
   if(page==='teams'){el.innerHTML=buildTeamsListingHTML();return;}
   if(page==='contracts'){el.innerHTML=buildContractsListingHTML();return;}
   if(page==='all-leaves'){el.innerHTML=buildAllLeavesHTML();return;}
@@ -95,8 +97,7 @@ function renderPageContentImpl(id){
   if(page==='leave-add'){el.innerHTML=buildAddLeaveHTML();return;}
   if(page==='team-add'){el.innerHTML=buildAddTeamHTML();return;}
   if(page==='payments'){el.innerHTML=buildPaymentsHTML();return;}
-  if(page==='my-timesheet'){el.innerHTML=buildMyTimesheetHTML();return;}
-  if(page==='all-timesheet'){el.innerHTML=buildAllTimesheetHTML();return;}
+  if(page==='timesheet'){el.innerHTML=buildTimesheetPageHTML();return;}
   if(page==='settings'){el.innerHTML=buildCompanySettingsHTML();return;}
   if(page==='my-profile'){el.innerHTML=buildMyProfileHTML();return;}
   if(page==='switch-entity'){el.innerHTML=buildSwitchEntityHTML();return;}
@@ -112,7 +113,7 @@ function renderADTPage(){
   // Show/hide + button in topbar based on current page
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
-    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','ai-analytics','journey-simulation','manual-journey-run','master-data'];
+    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','ai-analytics','journey-simulation','manual-journey-run','master-data'];
     const show=!noAddPages.includes(page);
     addBtn.style.display=show?'':'none';
     if(show){

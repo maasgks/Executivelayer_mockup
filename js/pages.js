@@ -1425,8 +1425,11 @@ function buildEntityAdminDashboardHTML(){
   const pendingRequests=entityScopedRequests.filter(r=>r.status==='Pending');
   const notifyEntries=entityRequests.filter(r=>r.type==='manager-notify'&&r.clientId==='dhi-hyperlocal');
   const pendingNotes=notifyEntries.filter(r=>r.status==='Pending');
+  /* No "Entity Admin" heading. With the tab strip gone this is the only thing on the route,
+     so a line naming the role labels a page that has nothing to be told apart from — and the
+     role is already stated in the switcher and the user menu. The sentence under it stays,
+     because that one says what is on the page rather than who is reading it. */
   return `
-    <p style="font-size:14px;font-weight:600;margin-bottom:4px">Entity Admin</p>
     <p style="font-size:12px;color:var(--gray);margin-bottom:20px">Your entity's automation overview — systems, journeys, and requests.</p>
     <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
       <div class="stat-card ea-hero-stat cfg-hero-blue" onclick="openEntitySystemsModal()"><div class="stat-label"><span>Systems Activated</span><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg></div></div><div class="stat-val">${sysActive} <span style="font-size:14px;color:var(--gray);font-weight:500">of ${sysTotal}</span></div><div class="stat-sub" style="color:var(--gray)">Default systems in use</div></div>
@@ -2340,6 +2343,33 @@ function buildMasterDataHTML(){
     +'</div></div>';
 }
 
+/* == EMPLOYEES ============================================================================
+   One page, two lists. Direct and Global used to be two sidebar rows and two page ids for what
+   is one question — who works here — asked twice. They are still two renderers, because the
+   columns genuinely differ (department and branch for direct hires, country and worker type for
+   global ones), but choosing between them is a filter on one page now rather than a fork in the
+   navigation. Every old link into 'direct' or 'global' still lands here on the right scope; see
+   resolvePageAlias in core.js. == */
+const empScopes=[{id:'direct',label:'Direct'},{id:'global',label:'Global'}];
+function buildEmployeesPageHTML(){
+  return '<div class="pg-scope">'
+    +'<span class="pg-scope-label">Employee type</span>'
+    +'<div class="dash-tabs pg-scope-tabs">'+empScopes.map(function(s){
+      return '<button class="dash-tab'+(empScope===s.id?' active':'')+'" onclick="empSetScope(\''+s.id+'\')">'+s.label+'</button>';
+    }).join('')+'</div></div>'
+    +(empScope==='global'?buildGlobalListingHTML():buildDirectListingHTML());
+}
+/* == TIMESHEET ============================================================================
+   Same merge, presented as tabs rather than a filter, because the two views are not two cuts of
+   one table: My is a calendar you fill in and All is a roster you chase. The tab strip is the
+   app's standard `.dash-tabs` pill row, so this reads like every other tabbed page. == */
+const tsScopes=[{id:'my',label:'My Timesheet'},{id:'all',label:'All Timesheets'}];
+function buildTimesheetPageHTML(){
+  return '<div class="dash-tabs">'+tsScopes.map(function(t){
+      return '<button class="dash-tab'+(tsScope===t.id?' active':'')+'" onclick="tsSetScope(\''+t.id+'\')">'+t.label+'</button>';
+    }).join('')+'</div>'
+    +(tsScope==='all'?buildAllTimesheetHTML():buildMyTimesheetHTML());
+}
 function buildDirectListingHTML(){
   const d='<span style="color:#9ca3af">--</span>';
   // -- Employees waiting on HR for onboarding (see ensureDirectEmpForOnboarding) pin to the top with a notification dot, same "needs action" treatment used on the Contracts sidebar tabs. --
@@ -4866,11 +4896,11 @@ function buildMyTimesheetHTML() {
       + '</div>'
     : '';
 
-  // -- Only when this calendar was opened from All Timesheet. My Timesheet is a top-level
-  // sidebar destination, so injectPageBackBar gives it nothing — correct when you navigated to
-  // your own timesheet, wrong when you drilled into someone else's and had no way back. --
+  // -- Only when this calendar was opened by drilling into a row on the All tab. It returns by
+  // switching scope rather than navigating, because both tabs are one page id now — a
+  // navigatePage call would be a trip to the page you are already on. --
   const backBar = tsFromAllTimesheet
-    ? cfgBackBtn('all-timesheet','All Timesheet')
+    ? '<button class="ep-cancel-btn" style="margin-bottom:18px" onclick="tsSetScope(\'all\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg> All Timesheets</button>'
     : '';
 
   return '<div class="ts-main">'
