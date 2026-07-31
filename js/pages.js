@@ -1746,25 +1746,75 @@ function applyMdSearch(){
   renderADTPage();
 }
 function mdSourceLabel(e){return e.source==='adt_solution'?'NewForce Solutions':'Manual';}
-// -- The Source System badge names a system that exists outside this app, so it behaves like a
-// way in to it rather than a label: clicking NewForce Solutions redirects to the NewForce console.
-// Only the NewForce badge links — "Manual" names no system to open, so it stays plain text rather
-// than a link that goes nowhere.
+// The standard "leaves this app" glyph — a box with an arrow out of it. aria-hidden because the
+// th it sits in already carries the meaning in its title.
+function mdExtLinkIcon(){
+  return '<svg class="md-th-link-ico" width="11" height="11" viewBox="0 0 24 24" fill="none"'
+    +' stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"'
+    +' aria-hidden="true"><path d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>'
+    +'<polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+}
+// -- The Source System value names a system that exists outside this app, so it behaves like a
+// way in to it: clicking NewForce Solutions redirects to the NewForce console. Only NewForce
+// links — "Manual" names no system to open, so it stays plain text rather than a link that goes
+// nowhere.
+//
+// It reads as ordinary table text, not a badge. A pill in a column of plain cells reads as a
+// status — a thing that changes and that you might act on — and this is neither: it is a fixed
+// fact about where the row came from, the same kind of fact as Country or Client's Company two
+// cells over. The affordance that says these values lead somewhere is stated once, by the
+// external-link icon in the column header, instead of being re-asserted on every row.
 //
 // Same tab, no target="_blank": this is a hand-off to the system that issued the record, so the
 // operator goes there rather than accumulating a second window they have to come back through.
 // Ctrl/Cmd-click still opens a tab for anyone who wants one — that stays the browser's call.
 //
 // stopPropagation matters here: the whole row is clickable (it opens the record drawer), so
-// without it a click on the badge would both leave for NewForce and open the drawer behind it. --
+// without it a click on the name would both leave for NewForce and open the drawer behind it. --
 function mdSourceSystemCell(e){
   const label=mdSourceLabel(e);
-  const style='color:#0d9488;background:#f0fdfa;border-color:#99f6e4';
   const url=(window.EXEC_CONFIG&&window.EXEC_CONFIG.adtConsoleUrl)||'';
-  if(e.source!=='adt_solution'||!url)return '<span class="badge" style="'+style+'">'+label+'</span>';
-  return '<a class="badge md-source-link" href="'+attrSafe(url)+'" rel="noreferrer"'
+  if(e.source!=='adt_solution'||!url)return label;
+  return '<a class="md-source-link" href="'+attrSafe(url)+'" rel="noreferrer"'
     +' onclick="event.stopPropagation()" title="Go to '+label+' — the system this client came from"'
-    +' style="'+style+'">'+label+'</a>';
+    +'>'+label+'</a>';
+}
+// -- The Source Record ID cell. Because we now mint the Client ID first and push to the source
+// system second, a client can legitimately exist here with no source record id yet — and an
+// empty cell would read exactly like a manually created record that never had one. So the two
+// unmirrored states say so, and say it differently:
+//
+//   pending  — in flight, nothing to do but wait
+//   failed   — the push did not land, and there is a Retry the operator can press
+//
+// This is the whole point of choosing "keep the record and retry" over "roll the creation back":
+// the work survives a third-party outage, but it is never allowed to survive *silently*. --
+function mdSourceRecordCell(e){
+  if(e.sourceRecordId){
+    return '<span style="font-family:monospace;font-size:12px;color:#0d9488;font-weight:600">'+e.sourceRecordId+'</span>';
+  }
+  if(e.mirrorState==='pending')return '<span class="md-mirror md-mirror-pending">Mirroring…</span>';
+  if(e.mirrorState==='failed'){
+    return '<span class="md-mirror md-mirror-failed" title="'+attrSafe(e.mirrorError||'The push to the source system failed')+'">Not mirrored</span>'
+      +'<button class="md-mirror-retry" onclick="event.stopPropagation();mdRetryMirror(\''+attrSafe(e.empId)+'\')">Retry</button>';
+  }
+  return '--';
+}
+// Re-pushes one client to its source system, then reloads the listing from the backend so the
+// cell reflects whatever actually happened rather than what we hoped would happen.
+function mdRetryMirror(code){
+  execApiRetryMirror(code).then(function(r){
+    showAiToast(r&&r.status==='mirrored'?'Mirrored to NewForce Solutions':'Still not mirrored',
+      r&&r.status==='mirrored'
+        ?('Source record '+(r.employee&&r.employee.source_record_id||'')+' linked to '+code+'.')
+        :((r&&r.mirrorError)||'The source system could not be reached.'));
+    // Straight to mdRefreshFromBackend, not mdEnsureLoaded: the latter early-returns once the
+    // backend has loaded successfully, which is exactly the state we are in and exactly the
+    // state whose data we need to replace.
+    mdRefreshFromBackend().then(function(){if(page==='master-data')renderADTPage();});
+  }).catch(function(err){
+    showAiToast('Retry failed',(err&&err.message)||'The source system could not be reached.');
+  });
 }
 // -- "Last Updated" in the listing. Stored as one UTC instant; shown short, because the column
 // answers "is this stale" rather than "exactly when" — the Logs tab carries the precise trail.
@@ -2183,7 +2233,7 @@ function buildMasterDataHTML(){
         +'<td style="font-family:monospace;font-size:12px;font-weight:600;color:var(--navy)">'+(e.empId||d)+'</td>'
         +'<td style="font-weight:600;color:var(--navy)">'+(e.companyName&&e.companyName!=='--'?e.companyName:d)+'</td>'
         +'<td>'+mdSourceSystemCell(e)+'</td>'
-        +'<td>'+(e.sourceRecordId?('<span style="font-family:monospace;font-size:12px;color:#0d9488;font-weight:600">'+e.sourceRecordId+'</span>'):d)+'</td>'
+        +'<td>'+mdSourceRecordCell(e)+'</td>'
         +'<td>'+(e.country||d)+'</td>'
         +'<td><span class="lp-status-badge '+String(e.status).toLowerCase()+'">'+e.status+'</span></td>'
         +'<td style="color:var(--gray);font-size:12px;white-space:nowrap">'+(lastUpd||d)+'</td>'
@@ -2254,7 +2304,12 @@ function buildMasterDataHTML(){
     +'<table class="lp-table"><thead><tr>'
     +(compact
       ?'<th>'+rows.length+' record'+(rows.length===1?'':'s')+'</th>'
-      :'<th>SR. NO</th><th>CLIENT ID</th><th>CLIENT\'S COMPANY</th><th>SOURCE SYSTEM</th><th>SOURCE RECORD ID</th><th>COUNTRY</th><th>STATUS</th><th>LAST UPDATED</th><th>ACTION</th>')
+      // -- The external-link glyph beside SOURCE SYSTEM is where "these values go somewhere" is
+      // said. Putting it in the header states it once for the column instead of repeating an
+      // affordance on every row, which is what the old per-row badge was doing. --
+      :'<th>SR. NO</th><th>CLIENT ID</th><th>CLIENT\'S COMPANY</th>'
+       +'<th title="Opens the system this client came from">SOURCE SYSTEM'+mdExtLinkIcon()+'</th>'
+       +'<th>SOURCE RECORD ID</th><th>COUNTRY</th><th>STATUS</th><th>LAST UPDATED</th><th>ACTION</th>')
     +'</tr></thead><tbody>'+tableBody+'</tbody></table>'
     // -- Hidden in compact mode: with the drawer open the listing is a narrow identity strip and
     // a row of pagination chrome under it would take more of it than the records do. --
@@ -3975,7 +4030,11 @@ function buildContractFormHTML(type,step,splitMode){
   const isLast=isAssistedReview||step===2;
   const goBack=type==='PEO'?'peoBack()':'eorBack()';
   const goNext=type==='PEO'?'peoNext()':'eorNext()';
-  const finalAction=aiAssistedFlow?'aiSubmitAssistedContract(\''+type+'\')':'submitManualContractDeal(\''+type+'\')';
+  // `type` is the form we are on; aiCtRunType() is the engagement model the user picked. They
+  // differ only for Contract-based, which continues on the EOR form but must still be filed as
+  // a Contractor contract — so the record follows the choice, not the route.
+  const submitType=aiAssistedFlow?aiCtRunType(type):type;
+  const finalAction=aiAssistedFlow?'aiSubmitAssistedContract(\''+submitType+'\')':'submitManualContractDeal(\''+type+'\')';
   const footer='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px">'
     +'<button class="ep-cancel-btn" style="border-radius:99px;display:inline-flex;align-items:center;gap:6px" onclick="'+goBack+'"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Back</button>'
     +'<button class="ep-save-btn" style="padding:9px 28px;border-radius:99px" onclick="'+(isLast?finalAction:goNext)+'">'+( isLast?(aiAssistedFlow?'Create Proposal':'Submit Contract'):'Next')+'</button>'
@@ -9994,9 +10053,19 @@ function aiJourneyLabelHTML(journeyId,stage){
   // answered — the name and the chips say what the step is, not who to chase.
   const waitLabel=current.waitingOn&&current.waitingOn!=='&mdash;'
     ?'<span class="aicj-label-wait">Waiting on <b>'+current.waitingOn+'</b></span>':'';
+  // The engagement model, for the contract journey only. It used to be three full-size cards
+  // stacked above the rail on every step; the choice is made on the screen before the run
+  // starts, so all the run needs is a reminder of which model it is under. One chip does that
+  // in the space the header already occupies.
+  const model=journeyId==='contract-creation'?aiCtActiveType():'';
+  const modelCard=model?AI_CT_TYPE_CARDS.find(function(t){return t.id===model;}):null;
+  const modelChip=modelCard
+    ?'<span class="aicj-label-model" title="'+attrSafe('Engagement model: '+modelCard.title+' — '+modelCard.sub)+'">'
+      +modelCard.title+'</span>':'';
   return '<div class="aicj-label">'
     +'<span class="aicj-label-step">Step '+(stage+1)+' of '+events.length+'</span>'
     +'<span class="aicj-label-name">'+current.name+'</span>'
+    +modelChip
     +aiChipsCompact(current.chips)
     +aiAgentBadgeHTML(current.source)
     +waitLabel
@@ -10068,29 +10137,70 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
    Contract based are drawn in the same shape but locked, because showing the full menu and
    marking what isn't wired yet is honest, where hiding them would imply the product only
    ever does EOR. The chosen card stays visible on every later step as run context. == */
+// All three are live. Two of them were previously drawn but not clickable, marked "Not automated
+// yet" — which in PEO's case was not even true: buildPEOContractHTML is a complete wizard that
+// simply had no route into it from here. A card the product can honour and does not is worse
+// than no card at all, so each now states what it opens and opens it.
+//
+// `outcome` is the promise the card makes, printed on the card itself. A chooser whose options
+// look identical asks the reader to guess what pressing one does; naming the destination is the
+// difference between a menu and a lottery.
 const AI_CT_TYPE_CARDS=[
   {id:'EOR',title:'EOR',sub:'Employer of Record',
    desc:'We employ the worker in-country on your behalf and carry the compliance.',live:true,
+   flag:'AI Automated',outcome:'Opens the AI Contract Assistant',
    ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 21V10h8v11"/><path d="M12 7h.01"/></svg>'},
   {id:'PEO',title:'PEO',sub:'Professional Employer Organization',
-   desc:'Co-employment — you keep the relationship, we run payroll and filings.',live:false,
+   desc:'Co-employment — you keep the relationship, we run payroll and filings.',live:true,
+   flag:'AI Automated',outcome:'Opens the AI Contract Assistant',
    ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>'},
   {id:'CONTRACTOR',title:'Contract based',sub:'Independent contractor',
-   desc:'A direct contractor agreement, invoiced against the engagement.',live:false,
+   desc:'A direct contractor agreement, invoiced against the engagement.',live:true,
+   flag:'AI Automated',outcome:'Opens the AI Contract Assistant',
    ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'}
 ];
+/* == THE ENGAGEMENT MODEL CHOOSER — SCREEN ONE ===========================================
+   Create Contract used to open on the nine-stage rail, "STEP 1 OF 9", AND an empty state
+   reading "Choose an engagement model to begin". Those cannot all be true at once: a run that
+   has not been given its engagement model has not started, so there is no step 1 to be on. The
+   rail was progress chrome for a journey that did not exist, and it pushed the page's only
+   actual decision below ~150px of it.
+
+   So the choice gets its own screen and the whole screen. No rail, no counter, no empty state
+   card competing with the cards — the three options ARE the page. The rail appears on the next
+   screen, when there is a run for it to describe. == */
+function buildAICtModelChooserHTML(){
+  const back='<button class="ep-back" onclick="navigatePage(\'ai-executive\')">'
+    +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> Back to AI Executive</button>';
+  return '<div class="ep-page" style="max-width:1180px;margin:0 auto">'
+    +back
+    +'<div class="ai-ct-choose">'
+    +'<h1 class="ai-ct-choose-h1">Create a contract</h1>'
+    +'<p class="ai-ct-choose-sub">Start with how you are engaging this person. It decides which '
+    +'compliance rules apply, how the quote is built, and which contract we generate &mdash; so it '
+    +'is asked once, first, rather than corrected later.</p>'
+    +buildAIContractTypeCardsHTML()
+    +'<button class="add-link ai-ct-choose-skip" onclick="page=\'contract-type-select\';renderADTPage()">'
+    +'Skip &mdash; create manually</button>'
+    +'</div>'
+    +'</div>';
+}
 function aiCtActiveType(){return aiCtTypeChoice||aiCtPendingEmpType||'';}
 function buildAIContractTypeCardsHTML(){
   const active=aiCtActiveType();
   // Past the intake step the row is read-only context: the form behind it was built for the model
   // that was picked, so a card that still looked pressable would be offering a change it can't make.
   const editable=page==='ai-contract-assistant';
-  return '<div class="ai-ct-type-row">'+AI_CT_TYPE_CARDS.map(function(t){
+  // On the chooser screen the row IS the page, so each card carries the outcome line; once the
+  // run has started the same row is a context strip above the rail, where that line would be
+  // restating a decision already made.
+  const choosing=editable&&!active;
+  return '<div class="ai-ct-type-row'+(choosing?' choosing':'')+'">'+AI_CT_TYPE_CARDS.map(function(t){
     const selected=active===t.id;
     const clickable=t.live&&editable;
     const cls='ai-ct-type-card '+(clickable?'live':'locked')+(selected?' selected':'');
     const flag=t.live
-      ?'<span class="ai-ct-type-flag'+(selected?' on':'')+'">'+(selected?'Selected':'AI Automated')+'</span>'
+      ?'<span class="ai-ct-type-flag'+(selected?' on':'')+'">'+(selected?'Selected':(t.flag||'AI Automated'))+'</span>'
       :'<span class="ai-ct-type-flag locked">Not automated yet</span>';
     const tip=t.live?(editable?t.sub+' — '+t.desc:t.sub+' — chosen at intake'):t.sub+' — not automated yet';
     return '<'+(clickable?'button type="button"':'div')+' class="'+cls+'"'
@@ -10102,6 +10212,7 @@ function buildAIContractTypeCardsHTML(){
       +'<span class="ai-ct-type-sub">'+t.sub+'</span>'
       +'<span class="ai-ct-type-desc">'+t.desc+'</span>'
       +flag
+      +(choosing&&t.outcome?'<span class="ai-ct-type-outcome">'+t.outcome+'</span>':'')
       +'</span>'
       +'</'+(clickable?'button':'div')+'>';
   }).join('')+'</div>';
@@ -10150,14 +10261,19 @@ function buildAIContractAssistantHTML(){
   // The assistant is the second beat, not the first: the engagement model decides which form the
   // run lands on, so the page asks for it before opening the chat rather than asking the chat to
   // guess it out of a sentence.
-  if(aiCtActiveType()!=='EOR'){
+  // Only when no model has been chosen at all — and the chooser screen now catches that before
+  // this page renders, so this is a fallback rather than a state a user reaches by walking
+  // forward. It used to fire for PEO and Contract-based too, which is why picking either of
+  // them appeared to do nothing: the card set the choice and the page answered with an empty
+  // state. All three models open the assistant now.
+  if(!aiCtActiveType()){
     return '<div class="ep-page" style="max-width:1040px;margin:0 auto">'
       +back
       +'<div class="ai-ct-await">'
       +'<div class="ai-ct-await-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>'
       +'<div class="ai-ct-await-title">Choose an engagement model to begin</div>'
-      +'<div class="ai-ct-await-text">Pick <b>EOR</b> above and the AI Contract Assistant opens here &mdash; simulate an existing or new employee, or describe the hire in your own words.</div>'
-      +'<button class="add-link" style="margin-top:14px" onclick="page=\'contract-type-select\';renderADTPage()">Skip &mdash; create manually</button>'
+      +'<div class="ai-ct-await-text">This run has no engagement model yet, so there is nothing for the assistant to open. Start again from the chooser and the AI Contract Assistant opens here.</div>'
+      +'<button class="add-link" style="margin-top:14px" onclick="aiCtTypeChoice=\'\';aiCtPendingEmpType=\'\';page=\'ai-contract-assistant\';renderADTPage()">Choose an engagement model</button>'
       +'</div>'
       +'</div>';
   }
@@ -10419,11 +10535,27 @@ function aiCtApplyFieldAnswer(field,text){
     setTimeout(aiCtAskNextField,450);
   },500);
 }
+// Which form the run continues into. PEO has a form shaped for it; EOR and Contract-based share
+// the EOR form, because the fields a contractor agreement needs (person, country, dates, rate)
+// are the ones that form already asks for. The distinction is not lost by sharing the route —
+// the run's real engagement model rides in aiCtTypeChoice and is what lands on the contract
+// record, so a Contract-based run produces a Contractor contract off the same screen.
+//
+// The trailing 'else' used to dump anything that was not EOR or PEO onto contract-type-select,
+// which is how picking Contract-based fell out of the assisted flow entirely.
 function aiCtRouteToContractType(empType){
   if(empType==='PEO'){peoStep=0;page='contract-peo';}
-  else if(empType==='EOR'){eorStep=0;page='contract-eor';}
+  else if(empType==='EOR'||empType==='CONTRACTOR'){eorStep=0;page='contract-eor';}
   else{page='contract-type-select';}
   renderADTPage();
+}
+// The engagement model as the contract record should record it. The form route says which
+// screen we are on ('EOR' for both EOR and Contract-based); this says what the user actually
+// chose, so the two never have to agree.
+function aiCtRunType(formType){
+  const chosen=aiCtActiveType();
+  if(chosen==='CONTRACTOR')return 'Contractor';
+  return chosen||formType;
 }
 function aiCtUseEmployee(empId){
   const emp=directEmpData.concat(globalEmpData).find(function(e){return String(e.empId)===String(empId);});

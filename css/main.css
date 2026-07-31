@@ -363,12 +363,25 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:#f1f5f9;color:var(--navy);letter-spacing:.4px}
 .badge.cfg-agent-recommend{background:#f0fdfa;color:#0d9488;border:1px solid #99f6e4;cursor:pointer;transition:background .15s}
 .badge.cfg-agent-recommend:hover{background:#ccfbf1}
-/* The Source System badge on a NewForce-sourced client is a link out to NewForce. It keeps the
-   badge's own shape and colour — it is still the same fact about the row — and only picks up the
-   affordances that say "this goes somewhere": pointer, a tint on hover, a focus ring for keyboard. */
-.badge.md-source-link{display:inline-block;text-decoration:none;cursor:pointer;transition:background .15s}
-.badge.md-source-link:hover{background:#ccfbf1!important}
-.badge.md-source-link:focus-visible{outline:2px solid #0d9488;outline-offset:2px}
+/* Source System reads as ordinary cell text, inheriting .lp-table td, because it is a fixed fact
+   about the row rather than a status — a pill in a column of plain cells claims to be something
+   that changes and that you might act on. The link affordance is deliberately quiet at rest: the
+   column header carries the external-link glyph that says the whole column leads somewhere, so
+   the rows do not each have to re-state it. Hover and keyboard focus still confirm it per row. */
+.md-source-link{color:inherit;text-decoration:none;cursor:pointer;border-bottom:1px solid transparent;transition:border-color .15s}
+.md-source-link:hover{border-bottom-color:currentColor}
+.md-source-link:focus-visible{outline:2px solid var(--navy);outline-offset:2px;border-radius:2px}
+/* .55 so the glyph reads as a property of the header label rather than competing with it. */
+.md-th-link-ico{vertical-align:-1px;margin-left:5px;opacity:.55}
+/* A client that exists here but is not yet confirmed by its source system. Deliberately NOT the
+   monospace teal the real id wears: this is the absence of an id, and dressing it like one would
+   be a lie the operator has to read twice. 'Mirroring…' is grey because waiting is not a problem;
+   'Not mirrored' is amber because it is, and it carries the only Retry in the table. */
+.md-mirror{font-size:11px;font-weight:700;letter-spacing:.2px}
+.md-mirror-pending{color:var(--gray)}
+.md-mirror-failed{color:#b45309;cursor:help;border-bottom:1px dotted #d9a441}
+.md-mirror-retry{margin-left:8px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:5px;border:1px solid #d9a441;background:#fffbeb;color:#b45309;cursor:pointer;transition:background .15s}
+.md-mirror-retry:hover{background:#fef3c7}
 .cfg-cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:6px}
 /* gap:11px — the three lines each say a different kind of thing (what it is called, what it is
    named, what it covers), so they need air between them to read as three facts rather than one
@@ -1565,6 +1578,28 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-ct-type-flag.on{background:var(--navy);color:#fff}
 .ai-ct-type-flag.locked{background:transparent;border:1px dashed #cbd5e1;color:#9ca3af}
 @media(max-width:900px){.ai-ct-type-row{flex-wrap:wrap}.ai-ct-type-card{flex:1 1 240px}.ai-ct-type-desc{display:none}}
+/* SCREEN ONE — the engagement-model choice, given the whole page instead of a strip above a
+   progress rail for a run that has not started. One card component, two scales: the same
+   .ai-ct-type-card is a full option here and a context chip once the journey is underway, so a
+   reader learns the shape once. */
+.ai-ct-choose{padding:26px 0 0}
+.ai-ct-choose-h1{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:-.4px;margin:0 0 8px}
+.ai-ct-choose-sub{font-size:13.5px;color:var(--gray);line-height:1.65;max-width:620px;margin:0 0 26px}
+/* Taller, evenly weighted, and never wrapped mid-row: three options compared side by side is
+   the entire job of this screen, so they get equal width and equal height regardless of how
+   much description each carries. */
+.ai-ct-type-row.choosing{align-items:stretch;gap:16px}
+.ai-ct-type-row.choosing .ai-ct-type-card{flex:1 1 0;min-height:210px;padding:22px 22px 20px;border-radius:16px;align-items:flex-start}
+.ai-ct-type-row.choosing .ai-ct-type-body{flex:1;display:flex;flex-direction:column}
+.ai-ct-type-row.choosing .ai-ct-type-title{font-size:17px}
+.ai-ct-type-row.choosing .ai-ct-type-desc{display:block;margin-bottom:14px}
+/* The flag sits above the outcome and the outcome pins to the bottom, so the three "what this
+   opens" lines align across the row and can be read as one comparison rather than three. */
+.ai-ct-type-row.choosing .ai-ct-type-flag{margin-top:auto}
+.ai-ct-type-outcome{display:block;margin-top:12px;padding-top:11px;border-top:1px solid var(--border);font-size:11.5px;font-weight:600;color:var(--gray)}
+.ai-ct-type-row.choosing .ai-ct-type-card.live:hover .ai-ct-type-outcome{color:var(--navy)}
+.ai-ct-choose-skip{margin-top:22px}
+@media(max-width:900px){.ai-ct-type-row.choosing .ai-ct-type-card{flex:1 1 100%;min-height:0}}
 /* The nine-stage card rail that used to live here is gone — Contract Creation now draws the
    same numbered dot rail as every other journey (see .aicj-bar / .aicj-track below). */
 /* Contract Creation Journey — persistent animated step bar */
@@ -1577,6 +1612,10 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
    monochrome treatment; the amber border it had was the last non-alert colour on this bar. */
 .aicj-label-step{font-size:10.5px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.5px;background:var(--navy);border:1px solid var(--navy);border-radius:20px;padding:3px 11px;white-space:nowrap}
 .aicj-label-name{font-size:13.5px;font-weight:700;color:var(--navy)}
+/* The engagement model, standing in for the three cards this row replaced. Outlined rather than
+   filled: it is context the run carries, not a state that changes, so it must not compete with
+   the filled step counter beside it. */
+.aicj-label-model{font-size:10px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;border:1.5px solid var(--navy);border-radius:20px;padding:2px 10px;white-space:nowrap;cursor:help}
 .aicj-agent-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--navy);background:#f1f5f9;border:1px solid #cbd5e1;border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap;transition:background .15s}
 .aicj-agent-badge:hover{background:#e5e7eb}
 /* Pushed to the far end of the header row: it answers a different question from the rest of the
