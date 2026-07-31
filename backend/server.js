@@ -98,6 +98,64 @@ function hydrateEmployee(row) {
 
 const findById = (id) => db.prepare('SELECT * FROM direct_employees WHERE id = ?').get(id);
 const findByCode = (code) => db.prepare('SELECT * FROM direct_employees WHERE employee_code = ?').get(code);
+
+/* ------------------------------------------------------------------------ stores -- */
+
+const STORE_ID_PREFIX = 'STR-';
+const STORE_ID_DIGITS = 6;
+const BHAIYAA_REF_PREFIX = 'BHA-STR-';
+const BHAIYAA_REF_DIGITS = 4;
+// Our id and Bhaiyaa's, from two sequences. Same reasoning as the client ids: they are two
+// systems' names for one store and must never be derivable from each other.
+function mintStoreCode() {
+  return STORE_ID_PREFIX + String(nextSequenceValue('store')).padStart(STORE_ID_DIGITS, '0');
+}
+function mintBhaiyaaRef() {
+  return BHAIYAA_REF_PREFIX + String(nextSequenceValue('bhaiyaa_store_ref')).padStart(BHAIYAA_REF_DIGITS, '0');
+}
+const VALID_STORE_ROLES = ['seller', 'buyer'];
+const VALID_KYC = ['Pending', 'Verified', 'Failed'];
+
+const findStoreByCode = (code) => db.prepare('SELECT * FROM stores WHERE store_code = ?').get(code);
+function getStoreConsents(storeId) {
+  return db.prepare('SELECT document, accepted_at FROM store_consents WHERE store_id = ? ORDER BY id').all(storeId);
+}
+function getStoreEvents(storeId) {
+  return db.prepare('SELECT title, actor_user, description, occurred_at FROM store_events WHERE store_id = ? ORDER BY id').all(storeId);
+}
+// Booleans come back out of SQLite as 0/1; the client should not have to remember that.
+function hydrateStore(row) {
+  if (!row) return row;
+  let signup = null;
+  if (row.raw_signup) { try { signup = JSON.parse(row.raw_signup); } catch { signup = null; } }
+  return Object.assign({}, row, {
+    auto_named: !!row.auto_named,
+    mobile_verified: !!row.mobile_verified,
+    raw_signup: signup,
+    consents: getStoreConsents(row.id),
+    events: getStoreEvents(row.id)
+  });
+}
+/* Rejects what the store cannot be read without, and one thing it must never carry: the full
+   Aadhaar number. The client masks it before sending and this is the backstop — a server that
+   silently accepted a 12-digit id into a column meant for four would make the privacy promise
+   the UI prints a matter of client-side good behaviour. */
+function validateStoreInput(body) {
+  const errs = [];
+  if (!body || typeof body !== 'object') throw new HttpError(400, 'Body must be a JSON object');
+  if (!body.store_name || !String(body.store_name).trim()) errs.push('store_name is required');
+  if (!body.first_name || !String(body.first_name).trim()) errs.push('first_name is required');
+  if (!body.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email))) errs.push('a valid email is required');
+  if (!VALID_STORE_ROLES.includes(body.role)) errs.push("role must be 'seller' or 'buyer'");
+  if (!body.store_type || !String(body.store_type).trim()) errs.push('store_type is required');
+  if (body.kyc_status && !VALID_KYC.includes(body.kyc_status)) errs.push('unknown kyc_status');
+  if (body.status && !VALID_STATUSES.includes(body.status)) errs.push('unknown status');
+  if (body.aadhaar_masked && /\d{7,}/.test(String(body.aadhaar_masked).replace(/\s/g, ''))) {
+    errs.push('aadhaar_masked must be masked — send only the last four digits');
+  }
+  if (!Array.isArray(body.consents) || !body.consents.length) errs.push('consents are required');
+  if (errs.length) throw new HttpError(400, errs.join('; '));
+}
 // Scoped by source, matching the uq_de_source_record index. Two connected systems may each mint
 // the same record id for different clients, so a source record id only identifies a row when you
 // say which system said it.
@@ -502,7 +560,8 @@ async function handle(req, res, url, segments) {
       status: 'ok',
       adtBaseUrl: ADT_BASE_URL,
       authRequired: Boolean(API_TOKEN),
-      employees: db.prepare('SELECT COUNT(*) AS n FROM direct_employees').get().n
+      employees: db.prepare('SELECT COUNT(*) AS n FROM direct_employees').get().n,
+      stores: db.prepare('SELECT COUNT(*) AS n FROM stores').get().n
     }, origin);
     return;
   }
@@ -782,6 +841,119 @@ async function handle(req, res, url, segments) {
       logs: getLogs(employee.id),
       workflow: getWorkflow(employee.id)
     }, origin);
+    return;
+  }
+
+  /* ---------------------------------------------------------------- stores -- */
+
+  // GET /stores?status=&role=&q=&page=&pageSize=
+  if (req.method === 'GET' && segments[0] === 'stores' && segments.length === 1) {
+    const status = url.searchParams.get('status');
+    const role = url.searchParams.get('role');
+    const q = (url.searchParams.get('q') || '').trim();
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const pageSize = Math.min(200, Math.max(1, parseInt(url.searchParams.get('pageSize') || '50', 10) || 50));
+    if (status && !VALID_STATUSES.includes(status)) throw new HttpError(400, 'Unknown status filter: ' + status);
+    if (role && !VALID_STORE_ROLES.includes(role)) throw new HttpError(400, 'Unknown role filter: ' + role);
+
+    const where = [];
+    const params = [];
+    if (status) { where.push('status = ?'); params.push(status); }
+    if (role) { where.push('role = ?'); params.push(role); }
+    if (q) {
+      // Both ids searchable, same reasoning as the client listing: whoever is holding a Bhaiyaa
+      // reference should not have to translate it into ours before they can find the row.
+      where.push('(store_name LIKE ? OR store_code LIKE ? OR source_record_id LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR category LIKE ?)');
+      const like = '%' + q + '%';
+      params.push(like, like, like, like, like, like, like);
+    }
+    const clause = where.length ? ' WHERE ' + where.join(' AND ') : '';
+    const total = db.prepare('SELECT COUNT(*) AS n FROM stores' + clause).get(...params).n;
+    const rows = db.prepare('SELECT * FROM stores' + clause + ' ORDER BY id DESC LIMIT ? OFFSET ?')
+      .all(...params, pageSize, (page - 1) * pageSize);
+    // Counts over the whole table, not the filtered slice — the stat tiles are how you change
+    // the filter, so counting them against the current filter would make them self-referential.
+    const counts = { Pending: 0, Active: 0, Inactive: 0 };
+    db.prepare('SELECT status, COUNT(*) AS n FROM stores GROUP BY status').all()
+      .forEach((r) => { if (r.status in counts) counts[r.status] = r.n; });
+    sendJson(res, 200, {
+      stores: rows.map(hydrateStore), counts,
+      page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize))
+    }, origin);
+    return;
+  }
+
+  // GET /stores/:code — the whole drawer in one round trip.
+  if (req.method === 'GET' && segments[0] === 'stores' && segments.length === 2) {
+    const store = findStoreByCode(decodeURIComponent(segments[1]));
+    if (!store) throw new HttpError(404, 'Store not found');
+    sendJson(res, 200, { store: hydrateStore(store) }, origin);
+    return;
+  }
+
+  /* POST /stores — the store creation journey's write.
+     One transaction covers the id mint, the row, the consents and the trail, so a crash halfway
+     cannot leave a store with no record of what was agreed or how it got here. */
+  if (req.method === 'POST' && segments[0] === 'stores' && segments.length === 1) {
+    const body = await readJsonBody(req);
+    validateStoreInput(body);
+    const store = transaction(() => {
+      const ts = nowIso();
+      const code = mintStoreCode();
+      // Bhaiyaa is a mock in this environment, so its id is minted here on its own counter. When
+      // a real Bhaiyaa stands behind this, the ref comes back from that call and this line goes:
+      // the column, the mirror_state machine and the per-source unique index are already shaped
+      // for an id that arrives late or not at all.
+      const ref = mintBhaiyaaRef();
+      const info = db.prepare(
+        `INSERT INTO stores
+           (store_code, source_record_id, source, mirror_state, role, store_name, auto_named,
+            handle, category, store_type, plan, gst_position, credit_line, payment_terms,
+            first_name, last_name, email, phone_country_code, mobile, mobile_verified,
+            aadhaar_masked, kyc_status, kyc_verified_by, kyc_verified_at,
+            status, raw_signup, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).run(
+        code, ref, 'bhaiyaa', 'mirrored', body.role, String(body.store_name).trim(),
+        body.auto_named ? 1 : 0, body.handle || null, body.category || null, body.store_type,
+        body.plan || null, body.gst_position || null, body.credit_line || null, body.payment_terms || null,
+        String(body.first_name).trim(), body.last_name || null, String(body.email).trim(),
+        body.phone_country_code || null, body.mobile || null, body.mobile_verified ? 1 : 0,
+        body.aadhaar_masked || null, body.kyc_status || 'Pending',
+        body.kyc_verified_by || null, body.kyc_verified_at || null,
+        body.status || 'Pending',
+        body.raw_signup ? JSON.stringify(body.raw_signup) : null, ts, ts
+      );
+      const id = info.lastInsertRowid;
+      const insC = db.prepare('INSERT INTO store_consents (store_id, document, accepted_at) VALUES (?,?,?)');
+      (body.consents || []).forEach((c) => insC.run(id, c.document || c.name, c.accepted_at || c.acceptedAt || ts));
+      const insE = db.prepare('INSERT INTO store_events (store_id, title, actor_user, description, occurred_at) VALUES (?,?,?,?,?)');
+      // The trail the client just animated, recorded as fact. Sent by the client because it is
+      // the client that ran the journey; the server records rather than re-derives it.
+      const events = Array.isArray(body.events) && body.events.length ? body.events : [
+        { title: 'Store created', actor_user: 'Store Agent', description: 'Store opened from the Bhaiyaa Store Creation Journey.' }
+      ];
+      events.forEach((e) => insE.run(id, e.title, e.actor_user || 'Store Agent', e.description || '', e.occurred_at || ts));
+      return db.prepare('SELECT * FROM stores WHERE id = ?').get(id);
+    });
+    sendJson(res, 201, { store: hydrateStore(store) }, origin);
+    return;
+  }
+
+  // PATCH /stores/:code/status — the only mutation a store has so far.
+  if (req.method === 'PATCH' && segments[0] === 'stores' && segments[2] === 'status' && segments.length === 3) {
+    const store = findStoreByCode(decodeURIComponent(segments[1]));
+    if (!store) throw new HttpError(404, 'Store not found');
+    const body = await readJsonBody(req);
+    if (!VALID_STATUSES.includes(body.status)) throw new HttpError(400, 'Unknown status: ' + body.status);
+    const updated = transaction(() => {
+      const ts = nowIso();
+      db.prepare('UPDATE stores SET status = ?, updated_at = ? WHERE id = ?').run(body.status, ts, store.id);
+      db.prepare('INSERT INTO store_events (store_id, title, actor_user, description, occurred_at) VALUES (?,?,?,?,?)')
+        .run(store.id, 'Status changed to ' + body.status, body.actor_user || 'Admin', body.note || '', ts);
+      return db.prepare('SELECT * FROM stores WHERE id = ?').get(store.id);
+    });
+    sendJson(res, 200, { store: hydrateStore(updated) }, origin);
     return;
   }
 

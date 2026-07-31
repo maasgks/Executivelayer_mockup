@@ -1794,6 +1794,8 @@ function applyMdSearch(){
   mdSelectedId=null;
   renderADTPage();
 }
+// -- Bhaiyaa stores are NOT listed here: they have their own module (buildStoresListingHTML),
+// which is where their data is kept. This listing stays the NewForce/manual client store. --
 function mdSourceLabel(e){return e.source==='adt_solution'?'NewForce Solutions':'Manual';}
 // The standard "leaves this app" glyph — a box with an arrow out of it. aria-hidden because the
 // th it sits in already carries the meaning in its title.
@@ -1892,6 +1894,8 @@ function mdDistinct(pick){
 // that yields nothing once clicked is worse than no tile at all. --
 function mdRowsBeforeStatus(){
   const q=mdSearchQuery.toLowerCase();
+  // Newest first, and platform records ahead of the backend's — a store opened a moment ago is
+  // the row its creator came here to see.
   return masterData.filter(function(e){
     if(mdFilterSource&&mdSourceLabel(e)!==mdFilterSource)return false;
     if(!q)return true;
@@ -2116,13 +2120,16 @@ function renderMdSidebar(){
     // received. They differ because two systems named the same client, so the badge says whose
     // id each one is rather than leaving the reader to guess. First thing shown, because "which
     // client is this and where did it come from" is the first question asked of the record. --
-    const srcSys=rec.source==='adt_solution'?'NewForce Solutions':'Manual';
+    const srcSys=mdSourceLabel(rec);
     const idStrip='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'
       +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Client ID: '+rec.empId+'</span>'
       +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source System: '+srcSys+'</span>'
       +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source Record ID: '+(rec.sourceRecordId||'--')+'</span>'
       +'<span class="lp-status-badge '+String(rec.status).toLowerCase()+'">'+rec.status+'</span>'
       +'</div>';
+    // -- Records ingested from NewForce Solutions sit in Pending because the intake form simply does
+    // not ask for department, job title, branch or joining date. Naming the missing fields is
+    // more useful than a bare badge — it tells the operator exactly what is outstanding. --
     // -- Records ingested from NewForce Solutions sit in Pending because the intake form simply does
     // not ask for department, job title, branch or joining date. Naming the missing fields is
     // more useful than a bare badge — it tells the operator exactly what is outstanding. --
@@ -7254,6 +7261,975 @@ const cfgUserIntakeProgressSteps=[
   {title:'Client record created',note:'Written to the Executive Layer store as Pending.'}
 ];
 
+/* == BHAIYAA — CREATE STORE ===============================================================
+   Bhaiyaa's merchant signup, run from inside the Executive Layer. It reuses the intake flow's
+   shell and field kit (.uif-*) rather than growing a second form language, so a user who has
+   filled in Create Client recognises this on sight.
+
+   Two stages, not three. Create Client has an Ingestion stage because it genuinely round-trips
+   through NewForce's server and comes back with an id NewForce minted. Bhaiyaa has no such
+   service standing behind this screen, so there is nothing to narrate between Submit and Done —
+   and a progress feed for work that is not happening is the kind of thing a demo teaches people
+   to distrust. What the record does carry is a sync state, which is the honest version of the
+   same fact: the store exists here and is queued to mirror to Bhaiyaa. == */
+function startStoreIntake(){
+  // Remember where Exit has to land before navigating: the form shows no sidebar to leave by.
+  storeIntakeBackPage=canAccessPage(page,portalRole)&&page!=='create-store'?page:defaultPageForRole(portalRole);
+  storeIntakeReset();
+  navigatePage('create-store');
+}
+function storeIntakeReset(){
+  storeIntakeStep=0;storeIntakeDraft={};storeIntakeFieldErrors={};
+  storeIntakeResult=null;storeIntakeBusy=false;storeIntakeOtpStage='idle';
+  storeIntakeRole='';storeIntakeProgress=-1;
+  storeKycProgress=-1;storeKycDone=false;storeReviewStage=-1;
+  // The rail animates a stage only once, so a second run through the journey has to be allowed
+  // to animate the same connectors again.
+  aiStoreAnimatedStage=-1;
+  if(page==='create-store')renderADTPage();
+}
+// -- Picking a role is what opens the form; there is no separate Continue button, because the
+// card IS the choice and a second click to confirm it would be a click that decides nothing. --
+function storeIntakePickRole(role){
+  storeIntakeRole=role;
+  storeIntakeStep=1;
+  renderADTPage();
+  storeIntakeFocusFirst();
+}
+// Back to the role cards. The draft survives: changing your mind about seller/buyer should not
+// cost you the email address you already typed.
+function storeIntakeBackToRole(){
+  storeIntakeCollect();
+  storeIntakeStep=0;storeIntakeFieldErrors={};
+  renderADTPage();
+}
+function storeIntakeFocusFirst(){
+  setTimeout(function(){
+    const el=document.getElementById('st-email_id');
+    if(el&&el.focus)el.focus();
+  },40);
+}
+function storeIntakeExit(){navigatePage(storeIntakeBackPage||defaultPageForRole(portalRole));}
+/* == STORES — THE MODULE ==================================================================
+   Stores keep their own listing. The column contract is still the source-agnostic one — our id,
+   the record's label, the source system, that system's ref id, status, last updated — so a
+   second store platform needs no new columns; everything Bhaiyaa specifically gives us
+   (category, band, plan, GST, KYC, storefront, consents) is behind the action button. == */
+let storeSelectedId=null,storeStatusFilter='',storeSearchTerm='',storeTab='basic-details';
+// 'idle' | 'loading' | 'ok' | 'offline'. The listing has to tell an empty table apart from an
+// unreachable backend — reporting "no stores yet" while the server is down is a lie about the
+// state of the store, and the one that sends someone off to create a duplicate.
+let storesBackendState='idle',storesLoadInFlight=false;
+/* Server row -> the shape the listing and drawer already speak. Kept as a mapping rather than
+   renaming the UI to match the columns: the snake_case of a table and the camelCase of a view
+   are allowed to differ, and this one function is where they meet. */
+function storeFromBackend(r){
+  return {
+    id:r.id,storeCode:r.store_code,bhaiyaaCode:r.source_record_id,source:r.source,
+    mirrorState:r.mirror_state,role:r.role,storeName:r.store_name,storeNameAutoNamed:!!r.auto_named,
+    handle:r.handle||'',category:r.category||'',storeType:r.store_type,
+    plan:r.plan||'',gst:r.gst_position||'',creditLine:r.credit_line||'',paymentTerms:r.payment_terms||'',
+    firstName:r.first_name,lastName:r.last_name||'',email:r.email,
+    phoneCountryCode:r.phone_country_code||'+91',mobile:r.mobile||'',mobileVerified:!!r.mobile_verified,
+    aadhaarMasked:r.aadhaar_masked||'',kycStatus:r.kyc_status,kycVerifiedBy:r.kyc_verified_by||'',
+    kycVerifiedAt:r.kyc_verified_at||'',status:r.status,
+    consents:(r.consents||[]).map(function(c){return {name:c.document,acceptedAt:c.accepted_at};}),
+    events:r.events||[],
+    createdAt:r.created_at,updatedAt:r.updated_at,persisted:true
+  };
+}
+function storesRefreshFromBackend(){
+  return execApiListStores({pageSize:200}).then(function(res){
+    if(!res.ok||!res.data){storesBackendState=res.offline?'offline':'ok';return res;}
+    storesBackendState='ok';
+    // Replaced wholesale, then any store this browser created but could not save is put back —
+    // otherwise a refresh would quietly delete the record the success screen just showed.
+    const unsaved=bhaiyaaStores.filter(function(s){return s.persisted===false;});
+    bhaiyaaStores.length=0;
+    // Newest first. The server already returns them that way (ORDER BY id DESC) and this used to
+    // reverse it into oldest-first, which put the store you just created at the bottom of the
+    // list you were sent to look at it in.
+    res.data.stores.forEach(function(r){bhaiyaaStores.push(storeFromBackend(r));});
+    // A store that could not be saved goes to the very top: it is the newest thing that happened
+    // and the only row that needs anything doing about it.
+    unsaved.forEach(function(s){bhaiyaaStores.unshift(s);});
+    if(storeSelectedId&&!bhaiyaaStores.some(function(s){return s.id===storeSelectedId;}))storeSelectedId=null;
+    return res;
+  });
+}
+function storesEnsureLoaded(){
+  if(storesBackendState==='ok'||storesLoadInFlight)return;
+  storesLoadInFlight=true;storesBackendState='loading';
+  storesRefreshFromBackend().then(function(){
+    storesLoadInFlight=false;
+    if(page==='stores')renderADTPage();
+  });
+}
+function storesForceRefresh(){
+  storesBackendState='idle';storesLoadInFlight=false;storesEnsureLoaded();renderADTPage();
+}
+function storesFiltered(){
+  return bhaiyaaStores.filter(function(s){
+    if(storeStatusFilter&&s.status!==storeStatusFilter)return false;
+    if(storeSearchTerm){
+      const q=storeSearchTerm.toLowerCase();
+      if([s.storeName,s.storeCode,s.bhaiyaaCode,s.email,s.firstName,s.lastName,s.category].join(' ').toLowerCase().indexOf(q)===-1)return false;
+    }
+    return true;
+  });
+}
+function storeSetStatusFilter(v){storeStatusFilter=storeStatusFilter===v?'':v;storeSelectedId=null;renderADTPage();}
+function storeApplySearch(){const el=document.getElementById('st-search');storeSearchTerm=el?el.value.trim():'';storeSelectedId=null;renderADTPage();}
+function storeResetFilters(){storeStatusFilter='';storeSearchTerm='';storeSelectedId=null;renderADTPage();}
+function openStoreSidebar(id){storeSelectedId=id;storeTab='basic-details';renderADTPage();}
+function closeStoreSidebar(){storeSelectedId=null;renderADTPage();}
+function navStoreTab(t){storeTab=t;renderADTPage();}
+function storeIntakeOpenRecord(){
+  const s=storeIntakeResult;
+  storeResetFilters();
+  // Force a reload so the listing shows the server's copy of this store rather than the local
+  // one — if the two ever disagree, the server is right and the user should see that immediately.
+  storesBackendState='idle';storesLoadInFlight=false;
+  navigatePage('stores');
+  if(s)openStoreSidebar(s.id);
+}
+/* -- The write payload, built in one place so the first attempt and any retry cannot send
+   different things. Snake_case because that is the API's language; the mapping back is
+   storeFromBackend. The Aadhaar goes over already masked — the server rejects anything longer,
+   but the full number should never travel at all. -- */
+function storeSavePayload(store){
+  return {
+    role:store.role,store_name:store.storeName,auto_named:store.storeNameAutoNamed,
+    handle:store.handle,category:store.category,store_type:store.storeType,
+    plan:store.plan,gst_position:store.gst,credit_line:store.creditLine,payment_terms:store.paymentTerms,
+    first_name:store.firstName,last_name:store.lastName,email:store.email,
+    phone_country_code:store.phoneCountryCode,mobile:store.mobile,mobile_verified:store.mobileVerified,
+    aadhaar_masked:store.aadhaarMasked,kyc_status:store.kycStatus,
+    kyc_verified_by:store.kycVerifiedBy,kyc_verified_at:store.kycVerifiedAt,
+    status:store.status,
+    consents:store.consents.map(function(c){return {document:c.name,accepted_at:c.acceptedAt};}),
+    // The trail the merchant just watched, recorded as fact rather than re-derived server-side.
+    events:bhaiyaaStoreRunSteps(store).map(function(st){
+      return {title:st.title,actor_user:st.title.indexOf('KYC')>=0?'KYC Agent':'Store Agent',description:st.note};
+    })
+  };
+}
+// Re-attempts the write for a store the backend was not up to receive. Same payload builder as
+// the original attempt, so a retry cannot save something different from what was shown.
+function storeRetrySave(){
+  const s=storeIntakeResult;
+  if(!s||s.persisted)return;
+  s.saveError='';s.persisted=undefined;
+  renderADTPage();
+  execApiCreateStore(storeSavePayload(s)).then(function(res){
+    if(res.ok&&res.data&&res.data.store){
+      const srv=res.data.store;
+      s.storeCode=srv.store_code;s.bhaiyaaCode=srv.source_record_id;
+      s.mirrorState=srv.mirror_state;s.persisted=true;s.saveError='';
+    }else{
+      s.persisted=false;
+      s.saveError=res.offline
+        ? 'Still can’t reach the backend. Start it with: node backend/dev.js'
+        : (res.error||'The store could not be saved.');
+    }
+    renderADTPage();
+  });
+}
+function storeStamp(iso){
+  if(!iso)return '--';
+  const dt=new Date(iso);
+  if(isNaN(dt.getTime()))return iso;
+  const mm=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h=dt.getHours(),ap=h>=12?'PM':'AM';h=h%12||12;
+  return dt.getDate()+' '+mm[dt.getMonth()]+' '+dt.getFullYear()+', '+h+':'+String(dt.getMinutes()).padStart(2,'0')+' '+ap;
+}
+function buildStoresListingHTML(){
+  const d='<span style="color:#9ca3af">--</span>';
+  const all=bhaiyaaStores,rows=storesFiltered();
+  const counts={Pending:0,Active:0,Inactive:0};
+  all.forEach(function(s){if(counts[s.status]!==undefined)counts[s.status]++;});
+  const compact=!!storeSelectedId;
+  const ham='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
+  const columns=[
+    {w:'6%',th:'SR. NO',cell:function(s,i){return '<span style="color:var(--gray);font-size:13px">'+(i+1)+'</span>';}},
+    {w:'14%',cw:'34%',th:'STORE ID',cell:function(s){return '<span class="st-code">'+s.storeCode+'</span>';}},
+    {w:'24%',cw:'44%',th:'STORE',cell:function(s){
+      return '<div class="cell-primary" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+attrSafe(s.storeName)+'</div>'
+        +'<div class="st-row-sub"><span class="st-role-tag '+s.role+'">'+(s.role==='buyer'?'Buyer':'Seller')+'</span>'
+        +(s.category?'<span class="st-row-cat">'+attrSafe(s.category)+'</span>':'')+'</div>';
+    }},
+    {w:'14%',hideWhenCompact:true,th:'SOURCE SYSTEM',cell:function(){return 'Bhaiyaa';}},
+    {w:'15%',cw:'22%',th:'SOURCE REF ID',cell:function(s){return '<span class="st-code src">'+(s.bhaiyaaCode||d)+'</span>';}},
+    {w:'10%',hideWhenCompact:true,th:'STATUS',cell:function(s){return '<span class="lp-status-badge '+String(s.status).toLowerCase()+'">'+s.status+'</span>';}},
+    {w:'11%',hideWhenCompact:true,th:'LAST UPDATED',cell:function(s){return '<span style="color:var(--gray);font-size:12px;white-space:nowrap">'+storeStamp(s.updatedAt)+'</span>';}},
+    {w:'6%',hideWhenCompact:true,th:'',cell:function(s){return '<button class="lp-action-btn" onclick="event.stopPropagation();openStoreSidebar('+s.id+')" title="Open this store">'+ham+'</button>';}}
+  ].filter(function(c){return !(compact&&c.hideWhenCompact);});
+  const colgroup='<colgroup>'+columns.map(function(c){return '<col style="width:'+(compact?(c.cw||c.w):c.w)+'">';}).join('')+'</colgroup>';
+  const head='<thead><tr>'+columns.map(function(c){return '<th>'+c.th+'</th>';}).join('')+'</tr></thead>';
+  const body=rows.length
+    ?rows.map(function(s,i){
+      return '<tr class="st-row'+(storeSelectedId===s.id?' lp-row-selected':'')+'" style="cursor:pointer" onclick="openStoreSidebar('+s.id+')">'
+        +columns.map(function(c){return '<td>'+c.cell(s,i)+'</td>';}).join('')+'</tr>';
+    }).join('')
+    :'<tr><td colspan="'+columns.length+'" style="padding:44px 16px;text-align:center">'
+      +(all.length
+        ?'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No stores match these filters</div>'
+          +'<div style="font-size:12px;color:var(--gray)">'+all.length+' store'+(all.length===1?' is':'s are')+' on file. '
+          +'<button onclick="storeResetFilters()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">Clear filters</button>.</div>'
+        // -- Four different empty states, and they must not look alike: still loading, backend
+        // unreachable, filtered to nothing, or genuinely nothing created yet. Printing "no
+        // stores yet" while the server is down is a lie about the state of the store, and the
+        // one that sends someone off to create a store that already exists. --
+        :storesBackendState==='loading'
+          ?'<div style="font-size:12.5px;color:var(--gray)">Loading stores…</div>'
+        :storesBackendState==='offline'
+          ?'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">Can’t reach the backend</div>'
+            +'<div style="font-size:12px;color:var(--gray);line-height:1.7">Stores are stored server-side, so this list can’t be shown until it is running.<br>Start it with <code style="font-family:ui-monospace,Menlo,monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px">node backend/dev.js</code>, then '
+            +'<button onclick="storesForceRefresh()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">retry</button>.</div>'
+        :'<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px">No stores yet</div>'
+          +'<div style="font-size:12px;color:var(--gray)">Open one with '
+          +'<button onclick="startStoreIntake()" style="background:none;border:none;padding:0;font:inherit;font-weight:700;color:#0d9488;cursor:pointer;text-decoration:underline">Create Store</button>.</div>')
+      +'</td></tr>';
+  const stat=function(k,l){
+    return '<div class="listing-stat'+(storeStatusFilter===k?' stat-selected':'')+'" onclick="storeSetStatusFilter(\''+k+'\')">'
+      +'<div class="listing-stat-count">'+(counts[k]||0)+'</div><div class="listing-stat-label">'+l+'</div></div>';
+  };
+  return '<div class="lp-page">'
+    +'<div class="listing-top">'
+    +'<div class="lp-filter-bar" style="flex:1;min-width:0"><div class="lp-filter-bar-label">Select Filter</div>'
+    +'<div class="lp-filter-bar-row">'
+    +'<input class="lp-pill-input" id="st-search" placeholder="Search stores…" value="'+attrSafe(storeSearchTerm)+'" onkeydown="if(event.key===\'Enter\')storeApplySearch()">'
+    +'<button class="lp-pill-reset" onclick="storeResetFilters()">Reset</button>'
+    +'<button class="lp-pill-search" onclick="storeApplySearch()">Search</button>'
+    +'<button class="lp-pill-reset" onclick="storesForceRefresh()">Refresh</button>'
+    +'</div></div>'
+    +'<div class="listing-stats">'+stat('Pending','Pending')+stat('Active','Active')+stat('Inactive','Inactive')+'</div>'
+    +'</div>'
+    +'<div class="lp-split-wrap"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
+    +'<table class="lp-table am-table">'+colgroup+head+'<tbody>'+body+'</tbody></table>'
+    +'</div></div>'
+    +'<div class="lp-split-sb'+(storeSelectedId?' open':'')+'" id="st-split-sb"><div class="lp-isb">'+(storeSelectedId?renderStoreSidebar():'')+'</div></div>'
+    +'</div></div>';
+}
+/* -- The drawer. Heads itself with the app's standard .lp-isb-tabbar — tabs left, close button
+   in .lp-isb-right — which is what every other drawer in the app uses. An earlier version
+   invented lp-isb-head/title/sub, none of which exist in any stylesheet, so the header rendered
+   as unstyled stacked text with the close button dropped onto its own line. -- */
+function renderStoreSidebar(){
+  const s=bhaiyaaStores.find(function(x){return x.id===storeSelectedId;});
+  if(!s)return '';
+  const d='<span style="color:#9ca3af">--</span>';
+  const tabs=[{id:'basic-details',label:'Store Details'},{id:'kyc',label:'KYC'},{id:'workflow',label:'Workflow'}];
+  const tabBar='<div class="lp-isb-tabbar">'
+    +'<div class="lp-isb-tabs" id="st-isb-tabs">'+tabs.map(function(t){return '<button class="lp-isb-tab'+(storeTab===t.id?' active':'')+'" onclick="navStoreTab(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeStoreSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'</div>';
+  const iId='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h4M7 14h8"/></svg>';
+  const iTag='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20.6 13.4 12 22l-9-9V3h10z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>';
+  const iUser='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const iMail='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>';
+  const iMoney='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const iClock='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  const iShield='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+  const fc=function(ico,label,val){return '<div class="lp-sb-field-card"><div class="lp-sb-field-icon">'+ico+'</div><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+label+'</div><div class="lp-sb-field-value">'+val+'</div></div></div>';};
+  const seller=s.role==='seller';
+  const mobile=s.mobile?attrSafe(s.phoneCountryCode+' '+s.mobile)+(s.mobileVerified?' <span class="uif-verified-chip">Verified</span>':''):d;
+  let body='';
+  if(storeTab==='kyc'){
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">Owner verification</span>'
+      +'<span class="uif-verified-chip">'+s.kycStatus+'</span></div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iId,'Aadhaar','<span class="st-code">'+s.aadhaarMasked+'</span>')
+      +fc(iUser,'Verified owner',attrSafe([s.firstName,s.lastName].filter(Boolean).join(' ')))
+      +fc(iShield,'Verified by',attrSafe(s.kycVerifiedBy))
+      +fc(iClock,'Verified at',storeStamp(s.kycVerifiedAt))
+      +'</div>'
+      +'<div class="am-sb-internal"><div class="am-sb-internal-label">Why only four digits</div>'
+      +'The full Aadhaar number was needed to verify the owner with UIDAI and is needed for nothing afterwards, so it is not kept on the record. What is kept is the last four digits, who verified it and when.</div>';
+  }else if(storeTab==='workflow'){
+    // The run that created this store, replayed from the same definition that drove it live —
+    // so the trail and the animation can never describe different work.
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">How this store was created</span>'
+      +'<span class="am-int-chip">Bhaiyaa Store Creation Journey</span></div>'
+      +'<div class="uif-proc">'+bhaiyaaStoreRunSteps(s).map(function(st,i,arr){
+        return '<div class="uif-proc-item st-run-item'+(st.milestone?' is-milestone':'')+' is-done">'
+          +'<div class="uif-proc-rail"><div class="uif-proc-dot"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+          +(i<arr.length-1?'<div class="uif-proc-line"></div>':'')+'</div>'
+          +'<div class="uif-proc-body"><div class="uif-proc-title">'+st.title+'</div>'
+          +'<div class="uif-proc-note">'+st.note+'</div></div></div>';
+      }).join('')+'</div>';
+  }else{
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+attrSafe(s.storeName)+'</span>'
+      +'<span class="lp-status-badge '+String(s.status).toLowerCase()+'">'+s.status+'</span></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'
+      +'<span class="st-role-tag '+s.role+'">'+(seller?'Seller':'Buyer')+'</span>'
+      +'<span class="badge" style="color:#475569;background:#f8fafc;border-color:#cbd5e1">Store ID: '+s.storeCode+'</span>'
+      +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Bhaiyaa Ref ID: '+s.bhaiyaaCode+'</span>'
+      +'</div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iTag,'Category',attrSafe(s.category)||d)+fc(iMoney,'Turnover band',attrSafe(s.storeType)||d)
+      +fc(iTag,'Plan',attrSafe(s.plan)||d)+fc(iShield,'GST',attrSafe(s.gst)||d)
+      +(seller
+        ?fc(iId,'Storefront',attrSafe(s.handle))+fc(iTag,'Catalogue','Empty — 0 items')
+        :fc(iId,'Ledger',attrSafe(s.handle))+fc(iMoney,'Credit line',attrSafe(s.creditLine)||d)+fc(iClock,'Payment terms',attrSafe(s.paymentTerms)||d))
+      +'</div>'
+      +'<div class="lp-sb-view-header" style="margin-top:18px"><span class="lp-sb-section-title">Who runs it</span></div>'
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iUser,'Owner',attrSafe([s.firstName,s.lastName].filter(Boolean).join(' '))||d)
+      +fc(iMail,'Email id',attrSafe(s.email)||d)+fc(iUser,'Mobile number',mobile)
+      +'</div>'
+      +'<div class="lp-sb-view-header" style="margin-top:18px"><span class="lp-sb-section-title">What was agreed</span></div>'
+      +'<div class="st-consents">'+s.consents.map(function(c){
+        return '<div class="st-consent-row"><span class="st-consent-tick"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6"><polyline points="20 6 9 17 4 12"/></svg></span>'
+          +'<span class="st-consent-name">'+c.name+'</span><span class="st-consent-at">'+storeStamp(c.acceptedAt)+'</span></div>';
+      }).join('')+'</div>';
+  }
+  return tabBar+'<div class="lp-isb-body">'+body+'</div>';
+}
+function storeIntakeClearError(name){
+  if(!storeIntakeFieldErrors[name])return;
+  delete storeIntakeFieldErrors[name];
+  const w=document.getElementById('st-w-'+name);if(w)w.classList.remove('has-error');
+  const e=document.getElementById('st-e-'+name);if(e)e.remove();
+}
+// Read straight from the DOM rather than mirroring every keystroke into state: the draft only
+// has to be right at the moments we re-render, and those are the moments this runs.
+function storeIntakeCollect(){
+  bhaiyaaStoreFields.forEach(function(f){
+    if(f.type==='consent')return;                        // checkboxes write to the draft on click
+    const el=document.getElementById('st-'+f.name);
+    if(el)storeIntakeDraft[f.name]=el.value.trim();
+  });
+  const otp=document.getElementById('st-otp-code');
+  if(otp)storeIntakeDraft.otp_code=otp.value.trim();
+}
+function storeIntakeToggleConsent(name){
+  storeIntakeDraft[name]=!storeIntakeDraft[name];
+  storeIntakeClearError(name);
+  storeIntakeCollect();
+  renderADTPage();
+}
+function storeIntakeKeydown(ev){if(ev.key==='Enter'){ev.preventDefault();submitStoreIntake();}}
+
+/* -- The OTP control. Sending is gated on a plausible number rather than firing blind, because
+   "we sent a code to +91 " is worse than being told the number is missing. -- */
+function storeIntakeSendOtp(){
+  storeIntakeCollect();
+  const num=(storeIntakeDraft.mobile_number||'').replace(/\D/g,'');
+  if(num.length<7){
+    storeIntakeFieldErrors.mobile_number='Enter a mobile number before requesting an OTP.';
+    renderADTPage();return;
+  }
+  delete storeIntakeFieldErrors.mobile_number;
+  storeIntakeOtpStage='sent';
+  renderADTPage();
+  showAiToast('OTP sent','Bhaiyaa sent a 6-digit code to '+(storeIntakeDraft.phone_country_code||'+91')+' '+storeIntakeDraft.mobile_number+'.');
+}
+function storeIntakeVerifyOtp(){
+  storeIntakeCollect();
+  if((storeIntakeDraft.otp_code||'')!==BHAIYAA_DEMO_OTP){
+    storeIntakeFieldErrors.otp_code='That code is not right. Use '+BHAIYAA_DEMO_OTP+' for this demo.';
+    renderADTPage();return;
+  }
+  delete storeIntakeFieldErrors.otp_code;
+  storeIntakeOtpStage='verified';
+  renderADTPage();
+}
+// Changing the number after verifying un-verifies it — otherwise a merchant could verify one
+// number and submit another, which is exactly what the control exists to prevent.
+function storeIntakeNumberChanged(){
+  storeIntakeClearError('mobile_number');
+  if(storeIntakeOtpStage!=='idle'){storeIntakeOtpStage='idle';renderADTPage();}
+}
+
+/* -- Validation. Required-ness follows Bhaiyaa's own form (email, first name, store type, both
+   consents) with one rule added: a mobile number that has been typed has to be verified. Bhaiyaa
+   leaves the number optional, and that stays true here — but half-finishing a verification and
+   submitting anyway would store a number nobody has proven belongs to the merchant. -- */
+function storeIntakeValidate(){
+  const d=storeIntakeDraft,errs={};
+  if(!d.email_id)errs.email_id='Email id is required.';
+  else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email_id))errs.email_id='Enter a valid email address.';
+  if(!d.first_name)errs.first_name='First name is required.';
+  if(!d.store_type)errs.store_type='Store type is required — it sets the turnover band.';
+  // Length only. Everything else about the number — checksum, whether UIDAI knows it, whether
+  // the name on it matches — is the KYC agent's job on the next stage, and duplicating that
+  // check here would mean two places to keep right about what a valid Aadhaar is.
+  const aad=(d.aadhaar_number||'').replace(/\D/g,'');
+  if(!aad)errs.aadhaar_number='Aadhaar number is required — Bhaiyaa will not open a store without a verified owner.';
+  else if(aad.length!==12)errs.aadhaar_number='An Aadhaar number is 12 digits.';
+  if(d.mobile_number&&storeIntakeOtpStage!=='verified')errs.mobile_number='Verify this number with an OTP, or clear it to continue without one.';
+  if(!d.accept_terms)errs.accept_terms='Accept the Terms & Conditions to continue.';
+  if(!d.accept_msa)errs.accept_msa='Accept the MSA to continue.';
+  return errs;
+}
+function submitStoreIntake(){
+  if(storeIntakeBusy)return;
+  storeIntakeCollect();
+  const errs=storeIntakeValidate();
+  storeIntakeFieldErrors=errs;
+  const first=Object.keys(errs)[0];
+  if(first){
+    renderADTPage();
+    const el=document.getElementById('st-w-'+first);
+    if(el&&el.scrollIntoView)el.scrollIntoView({block:'center'});
+    return;
+  }
+  // Validated, so on to KYC. The record is deliberately NOT created here: nothing should exist
+  // in either system until the owner's identity has been verified, which is the whole reason KYC
+  // is a stage before creation rather than a checkbox after it.
+  storeIntakeStep=2;
+  renderADTPage();
+  storeRunKyc();
+}
+/* -- Called from the KYC screen once the agent is done. This is where the store starts to
+   exist. -- */
+function storeCreateRecord(){
+  const d=storeIntakeDraft;
+  const now=new Date();
+  const stamp=now.toISOString().replace(/\.\d{3}Z$/,'Z');
+  const band=bhaiyaaBandFor(d.store_type);
+  /* Bhaiyaa's form says the store name can be changed in Settings, which is a signup that does
+     not block on the one decision a merchant is least ready to make. We mirror that: a blank
+     name becomes "<first name>'s Store" and the success screen says so, rather than storing an
+     unnamed store and leaving someone to wonder what happened to the field. */
+  const named=!!d.store_name;
+  const storeName=named?d.store_name:(d.first_name+'’s Store');
+  const store={
+    id:bhaiyaaStoreSeq++,
+    storeCode:'STR-'+String(bhaiyaaStoreSeq-1).padStart(6,'0'),
+    // Bhaiyaa's own reference, minted on its counter. The two ids never line up, which is the
+    // point — each system knows this store by the id it issued itself.
+    bhaiyaaCode:'BHA-STR-'+String(bhaiyaaSourceSeq++).padStart(4,'0'),
+    role:storeIntakeRole||'seller',
+    email:d.email_id,
+    phoneCountryCode:d.phone_country_code||'+91',
+    mobile:d.mobile_number||'',
+    mobileVerified:storeIntakeOtpStage==='verified',
+    firstName:d.first_name,lastName:d.last_name||'',
+    storeName:storeName,
+    storeNameAutoNamed:!named,
+    handle:bhaiyaaHandle(storeName),
+    category:d.store_category||'',
+    storeType:d.store_type,
+    plan:band.plan,gst:band.gst,creditLine:band.credit,paymentTerms:band.terms,
+    // Only the last four digits survive the journey. The full number was needed to verify the
+    // owner and is needed for nothing afterwards, so it is not carried onto the record.
+    aadhaarMasked:bhaiyaaMaskAadhaar(d.aadhaar_number),
+    kycStatus:'Verified',kycVerifiedBy:'KYC Agent',kycVerifiedAt:stamp,
+    // Consent as evidence: what was accepted, and when. A boolean alone cannot answer "when did
+    // they agree", which is the only question anyone ever asks of an acceptance record.
+    consents:[{name:'Terms & Conditions',acceptedAt:stamp},{name:'MSA',acceptedAt:stamp}],
+    source:'bhaiyaa',
+    mirrorState:'mirrored',
+    status:'Pending',
+    createdAt:stamp,
+    updatedAt:stamp
+  };
+  bhaiyaaStores.push(store);
+  storeIntakeResult=store;
+  /* -- Persisted while the run animates, not after it. The feed is paced for reading, and
+     holding the write until the last frame would mean a browser closed mid-animation loses a
+     store the screen already said was created.
+
+     The ids the backend mints replace the provisional ones as soon as the response lands. The
+     run is still narrating at that point, so the steps that name the Store ID and the Bhaiyaa
+     ref print the real ones — this is the same trick the client intake uses, and it is why
+     those steps sit late in the feed rather than first.
+
+     A failed write does not roll the screen back: the record stands, marked unsaved, and the
+     success screen offers a retry. Losing a merchant's completed signup because a dev server
+     was not running would be the worst possible response to the least serious failure. -- */
+  execApiCreateStore(storeSavePayload(store)).then(function(res){
+    if(res.ok&&res.data&&res.data.store){
+      const srv=res.data.store;
+      store.storeCode=srv.store_code;
+      store.bhaiyaaCode=srv.source_record_id;
+      store.mirrorState=srv.mirror_state;
+      store.persisted=true;store.saveError='';
+    }else{
+      store.persisted=false;
+      store.saveError=res.offline
+        ? 'The Executive Layer backend is not running, so this store is only in this browser. Start it with: node backend/dev.js'
+        : (res.error||'The store could not be saved.');
+    }
+    if(page==='create-store')renderADTPage();
+  });
+  /* Into the run. The feed is paced rather than instant on purpose: these are the steps the
+     execution layer takes, and a record that appears in one frame teaches nobody what happened
+     to their answers. Each tick reveals one step's reads and writes. */
+  storeIntakeBusy=true;
+  storeIntakeStep=3;storeIntakeProgress=0;
+  renderADTPage();
+  const steps=bhaiyaaStoreRunSteps(store);
+  const advance=function(i){
+    storeIntakeProgress=i;
+    storeIntakePatchRun();
+    if(i>=steps.length-1){
+      // A beat longer on the milestone than between the other steps: the store coming into
+      // existence is the moment worth landing on, and 760ms is the difference between a run
+      // that finishes and a run that arrives.
+      setTimeout(function(){
+        storeIntakeBusy=false;
+        storeIntakeStep=4;
+        renderADTPage();
+      },1100);
+      return;
+    }
+    setTimeout(function(){advance(i+1);},640);
+  };
+  setTimeout(function(){advance(1);},640);
+}
+// Patches only the feed, so the stepper above it does not flicker on every tick.
+function storeIntakePatchRun(){
+  const el=document.getElementById('st-run');
+  if(el)el.innerHTML=storeIntakeRunHTML();
+  scrollActiveStepIntoView('st-run');
+}
+/* -- One step of the run. The reads and writes only appear once the step has been reached, so
+   the feed reports what has happened rather than previewing what is planned; and writes are
+   marked apart from reads because "this value did not exist before" is the whole story. -- */
+function storeIntakeRunHTML(){
+  const s=storeIntakeResult;
+  if(!s)return '';
+  const steps=bhaiyaaStoreRunSteps(s);
+  return steps.map(function(st,i){
+    const state=storeIntakeProgress>i?'is-done':(storeIntakeProgress===i?'is-active':'');
+    const mark=storeIntakeProgress>i
+      ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>'
+      : (storeIntakeProgress===i?'<span class="uif-spin"></span>':'');
+    const pairs=function(list,kind){
+      if(!list.length)return '';
+      return '<div class="st-io st-io--'+kind+'">'
+        +'<span class="st-io-tag">'+(kind==='read'?'Read':'Wrote')+'</span>'
+        +'<div class="st-io-list">'+list.map(function(p,n){
+          return '<span class="st-io-pair" style="animation-delay:'+(n*55)+'ms">'
+            +'<span class="st-io-k">'+attrSafe(p[0])+'</span>'
+            +'<span class="st-io-v">'+attrSafe(String(p[1]))+'</span></span>';
+        }).join('')+'</div></div>';
+    };
+    const reached=storeIntakeProgress>=i;
+    return '<div class="uif-proc-item st-run-item'+(st.milestone?' is-milestone':'')+' '+state+'">'
+      +'<div class="uif-proc-rail"><div class="uif-proc-dot">'+mark+'</div>'
+      +(i<steps.length-1?'<div class="uif-proc-line"></div>':'')+'</div>'
+      +'<div class="uif-proc-body"><div class="uif-proc-title">'+st.title+'</div>'
+      +(reached?'<div class="uif-proc-note">'+st.note+'</div>':'')
+      +(reached?pairs(st.reads,'read')+pairs(st.writes,'write'):'')
+      +'</div></div>';
+  }).join('');
+}
+
+function buildCreateStoreHTML(){
+  /* A review of a finished stage takes the body; the rail above still reports the real step. */
+  if(storeReviewStage>=0&&storeReviewStage<storeIntakeStep)return buildStoreReviewHTML();
+
+  /* ---------- Stage 1: seller or buyer ---------- */
+  if(storeIntakeStep===0){
+    const cards=bhaiyaaStoreRoles.map(function(r){
+      return '<button type="button" class="st-role'+(storeIntakeRole===r.id?' on':'')+'" onclick="storeIntakePickRole(\''+r.id+'\')">'
+        +'<span class="st-role-ico">'+r.icon+'</span>'
+        +'<span class="st-role-label">'+r.label+'</span>'
+        +'<span class="st-role-sub">'+r.sub+'</span>'
+        +'<span class="st-role-blurb">'+r.blurb+'</span>'
+        +'<span class="st-role-gets">'+r.gets.map(function(g){return '<span class="st-role-get">'+g+'</span>';}).join('')+'</span>'
+        +'<span class="st-role-go">Continue<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>'
+        +'</button>';
+    }).join('');
+    return storeIntakeShellHTML('<div class="uif-card">'
+      +'<div class="uif-card-head">'
+      +'<div class="uif-card-title">How will this store use Bhaiyaa?</div>'
+      +'<div class="uif-card-sub">Asked first because it changes what the rest of the signup means &mdash; and what gets provisioned when the store is created. It can’t be switched later without opening a second store.</div>'
+      +'</div>'
+      +'<div class="st-role-grid">'+cards+'</div>'
+      +'</div>');
+  }
+
+  /* ---------- Stage 3: KYC ---------- */
+  if(storeIntakeStep===2)return buildStoreKycHTML();
+
+  /* ---------- Stage 4: the creation run ---------- */
+  if(storeIntakeStep===3&&storeIntakeResult){
+    const role=bhaiyaaStoreRoles.find(function(r){return r.id===storeIntakeResult.role;});
+    return storeIntakeShellHTML('<div class="uif-card">'
+      +'<div class="uif-card-head">'
+      +'<div class="uif-card-title">Creating the store</div>'
+      +'<div class="uif-card-sub">Every step below, with the values it read off your signup and the values it wrote that did not exist before. '+(role?role.sub.toLowerCase().replace(/^you /,'This store '):'')+'.</div>'
+      +'</div>'
+      +'<div class="uif-proc" id="st-run">'+storeIntakeRunHTML()+'</div>'
+      +'</div>');
+  }
+
+  /* ---------- Stage 5: the store record ---------- */
+  if(storeIntakeStep===4&&storeIntakeResult){
+    const s=storeIntakeResult;
+    const kv=function(k,v){
+      return '<div class="uif-kv"><span class="uif-kv-key">'+k+'</span><span class="uif-kv-val">'+(v||'<span style="color:#9ca3af">--</span>')+'</span></div>';
+    };
+    const mobile=s.mobile
+      ?attrSafe(s.phoneCountryCode+' '+s.mobile)+(s.mobileVerified?' <span class="uif-verified-chip">Verified</span>':'')
+      :'';
+    return storeIntakeShellHTML('<div class="uif-card">'
+      +'<div class="uif-success-head">'
+      +'<div class="uif-success-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+      +'<div><div class="uif-success-title">Store created</div>'
+      +'<div class="uif-success-sub">Held in the Executive Layer under its own Store ID, and queued to mirror to Bhaiyaa.</div></div>'
+      +'</div>'
+      +'<div class="uif-idrow">'
+      +'<div class="uif-idcard"><div class="uif-idcard-label">Store ID</div><div class="uif-idcard-value">'+s.storeCode+'</div>'
+      +'<div class="uif-idcard-note">In the Executive Layer</div></div>'
+      +'<div class="uif-idcard accent"><div class="uif-idcard-label">Bhaiyaa Ref ID</div><div class="uif-idcard-value">'+s.bhaiyaaCode+'</div>'
+      +'<div class="uif-idcard-note">In Bhaiyaa</div></div>'
+      +'</div>'
+      +'<div class="uif-idnote">The same store, held in two systems that each mint their own id &mdash; so the two never match. The Executive Layer keeps both, which is what lets this record be traced back to Bhaiyaa.</div>'
+      /* -- Whether it actually reached the database, said outright. A success screen that shows
+         a Store ID which exists only in this tab is the single most misleading thing this flow
+         could do, so an unsaved store says so and offers the retry. -- */
+      +(s.persisted===false
+        ?'<div class="uif-banner warn"><div><strong>Not saved yet.</strong> '+attrSafe(s.saveError||'')
+          +' <button onclick="storeRetrySave()">Retry saving</button></div></div>'
+        :s.persisted?'':'<div class="uif-banner"><div>Saving…</div></div>')
+      +'<p class="uif-section-label">Submitted details</p>'
+      +'<div style="margin-bottom:4px">'
+      +kv('Status','<span class="lp-status-badge pending">'+s.status+'</span>')
+      +kv('Store role',s.role==='buyer'?'Buyer':'Seller')
+      +kv('Store name',attrSafe(s.storeName))
+      +kv('Store category',attrSafe(s.category))
+      +kv('Store type',attrSafe(s.storeType))
+      +kv('Plan',attrSafe(s.plan))
+      +kv('Owner',attrSafe([s.firstName,s.lastName].filter(Boolean).join(' ')))
+      +kv('Email id',attrSafe(s.email))
+      +kv('Mobile number',mobile)
+      +kv('Accepted',s.consents.map(function(c){return c.name;}).join(' &middot; ')+' <span class="uif-consent-stamp">on '+s.createdAt+'</span>')
+      +'</div>'
+      +(s.storeNameAutoNamed
+        ?'<div class="uif-note">No store name was given, so it was opened as <strong>'+attrSafe(s.storeName)+'</strong>. It can be renamed in Settings at any time &mdash; the same as on Bhaiyaa.</div>'
+        :'')
+      +'<div class="uif-note">The store is <strong>Pending</strong> because signup does not capture the address, GST number or bank details Bhaiyaa needs before a store can take orders.</div>'
+      +'<div class="uif-cta">'
+      +'<button class="uif-submit" onclick="storeIntakeOpenRecord()">Open store record'
+      +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+      +'<button class="uif-btn-secondary" onclick="storeIntakeReset()">Create another store</button>'
+      +'</div>'
+      +'</div>');
+  }
+
+  /* ---------- Stage 1: the form ---------- */
+  const errs=storeIntakeFieldErrors||{};
+  const draft=storeIntakeDraft||{};
+  const errText=function(name){
+    return errs[name]?'<div class="uif-error-text" id="st-e-'+name+'">'+errs[name]+'</div>':'';
+  };
+  const wrapCls=function(name,extra){
+    return 'uif-field'+(extra?' '+extra:'')+(errs[name]?' has-error':'');
+  };
+  // A buyer's category says what they source, a seller's says what they put in front of
+  // customers. Same field, and the hint is the only thing that can tell them apart.
+  const buying=storeIntakeRole==='buyer';
+  const hintFor=function(f){
+    if(f.name==='store_category'&&buying)return 'Select a category that defines what your store sources from suppliers.';
+    return f.hint;
+  };
+  const hintText=function(f){const h=hintFor(f);return h?'<div class="uif-field-hint">'+h+'</div>':'';};
+  const selOpts=function(f){
+    const cur=draft[f.name]||'';
+    return '<option value="">'+(f.placeholder||'Select')+'</option>'
+      +(f.options||[]).map(function(o){
+        return '<option value="'+attrSafe(o)+'"'+(o===cur?' selected':'')+'>'+o+'</option>';
+      }).join('');
+  };
+
+  const fieldHTML=[];
+  for(let i=0;i<bhaiyaaStoreFields.length;i++){
+    const f=bhaiyaaStoreFields[i];
+    const req=f.required?'<span class="req">*</span>':'';
+
+    /* The mobile row is the one composite: dial code, number, and the OTP control that only this
+       field has. It owns a full row because the verified state needs somewhere to live. */
+    if(f.verify==='otp'){
+      const next=bhaiyaaStoreFields[i+1];
+      const numName=next?next.name:'mobile_number';
+      const verified=storeIntakeOtpStage==='verified';
+      const sent=storeIntakeOtpStage==='sent';
+      fieldHTML.push('<div class="'+wrapCls('mobile_number','uif-full')+'" id="st-w-mobile_number">'
+        +'<label class="uif-label" for="st-'+numName+'">'+f.label+req+'</label>'
+        +'<div class="uif-mobile">'
+        +'<select class="uif-select" id="st-'+f.name+'"'+(verified?' disabled':'')+'>'+selOpts(f)+'</select>'
+        +'<input class="uif-input" id="st-'+numName+'" placeholder="'+attrSafe(next?next.placeholder||'':'')+'"'
+          +' value="'+attrSafe(draft[numName]||'')+'"'+(verified?' disabled':'')
+          +' oninput="storeIntakeNumberChanged()" onkeydown="storeIntakeKeydown(event)">'
+        +(verified
+          ?'<span class="uif-verified-chip lg"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>'
+          :'<button type="button" class="uif-otp-btn" onclick="storeIntakeSendOtp()">'+(sent?'Resend OTP':'Get OTP')+'</button>')
+        +'</div>'
+        +errText('mobile_number')
+        +(sent
+          ?'<div class="uif-otp-row">'
+            +'<input class="uif-input'+(errs.otp_code?' is-error':'')+'" id="st-otp-code" inputmode="numeric" maxlength="6" placeholder="6-digit OTP"'
+              +' value="'+attrSafe(draft.otp_code||'')+'" oninput="storeIntakeClearError(\'otp_code\')">'
+            +'<button type="button" class="uif-otp-verify" onclick="storeIntakeVerifyOtp()">Verify</button>'
+            +'</div>'
+            +(errs.otp_code?'<div class="uif-error-text" id="st-e-otp_code">'+errs.otp_code+'</div>':'')
+            +'<div class="uif-field-hint">Bhaiyaa sent a code to this number. For this demo it is <strong>'+BHAIYAA_DEMO_OTP+'</strong>.</div>'
+          :'')
+        +(verified?'':hintText(f))
+        +'</div>');
+      i++; // the paired number field is consumed above
+      continue;
+    }
+
+    if(f.type==='consent'){
+      const on=!!draft[f.name];
+      fieldHTML.push('<div class="'+wrapCls(f.name,'uif-full uif-consent-field')+'" id="st-w-'+f.name+'">'
+        +'<button type="button" class="uif-consent'+(on?' on':'')+'" onclick="storeIntakeToggleConsent(\''+f.name+'\')">'
+        +'<span class="uif-consent-box">'+(on?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"><polyline points="20 6 9 17 4 12"/></svg>':'')+'</span>'
+        +'<span class="uif-consent-text">'+f.label+'<span class="uif-consent-link">'+f.linkText+'</span></span>'
+        +'</button>'
+        +errText(f.name)
+        +'</div>');
+      continue;
+    }
+
+    if(f.type==='select'){
+      fieldHTML.push('<div class="'+wrapCls(f.name,f.full?'uif-full':'')+'" id="st-w-'+f.name+'">'
+        +'<label class="uif-label" for="st-'+f.name+'">'+f.label+req+'</label>'
+        +'<select class="uif-select" id="st-'+f.name+'" onchange="storeIntakeClearError(\''+f.name+'\')">'+selOpts(f)+'</select>'
+        +errText(f.name)+hintText(f)
+        +'</div>');
+      continue;
+    }
+
+    fieldHTML.push('<div class="'+wrapCls(f.name,f.full?'uif-full':'')+'" id="st-w-'+f.name+'">'
+      +'<label class="uif-label" for="st-'+f.name+'">'+f.label+req+'</label>'
+      +'<input class="uif-input" type="'+(f.type==='email'?'email':'text')+'" id="st-'+f.name+'" placeholder="'+attrSafe(f.placeholder||f.label)+'"'
+      +' value="'+attrSafe(draft[f.name]||'')+'"'
+      +' oninput="storeIntakeClearError(\''+f.name+'\')" onkeydown="storeIntakeKeydown(event)">'
+      +errText(f.name)+hintText(f)
+      +'</div>');
+  }
+
+  const role=bhaiyaaStoreRoles.find(function(r){return r.id===storeIntakeRole;})||bhaiyaaStoreRoles[0];
+  return storeIntakeShellHTML('<div class="uif-card">'
+    +'<div class="uif-card-head">'
+    // -- The chosen role rides in the header rather than being restated as a field: it is a
+    // decision already made, and the only thing still needed from it is a way to change it. --
+    +'<div class="st-role-chip">'+role.icon+'<span>'+(role.id==='buyer'?'Buyer':'Seller')+'</span>'
+      +'<button type="button" onclick="storeIntakeBackToRole()">Change</button></div>'
+    +'<div class="uif-card-title">Welcome to Bhaiyaa</div>'
+    +'<div class="uif-card-sub">Bhaiyaa’s merchant signup, filled in from here. Submitting registers the store on Bhaiyaa and keeps a copy in the Executive Layer.</div>'
+    +'</div>'
+    +'<div class="uif-grid">'+fieldHTML.join('')+'</div>'
+    +'<div class="uif-actions">'
+    +'<div class="uif-hint">The address, GST number and bank details aren’t on this form &mdash; the store opens as <strong>Pending</strong> until they’re added.</div>'
+    +'<button class="uif-submit" onclick="submitStoreIntake()"'+(storeIntakeBusy?' disabled':'')+'>'
+    +'Create store'
+    +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+    +'</div>'
+    +'</div>');
+}
+/* -- The shell. The journey rail on top is the app's own aicj bar, driven by the same
+   aiJourneyEvents entry that Configure and AI Executive read — so the five stages a merchant
+   walks are literally the five stages the journey is defined as, and neither can drift from the
+   other. Below it, the stage's own screen. -- */
+function storeIntakeShellHTML(inner){
+  return '<div class="uif-page">'
+    +'<button class="uif-exit uif-exit--float" onclick="storeIntakeExit()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>'+getPageTitle(storeIntakeBackPage||defaultPageForRole(portalRole))+'</button>'
+    +'<div class="st-journey-bar">'+buildAIJourneyBarHTML('bhaiyaa-store-creation',storeIntakeStep,'store',
+        {onStep:'storeReviewStep',reviewing:storeReviewStage})+'</div>'
+    +'<div class="uif-body">'+inner+'</div>'
+    +'</div>';
+}
+
+/* == REVIEWING A COMPLETED STAGE ==========================================================
+   Clicking a finished step on the rail opens what that step actually did — not a rewind. The
+   journey does not move: storeIntakeStep is untouched, so the rail keeps reporting real
+   progress and the live stage is exactly where it was when you left it. What changes is only
+   which card the body shows, and a banner says so in as many words, because a screen that looks
+   like the current step but is not is the one thing this must never be.
+
+   Each stage answers with the same material it ran on — the KYC panel replays the four checks
+   from bhaiyaaKycChecks, the creation panel replays bhaiyaaStoreRunSteps — so a review can never
+   describe work differently from the animation the user just watched. == */
+function storeReviewStep(i){
+  if(i>=storeIntakeStep)return;          // only finished stages are inspectable
+  storeReviewStage=storeReviewStage===i?-1:i;
+  renderADTPage();
+}
+function storeReviewExit(){storeReviewStage=-1;renderADTPage();}
+function buildStoreReviewHTML(){
+  const i=storeReviewStage;
+  const ev=(aiJourneyEvents['bhaiyaa-store-creation']||[])[i];
+  const s=storeIntakeResult;
+  const d=storeIntakeDraft||{};
+  const role=bhaiyaaStoreRoles.find(function(r){return r.id===(s?s.role:storeIntakeRole);})||bhaiyaaStoreRoles[0];
+  const kv=function(k,v){return '<div class="uif-kv"><span class="uif-kv-key">'+k+'</span><span class="uif-kv-val">'+(v||'<span style="color:#9ca3af">--</span>')+'</span></div>';};
+  // Named from the journey definition, not the rail's short label — the button has to name the
+  // step the way the rail above it does, and "Back to Store" for a stage the rail calls "Store
+  // Created" is the kind of small mismatch that makes a user check whether it is the same thing.
+  const evs=aiJourneyEvents['bhaiyaa-store-creation']||[];
+  const liveLabel=(evs[storeIntakeStep]||bhaiyaaStoreStages[storeIntakeStep]||{}).name
+    ||(bhaiyaaStoreStages[storeIntakeStep]||{}).label||'the current step';
+
+  let body='';
+  if(i===0){
+    body='<p class="uif-section-label">What was chosen</p>'
+      +'<div class="st-review-role"><span class="st-role-ico">'+role.icon+'</span>'
+      +'<div><div class="st-review-role-name">'+role.label+'</div>'
+      +'<div class="st-review-role-sub">'+role.blurb+'</div></div></div>'
+      +'<p class="uif-section-label" style="margin-top:18px">What it provisions</p>'
+      +'<div class="st-role-gets">'+role.gets.map(function(g){return '<span class="st-role-get">'+g+'</span>';}).join('')+'</div>';
+  }else if(i===1){
+    const owner=[d.first_name||(s&&s.firstName),d.last_name||(s&&s.lastName)].filter(Boolean).join(' ');
+    const mob=(d.mobile_number||(s&&s.mobile))?((d.phone_country_code||(s&&s.phoneCountryCode)||'+91')+' '+(d.mobile_number||s.mobile))
+      +(storeIntakeOtpStage==='verified'||(s&&s.mobileVerified)?' <span class="uif-verified-chip">Verified</span>':''):'';
+    body='<p class="uif-section-label">What was captured</p><div>'
+      +kv('Email id',attrSafe(d.email_id||(s&&s.email)))
+      +kv('Mobile number',mob)
+      +kv('Owner',attrSafe(owner))
+      +kv('Store name',attrSafe((s&&s.storeName)||d.store_name))
+      +kv('Store category',attrSafe(d.store_category||(s&&s.category)))
+      +kv('Store type',attrSafe(d.store_type||(s&&s.storeType)))
+      +kv('Aadhaar',s?s.aadhaarMasked:bhaiyaaMaskAadhaar(d.aadhaar_number))
+      +'</div>';
+  }else if(i===2){
+    // The same list the KYC screen drew, held at its finished state.
+    const keep=storeKycProgress;
+    storeKycProgress=bhaiyaaKycChecks.length;
+    const list=storeKycListHTML();
+    storeKycProgress=keep;
+    body='<p class="uif-section-label">What the KYC agent checked</p>'
+      +'<div class="uif-proc">'+list+'</div>'
+      +(s?'<div class="uif-note">Verified by <strong>'+attrSafe(s.kycVerifiedBy)+'</strong> on '+storeStamp(s.kycVerifiedAt)+'. Only the last four digits are kept on the record.</div>':'');
+  }else if(i===3||i===4){
+    if(!s)body='<div class="uif-card-sub">Nothing ran here yet.</div>';
+    else{
+      const steps=bhaiyaaStoreRunSteps(s);
+      const shown=i===3?steps:steps.slice(-1);
+      body='<p class="uif-section-label">'+(i===3?'What the store agent did':'The record it created')+'</p>'
+        +'<div class="uif-proc">'+shown.map(function(st,n,arr){
+          const pairs=function(list,kind){
+            if(!list.length)return '';
+            return '<div class="st-io st-io--'+kind+'"><span class="st-io-tag">'+(kind==='read'?'Read':'Wrote')+'</span>'
+              +'<div class="st-io-list">'+list.map(function(p){
+                return '<span class="st-io-pair"><span class="st-io-k">'+attrSafe(p[0])+'</span><span class="st-io-v">'+attrSafe(String(p[1]))+'</span></span>';
+              }).join('')+'</div></div>';
+          };
+          return '<div class="uif-proc-item st-run-item'+(st.milestone?' is-milestone':'')+' is-done">'
+            +'<div class="uif-proc-rail"><div class="uif-proc-dot"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg></div>'
+            +(n<arr.length-1?'<div class="uif-proc-line"></div>':'')+'</div>'
+            +'<div class="uif-proc-body"><div class="uif-proc-title">'+st.title+'</div>'
+            +'<div class="uif-proc-note">'+st.note+'</div>'
+            +pairs(st.reads,'read')+pairs(st.writes,'write')
+            +'</div></div>';
+        }).join('')+'</div>';
+    }
+  }
+
+  return storeIntakeShellHTML('<div class="uif-card">'
+    // -- The banner is the whole safety of this feature: it names the step being reviewed, says
+    // it is finished, and gives back the live step in one click. --
+    +'<div class="st-review-banner">'
+      +'<span class="st-review-badge">Completed</span>'
+      +'<div class="st-review-banner-txt"><strong>Reviewing “'+(ev?ev.name:bhaiyaaStoreStages[i].label)+'”.</strong> '
+      +'Nothing here changes the run &mdash; you are still on <strong>'+liveLabel+'</strong>.</div>'
+      +'<button class="st-review-back" onclick="storeReviewExit()">Back to '+liveLabel
+      +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+    +'</div>'
+    +'<div class="uif-card-head" style="margin-bottom:18px">'
+      +'<div class="uif-card-title">'+(ev?ev.name:bhaiyaaStoreStages[i].label)+'</div>'
+      +(ev?'<div class="uif-card-sub">'+ev.desc+'</div>':'')
+    +'</div>'
+    +body
+    // Who owned the step, from the journey definition — so the review answers "who did this"
+    // with the same source the journey detail page uses.
+    +(ev?'<div class="st-review-meta"><span>Ran by <strong>'+ev.source+'</strong></span>'
+      +'<span>'+(ev.human.indexOf('None')===0?'Fully automated':'Human step')+'</span></div>':'')
+    +'</div>');
+}
+
+/* == STAGE 3: KYC =========================================================================
+   Its own screen, not a line in the creation feed. Three reasons, all of them design rather
+   than convenience: it is the only stage that can fail in a way that stops everything; it is
+   the only one performed against a third party the merchant did not choose; and it is the one
+   a merchant is entitled to watch, because it is their government id being checked. A failure
+   buried on line four of a scrolling run would be the wrong place to learn about any of that.
+
+   The Aadhaar is masked the moment this screen renders and never shown in full again. == */
+function storeRunKyc(){
+  storeKycProgress=0;storeKycDone=false;
+  renderADTPage();
+  const advance=function(i){
+    storeKycProgress=i;
+    const el=document.getElementById('st-kyc-list');
+    if(el)el.innerHTML=storeKycListHTML();
+    scrollActiveStepIntoView('st-kyc-list');
+    if(i>=bhaiyaaKycChecks.length){
+      setTimeout(function(){
+        storeKycDone=true;
+        renderADTPage();
+      },520);
+      return;
+    }
+    setTimeout(function(){advance(i+1);},720);
+  };
+  setTimeout(function(){advance(1);},720);
+}
+function storeKycListHTML(){
+  const d=storeIntakeDraft||{};
+  const owner=[d.first_name,d.last_name].filter(Boolean).join(' ');
+  // The evidence line per check — what was compared, not just that something was.
+  const evidence={
+    format:bhaiyaaMaskAadhaar(d.aadhaar_number),
+    uidai:'Demographics returned by UIDAI',
+    name:owner?owner+' ≈ '+owner.toUpperCase():'Name on record',
+    screen:'0 matches on sanctions or watchlists'
+  };
+  return bhaiyaaKycChecks.map(function(c,i){
+    const state=storeKycProgress>i?'is-done':(storeKycProgress===i?'is-active':'');
+    const mark=storeKycProgress>i
+      ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>'
+      : (storeKycProgress===i?'<span class="uif-spin"></span>':'');
+    return '<div class="uif-proc-item st-run-item '+state+'">'
+      +'<div class="uif-proc-rail"><div class="uif-proc-dot">'+mark+'</div>'
+      +(i<bhaiyaaKycChecks.length-1?'<div class="uif-proc-line"></div>':'')+'</div>'
+      +'<div class="uif-proc-body"><div class="uif-proc-title">'+c.label+'</div>'
+      +(storeKycProgress>i?'<div class="uif-proc-note">'+c.done+'</div>'
+        +'<div class="st-io st-io--write"><span class="st-io-tag">Checked</span><div class="st-io-list">'
+        +'<span class="st-io-pair"><span class="st-io-v">'+attrSafe(evidence[c.id])+'</span></span></div></div>'
+        :(storeKycProgress===i?'<div class="uif-proc-note">'+c.running+'</div>':''))
+      +'</div></div>';
+  }).join('');
+}
+function buildStoreKycHTML(){
+  const d=storeIntakeDraft||{};
+  const owner=[d.first_name,d.last_name].filter(Boolean).join(' ');
+  const head='<div class="uif-card-head">'
+    +'<div class="uif-card-title">Verifying the owner</div>'
+    +'<div class="uif-card-sub">The KYC agent checks this Aadhaar with UIDAI and matches it against the name on the signup. Bhaiyaa will not open a store without it &mdash; so this runs before anything is created, not after.</div>'
+    +'</div>';
+  const idCard='<div class="st-kyc-id">'
+    +'<div class="st-kyc-id-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="2" y="5" width="20" height="14" rx="2.5"/><circle cx="8" cy="11" r="2.2"/><path d="M4.5 16.5c.7-1.7 2-2.5 3.5-2.5s2.8.8 3.5 2.5"/><line x1="15" y1="10" x2="19" y2="10"/><line x1="15" y1="13.5" x2="19" y2="13.5"/></svg></div>'
+    +'<div><div class="st-kyc-id-label">Aadhaar on record</div>'
+    +'<div class="st-kyc-id-num">'+bhaiyaaMaskAadhaar(d.aadhaar_number)+'</div>'
+    +'<div class="st-kyc-id-name">'+attrSafe(owner)+'</div></div>'
+    +(storeKycDone?'<span class="uif-verified-chip lg"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> KYC verified</span>':'')
+    +'</div>';
+  const cta=storeKycDone
+    ?'<div class="uif-actions">'
+      +'<div class="uif-hint">Only the last four digits are kept on the store record. The full number is not stored.</div>'
+      +'<button class="uif-submit" onclick="storeKycContinue()">Create the store'
+      +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+      +'</div>'
+    :'';
+  return storeIntakeShellHTML('<div class="uif-card">'
+    +head+idCard
+    +'<div class="uif-proc" id="st-kyc-list">'+storeKycListHTML()+'</div>'
+    +cta
+    +'</div>');
+}
+// Verified is a gate the merchant passes deliberately, not a screen that slides away on a timer:
+// the result is theirs to read before the store exists.
+function storeKycContinue(){storeCreateRecord();}
+
 // -- The Create Contract entry point. The object to open is found by its intakeFormPage rather
 // than named outright, so declaring an intake form on a different Data Foundation object is all
 // it takes to repoint this button. The page in view is remembered first, because that is where
@@ -8839,6 +9815,10 @@ function aiJourneyCTA(j){
   // -- Same entry point as the sidebar's Client > Create Client: the journey's first step *is* the
   // intake form, so the card opens that form rather than a placeholder-subject manual run. --
   if(j.id==='user-master-data')return {label:'Create Client',action:"startContractIntake()"};
+  // -- Same reason again: the store journey's first stage IS the role choice, so the card opens
+  // the journey itself. Without this it fell through to the generic manual-run starter, which
+  // looks up manualJourneySteps['bhaiyaa-store-creation'] — an entry that does not exist. --
+  if(j.id==='bhaiyaa-store-creation')return {label:'Create Store',action:"startStoreIntake()"};
   if(mode==='Manual Mode'||mode==='Hybrid')return {label:(mode==='Hybrid'?'Start Hybrid Run':'Start Manual Run'),action:"startManualJourneyRun('"+j.id+"')"};
   if(aiRunFlows[j.id])return {label:aiRunFlows[j.id].entryLabel,action:"startAIJourneyRun('"+j.id+"')"};
   return null;
@@ -10149,19 +11129,38 @@ function aiJourneyLabelHTML(journeyId,stage){
     +waitLabel
     +'</div>';
 }
-function buildAIJourneyBarHTML(journeyId,stage,animationKey){
+/* -- `opts.onStep` makes completed dots clickable: it names a function taking the step index,
+   and only stages already behind the current one get it. Optional, so every existing caller is
+   unaffected and a journey without a review surface stays a read-only rail. `opts.reviewing` is
+   the index being inspected, marked so the rail says which step the panel below belongs to
+   without disturbing the done/current states that report actual progress. -- */
+function buildAIJourneyBarHTML(journeyId,stage,animationKey,opts){
+  opts=opts||{};
   const events=aiJourneyEvents[journeyId]||[];
-  const prev=animationKey==='payroll'?aiPayrollAnimatedStage:animationKey==='h2r'?aiH2rAnimatedStage:aiCtAnimatedStage;
+  const prev=animationKey==='payroll'?aiPayrollAnimatedStage
+    :animationKey==='h2r'?aiH2rAnimatedStage
+    :animationKey==='store'?aiStoreAnimatedStage:aiCtAnimatedStage;
   const animateThisRender=stage>prev;
   if(animationKey==='payroll'){if(animateThisRender)aiPayrollAnimatedStage=stage;}
   else if(animationKey==='h2r'){if(animateThisRender)aiH2rAnimatedStage=stage;}
+  // -- Without its own key the store journey wrote into aiCtAnimatedStage, which would have made
+  // walking a store run suppress the connector animation on the next contract run. --
+  else if(animationKey==='store'){if(animateThisRender)aiStoreAnimatedStage=stage;}
   else if(animateThisRender){aiCtAnimatedStage=stage;}
   const label=aiJourneyLabelHTML(journeyId,stage);
   // Numbered pending dots: at nine stages an unlabelled circle gives no sense of position, and
   // the number is already the thing the header counts ("Step 4 of 9").
   const stepHTML=function(e,i,connect){
     const state=i<stage?'done':i===stage?'current':'pending';
-    let h='<div class="aicj-step">'
+    const clickable=opts.onStep&&i<stage;
+    const reviewing=opts.reviewing===i;
+    const attrs=clickable
+      ?' role="button" tabindex="0" class="aicj-step is-clickable'+(reviewing?' is-reviewing':'')+'"'
+        +' title="'+attrSafe('See what ran in “'+aiCjShortLabel(e.name)+'”')+'"'
+        +' onclick="'+opts.onStep+'('+i+')"'
+        +' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();'+opts.onStep+'('+i+')}"'
+      :' class="aicj-step"';
+    let h='<div'+attrs+'>'
       +'<div class="aicj-dot '+state+'">'+(state==='done'?'':(i+1))+'</div>'
       +'<div class="aicj-step-label '+state+'">'+aiCjShortLabel(e.name)+'</div>'
       +'</div>';
@@ -10310,6 +11309,39 @@ function aiScrollContentToTop(){
   const el=document.getElementById('adt-content');
   if(!el||el.scrollTop===0)return;
   el.scrollTo({top:0,behavior:'smooth'});
+}
+/* == WHEN A RE-RENDER SHOULD SCROLL =======================================================
+   renderADTPage used to scroll to the top on EVERY call, which is right when you arrive
+   somewhere new and wrong every other time. Because the app re-renders the whole page for any
+   state change, pressing Get OTP, verifying a code or ticking a consent box all threw the
+   reader back to the top of the form they were halfway down.
+
+   The rule now: scroll when the thing on screen CHANGES, not when it redraws. `page` alone is
+   not enough for that, because the flows that hold several screens under one page id — the
+   store journey, the payroll/H2R runs, the client intake — genuinely do arrive somewhere new
+   without the page id moving. So those contribute their step to the key, and everything else
+   keys on the page. == */
+let adtLastScrollKey='';
+function adtScrollKey(){
+  if(page==='create-store')return 'create-store|'+storeIntakeStep+'|'+storeReviewStage;
+  if(page==='ai-journey-run')return 'ai-journey-run|'+aiRunFlowJourneyId+'|'+aiRunFlowStep+'|'+aiH2rOffboardStep;
+  if(page==='cfg-user-intake')return 'cfg-user-intake|'+cfgUserIntakeStep;
+  return page;
+}
+function adtMaybeScrollTop(){
+  const key=adtScrollKey();
+  if(key===adtLastScrollKey)return;
+  adtLastScrollKey=key;
+  aiScrollContentToTop();
+}
+/* -- Keeps the running step in view while a feed plays. `block:'nearest'` is the whole point:
+   it moves the page only when the active step has actually left the viewport, so a short run
+   that fits on screen never scrolls at all and a long one never gets ahead of the reader. -- */
+function scrollActiveStepIntoView(containerId){
+  const box=document.getElementById(containerId);
+  if(!box||!box.querySelector)return;
+  const active=box.querySelector('.is-active');
+  if(active&&active.scrollIntoView)active.scrollIntoView({block:'nearest',behavior:'smooth'});
 }
 function aiShowLoader(title,sub,targetEl){
   const el=targetEl||aiCtLoaderTarget();

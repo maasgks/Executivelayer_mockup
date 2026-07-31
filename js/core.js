@@ -24,6 +24,10 @@ let aiCtPendingField=null,aiCtQuestionsStarted=false;
 const aiPayrollManager={name:'Meera Iyer',role:'Finance Approver',initials:'MI'};
 const aiHrManager={name:'Pallavi Parate',role:'HR Manager',initials:'PP'};
 let aiPayrollAnimatedStage=-1,aiPayrollData={};
+// The Bhaiyaa store journey's rail animation state, kept apart from the others for the same
+// reason they are kept apart from each other: the bar only animates a stage it has not drawn
+// before, and a shared counter would make one journey's progress suppress another's.
+let aiStoreAnimatedStage=-1;
 let aiH2rAnimatedStage=-1,aiH2rData={},aiH2rOffboardStep=-1;
 // -- Agent Mode: chat-driven journey run (typed prompt -> live journey execution in form-col) --
 let pendingAgentAttachment=null,agentUploadTargetId=null,agentRunData=null;
@@ -516,6 +520,13 @@ const sidebarItems=[
   {dropdown:'Client & Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
     {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],personas:['account-manager'],color:'amber',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
     {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
+    // -- Bhaiyaa's store signup, beside the client actions because it is the same kind of thing:
+    // a record being opened from a connected system's own form. An action rather than a route,
+    // like Create Client — what it opens is a focused flow that hides the sidebar. --
+    {id:'create-store',label:'Create Store',roles:['entity-admin','entity-user'],color:'amber',action:()=>startStoreIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/></svg>'},
+    // -- Stores keep their own module. Create-then-browse, the same pair as Create Client /
+    // All Clients above it. --
+    {id:'stores',label:'All Stores',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><line x1="9" y1="15" x2="15" y2="15"/></svg>'},
     {id:'contracts',label:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
     {id:'contract-templates',label:'Contract Templates',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'}
   ]},
@@ -612,7 +623,7 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Agent & Model Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='employees')return{title:'Employees',context:'Employees',filters:[],columns:[],rows:[]};if(pg==='timesheet')return{title:'Timesheet',context:'Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Agent & Model Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='create-store')return{title:'Create Store',context:'Bhaiyaa',filters:[],columns:[],rows:[]};if(pg==='stores')return{title:'All Stores',context:'Stores',filters:[],columns:[],rows:[]};if(pg==='employees')return{title:'Employees',context:'Employees',filters:[],columns:[],rows:[]};if(pg==='timesheet')return{title:'Timesheet',context:'Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
@@ -1085,6 +1096,11 @@ const pageRoleMap={
   // Journey end to end: Create Client opens the intake form, and submitting it lands on All Clients.
   // Which personas actually see the entries is decided by the sidebar (`personas`), not here. --
   'cfg-user-intake':['super-admin','entity-admin','entity-user'],
+  // -- Create Store is not persona-gated the way Create Client is. Opening a store on Bhaiyaa is
+  // not the Account Manager's contract journey; it is entity-level onboarding, so every Entity
+  // User can reach it. Super Admin cannot: it configures what a store is, it does not open one. --
+  'create-store':['entity-admin','entity-user'],
+  'stores':['super-admin','entity-admin','entity-user'],
   'master-data':['super-admin','entity-admin','entity-user'],
   'cfg-context-journey':['super-admin','entity-admin'],'cfg-journey-detail':['super-admin','entity-admin'],
   'cfg-agents':['super-admin','entity-admin'],
@@ -1877,10 +1893,61 @@ const aiJourneys=[
   {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',modules:['Client','Master Data','NewForce Solutions'],coverage:0,humanSteps:3,aiSteps:0,status:'Active',risk:'Low',updated:'29 Jul 2026, 9:45 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3"/><path d="M20 5.5v6"/><path d="M4 12c0 1.7 3.6 3 8 3"/><path d="M18 15v6M15 18h6"/></svg>'},
   {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
-  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'}
+  {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'},
+  // -- Two human stages (the role choice and the signup) and three the agents run: KYC, the
+  // creation itself, and the confirmation. Coverage is the honest fraction of that. --
+  {id:'bhaiyaa-store-creation',name:'Bhaiyaa Store Creation Journey',category:'O2C',desc:'Opens a Bhaiyaa store end to end — seller or buyer, the merchant signup, Aadhaar KYC run by the agent, then registration on Bhaiyaa and provisioning.',modules:['Stores','Bhaiyaa','Compliance Hub'],coverage:60,humanSteps:2,aiSteps:3,status:'Active',risk:'Low',updated:'31 Jul 2026, 12:10 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/></svg>'}
 ];
 
 const aiJourneyEvents={
+  /* == BHAIYAA STORE CREATION ============================================================
+     Five stages, and the split between them is the design: each one is a different KIND of
+     work, so each earns its own screen rather than being a line in one long feed.
+
+       Store Role      a decision, and the only one that changes what the rest means
+       Store Details   data entry
+       KYC             an identity check the agent performs against UIDAI — not data entry,
+                       not provisioning, and the one stage that can genuinely fail, so it is
+                       shown on its own rather than buried mid-run where a failure would
+                       scroll past
+       Store Creation  the automation: fetch, derive, mint, register, provision
+       Store Created   the record
+
+     The rail carries all five from the first screen, so a merchant on step 1 can already see
+     that an Aadhaar check is coming — which is the difference between asking for an Aadhaar
+     number and springing it on them. == */
+  'bhaiyaa-store-creation':[
+    {name:'Store Role',chips:['Human Required','Bhaiyaa'],source:'Merchant',waitingOn:'Merchant',
+     desc:'The merchant chooses whether the store sells to customers or buys from sellers. Everything after this branches on it — the category question, what is provisioned, and the credit terms.',
+     validation:'A role must be chosen; it cannot be changed later without opening a second store.',
+     human:'Required — the merchant picks Seller or Buyer.',
+     failure:'No failure mode: the screen cannot be passed without a choice.',
+     next:'Store Details',fields:['Store Role']},
+    {name:'Store Details',chips:['Human Required','Bhaiyaa'],source:'Merchant',waitingOn:'Merchant',
+     desc:'Bhaiyaa’s own signup — contact details, store name, category and the turnover band — captured inside the Executive Layer rather than on Bhaiyaa’s site.',
+     validation:'Email, first name, store type, Aadhaar and both consents are mandatory. A mobile number, if given, must be OTP-verified.',
+     human:'Required — the merchant completes the signup.',
+     failure:'Validation errors are reported per field; nothing is submitted until all clear.',
+     next:'KYC Verification',fields:['Email Id','Mobile Number','Owner Name','Store Name','Store Category','Store Type','Aadhaar Number']},
+    {name:'KYC Verification',chips:['AI Automated','Compliance'],source:'KYC Agent',waitingOn:'&mdash;',
+     desc:'The KYC agent checks the Aadhaar number against UIDAI, matches the name and mobile on record against the returned demographics, and screens the merchant before any store is opened.',
+     validation:'Verhoeff checksum, UIDAI demographic match on name and mobile, and a watchlist screen. All four must pass.',
+     human:'None — fully automated. A failed match stops the journey and is handed to Compliance.',
+     failure:'A mismatch or a failed screen halts the run before a store exists, which is the point of doing it here rather than after.',
+     next:'Store Creation',fields:['Aadhaar Number','Name Match','Mobile Match','Screening Result']},
+    {name:'Store Creation',chips:['AI Automated','Bhaiyaa'],source:'Store Agent',waitingOn:'&mdash;',
+     desc:'The agent derives the plan and GST position from the turnover band, mints the Store ID, registers the store on Bhaiyaa through StoreIntake, and provisions the storefront or the purchase ledger.',
+     validation:'Bhaiyaa must return its own store id before provisioning starts.',
+     human:'None — fully automated.',
+     failure:'A registration failure leaves the Store ID minted and the record unmirrored, so it can be retried rather than re-keyed.',
+     next:'Store Created',fields:['Store ID','Bhaiyaa Ref ID','Plan','GST','Storefront / Ledger']},
+    {name:'Store Created',chips:['AI Automated','Bhaiyaa'],source:'Store Agent',waitingOn:'&mdash;',
+     desc:'The store exists in both systems and is readable in Stores. It stays Pending until the address, GST number and bank details are added.',
+     validation:'The record carries both ids and is readable from the Stores listing.',
+     human:'None — the merchant opens the record to confirm it landed.',
+     failure:'None at this point; the work is done.',
+     next:'Journey Complete',fields:['Store ID','Bhaiyaa Ref ID','Status']}
+  ],
   'user-master-data':[
     // -- One event per stage of the real intake flow, in the order the operator sees them. Every
     // one is Human Required: the Account Manager fills the form and presses Submit, and what
@@ -1952,10 +2019,16 @@ let aiClientJourneySeq=6;
 // feed that bills against it) and Finance & Payroll Postings (GL). Each API is tagged
 // Transactional (business documents/events) vs Transformational (master/reference data consumed
 // by Data Foundation).
-const cfgApiCategories=['Procure to Pay','Order to Cash','Finance & Payroll Postings','Others'];
+// -- "Store Management" is Bhaiyaa's category, not a rename of Order to Cash everywhere. The
+// list is shared across systems but a system only ever shows the categories its own APIs are
+// tagged with (see buildCfgSystemDetailHTML, which groups off apiList), so adding one here costs
+// nothing to SAP/Infor/NFAdmin and keeps Bhaiyaa's grouping true to what Bhaiyaa is: a storefront
+// platform whose objects are stores, not sales orders against a staffing contract. --
+const cfgApiCategories=['Procure to Pay','Order to Cash','Store Management','Finance & Payroll Postings','Others'];
 const cfgApiSubcats={
   'Procure to Pay':['Vendor & Service Master','Purchasing','Service Confirmation & Invoicing'],
   'Order to Cash':['Master Data Creation','Time & Attendance'],
+  'Store Management':['Store Onboarding','Master Data Creation','Time & Attendance'],
   'Finance & Payroll Postings':['GL Postings'],
   'Others':['Compliance & Documentation','General']
 };
@@ -2006,10 +2079,16 @@ const cfgSystems=[
     apiList:[
       {name:'EmployeeIntake · Client Master Data',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'}
     ]},
+  // -- Bhaiyaa is a storefront platform: the thing it owns is a store, and everything else it
+  // gives us hangs off one. StoreIntake is the write side of that — the API behind Create Store
+  // (buildCreateStoreHTML, js/pages.js) — and it is `rw` for the same reason ADT's EmployeeIntake
+  // is: we post a signup to it and read the store back with the id Bhaiyaa minted. --
   {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.vyoma.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
-      {name:'WorkforceRoster · Field Workforce',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
-      {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Order to Cash',sub:'Time & Attendance',type:'Transactional'},
+      {name:'StoreIntake · Store Signup',dir:'rw',cat:'Store Management',sub:'Store Onboarding',type:'Transactional'},
+      {name:'StoreRegistry · Store Master',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'},
+      {name:'WorkforceRoster · Field Workforce',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'},
+      {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Store Management',sub:'Time & Attendance',type:'Transactional'},
       {name:'PayoutBatch · Contractor Payouts',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
   {id:'nfadmin',name:'NFAdmin',type:'NFAdmin',method:'REST / SOAP',endpoint:'https://nfadmin.vyoma.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
@@ -2098,7 +2177,10 @@ const entityLockedCategories=['P2P','F2A'];
 // contract-creation ships pre-activated so Entity User lands on a working "Create Contract" action out of the box;
 // payroll-creation/h2r-lifecycle start locked so the request -> approve -> unlock flow has something real to demo.
 // user-master-data ships pre-activated alongside it: the client record it creates is what a deal is raised against, so locking it would strand Create Contract with nothing to point at.
-const entityJourneyActivation={'contract-creation':true,'user-master-data':true};
+// -- Which journeys this entity has switched on. Anything absent renders as a locked card with
+// no run button, so a journey has to appear here to be reachable from AI Executive. Bhaiyaa's
+// store journey is on because Bhaiyaa itself is activatedForEntity. --
+const entityJourneyActivation={'contract-creation':true,'user-master-data':true,'bhaiyaa-store-creation':true};
 function formatEntityTimestamp(date){
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const day=String(date.getDate()).padStart(2,'0');
@@ -2974,6 +3056,163 @@ const cfgUserIntakeFallbackFields=[
   {name:'looking_for',label:'What are you looking for?',type:'select',options:['Employer of Record (EOR)','Contractor Management','Payroll Outsourcing','Entity Setup','PEO Services']},
   {name:'heard_about_us',label:'How did you hear about us?',type:'select',options:['Google Search','LinkedIn','Referral','Conference / Event','Existing Customer','Other']}
 ];
+/* == BHAIYAA — STORE CREATION JOURNEY ======================================================
+   The signup Bhaiyaa asks a merchant for, rendered here so a store can be opened from inside the
+   Executive Layer instead of on Bhaiyaa's own site. Same field-definition shape as the NewForce
+   intake above, plus three things that form needs and NewForce's does not:
+
+     hint     Bhaiyaa writes a line of help under three of its fields. They are not decoration —
+              "you can change this later" and "this decides your annual turnover band" are the
+              two facts that stop a merchant stalling on a choice, so they are part of the field.
+     verify   The mobile number is the one field with a state machine behind it (send OTP, enter
+              code, verified). Declaring it here keeps the renderer generic.
+     consent  T&C and MSA are not checkboxes that gate a button, they are evidence. Both are
+              recorded on the store record with the timestamp they were accepted at.
+
+   Ordering follows Bhaiyaa's own form exactly: who you are, then how we reach you, then what the
+   store is. A merchant filling this alongside Bhaiyaa's site should never have to hunt. == */
+const bhaiyaaStoreCategories=['Grocery & Kirana','Fruits & Vegetables','Dairy & Bakery','Pharmacy & Wellness','Restaurant & Food Service','Electronics & Mobile','Apparel & Footwear','Stationery & Books','Hardware & Home Needs','General Store'];
+/* Turnover bands, not sizes-in-the-abstract. The band a merchant picks decides whether GST
+   registration is mandatory for them and which Bhaiyaa plan they land on, so the rupee range is
+   in the option text — a merchant knows their turnover, not whether they are "Micro". */
+const bhaiyaaStoreTypes=['Nano — under ₹20 lakh a year','Micro — ₹20 lakh to ₹1 crore','Small — ₹1 crore to ₹5 crore','Medium — ₹5 crore to ₹50 crore','Large — above ₹50 crore'];
+const bhaiyaaStoreFields=[
+  {name:'email_id',label:'Email Id',type:'email',required:true,placeholder:'Enter Your email address',full:true},
+  {name:'phone_country_code',label:'Mobile Number',type:'select',options:['+91','+971','+65','+44','+1'],verify:'otp'},
+  {name:'mobile_number',label:'',type:'text',placeholder:'Enter Mobile Number'},
+  {name:'first_name',label:'First Name',type:'text',required:true,placeholder:'Enter Your First Name'},
+  {name:'last_name',label:'Last Name',type:'text',placeholder:'Enter Your Last Name'},
+  /* Aadhaar is asked here and nowhere else. It is the only field on this form that exists for a
+     third party's benefit rather than the merchant's, so it says why it is being asked — an
+     unexplained government id on a signup form is the field people abandon a signup at. Twelve
+     digits, grouped, and never shown in full again after this screen. */
+  {name:'aadhaar_number',label:'Aadhaar Number',type:'text',required:true,full:true,placeholder:'0000 0000 0000',
+   hint:'Verified with UIDAI before your store is opened. Bhaiyaa needs a KYC-verified owner on every store.'},
+  {name:'store_name',label:'Store Name',type:'text',placeholder:'Enter your store name',full:true,
+   hint:'You can always change your Store name in Settings.'},
+  {name:'store_category',label:'Choose Your Store Category',type:'select',full:true,placeholder:'Select',options:bhaiyaaStoreCategories,
+   hint:'Select a category that defines what your store offers to your customers.'},
+  {name:'store_type',label:'Choose Your Store Type',type:'select',required:true,full:true,placeholder:'Select',options:bhaiyaaStoreTypes,
+   hint:'Select a store type that defines your annual turnover.'},
+  {name:'accept_terms',type:'consent',required:true,label:'I accept the ',linkText:'Terms & Conditions'},
+  {name:'accept_msa',type:'consent',required:true,label:'I accept the ',linkText:'MSA'}
+];
+/* -- Seller or buyer is the first question because it is the only one whose answer changes what
+   the other answers mean. A seller's category says what they put in front of customers; a
+   buyer's says what they source. They also provision differently — a storefront and a payout
+   account against a purchase ledger and a credit line — so asking it first is what lets the run
+   afterwards be about this store rather than a generic one. -- */
+const bhaiyaaStoreRoles=[
+  {id:'seller',label:'Create store as a Seller',sub:'You sell to customers',
+   blurb:'A storefront on Bhaiyaa with your catalogue, incoming orders and a payout account.',
+   gets:['Storefront & catalogue','Order inbox','Payout account'],
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/></svg>'},
+  {id:'buyer',label:'Create store as a Buyer',sub:'You buy from sellers',
+   blurb:'A buyer profile on Bhaiyaa with a purchase ledger, credit terms and supplier access.',
+   gets:['Purchase ledger','Credit terms','Supplier catalogue'],
+   icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h3l2.4 12.2a1.7 1.7 0 0 0 1.7 1.3h8.6a1.7 1.7 0 0 0 1.7-1.3L21 7H6"/></svg>'}
+];
+/* -- The KYC stage. Four checks, in the order a real UIDAI verification does them: the number
+   has to be well-formed before it is worth sending, the demographics come back, the name and
+   mobile on the signup are matched against them, and the merchant is screened. Each carries the
+   value it compared, because "Name match ✓" alone is a claim, and "Asha Rane ≈ ASHA RANE ✓" is
+   evidence. -- */
+const bhaiyaaKycChecks=[
+  {id:'format',label:'Checking the number',running:'Validating the Verhoeff checksum…',done:'Well-formed Aadhaar number'},
+  {id:'uidai',label:'Querying UIDAI',running:'Requesting demographics for this Aadhaar…',done:'UIDAI responded'},
+  {id:'name',label:'Matching the name',running:'Comparing the name on record with UIDAI…',done:'Name matches'},
+  {id:'screen',label:'Screening the merchant',running:'Checking sanctions and watchlists…',done:'No adverse match'}
+];
+const bhaiyaaStoreStages=[
+  {label:'Store Role',sub:'Seller or buyer'},
+  {label:'Store Details',sub:'Fill in the signup'},
+  {label:'KYC',sub:'Aadhaar verified'},
+  {label:'Creating',sub:'Writing to Bhaiyaa'},
+  {label:'Store',sub:'Record created'}
+];
+function bhaiyaaMaskAadhaar(n){
+  const digits=String(n||'').replace(/\D/g,'');
+  if(digits.length<4)return 'XXXX XXXX XXXX';
+  return 'XXXX XXXX '+digits.slice(-4);
+}
+/* -- Derived from the turnover band, not asked separately. The band a merchant picks already
+   decides all three, so asking again would be asking them to do our arithmetic. The run shows
+   each one as it is written, which is what makes the band feel like it did something. -- */
+const bhaiyaaBandFacts={
+  'Nano — under ₹20 lakh a year':{gst:'Not mandatory at this turnover',plan:'Starter',credit:'Prepaid only',terms:'Prepaid'},
+  'Micro — ₹20 lakh to ₹1 crore':{gst:'Mandatory',plan:'Growth',credit:'₹50,000 limit',terms:'Prepaid'},
+  'Small — ₹1 crore to ₹5 crore':{gst:'Mandatory',plan:'Business',credit:'₹2,50,000 limit',terms:'Net 15'},
+  'Medium — ₹5 crore to ₹50 crore':{gst:'Mandatory',plan:'Enterprise',credit:'₹10,00,000 limit',terms:'Net 30'},
+  'Large — above ₹50 crore':{gst:'Mandatory · e-invoicing',plan:'Enterprise+',credit:'Negotiated',terms:'Net 45'}
+};
+function bhaiyaaBandFor(type){return bhaiyaaBandFacts[type]||{gst:'To be confirmed',plan:'Starter',credit:'Prepaid only',terms:'Prepaid'};}
+function bhaiyaaHandle(name){return (name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'store';}
+/* == THE RUN =============================================================================
+   What the execution layer actually does with the signup, step by step, with the values it read
+   and the values it wrote. Both halves matter: a feed that only says "Registering…" is a spinner
+   with a caption, and the question anyone has watching a record get created is which of their
+   answers went where. Reads come from the form, writes are what did not exist a moment ago. == */
+function bhaiyaaStoreRunSteps(s){
+  const band=bhaiyaaBandFor(s.storeType);
+  const owner=[s.firstName,s.lastName].filter(Boolean).join(' ');
+  const mobile=s.mobile?s.phoneCountryCode+' '+s.mobile+(s.mobileVerified?' (verified)':''):'Not given';
+  const seller=s.role==='seller';
+  return [
+    {title:'Reading the signup',note:'Taking the details off the form and checking them against Bhaiyaa’s rules.',
+     reads:[['Email id',s.email],['Mobile number',mobile],['Owner',owner]],writes:[]},
+    // Carried forward rather than re-run: KYC happened on its own stage, and repeating it here
+    // would show the same work twice. What this step does is attach the result to the record.
+    {title:'Attaching the KYC result',note:'The verification from the previous stage, recorded against the store.',
+     reads:[['Aadhaar',s.aadhaarMasked],['Verified at',s.kycVerifiedAt]],
+     writes:[['KYC status','Verified'],['Verified by','KYC Agent']]},
+    {title:'Resolving the turnover band',note:'One answer decides the plan, the GST position and the credit line.',
+     reads:[['Store type',s.storeType]],
+     writes:seller?[['Plan',band.plan],['GST',band.gst]]:[['Plan',band.plan],['GST',band.gst],['Credit line',band.credit]]},
+    {title:'Minting the Store ID',note:'The Executive Layer’s own identifier, issued before anything leaves this system.',
+     reads:[],writes:[['Store ID',s.storeCode]]},
+    {title:seller?'Registering the store on Bhaiyaa':'Registering the buyer profile on Bhaiyaa',
+     note:'Posted to StoreIntake · Store Signup. Bhaiyaa mints its own id and returns it.',
+     reads:[['Store name',s.storeName],['Category',s.category||'Not set']],
+     writes:[['Bhaiyaa Store ID',s.bhaiyaaCode]]},
+    seller
+      ?{title:'Opening the storefront',note:'The catalogue and order inbox a customer will see.',
+        reads:[['Category',s.category||'Not set']],
+        writes:[['Storefront',s.handle],['Catalogue','Empty — 0 items'],['Order inbox','Open']]}
+      :{title:'Opening the purchase ledger',note:'Where this buyer’s orders and dues will be recorded.',
+        reads:[['Credit line',band.credit]],
+        writes:[['Ledger',s.handle],['Payment terms',band.terms],['Supplier catalogue','Enabled']]},
+    {title:'Recording consent',note:'Stored as evidence with the moment each was accepted, not as a flag.',
+     reads:[],writes:s.consents.map(function(c){return [c.name,c.acceptedAt];})},
+    /* The milestone. Marked so the feed can draw it as an arrival rather than another line —
+       this is the step where the thing the merchant came for starts existing, and a run where
+       every step looks identical never says which one that was. */
+    {title:seller?'Store created':'Buyer account created',milestone:true,
+     note:'Live in both systems and readable in Stores. It stays Pending until the address, GST number and bank details are added.',
+     reads:[],writes:[['Store',s.storeName],['Store ID',s.storeCode],['Bhaiyaa Ref ID',s.bhaiyaaCode],['Status',s.status]]}
+  ];
+}
+// The demo code. A real integration would post the number to Bhaiyaa and never see the code at
+// all; here it is fixed and stated on screen, because an OTP nobody can guess is a dead end in a
+// mockup and a hidden one that accepts anything teaches the wrong thing about the control.
+const BHAIYAA_DEMO_OTP='123456';
+let bhaiyaaStores=[];
+let bhaiyaaStoreSeq=1;
+// Bhaiyaa's own counter, kept apart from ours on purpose: two systems minting ids for one store
+// is the fact the success screen exists to show, and a shared counter would make them agree.
+let bhaiyaaSourceSeq=1;
+let storeIntakeStep=0,storeIntakeDraft={},storeIntakeFieldErrors={},storeIntakeResult=null,storeIntakeBusy=false;
+let storeIntakeBackPage='dashboard';
+let storeIntakeRole='';      // 'seller' | 'buyer' — picked on stage 0, stamped on the record
+let storeIntakeProgress=-1;  // index into bhaiyaaStoreRunSteps while the run plays
+let storeKycProgress=-1;     // index into bhaiyaaKycChecks while KYC plays
+let storeKycDone=false;
+// Which finished stage is being inspected, or -1 for none. Deliberately separate from
+// storeIntakeStep: reviewing is not rewinding, and the run must not move because someone looked.
+let storeReviewStage=-1;
+// 'idle' -> 'sent' -> 'verified'. Held apart from the draft because it is not a value the
+// merchant typed, it is a fact about the number they typed.
+let storeIntakeOtpStage='idle';
+
 let cfgSystemEditing=false;
 let cfgSystemDraft=null;
 let cfgStepAssignments={};
