@@ -166,66 +166,73 @@ const amPipelineTracks=[
    source table gives compound owners for some stages ("EOR Ops · Pricing", "System · AM") and
    the split only makes sense at sub-step level: Pricing owns the pricing approval, EOR Ops
    owns the cost build. `cond` marks a step that only applies in some cases and renders muted,
-   `decision` a branch point, `loop` a step that can legitimately repeat. == */
+   `decision` a branch point, `loop` a step that can legitimately repeat.
+
+   `auto` marks a step the AI Execution Layer performs itself — `autoNote` says by what. The
+   dividing line: lookups, generation from templates/data, dispatch, and webhook-confirmed
+   facts automate; judgment, liability and signatures do not. So "CSM assigned" automates (a
+   country-to-CSM routing table needs no human), but "Qualified / Disqualified" never does —
+   that is the one decision stage 1 exists to make. `owner` stays on auto steps on purpose:
+   automation changes who does the work, not who answers for it. == */
 const amSubStatuses={
   'request-received':[
-    {label:'New intake',owner:'Account Manager'},
-    {label:'CSM assigned',owner:'Account Manager',sla:'1h'},
+    {label:'New intake',owner:'Account Manager',auto:true,autoNote:'logged from intake form'},
+    {label:'CSM assigned',owner:'Account Manager',sla:'1h',auto:true,autoNote:'by client country'},
     {label:'Qualified / Disqualified',owner:'Account Manager',decision:true}
   ],
   'quote-prep':[
-    {label:'Country data check',owner:'EOR Ops'},
-    {label:'Partner cost requested',owner:'EOR Ops',cond:'non-owned countries',sla:'48h'},
-    {label:'Cost calc built',owner:'EOR Ops',sla:'24h'},
-    {label:'Statutory floor check',owner:'Compliance'},
+    {label:'Country data check',owner:'EOR Ops',auto:true,autoNote:'Compliance Hub lookup'},
+    {label:'Partner cost requested',owner:'EOR Ops',cond:'non-owned countries',sla:'48h',auto:true,autoNote:'request auto-sent to partner'},
+    {label:'Cost calc built',owner:'EOR Ops',sla:'24h',auto:true,autoNote:'drafted by cost engine'},
+    {label:'Statutory floor check',owner:'Compliance',auto:true,autoNote:'rules engine'},
     {label:'Pricing approval',owner:'Pricing',cond:'if off-standard'},
     {label:'Quote QA',owner:'Pricing'}
   ],
   'quote-review':[
-    {label:'Sent',owner:'Account Manager'},
-    {label:'Viewed',owner:'Client'},
-    {label:'Follow-up 1 / 2 / 3',owner:'Account Manager',loop:true},
+    {label:'Sent',owner:'Account Manager',auto:true,autoNote:'on QA pass'},
+    {label:'Viewed',owner:'Client',auto:true,autoNote:'tracked on open'},
+    {label:'Follow-up 1 / 2 / 3',owner:'Account Manager',loop:true,auto:true,autoNote:'scheduled reminders'},
     {label:'Change requested',owner:'Client',decision:true},
     {label:'Re-issued v2',owner:'Account Manager',loop:true}
   ],
   'quote-approved':[
-    {label:'Won',owner:'Account Manager'},
-    {label:'Client tenant provisioned',owner:'System'},
-    {label:'CSM confirmed to client',owner:'Account Manager',sla:'Same day'}
+    {label:'Won',owner:'Account Manager',auto:true,autoNote:'on client acceptance'},
+    {label:'Client tenant provisioned',owner:'System',auto:true,autoNote:'provisioning'},
+    {label:'CSM confirmed to client',owner:'Account Manager',sla:'Same day',auto:true,autoNote:'intro auto-sent'}
   ],
   'agreement-signature':[
-    {label:'MSA drafted',owner:'Compliance'},
+    {label:'MSA drafted',owner:'Compliance',auto:true,autoNote:'from country template'},
     {label:'Legal & compliance review',owner:'Compliance',sla:'48h'},
-    {label:'Client entity + sanctions check',owner:'Compliance'},
-    {label:'Sent',owner:'Compliance'},
+    {label:'Client entity + sanctions check',owner:'Compliance',auto:true,autoNote:'screening API, human on hit'},
+    {label:'Sent',owner:'Compliance',auto:true,autoNote:'e-sign dispatch'},
     {label:'Signed',owner:'Client'}
   ],
   'deposit-due':[
-    {label:'Invoice raised',owner:'Finance'},
+    {label:'Invoice raised',owner:'Finance',auto:true,autoNote:'on agreement signed'},
     {label:'Awaiting funds',owner:'Client'},
     {label:'Part-paid',owner:'Client',decision:true},
-    {label:'Cleared',owner:'Finance',sla:'Auto on webhook'}
+    {label:'Cleared',owner:'Finance',auto:true,autoNote:'bank webhook'}
   ],
   'employment-contract':[
-    {label:'Draft generated',owner:'EOR Ops',sla:'24h to issue'},
-    {label:'Clause compliance check',owner:'Compliance'},
+    {label:'Draft generated',owner:'EOR Ops',sla:'24h to issue',auto:true,autoNote:'from approved quote'},
+    {label:'Clause compliance check',owner:'Compliance',auto:true,autoNote:'AI clause check'},
     {label:'Internal approval',owner:'EOR Ops'},
-    {label:'Sent to worker',owner:'EOR Ops'},
+    {label:'Sent to worker',owner:'EOR Ops',auto:true,autoNote:'via Docuseal'},
     {label:'Worker signed',owner:'Worker'},
     {label:'ADT countersigned',owner:'EOR Ops'}
   ],
   'onboarding':[
-    {label:'Worker KYC',owner:'Onboarding Ops'},
+    {label:'Worker KYC',owner:'Onboarding Ops',auto:true,autoNote:'KYC provider'},
     {label:'Documents',owner:'Onboarding Ops',cond:'n/n per country'},
     {label:'Tax registration',owner:'Onboarding Ops'},
     {label:'Social security enrolment',owner:'Onboarding Ops'},
-    {label:'Bank verified',owner:'Onboarding Ops'},
-    {label:'Payroll configured',owner:'Payroll Ops'}
+    {label:'Bank verified',owner:'Onboarding Ops',auto:true,autoNote:'penny-drop check'},
+    {label:'Payroll configured',owner:'Payroll Ops',auto:true,autoNote:'from contract data'}
   ],
   'active':[
-    {label:'Ready for payroll',owner:'Payroll Ops'},
-    {label:'First payroll run',owner:'Payroll Ops',sla:'Per payroll calendar'},
-    {label:'Active',owner:'Payroll Ops'}
+    {label:'Ready for payroll',owner:'Payroll Ops',auto:true,autoNote:'all onboarding gates green'},
+    {label:'First payroll run',owner:'Payroll Ops',sla:'Per payroll calendar',auto:true,autoNote:'payroll engine'},
+    {label:'Active',owner:'Payroll Ops',auto:true,autoNote:'after first run clears'}
   ]
 };
 /* Who each owner role actually is, and which persona may advance its sub-steps. `persona`
@@ -288,24 +295,85 @@ function amSubIndex(d){const steps=amSubSteps(d.stage);return Math.min(d.sub||0,
    current one — which left a record sitting on the last step of a stage with no next step to
    click and no way forward.
 
-   What the action IS depends on who owns that step, and only three cases matter to a user:
+   What the action IS depends on who owns that step, and only four cases matter to a user:
+     auto  the AI Execution Layer performs it — nobody ticks it, it reports itself done
      do    the signed-in role owns it, so there is a button that completes it
      chase the client owns it, so the useful action is a reminder, not a tick
      wait  a worker, another team, or the system owns it — nothing for this user to do
-   Returning the case explicitly means no screen has to re-derive it from the owner name. */
+   Auto is checked before ownership on purpose: an automated step must never grow a manual
+   "Mark done" button just because the accountable role happens to be signed in — ticking it
+   by hand is exactly what the automation removed. */
 function amNextAction(d){
   const step=amCurrentSub(d);
   if(!step)return {kind:'wait',label:'Nothing to do',owner:'&mdash;',step:null};
   const owner=step.owner;
+  if(step.auto)return {kind:'auto',label:'Runs automatically',owner:owner,step:step};
   if(amCanAdvance(owner))return {kind:'do',label:'Mark done',owner:owner,step:step};
   if(owner==='Client')return {kind:'chase',label:'Send reminder',owner:owner,step:step};
   if(owner==='System')return {kind:'wait',label:'Runs automatically',owner:owner,step:step};
   return {kind:'wait',label:'Waiting on '+owner,owner:owner,step:step};
 }
+/* == AUTO STEPS NEVER WAIT ===============================================================
+   An automated sub-step is not a task — the system performs it the instant it is reached, so
+   a record must never sit on one waiting for someone to press a button. Whenever a record
+   lands on an auto step, this rolls it forward (across a stage boundary if needed) until it
+   rests on a human step. The skipped steps still count as done, so the derived log records
+   them — as history, performed by the execution layer — while the Logs tab only ever asks a
+   person for the steps that are actually theirs. The one place a record may legitimately rest
+   on an auto step is the terminal stage, where there is nothing after it to wait for. */
+function amSkipAutoSteps(d){
+  const skipped=[];let guard=0;
+  while(guard++<60){
+    const steps=amSubSteps(d.stage);
+    const idx=Math.min(d.sub||0,Math.max(0,steps.length-1));
+    const cur=steps[idx];
+    if(!cur||!cur.auto)break;
+    if(idx<steps.length-1){skipped.push(cur.label);d.sub=idx+1;continue;}
+    const next=amPipelineStages[amStageIndex(d.stage)+1];
+    if(!next)break;
+    skipped.push(cur.label);
+    d.stage=next.id;d.sub=0;
+  }
+  return skipped;
+}
+/* == CSM AUTO-ASSIGNMENT =================================================================
+   The concrete automation behind stage 1's "CSM assigned": routed by the client's country.
+   Held on the deal (d.csm) so it is a fact that can be revisited — the Workflow tab shows the
+   assignment and offers reassignment, which is the whole reason it surfaces there rather than
+   as a step someone ticks in the Logs. */
+const amCsmByCountry={'India':'Ishita Rao','Netherlands':'Maya Vos','Germany':'Tomas Berg','Spain':'Luis Ortega','United Kingdom':'Daniel Kim'};
+const amCsmPool=['Ishita Rao','Maya Vos','Tomas Berg','Luis Ortega','Daniel Kim'];
+function amCsmFor(d){return d.csm||amCsmByCountry[d.country]||'Daniel Kim';}
+function amReassignCsm(dealId,name){
+  const d=amDeals.find(function(x){return x.id===dealId;});if(!d||!name||name===amCsmFor(d))return;
+  const prev=amCsmFor(d);
+  d.csm=name;
+  amPushNote(d,'CSM reassigned','Reassigned from '+prev+' to '+name+' by '+actorLabel(currentActorId())+'.');
+  showAiToast('CSM reassigned',d.ref+' &middot; '+name+' now owns this client relationship.');
+  renderADTPage();
+}
+/* Shared "something happened without the record moving" entry — reminders, completion notes,
+   reassignments. One writer, so every note carries the same shape and stamps. */
+function amPushNote(d,label,note){
+  const stage=amStageById(d.stage)||{};
+  const now=new Date();const h=now.getHours();
+  (amExtraLog[d.id]=amExtraLog[d.id]||[]).unshift({
+    stage:stage,stageNo:stage.n,subNo:amSubIndex(d)+1,
+    sub:{label:label},
+    owner:amOwnerInfo('Account Manager'),ownerRole:'Account Manager',
+    state:'note',
+    date:now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear(),
+    time:(h%12||12)+':'+String(now.getMinutes()).padStart(2,'0')+' '+(h>=12?'PM':'AM'),
+    note:note
+  });
+}
 /* Reminders are the one event the derived log cannot infer, because they do not move the
    record — they are a thing the Account Manager did while standing still. Kept separately so
    the derived history stays derived. */
 const amExtraLog={};
+// Seed records may sit on an auto step (the table predates the auto flags); roll them forward
+// once at load so the invariant above holds from the first render.
+amDeals.forEach(function(d){amSkipAutoSteps(d);});
 /* == SUB-STATUS LOG ======================================================================
    Derived, not stored. Every sub-status a record has already cleared — across every stage it
    has passed through, not just the one it sits in — becomes one log entry stamped with the
@@ -421,36 +489,60 @@ const sidebarItems=[
     {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],personas:['account-manager'],color:'orange',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
     {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'}
   ]},
-  {dropdown:'Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',children:[
-    {id:'direct',label:'Direct Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
-    {id:'global',label:'Global Employee',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
+  /* == THE SAAS PRODUCT'S OWN MODULES =====================================================
+     Six domain groups, each one an answer to "whose job is this". The previous shape grouped
+     by noun — an "Employee" dropdown holding two views of the same list, a "Leaves" dropdown,
+     a "Compliance Hub" dropdown — which meant the four pages of pre-employment legal setup
+     (Contracts, Contract Templates, Compliance Hub, Rates & Rules) were split across
+     "Workforce Operations" and "Compliance Hub" for no reason a user could name, and Payroll
+     sat under a heading whose other children were timesheets and contracts.
+
+     What changed, and why:
+       Workforce               Employees + Teams. Direct and Global were never two modules,
+                               only two filters over one list, so they are one nav item with
+                               the filter inside the page (see buildEmployeesPageHTML).
+       Contracts & Compliance  The four pre-employment legal pages, together at last.
+       Time & Payroll          Everything that feeds a pay run. My/All Timesheet collapse the
+                               same way Employees did — one page, two tabs.
+       Finance                 Payments alone, deliberately. Client billing has a different
+                               owner (Finance) than payroll (Ops/HR), and the domain map has
+                               it growing into invoices, vouchers and receivables — folding it
+                               into Payroll now to save one row would only have to be undone.
+       Administration          Company Settings + Users. "All Users" loses its qualifier; under
+                               an Administration heading, "Users" is unambiguous.
+       Support                 Untouched, on purpose. == */
+  {dropdown:'Workforce',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',children:[
+    {id:'employees',label:'Employees',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
+    {id:'teams',label:'Teams',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'}
   ]},
-  {id:'teams',label:'Teams',roles:['super-admin','entity-admin','entity-user'],color:'purple',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'},
-  {dropdown:'Workforce Operations',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',children:[
-    {id:'contracts',label:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
-    {id:'my-timesheet',label:'My Timesheet',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'},
-    {id:'all-timesheet',label:'All Timesheet',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>'},
+  {dropdown:'Contracts & Compliance',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',children:[
+    {id:'contracts',label:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
+    {id:'contract-templates',label:'Contract Templates',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'},
+    {id:'compliance',label:'Compliance Hub',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'},
+    {id:'rates-rules',label:'Rates & Rules',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>'}
+  ]},
+  // -- Leave Policies is not in the module spec but is a live page, and it is the settings
+  // behind the row above it. Filing it anywhere else would separate the policy from the
+  // balances it governs, so it stays next to Leaves. --
+  {dropdown:'Time & Payroll',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',children:[
+    {id:'all-leaves',label:'Leaves',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>'},
+    {id:'leave-policies',label:'Leave Policies',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'},
+    {id:'timesheet',label:'Timesheet',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'},
+    {id:'payroll',label:'Payroll',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'},
     {id:'payheads',label:'Payheads',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1V2l-2 1-2-1-2 1-2-1-2 1-2-1z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>'},
-    {id:'payroll',label:'Payroll',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'}
-  ]},
-  {dropdown:'Leaves',roles:['super-admin','entity-admin','entity-user'],color:'green',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>',children:[
-    {id:'all-leaves',label:'All Leaves',roles:['super-admin','entity-admin','entity-user'],color:'green',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>'},
-    {id:'leave-policies',label:'Leave Policies',roles:['super-admin','entity-admin','entity-user'],color:'green',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'}
+    {id:'salary-view',label:'Salary View',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="13" y2="9"/><line x1="7" y1="13" x2="17" y2="13"/><line x1="7" y1="17" x2="11" y2="17"/></svg>'}
   ]},
   {dropdown:'Finance',roles:['super-admin','entity-admin','entity-user'],color:'green',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M6 15h2"/><path d="M12 15h4"/></svg>',children:[
     {id:'payments',label:'Payments',roles:['super-admin','entity-admin','entity-user'],color:'green',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M6 15h2"/></svg>'}
-  ]},
-  {dropdown:'Compliance Hub',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',children:[
-    {id:'compliance',label:'Compliance Items',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>'},
-    {id:'rates-rules',label:'Rates & Rules',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>'},
-    {id:'contract-templates',label:'Contract Templates',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'}
   ]},
   {dropdown:'Support',roles:['super-admin','entity-admin','entity-user'],color:'indigo',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>',children:[
     {id:'chats',label:'Chats',roles:['super-admin','entity-admin','entity-user'],color:'indigo',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 10h8"/><path d="M8 14h5"/></svg>'},
     {id:'support-tickets',label:'Tickets',roles:['super-admin','entity-admin','entity-user'],color:'indigo',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9a3 3 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a3 3 0 0 0 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3z"/><path d="M13 5v14"/></svg>'}
   ]},
-  {id:'all-users',label:'All Users',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'},
-  {id:'settings',label:'Company Settings',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'}
+  {dropdown:'Administration',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',children:[
+    {id:'settings',label:'Company Settings',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'},
+    {id:'all-users',label:'Users',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'}
+  ]}
 ];
 
 
@@ -495,6 +587,17 @@ const supportPageMeta={
   compliance:{title:'Rates & Rules',context:'Compliance Hub',filters:['Country','Category','Status'],columns:['S. No','Country','Rule Name','Category','Applicable To','Value / Rate','Status'],rows:[[1,'Netherlands','Minimum Wage','General','EOR / PEO','EUR 14.71','Active'],[2,'Netherlands','Income Tax Bracket 1','Income Tax','EOR','35.75%','Inactive'],[3,'Netherlands','Unemployment Insurance','Social Security','EOR','2.74%','Active'],[4,'Netherlands','Disability Insurance','Social Security','EOR','6.27%','Inactive'],[5,'Netherlands','Holiday Allowance','Benefits','EOR / PEO','8.00%','Active'],[6,'Netherlands','Health Insurance Levy','Health Ins.','PEO','6.10%','Inactive'],[7,'Netherlands','Childcare Levy','Social Security','PEO','0.50%','Inactive']]},
   settings:{title:'Company Settings',context:'Company Settings',filters:['Area','Owner','Status'],columns:['S. No','Setting','Area','Owner','Updated','Status'],rows:[[1,'Entity Profile','Company','Pallavi Parate','Today','Active'],[2,'Bank Details','Finance','Finance Ops','Yesterday','Pending'],[3,'Permissions','Access','Admin','06 May 2026','Active'],[4,'Notifications','Workspace','People Ops','02 May 2026','Active'],[5,'Billing Contacts','Finance','Admin','29 Apr 2026','Inactive'],[6,'Audit Logs','Security','System','Live','Active']]},
   support:{title:'Support',context:'Support',filters:['Topic','Priority','Status'],columns:['S. No','Ticket','Topic','Owner','Updated','Status'],rows:[[1,'SUP-1018','Payroll question','ADT Support','Today','Active'],[2,'SUP-1017','Contract review','Legal Desk','Yesterday','Pending'],[3,'SUP-1016','Compliance rates','Compliance Desk','06 May 2026','Active'],[4,'SUP-1015','Payment proof','Finance Ops','04 May 2026','Active'],[5,'SUP-1014','Account access','Admin','Closed','Inactive'],[6,'SUP-1013','Entity setup','Operations','01 May 2026','Active']]},
+  // -- New page behind the Salary View row under Time & Payroll. It carries a full meta rather
+  // than a title alone because buildListingHTML reads filters/columns/rows off it; a partial
+  // entry would throw on the first render. --
+  'salary-view':{title:'Salary View',context:'Salary View',filters:['Country','Cycle','Status'],columns:['S. No','Employee','Employee ID','Cycle','Gross Pay','Deductions','Net Pay','Status'],rows:[
+    [1,'Anika Shah','EMP003','May 2026','EUR 6,200','EUR 1,410','EUR 4,790','Active'],
+    [2,'Rahul Mehta','EMP004','May 2026','INR 210,000','INR 38,500','INR 171,500','Pending'],
+    [3,'Pallavi Parate','EMP002','May 2026','INR 185,000','INR 33,900','INR 151,100','Active'],
+    [4,'Luis Martin','EMP007','April 2026','EUR 5,400','EUR 1,620','EUR 3,780','Active'],
+    [5,'Nora Kim','EMP009','April 2026','EUR 4,850','EUR 1,455','EUR 3,395','Inactive'],
+    [6,'Owen Clark','EMP011','April 2026','GBP 4,700','GBP 1,128','GBP 3,572','Active']
+  ]},
   'all-leaves':{title:'All Leaves',context:'All Leaves',filters:['Leave Type','Status'],columns:['S.No','Key Id','Full Name','Leave Hours','From Date','To Date','Status'],rows:[
     [1,'2014','Shaun J','Full Day','14-04-2026','16-04-2026','Approved'],
     [2,'2019','Pallavi P','Half Day','18-04-2026','18-04-2026','Pending'],
@@ -505,7 +608,7 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Agent & Model Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='direct')return{title:'Direct Employee',context:'Direct Employee',filters:[],columns:[],rows:[]};if(pg==='global')return{title:'Global Employee',context:'Global Employee',filters:[],columns:[],rows:[]};if(pg==='my-timesheet')return{title:'My Timesheet',context:'My Timesheet',filters:[],columns:[],rows:[]};if(pg==='all-timesheet')return{title:'All Timesheet',context:'All Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Agent & Model Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='employees')return{title:'Employees',context:'Employees',filters:[],columns:[],rows:[]};if(pg==='timesheet')return{title:'Timesheet',context:'Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
@@ -988,7 +1091,32 @@ const pageRoleMap={
 function canAccessPage(pg,role){const allowed=pageRoleMap[pg];return !allowed||allowed.includes(role);}
 function defaultPageForRole(role){return role==='entity-user'?'ai-executive':'dashboard';}
 
+/* == MERGED PAGES: SCOPE STATE ============================================================
+   Employees and Timesheet each replaced two sidebar rows and two page ids with one page and a
+   switch inside it. The scope lives here rather than in `page` so that every page still maps to
+   exactly one sidebar row to highlight — which is most of the reason the merge is worth doing.
+   Defaults are the view a person lands on cold: their own timesheet, and direct employees. == */
+let empScope='direct';   // 'direct' | 'global'
+let tsScope='my';        // 'my' | 'all'
+const TS_DEFAULT_EMP={name:'Shaun Test1',initials:'ST',role:'Entity Super Admin'};
+/* Every retired id still resolves. Dashboard tiles, journey module links, the All Timesheet
+   drill-down and the back buttons all pass ids like 'direct' or 'all-timesheet'; rewriting each
+   call site would be a lot of edits for no behavioural gain, and any one missed would 404 into
+   the role's default page with no clue why. Translating here — at the single funnel every
+   navigation goes through — means one place has to be right instead of a dozen. */
+function resolvePageAlias(pg){
+  if(pg==='direct'||pg==='global'){empScope=pg;return 'employees';}
+  if(pg==='my-timesheet'||pg==='all-timesheet'){tsScope=pg==='my-timesheet'?'my':'all';return 'timesheet';}
+  return pg;
+}
+
 function navigatePage(pg){
+  /* A plain trip to Timesheet is a trip to YOUR timesheet. Without this, drilling into a
+     colleague's calendar from the All tab and then clicking Timesheet in the sidebar would
+     re-open that colleague's month under a tab labelled "My" — the state survived the
+     navigation because the page id no longer changes between the two views. */
+  if(pg==='timesheet')tsEmp=Object.assign({},TS_DEFAULT_EMP);
+  pg=resolvePageAlias(pg);
   const resolved=canAccessPage(pg,portalRole)?pg:defaultPageForRole(portalRole);
   // Any deliberate navigation ends the All Timesheet drill-down, including the back button itself.
   tsFromAllTimesheet=false;
@@ -1061,12 +1189,16 @@ function dashboardTabsForRole(role){
     // Workspace", so moving the standard dashboard onto the `employee` id does not cost them it. --
     return [employeeTab].concat(map[activePersonaId]||[{id:'my-work',label:'My Workspace'}]);
   }
-  if(role==='entity-admin')return [employeeTab,{id:'entity-admin',label:'Entity Admin'}];
+  /* -- Entity Admin follows the Account Manager pattern above: one dashboard, no tab strip.
+     The entity view IS the dashboard for this role — systems, journeys, and the requests
+     queue — and pairing it with the employee self-service view put a two-pill toggle above a
+     page that only ever wanted one of them. The self-service figures stay reachable through
+     the sidebar (Leaves, My Timesheet, My Profile), so only the toggle is gone. -- */
+  if(role==='entity-admin')return [{id:'entity-admin',label:'Entity Admin'}];
   /* Platform Overview leads for Super Admin, and the employee view keeps its place behind it.
      A Super Admin operates the execution layer across every client — landing them on their own
      leave balance and payslip answered a question they had not asked, and buried the one they
-     had (is anything broken). Entity Admin keeps employee-first because that role really does
-     use the self-service view day to day. */
+     had (is anything broken). */
   if(role==='super-admin')return [{id:'platform',label:'Platform Overview'},employeeTab];
   return [employeeTab];
 }
@@ -2006,7 +2138,7 @@ function acknowledgeManagerNotify(id){
   renderADTPage();
   showAiToast('Marked as reviewed','You\'ve acknowledged this note from your Entity User.');
 }
-// -- Notes flagged for a second opinion route into the linked deal's own Logs tab in Workforce Operations > Contracts, so the reviewer approves/rejects in the record itself rather than inline in the notes list. --
+// -- Notes flagged for a second opinion route into the linked deal's own Logs tab in Contracts & Compliance > Contracts, so the reviewer approves/rejects in the record itself rather than inline in the notes list. --
 function resolveManagerNotify(id){
   const req=entityRequests.find(function(r){return r.id===id&&r.type==='manager-notify';});if(!req||req.status!=='Pending')return;
   if(!req.contractRecordId){acknowledgeManagerNotify(id);return;}
@@ -2302,7 +2434,9 @@ function loadAppState(){
   }catch(e){}
 }
 function manualJourneySteps(journeyId){return manualJourneyStepCatalog[journeyId]||[];}
-const manualModulePageLabels={contracts:'Contracts',compliance:'Compliance Hub','my-tasks':'My Tasks',direct:'Direct Employee',payroll:'Payroll','all-timesheet':'All Timesheet',payments:'Payments',payheads:'Payheads','leave-policies':'Leave Policies'};
+// -- Keyed by the `modulePage` ids the journey definitions carry, which still name the retired
+// pages; the labels name where those ids now land. resolvePageAlias does the routing half. --
+const manualModulePageLabels={contracts:'Contracts',compliance:'Compliance Hub','my-tasks':'My Tasks',direct:'Employees',payroll:'Payroll','all-timesheet':'Timesheet',payments:'Payments',payheads:'Payheads','leave-policies':'Leave Policies'};
 function manualModuleLabel(pageId){return manualModulePageLabels[pageId]||getPageTitle(pageId)||pageId;}
 function manualStepOwnerDeptId(ownerRole){
   const role=ownerRole||'';
@@ -2946,7 +3080,7 @@ const entitiesData=[
 // ── TIMESHEET STATE & DATA ──
 let tsSelectedDay=null;
 let tsMonth={year:2026,month:5}; // 0-indexed (5=June)
-let tsEmp={name:'Shaun Test1',initials:'ST',role:'Entity Super Admin'};
+let tsEmp=Object.assign({},TS_DEFAULT_EMP);
 const tsAttendance={
   '2026-06-01':{in:'09:00 AM',out:'06:15 PM',loc:'Hyderabad',hours:'9.25h',src:'Auto',status:'present'},
   '2026-06-02':{in:'09:15 AM',out:'06:30 PM',loc:'Hyderabad',hours:'9.25h',src:'Manual',status:'present'},
@@ -2976,15 +3110,32 @@ const allTsData=[
   {id:3,empId:'11754',name:'Shaun Test1',country:'-',empStatus:'Active',tsStatus:'Unfilled',role:'Entity Super Admin',initials:'ST'}
 ];
 // -- Set here and cleared in navigatePage, so it is true only while the user drilled in from the
-// All Timesheet row and false the moment they reach My Timesheet any other way. atViewCalendar
-// assigns `page` directly rather than going through navigatePage, which is what keeps the two
-// paths distinguishable. --
+// All tab and false the moment they reach the My tab any other way. atViewCalendar assigns the
+// scope directly rather than going through navigatePage, which is what keeps the two paths
+// distinguishable — and is now the only thing that does, since both tabs are one page id. --
 let tsFromAllTimesheet=false;
 function atViewCalendar(empId,name,initials,role){
   tsEmp={name:name,initials:initials,role:role||'Employee'};
   tsSelectedDay=null;
   tsFromAllTimesheet=true;
-  page='my-timesheet';
+  tsScope='my';
+  page='timesheet';
+  renderADTPage();
+}
+// -- The tab strip on the Timesheet page. Switching tabs by hand is always a fresh start, so it
+// drops the drill-down: the back button it draws points at a tab you are already looking at. --
+function tsSetScope(s){
+  tsScope=s;
+  tsFromAllTimesheet=false;
+  tsSelectedDay=null;
+  if(s==='my')tsEmp=Object.assign({},TS_DEFAULT_EMP);
+  renderADTPage();
+}
+// -- Employees: same idea, one axis simpler. There is no drill-down to unwind, only two lists. --
+function empSetScope(s){
+  empScope=s;
+  // Both drawers close: each holds a record from a list the other scope does not show.
+  deSelectedId=null;geSelectedId=null;
   renderADTPage();
 }
 

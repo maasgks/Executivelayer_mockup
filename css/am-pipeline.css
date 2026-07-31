@@ -215,6 +215,11 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
 .am-sb-next.wait .am-sb-next-kicker{color:var(--gray)}
 .am-sb-next.chase{border-color:var(--am-tint-line);background:var(--am-tint-bg)}
 .am-sb-next.chase .am-sb-next-kicker{color:var(--am-tint-ink)}
+/* Auto: ink header treatment without the "do" urgency — the card informs, it does not ask. */
+.am-sb-next.auto{border-color:#cbd5e1;background:#f8fafc}
+.am-sb-next.auto .am-sb-next-kicker{color:var(--navy);display:inline-flex;align-items:center;gap:5px}
+.am-sb-owner.auto .am-sb-owner-av{background:var(--navy);color:#fff}
+.am-sb-owner.auto .am-sb-owner-flag{color:var(--gray)}
 .am-sb-loghead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px}
 .am-sb-loghead span{font-size:10.5px;font-weight:600;color:var(--gray);text-transform:none;letter-spacing:0}
 
@@ -227,6 +232,23 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
 /* Inline tags in the Logs trail and the Workflow list */
 .am-sub-tag{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:1px 6px;border-radius:20px;white-space:nowrap;line-height:1.5;background:var(--am-tint-bg);color:var(--am-tint-ink);border:1px solid var(--am-tint-line)}
 .am-sub-tag.breach{background:var(--am-strong-bg);color:var(--navy);border-color:var(--am-strong-line)}
+/* Automated step marker — solid ink, the same fill-weight code as the journey chips: solid
+   means the machine acts. The bolt is the icon, "auto" the word, both tiny by design. */
+.am-sub-tag.auto{display:inline-flex;align-items:center;gap:3px;background:var(--navy);color:#fff;border-color:var(--navy);margin-left:6px}
+.am-sub-tag.auto svg{width:8px;height:8px}
+.am-act.auto{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:var(--navy);background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:5px 11px}
+/* Workflow tab: automation that has already run. The CSM row carries a live select — the one
+   automated fact that is meant to be revisited — everything else is a plain "Done". */
+.am-auto-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #f1f3f5}
+.am-auto-row:last-child{border-bottom:none}
+.am-auto-bolt{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--navy);color:#fff}
+.am-auto-bolt svg{width:9px;height:9px}
+.am-auto-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.am-auto-txt b{font-size:12px;font-weight:700;color:var(--navy)}
+.am-auto-txt i{font-size:10.5px;font-style:normal;color:var(--gray)}
+.am-auto-done{font-size:10.5px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.4px}
+.am-auto-select{height:28px;padding:0 8px;border:1px solid var(--border);border-radius:7px;font-size:11.5px;font-weight:600;color:var(--navy);font-family:inherit;background:#fff;cursor:pointer;outline:none;max-width:150px}
+.am-auto-select:hover{border-color:#94a3b8}
 /* "Your turn" / "Gate" markers in the client-facing tab */
 .am-stage-flag{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:20px;white-space:nowrap;line-height:1.5;background:var(--am-tint-bg);color:var(--am-tint-ink);border:1px solid var(--am-tint-line)}
 .am-stage-flag.gate{background:var(--am-strong-bg);color:var(--navy);border-color:var(--am-strong-line)}
