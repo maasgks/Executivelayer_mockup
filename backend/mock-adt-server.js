@@ -20,7 +20,26 @@ const PORT = process.env.MOCK_ADT_PORT || 4100;
 const API_KEY = process.env.MOCK_ADT_API_KEY || 'demo-adt-staging-key';
 
 const submissions = [];
+// The submission counter persists even though the submissions themselves do not. A real source
+// system never reissues a record id, and this one restarting must not either: the Executive
+// Layer's store outlives this process, so a counter that reset to 1 would offer 'ADT-SUB-0001'
+// for a second, different client — which the Executive Layer correctly refuses, because it
+// already has a client filed under that id. Only the id watermark is kept; the records are
+// still cleared on restart, which is what you want for a demo.
+const SEQ_FILE = require('node:path').join(__dirname, 'data', 'mock-adt-seq');
 let submissionSeq = 1;
+try {
+  const saved = parseInt(require('node:fs').readFileSync(SEQ_FILE, 'utf8').trim(), 10);
+  if (Number.isFinite(saved) && saved > 0) submissionSeq = saved;
+} catch { /* first run, or the file was deleted to reset the demo */ }
+function nextSubmissionId() {
+  const id = 'ADT-SUB-' + String(submissionSeq++).padStart(4, '0');
+  try {
+    require('node:fs').mkdirSync(require('node:path').dirname(SEQ_FILE), { recursive: true });
+    require('node:fs').writeFileSync(SEQ_FILE, String(submissionSeq));
+  } catch { /* best effort — a demo that cannot persist the watermark still runs */ }
+  return id;
+}
 
 const COUNTRIES = ['India', 'Netherlands', 'Germany', 'Spain', 'United Kingdom', 'United States', 'Singapore'];
 const DIAL_CODES = ['+91', '+31', '+49', '+34', '+44', '+1', '+65'];
@@ -114,7 +133,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const record = {
-      id: 'ADT-SUB-' + String(submissionSeq++).padStart(4, '0'),
+      id: nextSubmissionId(),
       submitted_at: new Date().toISOString(),
       full_name: fields.get('full_name') || '',
       work_email: fields.get('work_email') || '',
@@ -152,8 +171,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const record = {
-      id: 'ADT-SUB-' + String(submissionSeq++).padStart(4, '0'),
+      id: nextSubmissionId(),
       submitted_at: new Date().toISOString(),
+      // The Executive Layer's own id for this client, stored here and echoed back. A real source
+      // system would hold it in an "external reference" field for exactly this reason: it is how
+      // a human on this side knows which Executive Layer client this row is, and how the
+      // Executive Layer re-links a record whose submit response it never received.
+      external_ref: body.external_ref || null,
       full_name: body.full_name || '',
       work_email: body.work_email || '',
       phone_country_code: body.phone_country_code || '',

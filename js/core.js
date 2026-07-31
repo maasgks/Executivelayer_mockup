@@ -84,12 +84,12 @@ let mtReqSelectedId=null,mtReqTab='journeys';
 let mtTaskSelectedRunId=null;
 let aiClientSelectedId=null,aiClientTab='journeys';
 let liveRunSeq=9000;
-// -- NewForce Solutions live sync. The ADTEMP-####/ADT-REF-#### pair and the "what have we already
-// seen" cursor are both minted by the backend now (see backend/server.js) rather than from
-// counters kept here: two browsers running this page each had their own counter, so both
-// issued ADTEMP-0001 to different people and each re-ingested submissions the other had
-// already taken. The poll loop's on/off state (adtPollTimerId, js/pages.js) stays client-side
-// and unpersisted, since a fresh page load always starts idle and must be re-armed. --
+// -- NewForce Solutions live sync. The Client ID and the "what have we already seen" cursor are
+// both minted by the backend now (see backend/server.js) rather than from counters kept here:
+// two browsers running this page each had their own counter, so both issued the same id to
+// different clients and each re-ingested submissions the other had already taken. The poll
+// loop's on/off state (adtPollTimerId, js/pages.js) stays client-side and unpersisted, since a
+// fresh page load always starts idle and must be re-armed. --
 let aiJourneyDetailSelectedStage=-1;
 let aiRunStatusFilter='';
 const aiAutomationRuns={
@@ -2051,7 +2051,7 @@ const cfgModels=[
     //
     // Only this object declares `identity`; the section does not render for models without it.
     identity:[
-      {name:'Client ID',column:'employee_code',mintedBy:'Executive Layer',example:'CLI-0010',
+      {name:'Client ID',column:'employee_code',mintedBy:'Executive Layer',example:'CLI-000010',
        note:'Issued by us when the client is created here. Unique across the whole Executive Layer — minted inside the insert transaction, not per browser.'},
       {name:'Source Record ID',column:'source_record_id',mintedBy:'NewForce Solutions',example:'ADT-SUB-0011',
        note:'The id the source system gave this same client in its own store. Recorded as received, never rewritten, and the key ingest deduplicates on.'}
@@ -2074,7 +2074,7 @@ const cfgModels=[
       {name:'Branch',type:'string'},{name:'Joining Date',type:'date'},{name:'Status',type:'string'}
     ],
     rules:{makerChecker:true,validation:'Full name and work email are required. Client ID is minted here and unique; Source Record ID must be unique too — a repeat resolves to the existing client instead of creating a second one. Record enters as Pending until enrichment fields are supplied'},
-    sample:[['Client ID','CLI-0010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Status','Pending']]}
+    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Status','Pending']]}
 ];
 let cfgModelTested={};
 let cfgModelEditing=false;

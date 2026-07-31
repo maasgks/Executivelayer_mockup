@@ -97,6 +97,13 @@ function execApiUpdateEmployee(employeeCode, fields){
   return execApiRequest('PATCH', '/employees/' + encodeURIComponent(employeeCode), fields);
 }
 
+// Re-push a client whose mirror to the source system failed. Resolves rather than rejects when
+// the retry itself fails cleanly (HTTP 202) — "we tried and it did not work" is an outcome the
+// caller renders, not an exception. Only transport failures reject.
+function execApiRetryMirror(employeeCode){
+  return execApiRequest('POST', '/employees/' + encodeURIComponent(employeeCode) + '/mirror-retry');
+}
+
 /* --------------------------------------------------------------- normalizing -- */
 
 // Backend row -> the shape directEmpData rows use in this app. Keeping the translation in one
@@ -112,6 +119,11 @@ function execApiToDirectEmpRow(row, localId){
     empId: row.employee_code,
     sourceRecordId: row.source_record_id,
     source: row.source,
+    // How far the outbound push to the source system got. Carried through because a client that
+    // exists here but has not yet been accepted there is a state the listing has to show — the
+    // alternative is an empty Source Record ID cell that looks identical to a manual record.
+    mirrorState: row.mirror_state || (row.source_record_id ? 'mirrored' : 'not_required'),
+    mirrorError: row.mirror_error || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     // Not captured by the ADT intake form — HR fills these in, which is why the record is Pending.

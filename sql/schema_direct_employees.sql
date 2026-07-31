@@ -9,6 +9,22 @@
 -- department, branch, or join date — HR completes those after ingest, which is why an
 -- ADT-sourced record lands in 'Pending' rather than 'Active'.
 
+-- Every system a client can arrive from, as data. This replaced an inline value list on
+-- direct_employees.source, which had to be rewritten — and the table rebuilt — for every new
+-- connector, making "connect another system" a schema migration rather than a configuration
+-- change. Adding SAP is now one INSERT.
+CREATE TABLE source_systems (
+  id           VARCHAR(30)  PRIMARY KEY,   -- 'adt_solution'
+  label        VARCHAR(100) NOT NULL,      -- 'NewForce Solutions' — what the UI prints
+  console_url  VARCHAR(255) NULL,          -- deep link out; null for systems with no console
+  is_active    TINYINT(1)   NOT NULL DEFAULT 1
+);
+-- 'manual' is a source_systems row like any other so the FK holds for hand-created clients.
+-- It has no console_url because there is no external system to open.
+INSERT IGNORE INTO source_systems (id, label, console_url) VALUES
+  ('manual',       'Manual',             NULL),
+  ('adt_solution', 'NewForce Solutions', 'https://admin.newforceltd.com/login/authentication');
+
 CREATE TABLE direct_employees (
   id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
@@ -28,11 +44,27 @@ CREATE TABLE direct_employees (
   -- it as though it were the source system's, which made it employee_code in a different prefix.
   -- Dropped. Pre-existing MySQL installs can leave the column in place; nothing reads or writes
   -- it, but it must be nullable.)
-  employee_code       VARCHAR(30)  NOT NULL UNIQUE,  -- 'CLI-0010' (client) | 'EMP001' (manual)
-  source_record_id    VARCHAR(64)  NULL UNIQUE,
+  -- 'CLI-000010', for every client, however it arrived. One prefix and one sequence: the id is
+  -- OUR name for the record, so letting it vary by origin ('ADTEMP-' for NewForce, 'EMP001' for
+  -- manual, as it once did) put provenance in the one field that must not carry it. Where a
+  -- client came from is the `source` column's job, and it can change; this id never does.
+  employee_code       VARCHAR(30)  NOT NULL UNIQUE,
+  -- THEIR id, null until the source system has confirmed it. Null is a real, visible state, not
+  -- an absence: we mint our id first and mirror the record out second, so between those two
+  -- steps the row legitimately has no source record id (see mirror_state).
+  source_record_id    VARCHAR(64)  NULL,
 
-  -- Which system the client came from. Rendered as the "Source System" column.
-  source              VARCHAR(30)  NOT NULL DEFAULT 'manual',  -- 'manual' | 'adt_solution'
+  -- Which system the client came from; FK into source_systems rather than an inline value list,
+  -- so connecting SAP is an INSERT and not a schema migration.
+  source              VARCHAR(30)  NOT NULL DEFAULT 'manual',
+
+  -- Where the outbound mirror got to. 'not_required' for manually created clients that were
+  -- never meant to leave; 'pending'/'failed' are retryable and surfaced in the UI so a failed
+  -- push can never sit silently; 'mirrored' means source_record_id is populated and agreed.
+  mirror_state        VARCHAR(20)  NOT NULL DEFAULT 'not_required',
+  mirror_error        VARCHAR(500) NULL,
+  mirror_attempts     INT          NOT NULL DEFAULT 0,
+  mirror_last_try_at  DATETIME     NULL,
 
   -- ---- Fields the NewForce Solutions intake form actually submits ----
   name                VARCHAR(150) NOT NULL,        -- "Full name"
@@ -61,7 +93,14 @@ CREATE TABLE direct_employees (
   updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   INDEX idx_de_status (status),
-  INDEX idx_de_source_record (source_record_id)
+  INDEX idx_de_source_record (source_record_id),
+  INDEX idx_de_mirror_state (mirror_state),
+  -- Scoped per source, not global. Two systems can legitimately both mint '12345' for different
+  -- clients; a global UNIQUE on source_record_id made the second connector's first collision an
+  -- insert failure. MySQL treats NULLs as distinct in a UNIQUE index, so any number of rows may
+  -- sit mirror-pending with no source record id at all.
+  UNIQUE KEY uq_de_source_record (source, source_record_id),
+  FOREIGN KEY (source) REFERENCES source_systems(id)
 );
 
 -- Backs the drawer's Logs tab. occurred_at is one UTC instant rather than the separate
@@ -96,7 +135,10 @@ CREATE TABLE id_sequences (
   name        VARCHAR(50)  PRIMARY KEY,
   next_value  INT UNSIGNED NOT NULL
 );
-INSERT IGNORE INTO id_sequences (name, next_value) VALUES ('adt_employee', 1), ('manual_employee', 1);
+-- One sequence for every client, whatever system it came from. There were two ('adt_employee',
+-- 'manual_employee'), which is what forced two prefixes to keep the ids apart — and the prefix
+-- was then telling you the origin. One counter means one prefix can serve everything.
+INSERT IGNORE INTO id_sequences (name, next_value) VALUES ('client', 1);
 
 -- The ADT polling cursor. Previously per-browser localStorage, so each operator kept a private
 -- idea of "what have we already seen" and one submission could be ingested once per browser.

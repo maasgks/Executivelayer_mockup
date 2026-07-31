@@ -47,12 +47,22 @@ function renderPageContentImpl(id){
   const el=document.getElementById(id);
   if(!el)return;
   if(isAIContractWizardPage(page)){
+    // Screen one is the engagement-model choice and only that. Until a model is picked there is
+    // no run, so there is nothing for the nine-stage rail to report — drawing it here would be
+    // claiming "step 1 of 9" of a journey that has not started, above an empty page that says as
+    // much. The rail arrives with the run, on the next render.
+    if(page==='ai-contract-assistant'&&!aiCtActiveType()){
+      el.innerHTML=buildAICtModelChooserHTML();
+      return;
+    }
     const cjStage=aiCtJourneyStage();
     if(cjStage>=0){
       aiCtSyncLinkedRun(cjStage);
-      // Engagement model above the rail, on every step: it is the one decision that shapes the
-      // whole run, so it reads as the run's header rather than a question asked once and lost.
-      el.innerHTML='<div class="aicj-wrap">'+buildAIContractTypeCardsHTML()+buildAIJourneyBarHTML('contract-creation',cjStage,'ct')+'<div id="aicj-inner"></div></div>';
+      // No card row here. The engagement model is chosen on the screen before this one, so
+      // repeating all three options above every step of the run re-asks a question that has
+      // been answered — and spends ~150px doing it. Which model the run is under still has to
+      // be visible, so it rides in the step header as a single chip (aiJourneyLabelHTML).
+      el.innerHTML='<div class="aicj-wrap">'+buildAIJourneyBarHTML('contract-creation',cjStage,'ct')+'<div id="aicj-inner"></div></div>';
       dispatchAIContractWizardPage(document.getElementById('aicj-inner'));
     }else{
       dispatchAIContractWizardPage(el);

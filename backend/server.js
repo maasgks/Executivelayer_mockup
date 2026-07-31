@@ -96,8 +96,13 @@ function hydrateEmployee(row) {
   return Object.assign({}, row, { raw_source_payload: payload });
 }
 
+const findById = (id) => db.prepare('SELECT * FROM direct_employees WHERE id = ?').get(id);
 const findByCode = (code) => db.prepare('SELECT * FROM direct_employees WHERE employee_code = ?').get(code);
-const findBySourceRecord = (id) => db.prepare('SELECT * FROM direct_employees WHERE source_record_id = ?').get(id);
+// Scoped by source, matching the uq_de_source_record index. Two connected systems may each mint
+// the same record id for different clients, so a source record id only identifies a row when you
+// say which system said it.
+const findBySourceRecord = (source, id) =>
+  db.prepare('SELECT * FROM direct_employees WHERE source = ? AND source_record_id = ?').get(source, id);
 const getLogs = (empId) => db.prepare('SELECT * FROM direct_employee_logs WHERE employee_id = ? ORDER BY id DESC').all(empId);
 const getWorkflow = (empId) => db.prepare('SELECT * FROM direct_employee_workflow WHERE employee_id = ? ORDER BY id DESC').all(empId);
 
@@ -126,6 +131,21 @@ function nextSequenceValue(name) {
   if (!row) throw new Error('Unknown id sequence: ' + name);
   db.prepare('UPDATE id_sequences SET next_value = next_value + 1 WHERE name = ?').run(name);
   return row.next_value;
+}
+
+// The Client ID, and the only place it is formed. Every client gets one from this single
+// sequence whatever system it came from, because the id is OUR name for the record: an id whose
+// prefix or counter varied by origin ('ADTEMP-' for NewForce, 'EMP001' for manual, as it once
+// did) was answering "where did this come from" in the one field that must not depend on it.
+// Provenance lives in `source`, which can be corrected; this id is issued once and never moves.
+//
+// Six digits, not four: the pad has to outlast the client base, and 'CLI-9999' followed by
+// 'CLI-10000' would sort wrongly everywhere ids are compared as text.
+const CLIENT_ID_PREFIX = 'CLI-';
+const CLIENT_ID_DIGITS = 6;
+function mintClientCode() {
+  const seq = nextSequenceValue('client');
+  return CLIENT_ID_PREFIX + String(seq).padStart(CLIENT_ID_DIGITS, '0');
 }
 
 function getSyncState(key) {
@@ -271,6 +291,129 @@ async function fetchLatestAdtSubmission(sinceId) {
   return body && body.data ? body.data : body;
 }
 
+// Creates the client on our side and stops. Called before anything is sent anywhere, so the
+// Client ID exists and is committed whether or not the source system can be reached. The intake
+// body is kept verbatim in raw_source_payload, which is what makes a retry possible later: the
+// exact payload to re-send is on the row rather than in the memory of a request that has ended.
+function createMirrorPendingClient(body) {
+  const mapped = mapAdtSubmission(body);
+  return transaction(() => {
+    const employeeCode = mintClientCode();
+    const ts = nowIso();
+    const info = db.prepare(
+      `INSERT INTO direct_employees
+         (employee_code, source_record_id, source, name, email, phone_country_code,
+          contact, company_name, country, looking_for, heard_about_us, status, raw_source_payload,
+          mirror_state, created_at, updated_at)
+       VALUES (?, NULL, 'adt_solution', ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, 'pending', ?, ?)`
+    ).run(
+      employeeCode, mapped.name, mapped.email, mapped.phone_country_code, mapped.contact,
+      mapped.company_name, mapped.country, mapped.looking_for, mapped.heard_about_us,
+      JSON.stringify(body), ts, ts
+    );
+    const row = db.prepare('SELECT * FROM direct_employees WHERE id = ?').get(info.lastInsertRowid);
+    insertLog(row.id, 'Created',
+      'Client created in the Executive Layer as ' + employeeCode + '. Awaiting confirmation from NewForce Solutions.',
+      'Executive Layer');
+    insertWorkflow(row.id, 'Client Created',
+      'Client ID ' + employeeCode + ' minted by the Executive Layer'
+      + (mapped.company_name ? (' for ' + mapped.company_name) : '') + '.', 'Executive Layer');
+    return row;
+  });
+}
+
+// Pushes a mirror-pending client to the source system and records the outcome either way.
+// Never throws for a transport or remote failure: the caller wants the record back with its
+// state updated, not an exception that would imply nothing happened. Only genuine programming
+// faults propagate.
+async function attemptMirror(row) {
+  let payload = {};
+  try { payload = row.raw_source_payload ? JSON.parse(row.raw_source_payload) : {}; } catch { payload = {}; }
+  // Our Client ID travels with the record, so the source system stores OUR name for the client
+  // alongside its own. That is what lets a human on either side line the two records up, and
+  // what a later reconciliation would match on.
+  const outbound = Object.assign({}, payload, { external_ref: row.employee_code });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ADT_TIMEOUT_MS);
+  let submitted = null;
+  let failure = null;
+  try {
+    const r = await fetch(ADT_BASE_URL + '/api/employee-intake/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ADT_API_KEY },
+      body: JSON.stringify(outbound),
+      signal: controller.signal
+    });
+    if (!r.ok) failure = 'NewForce Solutions rejected the submission (' + r.status + ')';
+    else {
+      const parsed = await r.json();
+      submitted = parsed && parsed.data ? parsed.data : parsed;
+      if (!submitted || !mapAdtSubmission(submitted).source_record_id) {
+        failure = 'NewForce Solutions accepted the record but returned no id for it';
+        submitted = null;
+      }
+    }
+  } catch (e) {
+    failure = 'Could not reach NewForce Solutions: ' + e.message;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const ts = nowIso();
+  if (failure) {
+    db.prepare(
+      `UPDATE direct_employees
+          SET mirror_state = 'failed', mirror_error = ?, mirror_attempts = mirror_attempts + 1,
+              mirror_last_try_at = ?, updated_at = ?
+        WHERE id = ?`
+    ).run(failure, ts, ts, row.id);
+    insertLog(row.id, 'Updated', 'Mirror to NewForce Solutions failed: ' + failure, 'Executive Layer');
+    return { ok: false, error: failure };
+  }
+
+  const sourceRecordId = mapAdtSubmission(submitted).source_record_id;
+  // The source system can hand back an id we already hold — most plausibly because it was
+  // restored from a backup, or (in this demo) restarted with its counter rewound. Storing it
+  // would attach two different clients to one source record, so the composite unique index
+  // refuses. That refusal is a mirror failure like any other, not a 500: the record stays, the
+  // reason is recorded in plain words, and Retry is available once the collision is resolved.
+  const clash = findBySourceRecord('adt_solution', sourceRecordId);
+  if (clash && clash.id !== row.id) {
+    const msg = 'NewForce Solutions returned source record ' + sourceRecordId
+      + ', which is already held by ' + clash.employee_code + '.';
+    db.prepare(
+      `UPDATE direct_employees
+          SET mirror_state = 'failed', mirror_error = ?, mirror_attempts = mirror_attempts + 1,
+              mirror_last_try_at = ?, updated_at = ?
+        WHERE id = ?`
+    ).run(msg, ts, ts, row.id);
+    insertLog(row.id, 'Updated', 'Mirror to NewForce Solutions failed: ' + msg, 'Executive Layer');
+    return { ok: false, error: msg };
+  }
+
+  transaction(() => {
+    db.prepare(
+      `UPDATE direct_employees
+          SET source_record_id = ?, mirror_state = 'mirrored', mirror_error = NULL,
+              mirror_attempts = mirror_attempts + 1, mirror_last_try_at = ?, updated_at = ?
+        WHERE id = ?`
+    ).run(sourceRecordId, ts, ts, row.id);
+    insertLog(row.id, 'Updated',
+      'Mirrored to NewForce Solutions, filed there as ' + sourceRecordId + '.', 'NewForce Solutions Sync');
+    insertWorkflow(row.id, 'Mirrored to Source System',
+      'NewForce Solutions accepted Client ID ' + row.employee_code + ' and filed it as ' + sourceRecordId + '.',
+      'NewForce Solutions Sync');
+    insertWorkflow(row.id, 'Pending HR Review',
+      'Record held as Pending. HR must supply department, job title, branch and joining date before activation.',
+      'Executive Layer');
+  });
+  // Move the cursor past this submission so the background poller does not re-ingest the record
+  // we just pushed as though it were a new arrival.
+  setSyncState('adt_last_seen_source_id', sourceRecordId);
+  return { ok: true, submission: submitted };
+}
+
 // Writes one ADT submission into master data. Everything the form does not ask for
 // (department, job title, branch, join date) is left null, and the record lands in 'Pending'
 // precisely because it is incomplete — HR fills the gaps and then activates it from the Logs tab.
@@ -281,27 +424,47 @@ function ingestAdtSubmission(raw) {
 
   // Idempotency: the same submission replayed (poll retry, backend restart, cursor reset)
   // resolves to the row it already created rather than a duplicate.
-  const existing = findBySourceRecord(mapped.source_record_id);
+  const existing = findBySourceRecord('adt_solution', mapped.source_record_id);
   if (existing) return { employee: hydrateEmployee(existing), created: false };
+
+  // A record we pushed out and then lost the response for comes back through the poller as a
+  // brand-new arrival. It is not one: external_ref carries the Client ID we already minted, so
+  // the submission is reconciled onto that row instead of creating a second client for the same
+  // person. Without this, every failed mirror that actually landed would duplicate on next poll.
+  const externalRef = raw && (raw.external_ref || raw.externalRef);
+  if (externalRef) {
+    const ours = findByCode(String(externalRef));
+    if (ours && !ours.source_record_id) {
+      const ts = nowIso();
+      db.prepare(
+        `UPDATE direct_employees
+            SET source_record_id = ?, mirror_state = 'mirrored', mirror_error = NULL, updated_at = ?
+          WHERE id = ?`
+      ).run(mapped.source_record_id, ts, ours.id);
+      insertLog(ours.id, 'Updated',
+        'Reconciled with NewForce Solutions source record ' + mapped.source_record_id
+        + ' — the mirror had in fact succeeded.', 'NewForce Solutions Sync');
+      return { employee: hydrateEmployee(findById(ours.id)), created: false };
+    }
+  }
 
   const employee = transaction(() => {
     // The only id minted here is ours. The source system's id for this same client arrived with
     // the submission and is stored as-is — inventing a second id of our own on top of it is what
     // the retired reference_id did, and it only ever confused which system named what.
     //
-    // 'CLI-' rather than the historical 'ADTEMP-': these records are clients, not employees.
-    // The sequence is not reset, so numbering continues past the ADTEMP-#### rows already in the
-    // store and no id is ever issued twice.
-    const seq = nextSequenceValue('adt_employee');
-    const employeeCode = 'CLI-' + String(seq).padStart(4, '0');
+    // mirror_state 'mirrored': this record came IN from the source system, so both ids exist and
+    // agree from the first instant. Nothing is owed outbound. The 'pending'/'failed' states are
+    // for the opposite direction, where we mint first and push second.
+    const employeeCode = mintClientCode();
     const sourceRecordId = mapped.source_record_id;
     const ts = nowIso();
     const info = db.prepare(
       `INSERT INTO direct_employees
          (employee_code, source_record_id, source, name, email, phone_country_code,
           contact, company_name, country, looking_for, heard_about_us, status, raw_source_payload,
-          created_at, updated_at)
-       VALUES (?, ?, 'adt_solution', ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)`
+          mirror_state, created_at, updated_at)
+       VALUES (?, ?, 'adt_solution', ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, 'mirrored', ?, ?)`
     ).run(
       employeeCode, sourceRecordId, mapped.name, mapped.email,
       mapped.phone_country_code, mapped.contact, mapped.company_name, mapped.country,
@@ -396,14 +559,22 @@ async function handle(req, res, url, segments) {
     const body = await readJsonBody(req);
     validateEmployeeInput(body);
     const employee = transaction(() => {
-      const code = body.employee_code || ('EMP' + String(nextSequenceValue('manual_employee')).padStart(3, '0'));
+      // The same mint as every other path. A hand-typed client is still a client, so it draws
+      // from the one sequence and wears the one prefix; that it was typed rather than ingested
+      // is shown by `source`, which is where that fact belongs. (This used to be 'EMP001' from
+      // a separate counter, which meant the id told you how the record was created.)
+      const code = body.employee_code || mintClientCode();
+      // Nothing is owed outbound for a client created here — 'not_required' rather than
+      // 'pending', so the retry sweep never picks up a record that was never meant to leave.
+      const mirrorState = body.source_record_id ? 'mirrored' : 'not_required';
       const ts = nowIso();
       const info = db.prepare(
         `INSERT INTO direct_employees
            (employee_code, source_record_id, source, name, email, phone_country_code,
             contact, company_name, country, looking_for, heard_about_us, department, branch,
-            job_title, join_date, description, status, raw_source_payload, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            job_title, join_date, description, status, raw_source_payload, mirror_state,
+            created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         // A manually created client has no source system, so it has no source record id —
         // null, not a stand-in. The column stays available for rows keyed into an external
@@ -414,7 +585,7 @@ async function handle(req, res, url, segments) {
         body.heard_about_us || null, body.department || null, body.branch || null,
         body.job_title || null, body.join_date || null, body.description || null,
         body.status || 'Pending',
-        body.raw_source_payload ? JSON.stringify(body.raw_source_payload) : null, ts, ts
+        body.raw_source_payload ? JSON.stringify(body.raw_source_payload) : null, mirrorState, ts, ts
       );
       const row = db.prepare('SELECT * FROM direct_employees WHERE id = ?').get(info.lastInsertRowid);
       insertLog(row.id, 'Created', body.creation_note || 'Employee record created', body.actor_user || 'System');
@@ -559,11 +730,17 @@ async function handle(req, res, url, segments) {
     return;
   }
 
-  // POST /adt/submit — fill in NewForce Solutions's intake form from inside the Executive Layer.
-  // Deliberately routed THROUGH ADT rather than written straight to our own tables: the record
-  // must originate in the source system, get its ADT submission id there, and come back to us
-  // through the same ingest path a form filled on ADT's website would take. Anything else would
-  // demo a shortcut that does not exist in production.
+  // POST /adt/submit — create a client here and mirror it out to NewForce Solutions.
+  //
+  // Ours first, theirs second. The Client ID is minted and committed locally before anything is
+  // sent, and only then is the record pushed to the source system, whose own id comes back and
+  // is stored as source_record_id. That order is what makes the two ids mean what they say: ours
+  // names the record in our store from the instant it exists, theirs names the same client in
+  // theirs from the instant they accept it.
+  //
+  // The push is therefore allowed to fail without destroying anything. The record stays, marked
+  // mirror_state='failed' with the reason, and is retryable from the UI — an operator's work is
+  // never discarded because a third-party endpoint was down for ten seconds.
   if (req.method === 'POST' && segments[0] === 'adt' && segments[1] === 'submit' && segments.length === 2) {
     const body = await readJsonBody(req);
     if (!body.full_name || !String(body.full_name).trim()) throw new HttpError(400, 'Full name is required');
@@ -571,35 +748,39 @@ async function handle(req, res, url, segments) {
       throw new HttpError(400, 'Work email is not a valid address');
     }
 
-    let submitted;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ADT_TIMEOUT_MS);
-    try {
-      const r = await fetch(ADT_BASE_URL + '/api/employee-intake/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ADT_API_KEY },
-        body: JSON.stringify(body),
-        signal: controller.signal
-      });
-      if (!r.ok) throw new HttpError(502, 'NewForce Solutions rejected the submission (' + r.status + ')');
-      const payload = await r.json();
-      submitted = payload && payload.data ? payload.data : payload;
-    } catch (e) {
-      if (e instanceof HttpError) throw e;
-      throw new HttpError(502, 'Could not reach NewForce Solutions: ' + e.message);
-    } finally {
-      clearTimeout(timer);
-    }
+    const employeeRow = createMirrorPendingClient(body);
+    const result = await attemptMirror(employeeRow);
+    const employee = hydrateEmployee(findById(employeeRow.id));
 
-    const { employee, created } = ingestAdtSubmission(submitted);
-    // Move the cursor past this submission so the background poller does not re-offer it.
-    setSyncState('adt_last_seen_source_id', employee.source_record_id);
-    sendJson(res, 201, {
-      status: created ? 'ingested' : 'duplicate',
+    // 201 when the round trip completed, 202 when the record is real but not yet mirrored —
+    // a different outcome deserves a different code, and the UI branches on it.
+    sendJson(res, result.ok ? 201 : 202, {
+      status: result.ok ? 'ingested' : 'mirror_failed',
+      mirrorState: employee.mirror_state,
+      mirrorError: employee.mirror_error || null,
       employee,
       logs: getLogs(employee.id),
       workflow: getWorkflow(employee.id),
-      submission: submitted
+      submission: result.submission || null
+    }, origin);
+    return;
+  }
+
+  // POST /employees/:code/mirror-retry — push a failed or pending client out again.
+  if (req.method === 'POST' && segments[0] === 'employees' && segments[2] === 'mirror-retry' && segments.length === 3) {
+    const row = findByCode(decodeURIComponent(segments[1]));
+    if (!row) throw new HttpError(404, 'Client not found');
+    if (row.mirror_state === 'mirrored') throw new HttpError(409, 'This client is already mirrored to ' + row.source);
+    if (row.mirror_state === 'not_required') throw new HttpError(409, 'This client was created here and is not mirrored anywhere');
+    const result = await attemptMirror(row);
+    const employee = hydrateEmployee(findById(row.id));
+    sendJson(res, result.ok ? 200 : 202, {
+      status: result.ok ? 'mirrored' : 'mirror_failed',
+      mirrorState: employee.mirror_state,
+      mirrorError: employee.mirror_error || null,
+      employee,
+      logs: getLogs(employee.id),
+      workflow: getWorkflow(employee.id)
     }, origin);
     return;
   }
