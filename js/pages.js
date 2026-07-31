@@ -804,30 +804,12 @@ function renderAmDealSidebar(){
           :'<button class="lp-logs-save-btn" onclick="amSimulateStep('+d.id+')">'+simLabel+'</button>'
             +(a.kind==='chase'?'<button class="am-sb-chase-link" onclick="amRemindClient('+d.id+')">Send the client a reminder instead</button>':''))
         +'</div>';
-    /* The walkable sequence is the MANUAL journey: only steps a person performs appear here.
-       The automated ones are absent by design — the system does them the moment they are
-       reached, and they surface in the Workflow tab (with their results, e.g. which CSM was
-       assigned) rather than as tasks in a to-do list they will never be. */
-    const manualSteps=steps.filter(function(st){return !st.auto;});
-    const manualDone=manualSteps.filter(function(st){return steps.indexOf(st)<idx;}).length;
-    const subList='<div class="am-sb-steps">'
-      +'<div class="am-sb-steps-head">Manual steps in &ldquo;'+s.short+'&rdquo;<span>'+Math.min(manualDone+1,manualSteps.length)+' of '+manualSteps.length+'</span></div>'
-      +manualSteps.map(function(st,i){
-        const fullIdx=steps.indexOf(st);
-        const state=fullIdx<idx?'done':fullIdx===idx?'current':'upcoming';
-        const o=amOwnerInfo(st.owner);
-        return '<div class="am-sb-step '+state+'">'
-          +'<span class="am-sb-step-mark">'+(state==='done'
-            ?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"><polyline points="20 6 9 17 4 12"/></svg>'
-            :(i+1))+'</span>'
-          +'<span class="am-sb-step-label">'+st.label
-            +(st.cond?'<i class="am-sub-cond">'+st.cond+'</i>':'')
-            +(st.decision?'<span class="am-sub-tag loop">decision</span>':'')
-            +(st.loop?'<span class="am-sub-tag loop">can repeat</span>':'')+'</span>'
-          +'<span class="am-sb-step-owner">'+o.who+'</span>'
-          +'</div>';
-      }).join('')
-      +'</div>';
+    /* The "Manual steps in <stage>" checklist that used to sit above the trail is gone. Logs is
+       the action tab: one thing to do, and the record of what has been done. The checklist was a
+       third thing — a read-only preview of the steps still to come — and it restated the step
+       the action panel already names, one line below the panel's own "Step n of m". The full
+       sequence, with its owners and its automated steps, lives in the Workflow tab, which is the
+       tab whose job is answering "what does this stage consist of". */
     const log=amDealLog(d);
     const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
@@ -855,7 +837,6 @@ function renderAmDealSidebar(){
     // arrangement of every other Logs tab in the app.
     body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.subject+'</span>'
       +'<span class="am-int-chip">Internal</span></div>'
-      +subList
       +'<div class="am-sb-loghead">Everything that has happened <span>'+log.length+' entr'+(log.length===1?'y':'ies')+', newest first</span></div>'
       +'<div class="lp-logs-wrap"><div class="lp-logs-timeline">'+timeline+'</div>'+actionPanel+'</div>';
 
