@@ -163,66 +163,73 @@ const amPipelineTracks=[
    source table gives compound owners for some stages ("EOR Ops · Pricing", "System · AM") and
    the split only makes sense at sub-step level: Pricing owns the pricing approval, EOR Ops
    owns the cost build. `cond` marks a step that only applies in some cases and renders muted,
-   `decision` a branch point, `loop` a step that can legitimately repeat. == */
+   `decision` a branch point, `loop` a step that can legitimately repeat.
+
+   `auto` marks a step the AI Execution Layer performs itself — `autoNote` says by what. The
+   dividing line: lookups, generation from templates/data, dispatch, and webhook-confirmed
+   facts automate; judgment, liability and signatures do not. So "CSM assigned" automates (a
+   country-to-CSM routing table needs no human), but "Qualified / Disqualified" never does —
+   that is the one decision stage 1 exists to make. `owner` stays on auto steps on purpose:
+   automation changes who does the work, not who answers for it. == */
 const amSubStatuses={
   'request-received':[
-    {label:'New intake',owner:'Account Manager'},
-    {label:'CSM assigned',owner:'Account Manager',sla:'1h'},
+    {label:'New intake',owner:'Account Manager',auto:true,autoNote:'logged from intake form'},
+    {label:'CSM assigned',owner:'Account Manager',sla:'1h',auto:true,autoNote:'by client country'},
     {label:'Qualified / Disqualified',owner:'Account Manager',decision:true}
   ],
   'quote-prep':[
-    {label:'Country data check',owner:'EOR Ops'},
-    {label:'Partner cost requested',owner:'EOR Ops',cond:'non-owned countries',sla:'48h'},
-    {label:'Cost calc built',owner:'EOR Ops',sla:'24h'},
-    {label:'Statutory floor check',owner:'Compliance'},
+    {label:'Country data check',owner:'EOR Ops',auto:true,autoNote:'Compliance Hub lookup'},
+    {label:'Partner cost requested',owner:'EOR Ops',cond:'non-owned countries',sla:'48h',auto:true,autoNote:'request auto-sent to partner'},
+    {label:'Cost calc built',owner:'EOR Ops',sla:'24h',auto:true,autoNote:'drafted by cost engine'},
+    {label:'Statutory floor check',owner:'Compliance',auto:true,autoNote:'rules engine'},
     {label:'Pricing approval',owner:'Pricing',cond:'if off-standard'},
     {label:'Quote QA',owner:'Pricing'}
   ],
   'quote-review':[
-    {label:'Sent',owner:'Account Manager'},
-    {label:'Viewed',owner:'Client'},
-    {label:'Follow-up 1 / 2 / 3',owner:'Account Manager',loop:true},
+    {label:'Sent',owner:'Account Manager',auto:true,autoNote:'on QA pass'},
+    {label:'Viewed',owner:'Client',auto:true,autoNote:'tracked on open'},
+    {label:'Follow-up 1 / 2 / 3',owner:'Account Manager',loop:true,auto:true,autoNote:'scheduled reminders'},
     {label:'Change requested',owner:'Client',decision:true},
     {label:'Re-issued v2',owner:'Account Manager',loop:true}
   ],
   'quote-approved':[
-    {label:'Won',owner:'Account Manager'},
-    {label:'Client tenant provisioned',owner:'System'},
-    {label:'CSM confirmed to client',owner:'Account Manager',sla:'Same day'}
+    {label:'Won',owner:'Account Manager',auto:true,autoNote:'on client acceptance'},
+    {label:'Client tenant provisioned',owner:'System',auto:true,autoNote:'provisioning'},
+    {label:'CSM confirmed to client',owner:'Account Manager',sla:'Same day',auto:true,autoNote:'intro auto-sent'}
   ],
   'agreement-signature':[
-    {label:'MSA drafted',owner:'Compliance'},
+    {label:'MSA drafted',owner:'Compliance',auto:true,autoNote:'from country template'},
     {label:'Legal & compliance review',owner:'Compliance',sla:'48h'},
-    {label:'Client entity + sanctions check',owner:'Compliance'},
-    {label:'Sent',owner:'Compliance'},
+    {label:'Client entity + sanctions check',owner:'Compliance',auto:true,autoNote:'screening API, human on hit'},
+    {label:'Sent',owner:'Compliance',auto:true,autoNote:'e-sign dispatch'},
     {label:'Signed',owner:'Client'}
   ],
   'deposit-due':[
-    {label:'Invoice raised',owner:'Finance'},
+    {label:'Invoice raised',owner:'Finance',auto:true,autoNote:'on agreement signed'},
     {label:'Awaiting funds',owner:'Client'},
     {label:'Part-paid',owner:'Client',decision:true},
-    {label:'Cleared',owner:'Finance',sla:'Auto on webhook'}
+    {label:'Cleared',owner:'Finance',auto:true,autoNote:'bank webhook'}
   ],
   'employment-contract':[
-    {label:'Draft generated',owner:'EOR Ops',sla:'24h to issue'},
-    {label:'Clause compliance check',owner:'Compliance'},
+    {label:'Draft generated',owner:'EOR Ops',sla:'24h to issue',auto:true,autoNote:'from approved quote'},
+    {label:'Clause compliance check',owner:'Compliance',auto:true,autoNote:'AI clause check'},
     {label:'Internal approval',owner:'EOR Ops'},
-    {label:'Sent to worker',owner:'EOR Ops'},
+    {label:'Sent to worker',owner:'EOR Ops',auto:true,autoNote:'via Docuseal'},
     {label:'Worker signed',owner:'Worker'},
     {label:'ADT countersigned',owner:'EOR Ops'}
   ],
   'onboarding':[
-    {label:'Worker KYC',owner:'Onboarding Ops'},
+    {label:'Worker KYC',owner:'Onboarding Ops',auto:true,autoNote:'KYC provider'},
     {label:'Documents',owner:'Onboarding Ops',cond:'n/n per country'},
     {label:'Tax registration',owner:'Onboarding Ops'},
     {label:'Social security enrolment',owner:'Onboarding Ops'},
-    {label:'Bank verified',owner:'Onboarding Ops'},
-    {label:'Payroll configured',owner:'Payroll Ops'}
+    {label:'Bank verified',owner:'Onboarding Ops',auto:true,autoNote:'penny-drop check'},
+    {label:'Payroll configured',owner:'Payroll Ops',auto:true,autoNote:'from contract data'}
   ],
   'active':[
-    {label:'Ready for payroll',owner:'Payroll Ops'},
-    {label:'First payroll run',owner:'Payroll Ops',sla:'Per payroll calendar'},
-    {label:'Active',owner:'Payroll Ops'}
+    {label:'Ready for payroll',owner:'Payroll Ops',auto:true,autoNote:'all onboarding gates green'},
+    {label:'First payroll run',owner:'Payroll Ops',sla:'Per payroll calendar',auto:true,autoNote:'payroll engine'},
+    {label:'Active',owner:'Payroll Ops',auto:true,autoNote:'after first run clears'}
   ]
 };
 /* Who each owner role actually is, and which persona may advance its sub-steps. `persona`
@@ -285,24 +292,85 @@ function amSubIndex(d){const steps=amSubSteps(d.stage);return Math.min(d.sub||0,
    current one — which left a record sitting on the last step of a stage with no next step to
    click and no way forward.
 
-   What the action IS depends on who owns that step, and only three cases matter to a user:
+   What the action IS depends on who owns that step, and only four cases matter to a user:
+     auto  the AI Execution Layer performs it — nobody ticks it, it reports itself done
      do    the signed-in role owns it, so there is a button that completes it
      chase the client owns it, so the useful action is a reminder, not a tick
      wait  a worker, another team, or the system owns it — nothing for this user to do
-   Returning the case explicitly means no screen has to re-derive it from the owner name. */
+   Auto is checked before ownership on purpose: an automated step must never grow a manual
+   "Mark done" button just because the accountable role happens to be signed in — ticking it
+   by hand is exactly what the automation removed. */
 function amNextAction(d){
   const step=amCurrentSub(d);
   if(!step)return {kind:'wait',label:'Nothing to do',owner:'&mdash;',step:null};
   const owner=step.owner;
+  if(step.auto)return {kind:'auto',label:'Runs automatically',owner:owner,step:step};
   if(amCanAdvance(owner))return {kind:'do',label:'Mark done',owner:owner,step:step};
   if(owner==='Client')return {kind:'chase',label:'Send reminder',owner:owner,step:step};
   if(owner==='System')return {kind:'wait',label:'Runs automatically',owner:owner,step:step};
   return {kind:'wait',label:'Waiting on '+owner,owner:owner,step:step};
 }
+/* == AUTO STEPS NEVER WAIT ===============================================================
+   An automated sub-step is not a task — the system performs it the instant it is reached, so
+   a record must never sit on one waiting for someone to press a button. Whenever a record
+   lands on an auto step, this rolls it forward (across a stage boundary if needed) until it
+   rests on a human step. The skipped steps still count as done, so the derived log records
+   them — as history, performed by the execution layer — while the Logs tab only ever asks a
+   person for the steps that are actually theirs. The one place a record may legitimately rest
+   on an auto step is the terminal stage, where there is nothing after it to wait for. */
+function amSkipAutoSteps(d){
+  const skipped=[];let guard=0;
+  while(guard++<60){
+    const steps=amSubSteps(d.stage);
+    const idx=Math.min(d.sub||0,Math.max(0,steps.length-1));
+    const cur=steps[idx];
+    if(!cur||!cur.auto)break;
+    if(idx<steps.length-1){skipped.push(cur.label);d.sub=idx+1;continue;}
+    const next=amPipelineStages[amStageIndex(d.stage)+1];
+    if(!next)break;
+    skipped.push(cur.label);
+    d.stage=next.id;d.sub=0;
+  }
+  return skipped;
+}
+/* == CSM AUTO-ASSIGNMENT =================================================================
+   The concrete automation behind stage 1's "CSM assigned": routed by the client's country.
+   Held on the deal (d.csm) so it is a fact that can be revisited — the Workflow tab shows the
+   assignment and offers reassignment, which is the whole reason it surfaces there rather than
+   as a step someone ticks in the Logs. */
+const amCsmByCountry={'India':'Ishita Rao','Netherlands':'Maya Vos','Germany':'Tomas Berg','Spain':'Luis Ortega','United Kingdom':'Daniel Kim'};
+const amCsmPool=['Ishita Rao','Maya Vos','Tomas Berg','Luis Ortega','Daniel Kim'];
+function amCsmFor(d){return d.csm||amCsmByCountry[d.country]||'Daniel Kim';}
+function amReassignCsm(dealId,name){
+  const d=amDeals.find(function(x){return x.id===dealId;});if(!d||!name||name===amCsmFor(d))return;
+  const prev=amCsmFor(d);
+  d.csm=name;
+  amPushNote(d,'CSM reassigned','Reassigned from '+prev+' to '+name+' by '+actorLabel(currentActorId())+'.');
+  showAiToast('CSM reassigned',d.ref+' &middot; '+name+' now owns this client relationship.');
+  renderADTPage();
+}
+/* Shared "something happened without the record moving" entry — reminders, completion notes,
+   reassignments. One writer, so every note carries the same shape and stamps. */
+function amPushNote(d,label,note){
+  const stage=amStageById(d.stage)||{};
+  const now=new Date();const h=now.getHours();
+  (amExtraLog[d.id]=amExtraLog[d.id]||[]).unshift({
+    stage:stage,stageNo:stage.n,subNo:amSubIndex(d)+1,
+    sub:{label:label},
+    owner:amOwnerInfo('Account Manager'),ownerRole:'Account Manager',
+    state:'note',
+    date:now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear(),
+    time:(h%12||12)+':'+String(now.getMinutes()).padStart(2,'0')+' '+(h>=12?'PM':'AM'),
+    note:note
+  });
+}
 /* Reminders are the one event the derived log cannot infer, because they do not move the
    record — they are a thing the Account Manager did while standing still. Kept separately so
    the derived history stays derived. */
 const amExtraLog={};
+// Seed records may sit on an auto step (the table predates the auto flags); roll them forward
+// once at load so the invariant above holds from the first render.
+amDeals.forEach(function(d){amSkipAutoSteps(d);});
 /* == SUB-STATUS LOG ======================================================================
    Derived, not stored. Every sub-status a record has already cleared — across every stage it
    has passed through, not just the one it sits in — becomes one log entry stamped with the

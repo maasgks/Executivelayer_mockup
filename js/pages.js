@@ -614,13 +614,17 @@ function amSubCellHTML(d){
   return '<div class="am-where"'
     +' title="'+attrSafe(String(s.plain).replace(/&mdash;/g,'—'))+'">'
     +'<span class="am-sub-pill '+amBadgeClass(d.stage)+'">'+s.short+'</span>'
-    +'<span class="am-where-step">'+cur.label+(cur.cond?'<i class="am-sub-cond">'+cur.cond+'</i>':'')+'</span>'
+    +'<span class="am-where-step">'+cur.label+(cur.auto?'<span class="am-sub-tag auto">'+amBoltSvg+' auto</span>':'')+(cur.cond?'<i class="am-sub-cond">'+cur.cond+'</i>':'')+'</span>'
     +'<span class="am-where-prog">Step '+(idx+1)+' of '+steps.length+'</span>'
     +'</div>';
 }
 /* The one column a new user should be able to act from without reading anything else. */
+const amBoltSvg='<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>';
 function amNextActionCellHTML(d){
   const a=amNextAction(d);
+  // Auto steps get a passive marker in the listing — there is nothing here for a person to do,
+  // and a button would say otherwise. The drawer carries the demo-only "run it now" control.
+  if(a.kind==='auto')return '<span class="am-act auto">'+amBoltSvg+' Auto</span>';
   if(a.kind==='do')return '<button class="am-act do" onclick="event.stopPropagation();amCompleteStep('+d.id+')">'
     +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> '+a.label+'</button>';
   if(a.kind==='chase')return '<button class="am-act chase" onclick="event.stopPropagation();amRemindClient('+d.id+')">'
@@ -646,19 +650,35 @@ function amAdvanceStep(dealId,simulated){
   // simulated advance is never mistaken for the owner having actually done it.
   if(!simulated&&!amCanAdvance(cur.owner)){showAiToast('Not yours to complete','&ldquo;'+cur.label+'&rdquo; belongs to '+cur.owner+'.');return;}
   const who=amOwnerInfo(cur.owner).who;
+  // The comment travels with the completion — same contract as every other Logs form in the
+  // app: the note is written by the person acting, at the moment of acting.
+  const commentEl=document.getElementById('am-log-comment');
+  const comment=commentEl?commentEl.value.trim():'';
+  // Required on a real completion, same as every other Logs form; a simulated handoff is the
+  // demo standing in for someone else, so it is exempt.
+  if(!simulated&&commentEl&&!comment){showAiToast('A comment is required','Add a note for this action before marking it done.');commentEl.focus();return;}
   d.breach=false;amStampToday(d);
-  if(idx<steps.length-1){
-    d.sub=idx+1;
-    showAiToast(simulated?'Simulated &mdash; '+cur.label:cur.label+' &mdash; done',
-      (simulated?who+' completed this. ':'')+d.ref+' &middot; next up: '+steps[idx+1].label);
-  }else{
+  const wasLast=idx>=steps.length-1;
+  const stageBefore=d.stage;
+  if(!wasLast){d.sub=idx+1;}
+  else{
     const nextStage=amPipelineStages[amStageIndex(d.stage)+1];
-    if(nextStage){
-      d.stage=nextStage.id;d.sub=0;
-      showAiToast('Moved to &ldquo;'+nextStage.short+'&rdquo;',d.ref+' &middot; the client now sees &ldquo;'+String(nextStage.label).replace(/&mdash;/g,'—')+'&rdquo;.');
-    }else{
-      showAiToast('All done',d.ref+' is employed and on payroll.');
-    }
+    if(nextStage){d.stage=nextStage.id;d.sub=0;}
+  }
+  // The system sweeps through whatever automated steps come next, so the record lands on the
+  // next HUMAN step — the auto work is reported, never offered as a task.
+  const autoRan=amSkipAutoSteps(d);
+  if(comment)amPushNote(d,'Note on &ldquo;'+cur.label+'&rdquo;',comment);
+  const landed=amCurrentSub(d);
+  const autoMsg=autoRan.length?' Automation ran: '+autoRan.join(', ')+'.':'';
+  if(d.stage!==stageBefore){
+    const st=amStageById(d.stage);
+    showAiToast('Moved to &ldquo;'+st.short+'&rdquo;',d.ref+' &middot; the client now sees &ldquo;'+String(st.label).replace(/&mdash;/g,'—')+'&rdquo;.'+autoMsg);
+  }else if(landed&&landed!==cur){
+    showAiToast(simulated?'Simulated &mdash; '+cur.label:cur.label+' &mdash; done',
+      (simulated?who+' completed this. ':'')+d.ref+' &middot; next up: '+landed.label+'.'+autoMsg);
+  }else{
+    showAiToast('All done',d.ref+' is employed and on payroll.'+autoMsg);
   }
   renderADTPage();
 }
@@ -757,37 +777,44 @@ function renderAmDealSidebar(){
     const idx=amSubIndex(d);
     const own=amOwnerInfo(a.owner);
     const mine=a.kind==='do';
-    /* Exactly one button, always. When the step is the signed-in role's, that button completes
-       it for real. When it belongs to anyone else the button simulates them doing it, because
-       the alternative — a dead "nothing for you to do here" — left the journey unwalkable at
-       every handoff, and six of the nine stages are owned by someone other than the AM. The
-       reminder survives as a secondary link on client-owned steps only: it is a real thing an
-       Account Manager does, and it does not move the record. */
-    const simLabel=a.step&&a.step.decision?'Simulate: '+own.who+' approves'
-      :'Simulate: '+own.who+' completes this';
-    const actionBtn=mine
-      ?'<button class="am-sb-advance" onclick="amCompleteStep('+d.id+')">Mark &ldquo;'+a.step.label+'&rdquo; done</button>'
-      :(a.step?'<button class="am-sb-simulate" onclick="amSimulateStep('+d.id+')">'+simLabel+'</button>':'')
-        +(a.kind==='chase'?'<button class="am-sb-chase-link" onclick="amRemindClient('+d.id+')">Send the client a reminder instead</button>':'');
-    // Who has to act, stated as a person rather than only a role name.
-    const ownerRow='<div class="am-sb-owner'+(mine?' mine':'')+'">'
-      +'<span class="am-sb-owner-av">'+own.initials+'</span>'
-      +'<span class="am-sb-owner-txt"><b>'+own.who+'</b><i>'+a.owner+'</i></span>'
-      +'<span class="am-sb-owner-flag">'+(mine?'Your step':'Not your step')+'</span>'
-      +'</div>';
-    const actionCard='<div class="am-sb-next '+(mine?'do':'wait')+'">'
-      +'<div class="am-sb-next-kicker">Next thing to happen</div>'
-      +'<div class="am-sb-next-step">'+(a.step?a.step.label:'&mdash;')+(a.step&&a.step.cond?'<i class="am-sub-cond">'+a.step.cond+'</i>':'')+'</div>'
-      +'<div class="am-sb-next-meta">Step '+(idx+1)+' of '+steps.length+' in &ldquo;'+s.short+'&rdquo;'
-        +(a.step&&a.step.sla?' &middot; should take '+a.step.sla:'')+'</div>'
-      +ownerRow+actionBtn+'</div>';
-    /* The rest of the stage's sub-statuses, kept visible so the one live step reads as a
-       position in a sequence rather than the only thing that exists. Read-only — the action
-       card is the single place anything advances. */
+    // Reachable only in the terminal stage: everywhere else amSkipAutoSteps guarantees the
+    // record rests on a human step, so the Logs never ask anyone to advance automation.
+    const isAuto=a.kind==='auto';
+    /* The standard Logs action panel — header, ownership line, comment, one button — the same
+       shape as the Contracts drawer, so advancing a deal reads like advancing anything else in
+       the app. When the step is the signed-in role's, the button completes it for real; anyone
+       else's is simulated so the demo can walk every handoff. The reminder survives as a
+       secondary link on client-owned steps: it is a real AM action and moves nothing. */
+    const simLabel=a.step&&a.step.decision?'Simulate: '+own.who+' approves':'Simulate: '+own.who+' completes this';
+    const actionPanel=isAuto
+      ?'<div class="lp-logs-form">'
+        +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:var(--navy);display:inline-block;flex-shrink:0"></span>Runs automatically</div>'
+        +'<p class="lp-logs-form-sub">&ldquo;'+a.step.label+'&rdquo; is performed by the AI Execution Layer'+(a.step.autoNote?' &mdash; '+a.step.autoNote:'')+'. Nothing to do here.</p>'
+        +'</div>'
+      :'<div class="lp-logs-form">'
+        +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:#f59e0b;display:inline-block;flex-shrink:0"></span>Next: '+a.step.label+'</div>'
+        +'<p class="lp-logs-form-sub">'
+          +(mine?'This step is yours to complete.':a.kind==='chase'?'Waiting on the client.':'Owned by '+own.who+' ('+a.owner+').')
+          +' Step '+(idx+1)+' of '+steps.length+' in &ldquo;'+s.short+'&rdquo;'
+          +(a.step.sla?' &middot; should take '+a.step.sla:'')+'.</p>'
+        +'<div class="lp-logs-form-label">Comment'+(mine?' <span class="lp-logs-form-req">*</span>':'')+'</div>'
+        +'<textarea id="am-log-comment" class="lp-logs-form-textarea" placeholder="Add a note for this action..."></textarea>'
+        +(mine
+          ?'<button class="lp-logs-save-btn" onclick="amCompleteStep('+d.id+')">Mark &ldquo;'+a.step.label+'&rdquo; done</button>'
+          :'<button class="lp-logs-save-btn" onclick="amSimulateStep('+d.id+')">'+simLabel+'</button>'
+            +(a.kind==='chase'?'<button class="am-sb-chase-link" onclick="amRemindClient('+d.id+')">Send the client a reminder instead</button>':''))
+        +'</div>';
+    /* The walkable sequence is the MANUAL journey: only steps a person performs appear here.
+       The automated ones are absent by design — the system does them the moment they are
+       reached, and they surface in the Workflow tab (with their results, e.g. which CSM was
+       assigned) rather than as tasks in a to-do list they will never be. */
+    const manualSteps=steps.filter(function(st){return !st.auto;});
+    const manualDone=manualSteps.filter(function(st){return steps.indexOf(st)<idx;}).length;
     const subList='<div class="am-sb-steps">'
-      +'<div class="am-sb-steps-head">Steps in &ldquo;'+s.short+'&rdquo;<span>'+(idx+1)+' of '+steps.length+'</span></div>'
-      +steps.map(function(st,i){
-        const state=i<idx?'done':i===idx?'current':'upcoming';
+      +'<div class="am-sb-steps-head">Manual steps in &ldquo;'+s.short+'&rdquo;<span>'+Math.min(manualDone+1,manualSteps.length)+' of '+manualSteps.length+'</span></div>'
+      +manualSteps.map(function(st,i){
+        const fullIdx=steps.indexOf(st);
+        const state=fullIdx<idx?'done':fullIdx===idx?'current':'upcoming';
         const o=amOwnerInfo(st.owner);
         return '<div class="am-sb-step '+state+'">'
           +'<span class="am-sb-step-mark">'+(state==='done'
@@ -812,22 +839,25 @@ function renderAmDealSidebar(){
         +'<div class="lp-log-card">'
         +'<div class="lp-log-status-row"><span class="lp-log-dot lp-log-dot--'+sk+'"></span>'
           +'<span class="lp-log-status-text lp-log-status-text--'+sk+'">'+e.sub.label+'</span>'
+          +(e.sub.auto?'<span class="am-sub-tag auto">'+amBoltSvg+' auto</span>':'')
           +(e.reminder?'<span class="am-sub-tag loop">reminder</span>':'')
           +(e.state==='current'?'<span class="am-sub-tag loop">happening now</span>':'')
           +(e.breach?'<span class="am-sub-tag breach">took too long</span>':'')+'</div>'
-        +'<div class="lp-log-meta-row"><span class="lp-log-meta-item">'+personSvg+'<span>'+e.owner.who+'</span></span>'
+        // The doer in the trail is whoever actually did it — the layer for auto steps.
+        +'<div class="lp-log-meta-row"><span class="lp-log-meta-item">'+personSvg+'<span>'+(e.sub.auto?'AI Execution Layer':e.owner.who)+'</span></span>'
           +'<span class="lp-log-meta-item">'+calSvg+'<span>'+e.date+'</span></span>'
           +'<span class="lp-log-meta-item">'+clkSvg+'<span>'+e.time+'</span></span></div>'
         +'<div class="lp-log-comment-row"><span class="lp-log-comment-label">In:</span>'+e.stageNo+'. '+e.stage.short
           +' &middot; '+(e.note?e.note:e.state==='current'?'In progress.':'Finished.')+'</div>'
         +'</div></div>';
     }).join(''):'<div class="lp-logs-empty">Nothing has happened yet.</div>';
+    // Standard logs layout: trail on the left, sticky action panel on the right — the exact
+    // arrangement of every other Logs tab in the app.
     body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.subject+'</span>'
       +'<span class="am-int-chip">Internal</span></div>'
-      +actionCard
       +subList
       +'<div class="am-sb-loghead">Everything that has happened <span>'+log.length+' entr'+(log.length===1?'y':'ies')+', newest first</span></div>'
-      +'<div class="lp-logs-timeline">'+timeline+'</div>';
+      +'<div class="lp-logs-wrap"><div class="lp-logs-timeline">'+timeline+'</div>'+actionPanel+'</div>';
 
   }else if(amDealTab==='workflow'){
     /* Stage-level and read-only: the nine steps of the journey, which are done, which one is
@@ -843,18 +873,53 @@ function renderAmDealSidebar(){
       const mark=state==='done'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>':String(st.n);
       return '<div class="am-cv-row '+state+'">'
         +'<div class="am-cv-markcol"><div class="am-cv-mark">'+mark+'</div>'+(i<amPipelineStages.length-1?'<div class="am-cv-line"></div>':'')+'</div>'
+        // How much of this stage runs itself — the count a PM scans for ("6 tasks, 4 auto"
+        // says how much human time the stage really costs).
         +'<div class="am-cv-body"><div class="am-cv-label">'+st.short
-          +(st.gate?'<span class="am-sub-tag breach">payment gate</span>':'')+'</div>'
+          +(st.gate?'<span class="am-sub-tag breach">payment gate</span>':'')
+          +(function(){const n=steps.filter(function(x){return x.auto;}).length;return n?'<span class="am-sub-tag auto">'+amBoltSvg+' '+n+' of '+steps.length+' auto</span>':'';})()
+          +'</div>'
         +'<div class="am-cv-sub">'
           +(state==='done'?doneCount+' of '+steps.length+' tasks done'+(last?' &middot; last by '+last.owner.who+' on '+last.date:'')
-            :state==='current'?'On task '+doneCount+' of '+steps.length+' &middot; '+(amCurrentSub(d)||{}).label+' &middot; waiting on '+((amCurrentSub(d)||{}).owner||'&mdash;')
+            :state==='current'?'On task '+doneCount+' of '+steps.length+' &middot; '+(amCurrentSub(d)||{}).label
+              +((amCurrentSub(d)||{}).auto?' &middot; runs automatically':' &middot; waiting on '+((amCurrentSub(d)||{}).owner||'&mdash;'))
             :'Not started &middot; '+steps.length+' tasks &middot; '+st.waitingOn)
         +'</div></div></div>';
     }).join('');
+    /* == AUTOMATED BY THE SYSTEM =========================================================
+       The automation lives HERE, not in the Logs: these are not tasks anyone will ever tick,
+       they are facts the system produced — and facts can be revisited. The CSM assignment is
+       the model case: assigned by client country the moment intake completed, shown with a
+       Reassign control so the routing can be corrected without replaying anything. Only
+       automation that has already run appears; upcoming automation would just be a promise. */
+    const autoRan=[];
+    amPipelineStages.forEach(function(st,si){
+      if(si>curIdx)return;
+      const upto=si<curIdx?amSubSteps(st.id).length:amSubIndex(d)+1;
+      amSubSteps(st.id).slice(0,upto).forEach(function(sub){if(sub.auto)autoRan.push({stage:st,sub:sub});});
+    });
+    const csmOpts=amCsmPool.map(function(n){return '<option'+(n===amCsmFor(d)?' selected':'')+'>'+n+'</option>';}).join('');
+    const autoRows=autoRan.map(function(x){
+      const isCsm=x.sub.label==='CSM assigned';
+      return '<div class="am-auto-row">'
+        +'<span class="am-auto-bolt">'+amBoltSvg+'</span>'
+        +'<span class="am-auto-txt"><b>'+x.sub.label+'</b><i>'+(x.sub.autoNote||'automated')+' &middot; in &ldquo;'+x.stage.short+'&rdquo;</i></span>'
+        +(isCsm
+          ?'<span class="am-auto-result"><select class="am-auto-select" onchange="amReassignCsm('+d.id+',this.value)">'+csmOpts+'</select></span>'
+          :'<span class="am-auto-done">Done</span>')
+        +'</div>';
+    }).join('');
+    const autoSection=autoRan.length
+      ?'<div class="am-sb-steps" style="margin-top:14px">'
+        +'<div class="am-sb-steps-head">Automated by the system<span>'+autoRan.length+' action'+(autoRan.length===1?'':'s')+'</span></div>'
+        +autoRows
+        +'</div>'
+      :'';
     body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">How far this has got</span>'
       +'<span class="am-int-chip">Internal</span></div>'
       +'<div class="am-cv-intro">The nine steps every piece of work goes through, and what has already been done on this one. To change anything, use the Logs tab.</div>'
-      +'<div class="am-cv-list">'+rows+'</div>';
+      +'<div class="am-cv-list">'+rows+'</div>'
+      +autoSection;
 
   }else{
     /* Deliberately free of the internal tasks. This tab is the client mirror, and those tasks
