@@ -65,21 +65,28 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA foreign_keys = ON;');
-db.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
 
 // `CREATE TABLE IF NOT EXISTS` silently does nothing against a database created by an older
-// schema, so a stale data/employees.db would otherwise fail later with a confusing
-// "no such column" at query time. Fail loudly at startup with the fix instead.
+// schema — and then schema.sql's own `CREATE INDEX ... (mirror_state)` crashes db.exec with a
+// bare "no such column: mirror_state". So the currency check has to run BEFORE the schema is
+// applied: it used to sit after, which meant the one situation it existed to explain was the
+// one it never survived to see. mirror_state is in the required list for the same reason —
+// it is the column the schema itself trips over first.
 (function assertSchemaCurrent() {
+  const hasTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='direct_employees'").get();
+  if (!hasTable) return; // fresh database — schema.sql below creates everything
   const cols = db.prepare('PRAGMA table_info(direct_employees)').all().map((c) => c.name);
-  const required = ['source_record_id', 'company_name', 'looking_for', 'heard_about_us', 'phone_country_code'];
+  const required = ['source_record_id', 'company_name', 'looking_for', 'heard_about_us', 'phone_country_code', 'mirror_state'];
   const missing = required.filter((c) => !cols.includes(c));
   if (missing.length) {
     console.error('Database at ' + DB_PATH + ' predates the current schema (missing: ' + missing.join(', ') + ').');
-    console.error('It holds demo data only — delete it and restart:  rm -rf backend/data');
+    console.error('To KEEP its records, run the migration:   node backend/migrate-client-ids.js');
+    console.error('Or, if it is disposable demo data, delete it and restart:   rm -rf backend/data');
     process.exit(1);
   }
 })();
+
+db.exec(fs.readFileSync(SCHEMA_PATH, 'utf8'));
 
 const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
