@@ -12,6 +12,7 @@ function buildDashboardPageHTML(){
   if(!tabs.some(t=>t.id===dashboardTab))dashboardTab=tabs[0]?tabs[0].id:'employee';
   const body=dashboardTab==='employee'?buildEmployeeDashboardHTML()
     :dashboardTab==='entity-admin'?buildEntityAdminDashboardHTML()
+    :dashboardTab==='platform'?buildSuperAdminDashboardHTML()
     :portalRole==='entity-user'?buildPersonaRoleDashboardHTML(dashboardTab)
     :dashboardContentHTML;
   return buildDashboardTabsHTML()+body;
@@ -1085,6 +1086,268 @@ function eaNoteCardHTML(r,dot){
   return dot
     +'<div class="ea-stack-issue">'+r.label+'</div>'
     +'<div class="ea-stack-meta"><div class="ea-stack-who"><div class="ea-req-requester">'+r.requestedBy+'</div></div>'+eaStackTimeHTML(r.timestamp)+'</div>';
+}
+/* == SUPER ADMIN: PLATFORM OVERVIEW =======================================================
+   A Super Admin runs the execution layer across every client, so this view answers four
+   questions in the order they get asked: is anything broken, what is stuck on a person, what
+   is running, and how automated are we overall. Employee self-service figures (leave, payslip,
+   attendance) are deliberately absent — they belong to the employee persona, and showing them
+   here was what made the old screen useless to this role.
+
+   Every number below is derived from live data (aiAutomationRuns, manualJourneyRuns,
+   aiJourneys, aiJourneyEvents). Nothing is hardcoded, so the tiles cannot drift away from the
+   pages they link to — the failure mode of a dashboard whose figures are typed in by hand. == */
+function saAllAiRuns(){
+  const out=[];
+  Object.keys(aiAutomationRuns||{}).forEach(function(jid){
+    (aiAutomationRuns[jid]||[]).forEach(function(r){out.push({journeyId:jid,run:r});});
+  });
+  return out;
+}
+function saManualRuns(){return typeof manualJourneyRuns!=='undefined'?manualJourneyRuns:[];}
+// AI / human / client split for a journey, counted off the steps themselves rather than the
+// journey's declared aiSteps+humanSteps, so the split can never disagree with the bar a user
+// sees on the journey page. `coverage` stays the journey's own published metric.
+function saStepSplit(journeyId){
+  const ev=(aiJourneyEvents||{})[journeyId]||[];
+  let ai=0,human=0,other=0;
+  ev.forEach(function(e){
+    const c=e.chips||[];
+    if(c.indexOf('Human Required')>-1)human++;
+    else if(c.indexOf('AI Automated')>-1)ai++;
+    else other++;
+  });
+  return {ai:ai,human:human,other:other,total:ev.length};
+}
+function saMetrics(){
+  const ai=saAllAiRuns(),man=saManualRuns();
+  const exceptions=ai.filter(function(x){return x.run.status==='Exception';});
+  const blocked=man.filter(function(r){return r.status==='Blocked';});
+  const waiting=ai.filter(function(x){return x.run.status==='Waiting for Approval';}).length
+    +man.filter(function(r){return r.status==='Waiting Approval';}).length;
+  const running=ai.filter(function(x){return x.run.status==='Active';}).length
+    +man.filter(function(r){return r.status==='Active';}).length;
+  const live=(aiJourneys||[]).filter(function(j){return j.status==='Active';});
+  // Weighted by steps, so a nine-step journey counts for more than a three-step one.
+  let aiSteps=0,totalSteps=0;
+  (aiJourneys||[]).forEach(function(j){const s=saStepSplit(j.id);aiSteps+=s.ai;totalSteps+=s.total;});
+  const manualHours=man.reduce(function(n,r){return n+(r.manualHours||0);},0);
+  const agentHours=man.reduce(function(n,r){return n+(r.agentEstimateHours||0);},0);
+  return {exceptions:exceptions,blocked:blocked,attention:exceptions.length+blocked.length,
+    waiting:waiting,running:running,totalRuns:ai.length+man.length,
+    liveJourneys:live.length,journeys:(aiJourneys||[]).length,
+    aiSteps:aiSteps,totalSteps:totalSteps,
+    coverage:totalSteps?Math.round(aiSteps/totalSteps*100):0,
+    manualHours:manualHours,agentHours:agentHours,
+    saved:Math.round(Math.max(0,manualHours-agentHours)*10)/10};
+}
+function saJourneyName(jid){const j=(aiJourneys||[]).find(function(x){return x.id===jid;});return j?j.name:jid;}
+// The one list worth putting above the fold: every run that has actually stopped, AI and
+// manual together, because a Super Admin does not care which engine stalled — only that it did.
+function saAttentionRowsHTML(m){
+  const rows=[];
+  m.exceptions.forEach(function(x){
+    rows.push({id:x.run.runId,journey:saJourneyName(x.journeyId),subject:x.run.client||'&mdash;',
+      kind:'Exception',why:x.run.exceptionNote||'Run stopped with an exception.',
+      when:x.run.lastActivity||'',click:"viewAIRun('"+x.run.runId+"')"});
+  });
+  m.blocked.forEach(function(r){
+    rows.push({id:r.runId,journey:saJourneyName(r.journeyId),subject:r.subject||'&mdash;',
+      kind:'Blocked',why:r.blockedReason||'Manual run is blocked.',
+      when:r.startedAt||'',click:"selectedManualRunId='"+r.runId+"';manualJourneyBackPage='dashboard';page='manual-journey-run';renderADTPage()"});
+  });
+  if(!rows.length)return '<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:18px">Nothing is stuck. Every run is moving.</td></tr>';
+  return rows.map(function(r){
+    return '<tr style="cursor:pointer" onclick="'+r.click+'">'
+      +'<td><div class="cell-primary">'+r.id+'</div><div class="cell-sub">'+r.subject+'</div></td>'
+      +'<td>'+r.journey+'</td>'
+      +'<td>'+statusMini(r.kind,r.kind==='Exception'?'rejected':'pending')+'</td>'
+      +'<td class="sa-why">'+r.why+'</td>'
+      +'<td class="cell-sub">'+r.when+'</td></tr>';
+  }).join('');
+}
+function saJourneyRowsHTML(){
+  const ai=saAllAiRuns();
+  return (aiJourneys||[]).map(function(j){
+    const mine=ai.filter(function(x){return x.journeyId===j.id;});
+    const exc=mine.filter(function(x){return x.run.status==='Exception';}).length;
+    const split=saStepSplit(j.id);
+    const cov=typeof j.coverage==='number'?j.coverage:0;
+    return '<tr style="cursor:pointer" onclick="selectedAIJourneyId=\''+j.id+'\';navigatePage(\'ai-journey-detail\')">'
+      +'<td><div class="cell-primary">'+j.name.replace(/\s*Journey$/,'')+'</div><div class="cell-sub">'+j.category+' &middot; '+split.total+' steps</div></td>'
+      +'<td><div class="sa-bar" title="'+cov+'% automated"><span style="width:'+cov+'%"></span></div><div class="cell-sub">'+cov+'% automated</div></td>'
+      +'<td>'+split.ai+' AI &middot; '+split.human+' human</td>'
+      +'<td>'+mine.length+'</td>'
+      +'<td>'+(exc?statusMini(exc+' exception'+(exc===1?'':'s'),'rejected'):statusMini('Healthy','approved'))+'</td></tr>';
+  }).join('');
+}
+function buildSuperAdminDashboardHTML(){
+  const m=saMetrics();
+  const tiles='<div class="stat-grid dash-stat-grid">'
+    +dashStatNav('Needs attention',String(m.attention),
+      m.exceptions.length+' exception'+(m.exceptions.length===1?'':'s')+' &middot; '+m.blocked.length+' blocked',
+      m.attention?'red':'green',dashIcoAlert,'ai-executive')
+    +dashStatNav('Waiting on a person',String(m.waiting),'Approvals holding runs up','orange',dashIcoUser,'ai-executive')
+    +dashStatNav('Running now',String(m.running),'Of '+m.totalRuns+' runs tracked','blue',dashIcoDoc,'ai-executive')
+    +dashStatNav('Automation coverage',m.coverage+'%',m.aiSteps+' of '+m.totalSteps+' steps run by agents','teal',dashIcoShield,'ai-analytics')
+    +'</div>';
+  const attention='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Needs attention</div><span onclick="navigatePage(\'ai-executive\')">Open AI Executive</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>Run</th><th>Journey</th><th>State</th><th>What is wrong</th><th>When</th>'
+    +'</tr></thead><tbody>'+saAttentionRowsHTML(m)+'</tbody></table></div>';
+  const journeys='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Journeys</div><span onclick="navigatePage(\'ai-analytics\')">Agent &amp; model analytics</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>Journey</th><th>Coverage</th><th>Step mix</th><th>Runs</th><th>Health</th>'
+    +'</tr></thead><tbody>'+saJourneyRowsHTML()+'</tbody></table></div>';
+  return '<div class="dash-ref">'
+    +'<div class="dash-ref-title">Platform Overview</div>'
+    +'<div class="dash-ref-sub">'+m.liveJourneys+' of '+m.journeys+' journeys live across '+(typeof aiClients!=='undefined'?aiClients.length:0)+' clients. '
+    +(m.attention?'<b>'+m.attention+'</b> run'+(m.attention===1?'':'s')+' need'+(m.attention===1?'s':'')+' a look.':'Nothing is stuck right now.')+'</div>'
+    +'</div>'
+    +tiles+attention+journeys;
+}
+/* == AGENT & MODEL ANALYTICS ==============================================================
+   The depth the Platform Overview deliberately leaves out. Two questions a Super Admin who
+   configures agents actually has: which agents are load-bearing, and how much of the journey
+   estate runs without a human in the loop.
+
+   "Steps powered" is derived by matching each journey step's `source` against the agent
+   catalogue, so an agent nobody wired into a journey shows 0 and is visible as dead config —
+   which a hand-maintained usage column would never surface. == */
+function saAgentUsage(){
+  const used={};
+  Object.keys(aiJourneyEvents||{}).forEach(function(jid){
+    (aiJourneyEvents[jid]||[]).forEach(function(e){
+      if(!e.source)return;
+      (used[e.source]=used[e.source]||{steps:0,journeys:{}}).steps++;
+      used[e.source].journeys[jid]=1;
+    });
+  });
+  return used;
+}
+/* Sequential ink ramp, light-on-dark ordered, for parts-of-a-whole bars on this page. The bands
+   it colours are ordinal (how much human involvement a guardrail demands), so one hue stepped by
+   lightness is the correct encoding — a categorical rainbow would imply the bands are unrelated
+   identities, and would fight the monochrome language the rest of the app uses.
+   Steps are validated, not eyeballed: adjacent CVD separation 17.6 (target >= 8), normal-vision
+   17.7 (floor 15), and every step clears 3:1 against the white card. */
+const SA_RAMP=['#0f172a','#475569','#7c8899'];
+function saRampStep(i){return SA_RAMP[Math.min(i,SA_RAMP.length-1)];}
+// 2px surface gaps between segments and rounded ends, so neighbouring bands stay separable
+// without a border; min-width keeps a one-of-twelve segment from collapsing to nothing.
+function saStackedBarHTML(parts,total){
+  if(!total)return '';
+  return '<div class="sa-stack">'+parts.map(function(p,i){
+    return '<span class="sa-stack-seg" style="width:'+(p.count/total*100)+'%;background:'+saRampStep(i)+'"'
+      +' title="'+attrSafe(p.label+' — '+p.count+' of '+total)+'"></span>';
+  }).join('')+'</div>';
+}
+// Count and share are both spelled out per row: the segment colour carries identity, the text
+// carries the value, so nothing on this card is readable by colour alone.
+function saLegendHTML(parts,total){
+  return '<div class="sa-legend">'+parts.map(function(p,i){
+    return '<div class="sa-legend-row">'
+      +'<span class="sa-legend-dot" style="background:'+saRampStep(i)+'"></span>'
+      +'<span class="sa-legend-label">'+p.label+'</span>'
+      +'<span class="sa-legend-val">'+p.count+'</span>'
+      +'<span class="sa-legend-pct">'+(total?Math.round(p.count/total*100):0)+'%</span>'
+      +'</div>';
+  }).join('')+'</div>';
+}
+function buildAgentModelAnalyticsHTML(){
+  const agents=typeof cfgAgents!=='undefined'?cfgAgents:[];
+  const used=saAgentUsage();
+  const wired=agents.filter(function(a){return (used[a.name]||{}).steps;});
+  const idle=agents.length-wired.length;
+  // Guardrail mix is the governance number: how much of the estate runs unattended.
+  const guard={};
+  agents.forEach(function(a){guard[a.guardrail]=(guard[a.guardrail]||0)+1;});
+  const models={};
+  agents.forEach(function(a){models[a.model]=(models[a.model]||0)+1;});
+  const modelNames=Object.keys(models);
+  const auto=guard['Fully automated']||0;
+  const systems=typeof cfgSystems!=='undefined'?cfgSystems:[];
+  const connected=systems.filter(function(s){return s.status==='Connected';}).length;
+  const totalApis=systems.reduce(function(n,s){return n+(s.apis||0);},0);
+  const m=saMetrics();
+
+  const tiles='<div class="stat-grid dash-stat-grid">'
+    +dashStatNav('Agents configured',String(agents.length),wired.length+' wired into a journey'+(idle?' &middot; '+idle+' idle':''),idle?'orange':'green',dashIcoShield,'cfg-agents')
+    +dashStatNav('Steps run by agents',String(m.aiSteps),'Of '+m.totalSteps+' journey steps','teal',dashIcoDoc)
+    +dashStatNav('Unattended',agents.length?Math.round(auto/agents.length*100)+'%':'0%',auto+' of '+agents.length+' need no human','blue',dashIcoUser)
+    +dashStatNav('Systems connected',connected+'/'+String(systems.length),totalApis+' APIs available','green',dashIcoShield,'cfg-systems')
+    +'</div>';
+
+  const agentRows=agents.map(function(a){
+    const u=used[a.name]||{steps:0,journeys:{}};
+    const jn=Object.keys(u.journeys).map(saJourneyName).map(function(n){return n.replace(/\s*Journey$/,'');});
+    const g=a.guardrail==='Fully automated'?'approved':'pending';
+    return '<tr style="cursor:pointer" onclick="viewCfgAgentSkillByName(\''+String(a.name).replace(/'/g,"\\'")+'\')">'
+      +'<td><div class="cell-primary">'+a.name+'</div><div class="cell-sub">'+a.type+'</div></td>'
+      +'<td>'+a.model+'</td>'
+      +'<td>'+statusMini(a.guardrail,g)+'</td>'
+      +'<td>'+(u.steps?u.steps:statusMini('Not used','rejected'))+'</td>'
+      +'<td class="cell-sub">'+(jn.length?jn.join(', ')+'':'&mdash;')+'</td></tr>';
+  }).join('');
+  const agentTable='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Agents</div><span onclick="navigatePage(\'cfg-agents\')">Manage agents</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>Agent</th><th>Model</th><th>Guardrail</th><th>Steps powered</th><th>Used in</th>'
+    +'</tr></thead><tbody>'+agentRows+'</tbody></table></div>';
+
+  // Guardrails are parts of one whole (every agent sits in exactly one band) and the band names
+  // are long, so this is a horizontal stacked bar with a legend beneath — not three separate
+  // bars, which invited the reader to compare each against the full width instead of each other.
+  const guardParts=Object.keys(guard).map(function(k){return {label:k,count:guard[k]};});
+  const guardCard='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Guardrails</div><span class="sa-head-note">'+agents.length+' agents</span></div>'
+    +saStackedBarHTML(guardParts,agents.length)
+    +saLegendHTML(guardParts,agents.length)
+    +'</div>';
+  /* One model is a single value, and a single value is a stat — a lone bar filling 100% of its
+     track states nothing, because there is no second bar to read it against. It only becomes a
+     stacked bar once there is a real split to show, so both cases are handled here. */
+  const modelParts=modelNames.map(function(k){return {label:k,count:models[k]};});
+  const modelBody=modelNames.length===1
+    ?'<div class="sa-solo"><div class="sa-solo-val">'+modelNames[0]+'</div>'
+      +'<div class="sa-solo-sub">Backing all '+agents.length+' agents, across every journey</div></div>'
+      +'<div class="sa-note">Single point of dependency &mdash; a change to <b>'+modelNames[0]+'</b> reaches the whole estate at once.</div>'
+    :saStackedBarHTML(modelParts,agents.length)+saLegendHTML(modelParts,agents.length);
+  const modelCard='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Models in use</div><span onclick="navigatePage(\'cfg-data-foundation\')">Data Foundation</span></div>'
+    +modelBody+'</div>';
+  const mix='<div class="dash-two-col sa-two-col">'+guardCard+modelCard+'</div>';
+
+  /* The Status column held "Connected" on every row — a column whose every value is identical
+     tells the reader nothing and costs a quarter of the table's width. Status moves inline to
+     the system it describes (dot AND word, never colour alone), and the width goes to API count,
+     which actually varies: 142 against 1 is invisible as bare digits and obvious as a bar. */
+  const maxApis=systems.reduce(function(n,s){return Math.max(n,s.apis||0);},0)||1;
+  const sysRows=systems.map(function(s){
+    const ok=s.status==='Connected';
+    const n=s.apis||0;
+    return '<tr style="cursor:pointer" onclick="selectedCfgSystemId=\''+s.id+'\';navigatePage(\'cfg-system-detail\')">'
+      +'<td><div class="cell-primary">'+s.name+'</div>'
+        +'<div class="cell-sub sa-sys-sub"><span class="sa-dot '+(ok?'ok':'bad')+'"></span>'+s.status
+        +' &middot; '+s.type+' &middot; '+s.method+'</div></td>'
+      +'<td><div class="sa-apis" title="'+attrSafe(n+' of '+maxApis+' APIs')+'">'
+        +'<span class="sa-apis-bar"><span style="width:'+Math.round(n/maxApis*100)+'%"></span></span>'
+        +'<span class="sa-apis-val">'+n+'</span></div></td>'
+      +'<td class="cell-sub">'+(s.lastTested||'&mdash;')+'</td></tr>';
+  }).join('');
+  const sysTable='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Systems</div><span onclick="navigatePage(\'cfg-systems\')">All systems</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>System</th><th class="sa-col-apis">APIs available</th><th>Last tested</th>'
+    +'</tr></thead><tbody>'+sysRows+'</tbody></table></div>';
+
+  return '<div class="dash-ref">'
+    +'<div class="dash-ref-title">Agent &amp; Model Analytics</div>'
+    +'<div class="dash-ref-sub">What the agent estate is doing across all '+((aiJourneys||[]).length)+' journeys, and how much of it runs without a person.</div>'
+    +'</div>'
+    +tiles+agentTable+mix+sysTable;
 }
 function buildEntityAdminDashboardHTML(){
   const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
