@@ -7881,10 +7881,17 @@ function buildCfgModelDetailHTML(){
       }).join('')
       +'<button type="button" class="btn btn-secondary btn-sm" style="margin-top:14px;border:1px dashed #f1c27a;color:var(--orange);background:transparent" onclick="addCfgEnrichRow()">+ Add enrichment field</button>'
       +'</div>'
-    :'<div class="ep-form-card" style="margin-bottom:18px;border-color:#f1c27a">'
-      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(26,26,26,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
-      +(m.enrichment.length?m.enrichment.map(function(e){return cfgEnrichRow(e);}).join(''):'<div style="padding:12px 0;font-size:12.5px;color:var(--gray)">No enrichment fields yet.</div>')
-      +'</div>';
+    // Enrichment appears only while editing, on the same basis as Rules below: the fields are
+    // still held on the model and still added, renamed and removed here — they are simply not
+    // restated on the read-only view. Emptied rather than deleted, because this editor is the
+    // only place enrichment fields can be maintained.
+    :'';
+  // Rules appear only while editing. The read-only view no longer carries a Rules card — the
+  // maker-checker setting and the validation rule are still stored on the model and still
+  // editable here, they are simply not restated on the view.
+  //
+  // Deliberately emptied rather than deleted: the edit form below is the only place these two
+  // are set, so removing the section outright would take the setting away, not just its display.
   const rulesSection=editing
     ?'<div class="ep-form-card" style="margin-bottom:18px">'
       +'<div class="ep-form-title">Rules</div>'
@@ -7892,12 +7899,7 @@ function buildCfgModelDetailHTML(){
       +'<div style="display:flex;align-items:center;gap:10px"><label class="cs-toggle"><input type="checkbox" id="cfg-model-edit-mc"'+(dm.makerChecker?' checked':'')+'><span class="cs-toggle-slider"></span></label><span style="font-size:13px;color:var(--navy)">Maker-checker &middot; AI drafts, human approves</span></div>'
       +'<div class="ep-form-group" style="flex:1;min-width:260px"><label class="ep-form-label">Validation rule</label><input class="ep-form-input" id="cfg-model-edit-validation" value="'+attrSafe(dm.validation)+'" placeholder="e.g. Base price must be greater than zero"></div>'
       +'</div></div>'
-    :'<div class="ep-form-card" style="margin-bottom:18px">'
-      +'<div class="ep-form-title">Rules</div>'
-      +'<div style="display:flex;gap:14px;flex-wrap:wrap">'
-      +'<div style="flex:1;min-width:220px"><div style="font-size:11px;color:var(--gray);margin-bottom:5px">Maker-checker</div><div style="font-size:13px;font-weight:600;color:'+(m.rules.makerChecker?'#16a34a':'#6b7280')+'">'+(m.rules.makerChecker?'On · AI drafts, human approves':'Off · no review required')+'</div></div>'
-      +'<div style="flex:1;min-width:220px"><div style="font-size:11px;color:var(--gray);margin-bottom:5px">Validation</div><div style="font-size:13px;font-weight:600;color:var(--navy)">'+(m.rules.validation||'&mdash;')+'</div></div>'
-      +'</div></div>';
+    :'';
   // -- The sample is what one whole record looks like coming through, so it leads with the ids
   // that name it. Identity fields are prepended rather than mapped in: Source Record ID is
   // already a mapped field and would otherwise appear twice. --
