@@ -7,7 +7,7 @@ let activePersonaId='hr';
 /* Empty rather than 'employee': buildDashboardPageHTML already falls back to the first tab the
    role actually has when the current one is not in its list, so starting empty makes every role
    land on its own first tab. Hardcoding 'employee' silently pinned Super Admin to the employee
-   view, because 'employee' is a legitimate tab for that role too; the guard had nothing to
+   view, because 'employee' is a legitimate tab for that role too — the guard had nothing to
    catch. Any explicit choice the user makes is still restored per persona from session state. */
 let dashboardTab='';
 let salesOpenDealsOpen=false;
@@ -1026,7 +1026,7 @@ function setPortalRole(role,force,personaId){
   if(saved){
     page=saved.page;dashboardTab=saved.dashboardTab;navStack=saved.navStack.slice();
   }else{
-    // Cleared, not pinned to 'employee' - see the note on the declaration.
+    // Cleared, not pinned to 'employee' — see the note on the declaration.
     dashboardTab='';page=defaultPageForRole(portalRole);navStack=[];
   }
   renderADTPage();
@@ -1063,7 +1063,7 @@ function dashboardTabsForRole(role){
   }
   if(role==='entity-admin')return [employeeTab,{id:'entity-admin',label:'Entity Admin'}];
   /* Platform Overview leads for Super Admin, and the employee view keeps its place behind it.
-     A Super Admin operates the execution layer across every client - landing them on their own
+     A Super Admin operates the execution layer across every client — landing them on their own
      leave balance and payslip answered a question they had not asked, and buried the one they
      had (is anything broken). Entity Admin keeps employee-first because that role really does
      use the self-service view day to day. */

@@ -1091,12 +1091,12 @@ function eaNoteCardHTML(r,dot){
    A Super Admin runs the execution layer across every client, so this view answers four
    questions in the order they get asked: is anything broken, what is stuck on a person, what
    is running, and how automated are we overall. Employee self-service figures (leave, payslip,
-   attendance) are deliberately absent; they belong to the employee persona, and showing them
+   attendance) are deliberately absent — they belong to the employee persona, and showing them
    here was what made the old screen useless to this role.
 
    Every number below is derived from live data (aiAutomationRuns, manualJourneyRuns,
    aiJourneys, aiJourneyEvents). Nothing is hardcoded, so the tiles cannot drift away from the
-   pages they link to. == */
+   pages they link to — the failure mode of a dashboard whose figures are typed in by hand. == */
 function saAllAiRuns(){
   const out=[];
   Object.keys(aiAutomationRuns||{}).forEach(function(jid){
@@ -1105,6 +1105,9 @@ function saAllAiRuns(){
   return out;
 }
 function saManualRuns(){return typeof manualJourneyRuns!=='undefined'?manualJourneyRuns:[];}
+// AI / human / client split for a journey, counted off the steps themselves rather than the
+// journey's declared aiSteps+humanSteps, so the split can never disagree with the bar a user
+// sees on the journey page. `coverage` stays the journey's own published metric.
 function saStepSplit(journeyId){
   const ev=(aiJourneyEvents||{})[journeyId]||[];
   let ai=0,human=0,other=0;
@@ -1125,6 +1128,7 @@ function saMetrics(){
   const running=ai.filter(function(x){return x.run.status==='Active';}).length
     +man.filter(function(r){return r.status==='Active';}).length;
   const live=(aiJourneys||[]).filter(function(j){return j.status==='Active';});
+  // Weighted by steps, so a nine-step journey counts for more than a three-step one.
   let aiSteps=0,totalSteps=0;
   (aiJourneys||[]).forEach(function(j){const s=saStepSplit(j.id);aiSteps+=s.ai;totalSteps+=s.total;});
   const manualHours=man.reduce(function(n,r){return n+(r.manualHours||0);},0);
@@ -1138,6 +1142,8 @@ function saMetrics(){
     saved:Math.round(Math.max(0,manualHours-agentHours)*10)/10};
 }
 function saJourneyName(jid){const j=(aiJourneys||[]).find(function(x){return x.id===jid;});return j?j.name:jid;}
+// The one list worth putting above the fold: every run that has actually stopped, AI and
+// manual together, because a Super Admin does not care which engine stalled — only that it did.
 function saAttentionRowsHTML(m){
   const rows=[];
   m.exceptions.forEach(function(x){
@@ -1205,7 +1211,11 @@ function buildSuperAdminDashboardHTML(){
 /* == AGENT & MODEL ANALYTICS ==============================================================
    The depth the Platform Overview deliberately leaves out. Two questions a Super Admin who
    configures agents actually has: which agents are load-bearing, and how much of the journey
-   estate runs without a human in the loop. == */
+   estate runs without a human in the loop.
+
+   "Steps powered" is derived by matching each journey step's `source` against the agent
+   catalogue, so an agent nobody wired into a journey shows 0 and is visible as dead config —
+   which a hand-maintained usage column would never surface. == */
 function saAgentUsage(){
   const used={};
   Object.keys(aiJourneyEvents||{}).forEach(function(jid){
@@ -1217,15 +1227,25 @@ function saAgentUsage(){
   });
   return used;
 }
+/* Sequential ink ramp, light-on-dark ordered, for parts-of-a-whole bars on this page. The bands
+   it colours are ordinal (how much human involvement a guardrail demands), so one hue stepped by
+   lightness is the correct encoding — a categorical rainbow would imply the bands are unrelated
+   identities, and would fight the monochrome language the rest of the app uses.
+   Steps are validated, not eyeballed: adjacent CVD separation 17.6 (target >= 8), normal-vision
+   17.7 (floor 15), and every step clears 3:1 against the white card. */
 const SA_RAMP=['#0f172a','#475569','#7c8899'];
 function saRampStep(i){return SA_RAMP[Math.min(i,SA_RAMP.length-1)];}
+// 2px surface gaps between segments and rounded ends, so neighbouring bands stay separable
+// without a border; min-width keeps a one-of-twelve segment from collapsing to nothing.
 function saStackedBarHTML(parts,total){
   if(!total)return '';
   return '<div class="sa-stack">'+parts.map(function(p,i){
     return '<span class="sa-stack-seg" style="width:'+(p.count/total*100)+'%;background:'+saRampStep(i)+'"'
-      +' title="'+attrSafe(p.label+' - '+p.count+' of '+total)+'"></span>';
+      +' title="'+attrSafe(p.label+' — '+p.count+' of '+total)+'"></span>';
   }).join('')+'</div>';
 }
+// Count and share are both spelled out per row: the segment colour carries identity, the text
+// carries the value, so nothing on this card is readable by colour alone.
 function saLegendHTML(parts,total){
   return '<div class="sa-legend">'+parts.map(function(p,i){
     return '<div class="sa-legend-row">'
@@ -1241,6 +1261,7 @@ function buildAgentModelAnalyticsHTML(){
   const used=saAgentUsage();
   const wired=agents.filter(function(a){return (used[a.name]||{}).steps;});
   const idle=agents.length-wired.length;
+  // Guardrail mix is the governance number: how much of the estate runs unattended.
   const guard={};
   agents.forEach(function(a){guard[a.guardrail]=(guard[a.guardrail]||0)+1;});
   const models={};
@@ -1276,12 +1297,18 @@ function buildAgentModelAnalyticsHTML(){
     +'<th>Agent</th><th>Model</th><th>Guardrail</th><th>Steps powered</th><th>Used in</th>'
     +'</tr></thead><tbody>'+agentRows+'</tbody></table></div>';
 
+  // Guardrails are parts of one whole (every agent sits in exactly one band) and the band names
+  // are long, so this is a horizontal stacked bar with a legend beneath — not three separate
+  // bars, which invited the reader to compare each against the full width instead of each other.
   const guardParts=Object.keys(guard).map(function(k){return {label:k,count:guard[k]};});
   const guardCard='<div class="listing-card dash-panel">'
     +'<div class="dash-panel-head"><div>Guardrails</div><span class="sa-head-note">'+agents.length+' agents</span></div>'
     +saStackedBarHTML(guardParts,agents.length)
     +saLegendHTML(guardParts,agents.length)
     +'</div>';
+  /* One model is a single value, and a single value is a stat — a lone bar filling 100% of its
+     track states nothing, because there is no second bar to read it against. It only becomes a
+     stacked bar once there is a real split to show, so both cases are handled here. */
   const modelParts=modelNames.map(function(k){return {label:k,count:models[k]};});
   const modelBody=modelNames.length===1
     ?'<div class="sa-solo"><div class="sa-solo-val">'+modelNames[0]+'</div>'
@@ -1293,6 +1320,10 @@ function buildAgentModelAnalyticsHTML(){
     +modelBody+'</div>';
   const mix='<div class="dash-two-col sa-two-col">'+guardCard+modelCard+'</div>';
 
+  /* The Status column held "Connected" on every row — a column whose every value is identical
+     tells the reader nothing and costs a quarter of the table's width. Status moves inline to
+     the system it describes (dot AND word, never colour alone), and the width goes to API count,
+     which actually varies: 142 against 1 is invisible as bare digits and obvious as a bar. */
   const maxApis=systems.reduce(function(n,s){return Math.max(n,s.apis||0);},0)||1;
   const sysRows=systems.map(function(s){
     const ok=s.status==='Connected';
@@ -10020,7 +10051,6 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   }).join('<div class="aicj-track-split" aria-hidden="true"></div>');
   return label+'<div class="aicj-bar"><div class="aicj-bar-scroll aicj-bar-tracked">'+groups+'</div></div>';
 }
-function buildAIContractJourneyBarHTML(stage){return buildAIJourneyBarHTML('contract-creation',stage,'contract');}
 /* == CONTRACT CREATION — THE STAGE RAIL ==================================================
    The contract journey used to draw its nine stages as cards while payroll and H2R drew the
    numbered dot-and-line rail, so the product showed two different shapes for the same idea.
