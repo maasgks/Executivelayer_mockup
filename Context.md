@@ -56,7 +56,7 @@ function navigatePage(pg){
 ### 3.3 Content dispatch
 `js/renderer.js` → `renderPageContent(id)` is an if/else chain on `page` that calls the matching `buildXxxHTML()` function from `pages.js` and assigns the result to `#adt-content`. `renderADTPage()` (in `renderer.js`) is the top-level refresh: rebuilds page title, the "+" add button, the sidebar, then calls `renderPageContent`.
 
-A large sub-family of pages (`ai-contract-assistant`, `ai-proposal-*`, `ai-contract-document`, `ai-onboarding-run`, `contract-eor`, `contract-peo`, etc.) is routed through a nested dispatcher, `dispatchAIContractWizardPage()`, wrapped in a persistent animated journey progress bar (`buildAIContractJourneyBarHTML`) — see §6.3.
+A large sub-family of pages (`ai-contract-assistant`, `ai-proposal-*`, `ai-contract-document`, `ai-onboarding-run`, `contract-eor`, `contract-peo`, etc.) is routed through a nested dispatcher, `dispatchAIContractWizardPage()`, wrapped in a persistent animated journey progress bar (`buildAIJourneyBarHTML('contract-creation', …)`, the same rail every journey uses) — see §6.3.
 
 ### 3.4 Sidebar generation
 `sidebarItems` (core.js) is a flat/nested array of `{id, label, icon, color, roles:[...]}` or `{dropdown, children:[...], roles:[...]}`. `getSidebarItems()` filters the whole tree by `portalRole` (dropping empty dropdowns). `buildSidebar(id, collapsed, activePg)` renders it to a DOM element imperatively (not re-diffed — cleared and rebuilt each time). Two sidebars exist (`#adt-sidebar`, `#agent-sb`) sharing this same data and builder.
@@ -125,7 +125,7 @@ This journey has a real multi-step interactive "run", distinct from the simpler 
 3. **Contract Document** (`ai-contract-document`, step "Contract Sent") — generates and displays the full employment agreement (`buildAIContractDocumentHTML`). This step **pauses** (does not auto-advance) and shows **Edit** / **Approve** buttons (`aiContractDocActionBarHTML`). Edit makes the document `contenteditable` in place with a **Save** bar pinned above it (`aiContractDocEdit`/`aiContractDocSave`); Approve (`aiContractDocApprove`) calls `aiSendContractForApproval()`, which sends it for signature and continues the journey.
 4. **Contract Waiting Approval** (`ai-contract-waiting-approval`, step "Contract Approved" — Ops Manager) → `aiSimulateContractApproval()` → **Onboarding** (`ai-onboarding-run`, automated checklist) → **Journey Complete** (`ai-journey-complete`).
 
-Every stage of this flow is wrapped by a persistent animated progress bar (`buildAIContractJourneyBarHTML`) showing "Handled by `<Agent>`" — clickable through to that agent's skill.md viewer without leaving the journey.
+Every stage of this flow is wrapped by a persistent animated progress bar (`buildAIJourneyBarHTML`) showing "Handled by `<Agent>`" — clickable through to that agent's skill.md viewer without leaving the journey.
 
 ### 5.5 Live run flows (Payroll & H2R)
 Simpler than Contract Creation: a single prompt box (`aiRunFlows[journeyId]`, core.js) drives a linear sequence of auto/manual steps rendered by `buildAIPayrollJourneyHTML`/`buildAIH2rJourneyHTML`, each with a "Simulate: X" button to fake the prompt. Payroll's "Create Salary Slip" and H2R's HR-approval step are the manual pause points; everything else auto-advances through `aiRunFlowRunCurrentStep()`.

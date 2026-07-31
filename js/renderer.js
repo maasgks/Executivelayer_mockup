@@ -50,7 +50,9 @@ function renderPageContentImpl(id){
     const cjStage=aiCtJourneyStage();
     if(cjStage>=0){
       aiCtSyncLinkedRun(cjStage);
-      el.innerHTML='<div class="aicj-wrap">'+buildAIContractJourneyBarHTML(cjStage)+'<div id="aicj-inner"></div></div>';
+      // Engagement model above the rail, on every step: it is the one decision that shapes the
+      // whole run, so it reads as the run's header rather than a question asked once and lost.
+      el.innerHTML='<div class="aicj-wrap">'+buildAIContractTypeCardsHTML()+buildAIJourneyBarHTML('contract-creation',cjStage,'ct')+'<div id="aicj-inner"></div></div>';
       dispatchAIContractWizardPage(document.getElementById('aicj-inner'));
     }else{
       dispatchAIContractWizardPage(el);
@@ -68,6 +70,7 @@ function renderPageContentImpl(id){
   if(page==='cfg-context-journey'){el.innerHTML=buildCfgContextJourneyHTML();return;}
   if(page==='cfg-journey-detail'){el.innerHTML=buildCfgJourneyDetailHTML();initCfgFlowScroll();return;}
   if(page==='journey-simulation'){el.innerHTML=buildJourneySimulationHTML();return;}
+  if(page==='ai-analytics'){el.innerHTML=buildAgentModelAnalyticsHTML();return;}
   if(page==='cfg-agents'){el.innerHTML=buildCfgAgentsHTML();return;}
   if(page==='ai-executive'){el.innerHTML=portalRole==='super-admin'?buildAIClientsListingHTML():buildAIExecutiveDashboardHTML();return;}
   if(page==='my-tasks'){el.innerHTML=buildMyTasksPageHTML();return;}
@@ -109,7 +112,7 @@ function renderADTPage(){
   // Show/hide + button in topbar based on current page
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
-    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','journey-simulation','manual-journey-run','master-data'];
+    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','my-timesheet','all-timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','ai-analytics','journey-simulation','manual-journey-run','master-data'];
     const show=!noAddPages.includes(page);
     addBtn.style.display=show?'':'none';
     if(show){

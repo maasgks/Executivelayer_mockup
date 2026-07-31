@@ -700,6 +700,37 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .dash-action-title{font-size:13px;font-weight:800;color:var(--navy);margin-bottom:3px}
 .dash-action-sub{font-size:11.5px;color:var(--gray);line-height:1.4}
 .dash-two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+/* -- Super Admin: Platform Overview + Agent & Model Analytics -- */
+.sa-bar{height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden;min-width:70px}
+.sa-bar>span{display:block;height:100%;border-radius:3px;background:var(--navy)}
+.sa-stack{display:flex;gap:2px;height:10px;margin:14px 16px 16px}
+.sa-stack-seg{border-radius:3px;min-width:4px;transition:opacity .15s}
+.sa-stack:hover .sa-stack-seg{opacity:.55}
+.sa-stack .sa-stack-seg:hover{opacity:1}
+.sa-legend{padding:0 16px 14px}
+.sa-legend-row{display:grid;grid-template-columns:9px 1fr auto 40px;align-items:center;gap:10px;padding:6px 0;border-top:1px solid #f1f5f9}
+.sa-legend-row:first-child{border-top:none}
+.sa-legend-dot{width:9px;height:9px;border-radius:2.5px}
+.sa-legend-label{font-size:12px;font-weight:600;color:var(--navy);min-width:0}
+.sa-legend-val{font-size:12.5px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+.sa-legend-pct{font-size:11px;font-weight:600;color:var(--gray);text-align:right;font-variant-numeric:tabular-nums}
+.sa-head-note{font-size:11px;font-weight:700;color:var(--gray)}
+.sa-two-col{align-items:stretch}
+.sa-solo{padding:16px 16px 4px}
+.sa-solo-val{font-size:22px;font-weight:800;color:var(--navy);letter-spacing:-.4px;line-height:1.2}
+.sa-solo-sub{font-size:11.5px;color:var(--gray);margin-top:3px}
+.sa-sys-sub{display:flex;align-items:center;gap:6px}
+.sa-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sa-dot.ok{background:#16a34a}
+.sa-dot.bad{background:var(--red)}
+.sa-col-apis{width:200px}
+.sa-apis{display:flex;align-items:center;gap:10px}
+.sa-apis-bar{flex:1 1 auto;min-width:60px;max-width:120px;height:6px;border-radius:3px;background:#eef2f6;overflow:hidden}
+.sa-apis-bar>span{display:block;height:100%;border-radius:3px;background:#475569;min-width:3px}
+.sa-apis-val{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.sa-why{white-space:normal;line-height:1.5;color:var(--gray);max-width:340px}
+.sa-note{margin-top:9px;padding:9px 11px;border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:7px;background:#fff;font-size:11.5px;line-height:1.55;color:var(--gray)}
+.sa-note b{color:var(--navy)}
 .dash-panel{margin-bottom:16px}
 .dash-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px 12px;border-bottom:1px solid var(--border);font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase}
 .dash-panel-head span{font-size:11px;text-transform:none;color:var(--gray);font-weight:600}
@@ -1491,6 +1522,40 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-ct-assist-idle-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px}
 .ai-ct-assist-idle-text{font-size:12px;line-height:1.6;max-width:280px}
 @media(max-width:840px){.ai-ct-assist-split{flex-direction:column}.ai-ct-assist-left{flex:1 1 auto;width:100%}}
+/* Waiting on the engagement model — the assistant panel is held back until a type is chosen, so
+   this stands in its place rather than leaving the step empty. */
+.ai-ct-await{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:280px;margin-top:20px;border:1.5px dashed var(--border);border-radius:16px;padding:38px 28px;background:#fff}
+.ai-ct-await-icon{width:40px;height:40px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:var(--gray);margin-bottom:14px}
+.ai-ct-await-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:7px}
+.ai-ct-await-text{font-size:12.5px;color:var(--gray);line-height:1.65;max-width:400px}
+.ai-ct-await-text b{color:var(--navy);font-weight:700}
+/* Engagement model chooser — EOR / PEO / Contract based, above the journey rail on every step */
+.ai-ct-type-row{display:flex;gap:12px;margin-bottom:14px}
+.ai-ct-type-card{flex:1 1 0;min-width:0;display:flex;align-items:flex-start;gap:12px;padding:14px 15px;border:1.5px solid var(--border);border-radius:14px;background:#fff;font-family:inherit;text-align:left;transition:.16s}
+.ai-ct-type-card.live{cursor:pointer}
+.ai-ct-type-card.live:hover{border-color:#94a3b8;box-shadow:0 2px 12px rgba(15,23,42,.07)}
+.ai-ct-type-card.selected{border-color:var(--navy);background:#f8fafc;box-shadow:0 0 0 2.5px rgba(15,23,42,.07)}
+.ai-ct-type-card.locked{background:#f8fafc;border-style:dashed;cursor:not-allowed}
+/* Past intake the chosen card is locked but still the answer to "what model is this run?" — it
+   keeps the selected treatment and only loses the pressable affordance. */
+.ai-ct-type-card.locked.selected{border-style:solid;cursor:default}
+.ai-ct-type-ico{width:34px;height:34px;border-radius:10px;background:#f1f5f9;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--navy)}
+.ai-ct-type-card.selected .ai-ct-type-ico{background:var(--navy);border-color:var(--navy);color:#fff}
+.ai-ct-type-card.locked .ai-ct-type-ico{color:#9ca3af;opacity:.7}
+.ai-ct-type-body{display:flex;flex-direction:column;min-width:0}
+.ai-ct-type-title{font-size:13.5px;font-weight:800;color:var(--navy);line-height:1.25}
+.ai-ct-type-sub{font-size:10.5px;font-weight:600;color:var(--gray);margin-top:2px;line-height:1.35}
+.ai-ct-type-desc{font-size:11px;color:#94a3b8;line-height:1.5;margin-top:6px}
+.ai-ct-type-card.locked .ai-ct-type-title,.ai-ct-type-card.locked .ai-ct-type-sub{color:#9ca3af}
+.ai-ct-type-card.locked.selected .ai-ct-type-title{color:var(--navy)}
+.ai-ct-type-card.locked.selected .ai-ct-type-sub{color:var(--gray)}
+.ai-ct-type-card.locked.selected .ai-ct-type-ico{background:var(--navy);border-color:var(--navy);color:#fff;opacity:1}
+.ai-ct-type-flag{align-self:flex-start;margin-top:9px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px;background:#f1f5f9;color:var(--navy);white-space:nowrap}
+.ai-ct-type-flag.on{background:var(--navy);color:#fff}
+.ai-ct-type-flag.locked{background:transparent;border:1px dashed #cbd5e1;color:#9ca3af}
+@media(max-width:900px){.ai-ct-type-row{flex-wrap:wrap}.ai-ct-type-card{flex:1 1 240px}.ai-ct-type-desc{display:none}}
+/* The nine-stage card rail that used to live here is gone — Contract Creation now draws the
+   same numbered dot rail as every other journey (see .aicj-bar / .aicj-track below). */
 /* Contract Creation Journey — persistent animated step bar */
 /* Same measure as .ai-exec-page. In focus mode the sidebar is gone, so without a cap the stepper
    and the step under it would stretch the full viewport on a wide monitor — trading a cramped

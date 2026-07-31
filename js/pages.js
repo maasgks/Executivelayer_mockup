@@ -12,6 +12,7 @@ function buildDashboardPageHTML(){
   if(!tabs.some(t=>t.id===dashboardTab))dashboardTab=tabs[0]?tabs[0].id:'employee';
   const body=dashboardTab==='employee'?buildEmployeeDashboardHTML()
     :dashboardTab==='entity-admin'?buildEntityAdminDashboardHTML()
+    :dashboardTab==='platform'?buildSuperAdminDashboardHTML()
     :portalRole==='entity-user'?buildPersonaRoleDashboardHTML(dashboardTab)
     :dashboardContentHTML;
   return buildDashboardTabsHTML()+body;
@@ -1085,6 +1086,237 @@ function eaNoteCardHTML(r,dot){
   return dot
     +'<div class="ea-stack-issue">'+r.label+'</div>'
     +'<div class="ea-stack-meta"><div class="ea-stack-who"><div class="ea-req-requester">'+r.requestedBy+'</div></div>'+eaStackTimeHTML(r.timestamp)+'</div>';
+}
+/* == SUPER ADMIN: PLATFORM OVERVIEW =======================================================
+   A Super Admin runs the execution layer across every client, so this view answers four
+   questions in the order they get asked: is anything broken, what is stuck on a person, what
+   is running, and how automated are we overall. Employee self-service figures (leave, payslip,
+   attendance) are deliberately absent; they belong to the employee persona, and showing them
+   here was what made the old screen useless to this role.
+
+   Every number below is derived from live data (aiAutomationRuns, manualJourneyRuns,
+   aiJourneys, aiJourneyEvents). Nothing is hardcoded, so the tiles cannot drift away from the
+   pages they link to. == */
+function saAllAiRuns(){
+  const out=[];
+  Object.keys(aiAutomationRuns||{}).forEach(function(jid){
+    (aiAutomationRuns[jid]||[]).forEach(function(r){out.push({journeyId:jid,run:r});});
+  });
+  return out;
+}
+function saManualRuns(){return typeof manualJourneyRuns!=='undefined'?manualJourneyRuns:[];}
+function saStepSplit(journeyId){
+  const ev=(aiJourneyEvents||{})[journeyId]||[];
+  let ai=0,human=0,other=0;
+  ev.forEach(function(e){
+    const c=e.chips||[];
+    if(c.indexOf('Human Required')>-1)human++;
+    else if(c.indexOf('AI Automated')>-1)ai++;
+    else other++;
+  });
+  return {ai:ai,human:human,other:other,total:ev.length};
+}
+function saMetrics(){
+  const ai=saAllAiRuns(),man=saManualRuns();
+  const exceptions=ai.filter(function(x){return x.run.status==='Exception';});
+  const blocked=man.filter(function(r){return r.status==='Blocked';});
+  const waiting=ai.filter(function(x){return x.run.status==='Waiting for Approval';}).length
+    +man.filter(function(r){return r.status==='Waiting Approval';}).length;
+  const running=ai.filter(function(x){return x.run.status==='Active';}).length
+    +man.filter(function(r){return r.status==='Active';}).length;
+  const live=(aiJourneys||[]).filter(function(j){return j.status==='Active';});
+  let aiSteps=0,totalSteps=0;
+  (aiJourneys||[]).forEach(function(j){const s=saStepSplit(j.id);aiSteps+=s.ai;totalSteps+=s.total;});
+  const manualHours=man.reduce(function(n,r){return n+(r.manualHours||0);},0);
+  const agentHours=man.reduce(function(n,r){return n+(r.agentEstimateHours||0);},0);
+  return {exceptions:exceptions,blocked:blocked,attention:exceptions.length+blocked.length,
+    waiting:waiting,running:running,totalRuns:ai.length+man.length,
+    liveJourneys:live.length,journeys:(aiJourneys||[]).length,
+    aiSteps:aiSteps,totalSteps:totalSteps,
+    coverage:totalSteps?Math.round(aiSteps/totalSteps*100):0,
+    manualHours:manualHours,agentHours:agentHours,
+    saved:Math.round(Math.max(0,manualHours-agentHours)*10)/10};
+}
+function saJourneyName(jid){const j=(aiJourneys||[]).find(function(x){return x.id===jid;});return j?j.name:jid;}
+function saAttentionRowsHTML(m){
+  const rows=[];
+  m.exceptions.forEach(function(x){
+    rows.push({id:x.run.runId,journey:saJourneyName(x.journeyId),subject:x.run.client||'&mdash;',
+      kind:'Exception',why:x.run.exceptionNote||'Run stopped with an exception.',
+      when:x.run.lastActivity||'',click:"viewAIRun('"+x.run.runId+"')"});
+  });
+  m.blocked.forEach(function(r){
+    rows.push({id:r.runId,journey:saJourneyName(r.journeyId),subject:r.subject||'&mdash;',
+      kind:'Blocked',why:r.blockedReason||'Manual run is blocked.',
+      when:r.startedAt||'',click:"selectedManualRunId='"+r.runId+"';manualJourneyBackPage='dashboard';page='manual-journey-run';renderADTPage()"});
+  });
+  if(!rows.length)return '<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:18px">Nothing is stuck. Every run is moving.</td></tr>';
+  return rows.map(function(r){
+    return '<tr style="cursor:pointer" onclick="'+r.click+'">'
+      +'<td><div class="cell-primary">'+r.id+'</div><div class="cell-sub">'+r.subject+'</div></td>'
+      +'<td>'+r.journey+'</td>'
+      +'<td>'+statusMini(r.kind,r.kind==='Exception'?'rejected':'pending')+'</td>'
+      +'<td class="sa-why">'+r.why+'</td>'
+      +'<td class="cell-sub">'+r.when+'</td></tr>';
+  }).join('');
+}
+function saJourneyRowsHTML(){
+  const ai=saAllAiRuns();
+  return (aiJourneys||[]).map(function(j){
+    const mine=ai.filter(function(x){return x.journeyId===j.id;});
+    const exc=mine.filter(function(x){return x.run.status==='Exception';}).length;
+    const split=saStepSplit(j.id);
+    const cov=typeof j.coverage==='number'?j.coverage:0;
+    return '<tr style="cursor:pointer" onclick="selectedAIJourneyId=\''+j.id+'\';navigatePage(\'ai-journey-detail\')">'
+      +'<td><div class="cell-primary">'+j.name.replace(/\s*Journey$/,'')+'</div><div class="cell-sub">'+j.category+' &middot; '+split.total+' steps</div></td>'
+      +'<td><div class="sa-bar" title="'+cov+'% automated"><span style="width:'+cov+'%"></span></div><div class="cell-sub">'+cov+'% automated</div></td>'
+      +'<td>'+split.ai+' AI &middot; '+split.human+' human</td>'
+      +'<td>'+mine.length+'</td>'
+      +'<td>'+(exc?statusMini(exc+' exception'+(exc===1?'':'s'),'rejected'):statusMini('Healthy','approved'))+'</td></tr>';
+  }).join('');
+}
+function buildSuperAdminDashboardHTML(){
+  const m=saMetrics();
+  const tiles='<div class="stat-grid dash-stat-grid">'
+    +dashStatNav('Needs attention',String(m.attention),
+      m.exceptions.length+' exception'+(m.exceptions.length===1?'':'s')+' &middot; '+m.blocked.length+' blocked',
+      m.attention?'red':'green',dashIcoAlert,'ai-executive')
+    +dashStatNav('Waiting on a person',String(m.waiting),'Approvals holding runs up','orange',dashIcoUser,'ai-executive')
+    +dashStatNav('Running now',String(m.running),'Of '+m.totalRuns+' runs tracked','blue',dashIcoDoc,'ai-executive')
+    +dashStatNav('Automation coverage',m.coverage+'%',m.aiSteps+' of '+m.totalSteps+' steps run by agents','teal',dashIcoShield,'ai-analytics')
+    +'</div>';
+  const attention='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Needs attention</div><span onclick="navigatePage(\'ai-executive\')">Open AI Executive</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>Run</th><th>Journey</th><th>State</th><th>What is wrong</th><th>When</th>'
+    +'</tr></thead><tbody>'+saAttentionRowsHTML(m)+'</tbody></table></div>';
+  const journeys='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Journeys</div><span onclick="navigatePage(\'ai-analytics\')">Agent &amp; model analytics</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>Journey</th><th>Coverage</th><th>Step mix</th><th>Runs</th><th>Health</th>'
+    +'</tr></thead><tbody>'+saJourneyRowsHTML()+'</tbody></table></div>';
+  return '<div class="dash-ref">'
+    +'<div class="dash-ref-title">Platform Overview</div>'
+    +'<div class="dash-ref-sub">'+m.liveJourneys+' of '+m.journeys+' journeys live across '+(typeof aiClients!=='undefined'?aiClients.length:0)+' clients. '
+    +(m.attention?'<b>'+m.attention+'</b> run'+(m.attention===1?'':'s')+' need'+(m.attention===1?'s':'')+' a look.':'Nothing is stuck right now.')+'</div>'
+    +'</div>'
+    +tiles+attention+journeys;
+}
+/* == AGENT & MODEL ANALYTICS ==============================================================
+   The depth the Platform Overview deliberately leaves out. Two questions a Super Admin who
+   configures agents actually has: which agents are load-bearing, and how much of the journey
+   estate runs without a human in the loop. == */
+function saAgentUsage(){
+  const used={};
+  Object.keys(aiJourneyEvents||{}).forEach(function(jid){
+    (aiJourneyEvents[jid]||[]).forEach(function(e){
+      if(!e.source)return;
+      (used[e.source]=used[e.source]||{steps:0,journeys:{}}).steps++;
+      used[e.source].journeys[jid]=1;
+    });
+  });
+  return used;
+}
+const SA_RAMP=['#0f172a','#475569','#7c8899'];
+function saRampStep(i){return SA_RAMP[Math.min(i,SA_RAMP.length-1)];}
+function saStackedBarHTML(parts,total){
+  if(!total)return '';
+  return '<div class="sa-stack">'+parts.map(function(p,i){
+    return '<span class="sa-stack-seg" style="width:'+(p.count/total*100)+'%;background:'+saRampStep(i)+'"'
+      +' title="'+attrSafe(p.label+' - '+p.count+' of '+total)+'"></span>';
+  }).join('')+'</div>';
+}
+function saLegendHTML(parts,total){
+  return '<div class="sa-legend">'+parts.map(function(p,i){
+    return '<div class="sa-legend-row">'
+      +'<span class="sa-legend-dot" style="background:'+saRampStep(i)+'"></span>'
+      +'<span class="sa-legend-label">'+p.label+'</span>'
+      +'<span class="sa-legend-val">'+p.count+'</span>'
+      +'<span class="sa-legend-pct">'+(total?Math.round(p.count/total*100):0)+'%</span>'
+      +'</div>';
+  }).join('')+'</div>';
+}
+function buildAgentModelAnalyticsHTML(){
+  const agents=typeof cfgAgents!=='undefined'?cfgAgents:[];
+  const used=saAgentUsage();
+  const wired=agents.filter(function(a){return (used[a.name]||{}).steps;});
+  const idle=agents.length-wired.length;
+  const guard={};
+  agents.forEach(function(a){guard[a.guardrail]=(guard[a.guardrail]||0)+1;});
+  const models={};
+  agents.forEach(function(a){models[a.model]=(models[a.model]||0)+1;});
+  const modelNames=Object.keys(models);
+  const auto=guard['Fully automated']||0;
+  const systems=typeof cfgSystems!=='undefined'?cfgSystems:[];
+  const connected=systems.filter(function(s){return s.status==='Connected';}).length;
+  const totalApis=systems.reduce(function(n,s){return n+(s.apis||0);},0);
+  const m=saMetrics();
+
+  const tiles='<div class="stat-grid dash-stat-grid">'
+    +dashStatNav('Agents configured',String(agents.length),wired.length+' wired into a journey'+(idle?' &middot; '+idle+' idle':''),idle?'orange':'green',dashIcoShield,'cfg-agents')
+    +dashStatNav('Steps run by agents',String(m.aiSteps),'Of '+m.totalSteps+' journey steps','teal',dashIcoDoc)
+    +dashStatNav('Unattended',agents.length?Math.round(auto/agents.length*100)+'%':'0%',auto+' of '+agents.length+' need no human','blue',dashIcoUser)
+    +dashStatNav('Systems connected',connected+'/'+String(systems.length),totalApis+' APIs available','green',dashIcoShield,'cfg-systems')
+    +'</div>';
+
+  const agentRows=agents.map(function(a){
+    const u=used[a.name]||{steps:0,journeys:{}};
+    const jn=Object.keys(u.journeys).map(saJourneyName).map(function(n){return n.replace(/\s*Journey$/,'');});
+    const g=a.guardrail==='Fully automated'?'approved':'pending';
+    return '<tr style="cursor:pointer" onclick="viewCfgAgentSkillByName(\''+String(a.name).replace(/'/g,"\\'")+'\')">'
+      +'<td><div class="cell-primary">'+a.name+'</div><div class="cell-sub">'+a.type+'</div></td>'
+      +'<td>'+a.model+'</td>'
+      +'<td>'+statusMini(a.guardrail,g)+'</td>'
+      +'<td>'+(u.steps?u.steps:statusMini('Not used','rejected'))+'</td>'
+      +'<td class="cell-sub">'+(jn.length?jn.join(', ')+'':'&mdash;')+'</td></tr>';
+  }).join('');
+  const agentTable='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Agents</div><span onclick="navigatePage(\'cfg-agents\')">Manage agents</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>Agent</th><th>Model</th><th>Guardrail</th><th>Steps powered</th><th>Used in</th>'
+    +'</tr></thead><tbody>'+agentRows+'</tbody></table></div>';
+
+  const guardParts=Object.keys(guard).map(function(k){return {label:k,count:guard[k]};});
+  const guardCard='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Guardrails</div><span class="sa-head-note">'+agents.length+' agents</span></div>'
+    +saStackedBarHTML(guardParts,agents.length)
+    +saLegendHTML(guardParts,agents.length)
+    +'</div>';
+  const modelParts=modelNames.map(function(k){return {label:k,count:models[k]};});
+  const modelBody=modelNames.length===1
+    ?'<div class="sa-solo"><div class="sa-solo-val">'+modelNames[0]+'</div>'
+      +'<div class="sa-solo-sub">Backing all '+agents.length+' agents, across every journey</div></div>'
+      +'<div class="sa-note">Single point of dependency &mdash; a change to <b>'+modelNames[0]+'</b> reaches the whole estate at once.</div>'
+    :saStackedBarHTML(modelParts,agents.length)+saLegendHTML(modelParts,agents.length);
+  const modelCard='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Models in use</div><span onclick="navigatePage(\'cfg-data-foundation\')">Data Foundation</span></div>'
+    +modelBody+'</div>';
+  const mix='<div class="dash-two-col sa-two-col">'+guardCard+modelCard+'</div>';
+
+  const maxApis=systems.reduce(function(n,s){return Math.max(n,s.apis||0);},0)||1;
+  const sysRows=systems.map(function(s){
+    const ok=s.status==='Connected';
+    const n=s.apis||0;
+    return '<tr style="cursor:pointer" onclick="selectedCfgSystemId=\''+s.id+'\';navigatePage(\'cfg-system-detail\')">'
+      +'<td><div class="cell-primary">'+s.name+'</div>'
+        +'<div class="cell-sub sa-sys-sub"><span class="sa-dot '+(ok?'ok':'bad')+'"></span>'+s.status
+        +' &middot; '+s.type+' &middot; '+s.method+'</div></td>'
+      +'<td><div class="sa-apis" title="'+attrSafe(n+' of '+maxApis+' APIs')+'">'
+        +'<span class="sa-apis-bar"><span style="width:'+Math.round(n/maxApis*100)+'%"></span></span>'
+        +'<span class="sa-apis-val">'+n+'</span></div></td>'
+      +'<td class="cell-sub">'+(s.lastTested||'&mdash;')+'</td></tr>';
+  }).join('');
+  const sysTable='<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Systems</div><span onclick="navigatePage(\'cfg-systems\')">All systems</span></div>'
+    +'<table class="listing-table dash-table"><thead><tr>'
+    +'<th>System</th><th class="sa-col-apis">APIs available</th><th>Last tested</th>'
+    +'</tr></thead><tbody>'+sysRows+'</tbody></table></div>';
+
+  return '<div class="dash-ref">'
+    +'<div class="dash-ref-title">Agent &amp; Model Analytics</div>'
+    +'<div class="dash-ref-sub">What the agent estate is doing across all '+((aiJourneys||[]).length)+' journeys, and how much of it runs without a person.</div>'
+    +'</div>'
+    +tiles+agentTable+mix+sysTable;
 }
 function buildEntityAdminDashboardHTML(){
   const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
@@ -9721,6 +9953,24 @@ function aiCtCurrentAgentBadge(){
   const current=events[aiCtJourneyStage()];
   return aiAgentBadgeHTML(current&&current.source);
 }
+// The step header (counter, name, chips, owning agent, who we're waiting on) is the same on every
+// journey surface, so it lives on its own rather than being restated by each rail that sits under it.
+function aiJourneyLabelHTML(journeyId,stage){
+  const events=aiJourneyEvents[journeyId]||[];
+  const current=events[stage];
+  if(!current)return '';
+  // Who is holding the work is the one thing a run view is asked for most and the old bar never
+  // answered — the name and the chips say what the step is, not who to chase.
+  const waitLabel=current.waitingOn&&current.waitingOn!=='&mdash;'
+    ?'<span class="aicj-label-wait">Waiting on <b>'+current.waitingOn+'</b></span>':'';
+  return '<div class="aicj-label">'
+    +'<span class="aicj-label-step">Step '+(stage+1)+' of '+events.length+'</span>'
+    +'<span class="aicj-label-name">'+current.name+'</span>'
+    +aiChipsCompact(current.chips)
+    +aiAgentBadgeHTML(current.source)
+    +waitLabel
+    +'</div>';
+}
 function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   const events=aiJourneyEvents[journeyId]||[];
   const prev=animationKey==='payroll'?aiPayrollAnimatedStage:animationKey==='h2r'?aiH2rAnimatedStage:aiCtAnimatedStage;
@@ -9728,20 +9978,7 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   if(animationKey==='payroll'){if(animateThisRender)aiPayrollAnimatedStage=stage;}
   else if(animationKey==='h2r'){if(animateThisRender)aiH2rAnimatedStage=stage;}
   else if(animateThisRender){aiCtAnimatedStage=stage;}
-  const current=events[stage];
-  // Who is holding the work is the one thing a run view is asked for most and the old bar never
-  // answered — the name and the chips say what the step is, not who to chase.
-  const waitLabel=current&&current.waitingOn&&current.waitingOn!=='&mdash;'
-    ?'<span class="aicj-label-wait">Waiting on <b>'+current.waitingOn+'</b></span>':'';
-  const label=current?(
-    '<div class="aicj-label">'
-    +'<span class="aicj-label-step">Step '+(stage+1)+' of '+events.length+'</span>'
-    +'<span class="aicj-label-name">'+current.name+'</span>'
-    +aiChipsCompact(current.chips)
-    +aiAgentBadgeHTML(current.source)
-    +waitLabel
-    +'</div>'
-  ):'';
+  const label=aiJourneyLabelHTML(journeyId,stage);
   // Numbered pending dots: at nine stages an unlabelled circle gives no sense of position, and
   // the number is already the thing the header counts ("Step 4 of 9").
   const stepHTML=function(e,i,connect){
@@ -9784,6 +10021,71 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   return label+'<div class="aicj-bar"><div class="aicj-bar-scroll aicj-bar-tracked">'+groups+'</div></div>';
 }
 function buildAIContractJourneyBarHTML(stage){return buildAIJourneyBarHTML('contract-creation',stage,'contract');}
+/* == CONTRACT CREATION — THE STAGE RAIL ==================================================
+   The contract journey used to draw its nine stages as cards while payroll and H2R drew the
+   numbered dot-and-line rail, so the product showed two different shapes for the same idea.
+   It now renders through buildAIJourneyBarHTML like every other journey — one rail vocabulary
+   across the whole system.
+
+   Nothing about the stages themselves changed: the labels still come from
+   aiJourneyEvents['contract-creation'] through aiCjShortLabel(), so the names under the
+   circles read exactly as they did on the cards. The engagement / placement split survives
+   too — buildAIJourneyBarHTML groups by each event's `track` and draws the same dashed
+   divider the Account Manager pipeline board uses, with the five stages left of it happening
+   once per client request and the four right of it repeating per hire. == */
+/* == THE ENGAGEMENT MODEL CHOOSER ========================================================
+   Three cards above the rail. EOR is the automated path and the only live one; PEO and
+   Contract based are drawn in the same shape but locked, because showing the full menu and
+   marking what isn't wired yet is honest, where hiding them would imply the product only
+   ever does EOR. The chosen card stays visible on every later step as run context. == */
+const AI_CT_TYPE_CARDS=[
+  {id:'EOR',title:'EOR',sub:'Employer of Record',
+   desc:'We employ the worker in-country on your behalf and carry the compliance.',live:true,
+   ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 21V10h8v11"/><path d="M12 7h.01"/></svg>'},
+  {id:'PEO',title:'PEO',sub:'Professional Employer Organization',
+   desc:'Co-employment — you keep the relationship, we run payroll and filings.',live:false,
+   ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>'},
+  {id:'CONTRACTOR',title:'Contract based',sub:'Independent contractor',
+   desc:'A direct contractor agreement, invoiced against the engagement.',live:false,
+   ico:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'}
+];
+function aiCtActiveType(){return aiCtTypeChoice||aiCtPendingEmpType||'';}
+function buildAIContractTypeCardsHTML(){
+  const active=aiCtActiveType();
+  // Past the intake step the row is read-only context: the form behind it was built for the model
+  // that was picked, so a card that still looked pressable would be offering a change it can't make.
+  const editable=page==='ai-contract-assistant';
+  return '<div class="ai-ct-type-row">'+AI_CT_TYPE_CARDS.map(function(t){
+    const selected=active===t.id;
+    const clickable=t.live&&editable;
+    const cls='ai-ct-type-card '+(clickable?'live':'locked')+(selected?' selected':'');
+    const flag=t.live
+      ?'<span class="ai-ct-type-flag'+(selected?' on':'')+'">'+(selected?'Selected':'AI Automated')+'</span>'
+      :'<span class="ai-ct-type-flag locked">Not automated yet</span>';
+    const tip=t.live?(editable?t.sub+' — '+t.desc:t.sub+' — chosen at intake'):t.sub+' — not automated yet';
+    return '<'+(clickable?'button type="button"':'div')+' class="'+cls+'"'
+      +(clickable?' onclick="aiCtChooseType(\''+t.id+'\')"':' aria-disabled="true"')
+      +' title="'+attrSafe(tip)+'">'
+      +'<span class="ai-ct-type-ico">'+t.ico+'</span>'
+      +'<span class="ai-ct-type-body">'
+      +'<span class="ai-ct-type-title">'+t.title+'</span>'
+      +'<span class="ai-ct-type-sub">'+t.sub+'</span>'
+      +'<span class="ai-ct-type-desc">'+t.desc+'</span>'
+      +flag
+      +'</span>'
+      +'</'+(clickable?'button':'div')+'>';
+  }).join('')+'</div>';
+}
+// Only the intake step lets the choice change — once the run has an employee and a form behind
+// it, switching the engagement model would silently invalidate what's already been captured.
+function aiCtChooseType(id){
+  const t=AI_CT_TYPE_CARDS.find(function(x){return x.id===id;});
+  if(!t||!t.live)return;
+  if(page!=='ai-contract-assistant')return;
+  aiCtTypeChoice=id;
+  if(!aiCtPendingEmpType)aiCtPendingEmpType=id;
+  renderADTPage();
+}
 function aiCtLoaderTarget(){return document.getElementById('aicj-inner')||document.getElementById('adt-content');}
 function aiScrollContentToTop(){
   const el=document.getElementById('adt-content');
@@ -9814,8 +10116,23 @@ function findExistingEmployee(name){
     || null;
 }
 function buildAIContractAssistantHTML(){
+  const back='<button class="ep-back" onclick="page=\'ai-executive\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>';
+  // The assistant is the second beat, not the first: the engagement model decides which form the
+  // run lands on, so the page asks for it before opening the chat rather than asking the chat to
+  // guess it out of a sentence.
+  if(aiCtActiveType()!=='EOR'){
+    return '<div class="ep-page" style="max-width:1040px;margin:0 auto">'
+      +back
+      +'<div class="ai-ct-await">'
+      +'<div class="ai-ct-await-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>'
+      +'<div class="ai-ct-await-title">Choose an engagement model to begin</div>'
+      +'<div class="ai-ct-await-text">Pick <b>EOR</b> above and the AI Contract Assistant opens here &mdash; simulate an existing or new employee, or describe the hire in your own words.</div>'
+      +'<button class="add-link" style="margin-top:14px" onclick="page=\'contract-type-select\';renderADTPage()">Skip &mdash; create manually</button>'
+      +'</div>'
+      +'</div>';
+  }
   return '<div class="ep-page" style="max-width:1040px;margin:0 auto">'
-    +'<button class="ep-back" onclick="page=\'ai-executive\';renderADTPage()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to AI Executive</button>'
+    +back
     +'<div class="ai-ct-assist-split">'
     +'<div class="ai-ct-assist-left">'
     +'<div class="ep-form-card" style="text-align:center;padding:32px 30px">'
@@ -9916,7 +10233,7 @@ function aiCtRenderMatchCard(emp,parsed){
 function aiCtNotFoundPanel(parsed){
   const nameParts=(parsed.name||'').trim().split(' ');
   const fname=nameParts[0]||'',lname=nameParts.slice(1).join(' ')||'';
-  const country=parsed.country||'',empType=parsed.empType||'',jobTitle=parsed.jobTitle||'';
+  const country=parsed.country||'',empType=parsed.empType||aiCtTypeChoice||'',jobTitle=parsed.jobTitle||'';
   const countryOpts=['','Netherlands','India','Germany','Spain','United Kingdom','France','Italy'].map(function(c){return '<option value="'+c+'"'+(c===country?' selected':'')+'>'+(c||'Select Country')+'</option>';}).join('');
   const empTypeOpts=['','EOR','PEO','Contractor'].map(function(t){return '<option value="'+t+'"'+(t===empType?' selected':'')+'>'+(t||'Select Type')+'</option>';}).join('');
   return '<div class="ep-form-card">'
@@ -10085,7 +10402,7 @@ function aiCtUseEmployee(empId){
   const parts=emp.name.split(' ');
   aiContractPrefill={fname:parts[0]||'',lname:parts.slice(1).join(' '),email:emp.email||'',country:emp.country||parsed.country||'India',jobTitle:emp.jobTitle||'',pay:aiCtMockSalary(emp).replace(/,/g,'')};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
-  aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||'';aiCtJourneyIsSimulated=false;
+  aiCtJourneyEmployee=emp;aiCtPendingEmpType=parsed.empType||aiCtTypeChoice||'';aiCtJourneyIsSimulated=false;
   const promptEl=document.getElementById('ai-ct-prompt');
   aiCtChatMsgs=[
     {role:'user',text:(promptEl&&promptEl.value)||('Create a contract for '+emp.name)},
@@ -10105,7 +10422,7 @@ function aiCtUseManualEntry(){
   const rec=Object.assign({id:newId,name:fullName,empId:empId,dept:'—',jobTitle:jobTitle||'—',joinDate:now.date,desc:'Created via AI Contract Assistant',contact:'—',email:'—',status:'Active'},
     isGlobal?{country:country,workerType:empType||'EOR'}:{branch:'—'});
   arr.push(rec);
-  aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||'';aiCtJourneyIsSimulated=true;
+  aiCtJourneyEmployee=rec;aiCtPendingEmpType=empType||aiCtTypeChoice||'';aiCtJourneyIsSimulated=true;
   aiContractPrefill={fname:fname,lname:lname,email:'',country:country,jobTitle:jobTitle};
   aiAssistedFlow=true;aiWizardFormData={};aiCreatedContractId=null;aiCtQuestionsStarted=false;aiCtPendingField=null;
   const promptEl=document.getElementById('ai-ct-prompt');
