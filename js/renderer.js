@@ -4,7 +4,16 @@
   if(page==='contract-type-select'){el.innerHTML=buildContractTypeSelectHTML();return;}
   if(page==='contract-eor'){if(aiAssistedFlow){el.innerHTML=buildAIAssistedContractSplitHTML('EOR');initAICtChatPanel();return;}el.innerHTML=buildEORContractHTML();return;}
   if(page==='contract-peo'){if(aiAssistedFlow){el.innerHTML=buildAIAssistedContractSplitHTML('PEO');initAICtChatPanel();return;}el.innerHTML=buildPEOContractHTML();return;}
-  if(page==='ai-proposal-created'){el.innerHTML=buildAIProposalCreatedHTML();aiScheduleAutoAdvance('ai-proposal-created',aiSendProposalForApproval,1300);return;}
+  // T2 · stage 2 -> 3. The only fully automatic stage transition in the journey. The runner
+  // plays quote-review's five sub-statuses across this dwell and releases it when they settle;
+  // with no run it is the original 1300ms auto-advance, guard and all.
+  if(page==='ai-proposal-created'){
+    el.innerHTML=buildAIProposalCreatedHTML();
+    if(!aicjHandoff(2,function(){if(page==='ai-proposal-created')aiSendProposalForApproval();},1300)){
+      // handed to the runner — nothing else to arm
+    }
+    return;
+  }
   if(page==='ai-proposal-waiting-approval'){el.innerHTML=buildAIProposalWaitingApprovalHTML();return;}
   if(page==='ai-contract-document'){el.innerHTML=buildAIContractDocumentHTML();return;}
   if(page==='ai-contract-awaiting-signature'){el.innerHTML=buildAIContractAwaitingSignatureHTML();return;}
@@ -33,7 +42,7 @@ function injectPageBackBar(id){
   // Nearly every detail and wizard screen renders its own back control, pointing at the same
   // parent. Detecting that from the rendered content rather than keeping a hand-maintained
   // list of page ids means the two can never drift out of sync.
-  if(el.querySelector('.ep-back,.ep-cancel-btn,.uif-exit'))return;
+  if(el.querySelector('.ep-back,.ep-cancel-btn,.uif-exit,.ccj-back'))return;
   const bar=document.createElement('div');
   bar.className='page-back-bar';
   bar.innerHTML='<button class="page-back-btn" onclick="navigatePage(\''+parent+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> '+getPageTitle(parent)+'</button>';
@@ -46,6 +55,16 @@ function renderPageContent(id){
 function renderPageContentImpl(id){
   const el=document.getElementById(id);
   if(!el)return;
+  // -- The rebuilt contract-creation journey (js/contract-journey.js). Checked before the
+  // original chain because the two share no page ids and must never both claim a render.
+  //
+  // The host class is what makes its layout contract hold: #adt-content normally scrolls the
+  // whole page, and the journey needs it to be a fixed-height flex column instead so the two
+  // body columns can scroll independently. Toggled rather than added, so leaving the journey
+  // for any other page restores the normal scrolling behaviour. --
+  const onCCJ=typeof isCCJPage==='function'&&isCCJPage(page);
+  el.classList.toggle('ccj-host',onCCJ);
+  if(onCCJ){ccjRenderPage(el);return;}
   if(isAIContractWizardPage(page)){
     // Screen one is the engagement-model choice and only that. Until a model is picked there is
     // no run, so there is nothing for the nine-stage rail to report — drawing it here would be
@@ -62,7 +81,18 @@ function renderPageContentImpl(id){
       // repeating all three options above every step of the run re-asks a question that has
       // been answered — and spends ~150px doing it. Which model the run is under still has to
       // be visible, so it rides in the step header as a single chip (aiJourneyLabelHTML).
-      el.innerHTML='<div class="aicj-wrap">'+buildAIJourneyBarHTML('contract-creation',cjStage,'ct')+'<div id="aicj-inner"></div></div>';
+      //
+      // The runner sits between the rail and the stage content: the rail says which of the nine
+      // stages the run is on, the runner says what is happening inside it. It goes OUTSIDE
+      // #aicj-inner deliberately — aiShowLoader() blows that node away on every stage
+      // transition, so anything inside it would vanish exactly when the machine is busiest.
+      // Outside, the runner keeps reporting through every loading state.
+      el.innerHTML='<div class="aicj-wrap has-runner">'+buildAIContractJourneyBarHTML(cjStage)
+        +buildAICtRunnerHTML(cjStage)+'<div id="aicj-inner"></div></div>';
+      // Start or resume the run for this stage BEFORE the page content is dispatched, so a
+      // transition the runner is about to own is already registered when the page's own
+      // handoff call runs (stage 2 arms its auto-advance during dispatch).
+      aicjOnStageRendered(cjStage);
       dispatchAIContractWizardPage(document.getElementById('aicj-inner'));
     }else{
       dispatchAIContractWizardPage(el);
@@ -156,7 +186,8 @@ function isJourneyFocusPage(pg){
     ||pg==='manual-journey-run'         // the same journey run by hand
     ||pg==='journey-simulation'         // a dry run of a configured journey
     ||pg==='ai-automate-form'           // the wizard that activates one
-    ||isAIContractWizardPage(pg);       // the whole contract-creation chain
+    ||isAIContractWizardPage(pg)        // the whole contract-creation chain
+    ||(typeof isCCJPage==='function'&&isCCJPage(pg)); // and its rebuilt replacement
 }
 // Plus the two linear flows that already worked this way: the cost calculator and the USER
 // intake form.
@@ -173,6 +204,8 @@ function isFocusedFlowPage(pg){
    any state change — a timeline tick, a toggle, a filter — and re-focusing on each of those
    would yank the caret out of whatever the user had actually clicked into. == */
 function flowPrimaryFieldId(pg){
+  // The rebuilt journey's stage 1 is a conversation, and its one question is the composer.
+  if(pg==='ccj-request-received')return 'ccj-prompt';
   if(pg==='ai-journey-run')return 'ai-run-prompt';
   if(pg==='ai-contract-assistant')return 'ai-ct-prompt';
   if(pg==='contract-eor'||pg==='contract-peo'){

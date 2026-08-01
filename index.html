@@ -12,7 +12,8 @@
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/leaves.css">
 <link rel="stylesheet" href="css/intake-flow.css">
-<link rel="stylesheet" href="css/am-pipeline.css"></head>
+<link rel="stylesheet" href="css/am-pipeline.css">
+<link rel="stylesheet" href="css/contract-journey.css"></head>
 <body>
 <!-- ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â ADT DASHBOARD ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â -->
 <div id="v-adt" class="view active">
@@ -33,20 +34,20 @@
       <div class="hdr-dd-wrap" id="entity-dd-wrap">
         <div class="company-sel" onclick="toggleHdrDD('entity-dd')" id="entity-trigger">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          Dhi Hyperlocal
+          ADT
           <svg class="hdr-dd-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div class="hdr-dd-panel" id="entity-dd">
           <div class="hdr-dd-header">
-            <div class="hdr-dd-entity-logo">DH</div>
+            <div class="hdr-dd-entity-logo">AD</div>
             <div>
-              <div class="hdr-dd-title">Dhi Hyperlocal</div>
-              <div class="hdr-dd-subtitle">Entity ID: ENT-00421</div>
+              <div class="hdr-dd-title">ADT</div>
+              <div class="hdr-dd-subtitle">Employer of Record &middot; 7 countries</div>
             </div>
           </div>
           <div class="hdr-dd-divider"></div>
-          <div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Type</span><span class="hdr-dd-info-val">EOR Entity</span></div>
-          <div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Country</span><span class="hdr-dd-info-val">India</span></div>
+          <div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Role</span><span class="hdr-dd-info-val">EOR Provider</span></div>
+          <div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Clients</span><span class="hdr-dd-info-val">4 active</span></div>
           <div class="hdr-dd-info-row"><span class="hdr-dd-info-label">Plan</span><span class="hdr-dd-info-val hdr-dd-badge">Enterprise</span></div>
           <div class="hdr-dd-divider"></div>
           <button class="hdr-dd-item" onclick="closeAllHdrDD();navigatePage('switch-entity')">
@@ -137,10 +138,15 @@
 
 <input type="file" id="agent-upload-input" accept="image/*,.pdf" style="display:none" onchange="handleAgentUpload(event)">
 <input type="file" id="ai-ct-upload-input" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="aiCtHandleDocUpload(event)">
+<!-- The rebuilt contract-creation journey's own upload target. Deliberately separate from the
+     one above: the two journeys share no state, and one input feeding both handlers would be
+     exactly the shared surface this rebuild exists to avoid. -->
+<input type="file" id="ccj-upload-input" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="ccjHandleUpload(event)">
 <script src="js/exec-config.js"></script>
 <script src="js/execApi.js"></script>
 <script src="js/core.js"></script>
 <script src="js/pages.js"></script>
+<script src="js/contract-journey.js"></script>
 <script src="js/renderer.js"></script>
 
 

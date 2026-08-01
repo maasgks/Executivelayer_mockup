@@ -1423,10 +1423,44 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 /* Compact journey cards. The old treatment (34px padding, 220px min-height, 20px title, a
    full-width black CTA) made each card a hero section; three of them filled the screen. Sized
    down so the grid reads as a set of options, not a stack of banners. */
-.ai-journey-grid-lg{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
-.ai-journey-card-lg{padding:20px 22px 18px;gap:11px}
-.ai-journey-card-lg .ai-journey-name{font-size:16px}
-.ai-journey-card-lg .ai-journey-desc{font-size:12.5px;line-height:1.6;white-space:normal;overflow:visible;text-overflow:clip}
+.ai-journey-grid-lg{grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px}
+/* The launcher card. Four things carry it, and they are the same four every console-grade card
+   uses: a settled resting state, one clear line of hierarchy, a readable measure, and an action
+   that sits in its own footer rather than floating in whitespace.
+
+   Resting elevation is a 1px hairline plus a barely-there shadow — enough to lift the card off
+   the page ground without competing with the content. Hover darkens the border and lifts 2px;
+   it does NOT recolour. The orange hover this inherited was the only warm pixel on an otherwise
+   monochrome page, so it read as a warning rather than as "clickable". */
+.ai-journey-card-lg{padding:22px 24px 0;gap:0;border-radius:14px;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .18s,box-shadow .18s,transform .18s}
+.ai-journey-card-lg:hover{border-color:#cbd5e1;box-shadow:0 6px 20px rgba(15,23,42,.09);transform:translateY(-2px)}
+.ai-journey-card-lg:active{transform:translateY(0);box-shadow:0 2px 8px rgba(15,23,42,.07)}
+.ai-journey-card-lg .ai-journey-card-head{align-items:center;gap:13px;margin-bottom:14px}
+.ai-journey-card-lg .ai-journey-icon{width:40px;height:40px;border-radius:11px;background:#f8fafc;border-color:#e8edf3}
+.ai-journey-card-lg .ai-journey-icon svg{width:19px;height:19px}
+/* Monochrome on hover, matching the rest of the journey language. */
+.ai-journey-card-lg:hover .ai-journey-icon{background:#f1f5f9;border-color:#cbd5e1;color:var(--navy)}
+.ai-journey-card-lg .ai-journey-head-text{padding-top:0}
+.ai-journey-card-lg .ai-journey-name{font-size:16.5px;font-weight:700;letter-spacing:-.2px;line-height:1.35}
+/* 52ch is the readable measure for a line and a half at this size — long enough to say what the
+   journey does, short enough that the eye never has to hunt for the next line's start. */
+.ai-journey-card-lg .ai-journey-desc{font-size:13px;line-height:1.62;color:var(--gray);white-space:normal;overflow:visible;text-overflow:clip;max-width:52ch;margin-bottom:18px}
+/* The action gets its own footer, divided by a hairline. Floating in open space it read as an
+   afterthought and left an uneven gap under every card of differing description length; a
+   footer makes every card in the row end on the same line whatever its copy does. */
+.ai-journey-card-lg .ai-journey-cta-btn{align-self:stretch;margin:0 -24px;padding:14px 24px;width:calc(100% + 48px);border-top:1px solid var(--border);border-radius:0 0 14px 14px;justify-content:flex-start;background:transparent;color:var(--navy);font-size:13px;font-weight:600;letter-spacing:-.1px;box-shadow:none;transform:none;transition:background .15s,color .15s}
+/* The inherited .btn-primary:hover lifts and shadows the button; inside a footer that would peel
+   it off the card, so both are cancelled and the feedback is a ground tint instead. */
+.ai-journey-card-lg .ai-journey-cta-btn:hover{background:#f8fafc;color:#000;box-shadow:none;transform:none}
+.ai-journey-card-lg .ai-journey-cta-btn::after{content:'\2192';margin-left:8px;transition:transform .18s}
+.ai-journey-card-lg:hover .ai-journey-cta-btn::after{transform:translateX(3px)}
+.ai-journey-card-lg .ai-journey-draft-banner{margin-bottom:16px}
+/* Activated is a state, not a headline: tighter, quieter, and aligned to the title's optical
+   centre rather than shouting from the corner. */
+.ai-journey-card-lg .ai-journey-active-badge{align-self:center;font-size:9px;letter-spacing:.6px;padding:3px 9px;background:#f8fafc;border-color:#e2e8f0;color:#64748b}
+.ai-journey-card-lg .ai-journey-active-dot{background:#16a34a;box-shadow:0 0 0 2.5px rgba(22,163,74,.14)}
+.ai-journey-card-lg.ai-journey-card-active{background:var(--card)}
+.ai-journey-card-lg.ai-journey-card-active:hover{border-color:#cbd5e1}
 .ai-journey-modules{display:flex;flex-wrap:wrap;gap:6px}
 .ai-journey-module-tag{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:6px;background:#f1f3f5;color:var(--gray)}
 .ai-journey-module-more{background:transparent;color:var(--gray);padding-left:2px}
@@ -1606,8 +1640,193 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .ai-ct-type-row.choosing .ai-ct-type-card.live:hover .ai-ct-type-outcome{color:var(--navy)}
 .ai-ct-choose-skip{margin-top:22px}
 @media(max-width:900px){.ai-ct-type-row.choosing .ai-ct-type-card{flex:1 1 100%;min-height:0}}
-/* The nine-stage card rail that used to live here is gone — Contract Creation now draws the
-   same numbered dot rail as every other journey (see .aicj-bar / .aicj-track below). */
+/* Contract Creation — nine stage cards, the same shape the Account Manager pipeline board uses.
+   No number on the card: on the board that number is a record count, and this surface is one run.
+   State carries the reading instead — filled rule + ink for done, ring for current, muted ahead.
+   Contract Creation only; payroll and H2R keep the numbered dot rail (.aicj-bar below). */
+.aicj-cards-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:14px 16px 15px;margin-bottom:22px}
+.aicj-cards{display:flex;align-items:stretch;min-width:0}
+.aicj-cards-group{display:flex;flex-direction:column;min-width:0}
+.aicj-cards-cap{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#b6c0cc;margin:0 0 9px 2px;white-space:nowrap;transition:color .3s}
+.aicj-cards-cap.done{color:#94a3b8}
+.aicj-cards-cap.current{color:var(--navy)}
+.aicj-cards-row{display:flex;align-items:stretch;gap:7px;flex:1;min-width:0}
+.aicj-cards-div{width:0;border-left:1.5px dashed #d7dee7;margin:0 15px;align-self:stretch;flex-shrink:0}
+/* Content starts at the TOP, not the bottom. Bottom alignment put the two-line "Quote in
+   preparation" on a different baseline from its single-line neighbours, so the row read as
+   ragged; top alignment lines every number and every first line of text up across all nine. */
+.aicj-card{flex:1 1 0;min-width:0;position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-height:76px;padding:14px 12px 12px;border:1px solid #e8edf3;border-radius:11px;background:#fff;overflow:hidden;transition:border-color .25s,background .25s,box-shadow .25s,transform .25s}
+/* The top rule is the progress bar. Read left to right it fills ink for what is done, turns
+   orange at where you are, and stays pale ahead — so the row answers "how far along" before any
+   label is read. It was already here but invisible at stage 1, when nothing is filled yet. */
+.aicj-card-rule{position:absolute;top:0;left:0;right:0;height:3px;background:#eef2f6;transition:background .25s}
+/* The step number: the ordinal anchor the card was missing. Nine unnumbered boxes force you to
+   count along the row to place yourself, which is the one thing this component is for. */
+.aicj-card-num{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;line-height:1;border:1.5px solid #e2e8f0;background:#fff;color:#a3aeba;transition:background .25s,border-color .25s,color .25s}
+.aicj-card-name{font-size:11.5px;font-weight:600;color:#94a3b8;line-height:1.4;transition:color .25s}
+/* DONE — settled, not shouting: tinted ground, ink rule, filled numeral carrying a check. */
+.aicj-card.done{background:#f8fafc;border-color:#e2e8f0}
+.aicj-card.done .aicj-card-rule{background:var(--navy)}
+.aicj-card.done .aicj-card-num{background:var(--navy);border-color:var(--navy);color:#fff}
+.aicj-card.done .aicj-card-name{color:var(--navy)}
+/* A completed stage is inspectable, so it earns a hover. Nothing else in the row moves. */
+.aicj-card.done:hover{border-color:#cbd5e1;box-shadow:0 1px 5px rgba(15,23,42,.07)}
+/* CURRENT — 1.5px and a soft ring, not the 2px hard black outline it used to wear. That weight
+   is the vocabulary of an error or a focus trap; "you are here" should point, not shout. The
+   orange belongs on the rule, where it reads as the leading edge of progress. */
+.aicj-card.current{border-color:var(--navy);border-width:1.5px;box-shadow:0 0 0 3px rgba(15,23,42,.05),0 1px 6px rgba(15,23,42,.06)}
+.aicj-card.current .aicj-card-rule{background:var(--orange)}
+.aicj-card.current .aicj-card-num{background:var(--navy);border-color:var(--navy);color:#fff}
+.aicj-card.current .aicj-card-name{color:var(--navy);font-weight:800}
+.aicj-card.enter{animation:aicj-card-pop .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes aicj-card-pop{from{transform:translateY(5px);opacity:.45}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){.aicj-card,.aicj-card-rule,.aicj-card-num,.aicj-card-name{transition:none}.aicj-card.enter{animation:none}}
+@media(max-width:1000px){.aicj-cards{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;padding-bottom:4px}.aicj-cards-group{flex:0 0 auto}.aicj-card{flex:0 0 112px}.aicj-cards-div{margin:0 10px}}
+
+/* The assisted-contract page is a full-bleed, viewport-height two-column split sized by a hard
+   calc. The runner now sits above it, so that calc has to account for it or the split's bottom
+   edge falls off screen. Additive override — the base rule is untouched. */
+.aicj-wrap.has-runner .ai-ct-split{height:calc(100vh - 56px - 120px - var(--aicj-runner-h,150px))}
+/* == THE SUB-STATUS RUNNER ================================================================
+   The rail above says which of nine stages the run is on. This says what is happening inside
+   it: the stage's sub-statuses listed vertically, one expanded in place with its evidence.
+
+   The whole surface is monochrome except for three signals that each mean exactly one thing —
+   a green verdict, an amber wait, a red failure. Everything else is ink on paper. That is the
+   discipline that lets a reader scan nine rows and know instantly which one needs them. == */
+/* The runner is a STATUS STRIP, not a page. It reports what the machine is doing while the
+   journey itself happens below it, so it is capped: the list scrolls inside the card and the
+   stage content underneath never gets pushed off screen no matter how many sub-statuses a
+   stage has. 300px is roughly a third of what an uncapped card cost. */
+.aicj-runner{background:#fff;border:1px solid var(--border);border-radius:12px;margin-bottom:14px;box-shadow:0 1px 2px rgba(15,23,42,.04);overflow:hidden;display:flex;flex-direction:column;max-height:280px}
+.aicj-runner-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--border);background:#fcfdfe;flex-shrink:0}
+.aicj-runner-title{font-size:11.5px;font-weight:700;color:var(--navy);letter-spacing:-.1px}
+.aicj-runner-count{font-size:9px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;background:#f1f5f9;border-radius:20px;padding:2px 7px}
+.aicj-runner-sla{margin-left:auto;font-size:10px;color:#94a3b8;white-space:nowrap}
+.aicj-runner-head .am-sub-tag{transform:scale(.92);transform-origin:left center}
+
+/* The list. Rows are separated by hairlines rather than gaps so the column reads as one
+   continuous record — a sequence of things that happened, not a set of unrelated tiles. */
+/* THE SUB-STATUS RAIL — the nine-card stage rail's shape, one scale down. A reader learns the
+   card once above and reads it again here without a legend: same top rule as a progress bar,
+   same numbered mark, same done/current/upcoming states. The stage rail says which of nine
+   stages; this says which sub-status inside it.
+   Evidence is NOT in these cards — it plays in the one panel below, which is what keeps the box
+   the same height whether a stage has three sub-statuses or six. */
+.aicj-srail{display:flex;align-items:stretch;gap:6px;padding:11px 14px;flex-shrink:0;overflow-x:auto;scrollbar-width:thin}
+.aicj-srail::-webkit-scrollbar{height:5px}
+.aicj-srail::-webkit-scrollbar-thumb{background:#dde3ea;border-radius:3px}
+.aicj-scard{flex:1 1 0;min-width:96px;position:relative;display:flex;align-items:center;gap:7px;padding:9px 10px 8px;border:1px solid #e8edf3;border-radius:9px;background:#fff;overflow:hidden;text-align:left;font-family:inherit;transition:border-color .2s,background .2s,box-shadow .2s}
+button.aicj-scard{cursor:pointer}
+button.aicj-scard:hover{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(15,23,42,.06)}
+/* The top rule reads left to right as a progress bar: ink for done, orange at the live one,
+   pale ahead — so the rail answers "how far into this stage" before any label is read. */
+.aicj-scard-rule{position:absolute;top:0;left:0;right:0;height:2.5px;background:#eef2f6;transition:background .25s}
+.aicj-scard-mark{width:16px;height:16px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;line-height:1;border:1.5px solid #e2e8f0;background:#fff;color:#a3aeba;transition:.2s}
+.aicj-scard-name{font-size:10.5px;font-weight:600;color:#94a3b8;line-height:1.3;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;transition:color .2s}
+.aicj-scard.done{background:#f8fafc}
+.aicj-scard.done .aicj-scard-rule{background:var(--navy)}
+.aicj-scard.done .aicj-scard-mark{background:var(--navy);border-color:var(--navy);color:#fff}
+.aicj-scard.done .aicj-scard-name{color:var(--navy)}
+.aicj-scard.skipped{background:#fcfdfe;border-style:dashed}
+.aicj-scard.skipped .aicj-scard-mark{border-style:dashed;color:#cbd5e1}
+.aicj-scard.skipped .aicj-scard-name{color:#a3aeba;text-decoration:line-through;text-decoration-color:#e2e8f0}
+.aicj-scard.current{border-color:var(--navy);border-width:1.5px;background:#fff;box-shadow:0 0 0 3px rgba(15,23,42,.05)}
+.aicj-scard.current .aicj-scard-rule{background:var(--orange)}
+.aicj-scard.current .aicj-scard-mark{background:var(--navy);border-color:var(--navy);color:#fff}
+.aicj-scard.current .aicj-scard-name{color:var(--navy);font-weight:700}
+/* The way back from inspecting history. */
+.aicj-runner-live{margin-left:auto;border:none;background:none;font-family:inherit;font-size:10px;font-weight:700;color:var(--navy);cursor:pointer;padding:2px 0;border-bottom:1px solid transparent}
+.aicj-runner-live:hover{border-bottom-color:var(--navy)}
+.aicj-ev-name{font-size:11.5px;font-weight:700;color:var(--navy)}
+.aicj-ev-past{font-size:8.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;background:#f1f5f9;border-radius:20px;padding:2px 7px}
+.aicj-owner{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#64748b;white-space:nowrap}
+.aicj-owner-av{width:16px;height:16px;border-radius:50%;background:var(--navy);color:#fff;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center}
+/* A skipped step's evidence IS its reason. */
+.aicj-skip{font-size:11px;color:#64748b;line-height:1.55;background:#fff;border:1px dashed var(--border);border-radius:8px;padding:8px 11px}
+.aicj-skip span{color:#a3aeba}
+
+/* The evidence body, expanded in place under the active row. */
+.aicj-runner-body{padding:2px 14px 12px;background:#f8fafc;border-bottom:1px solid var(--border);flex-shrink:0;animation:aicj-ev-in .24s cubic-bezier(.2,.8,.2,1)}
+@keyframes aicj-ev-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.aicj-runner-body.derived{background:#fbfcfd}
+.aicj-ev-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+.aicj-ev-sla{font-size:9px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border:1px solid var(--border);border-radius:20px;padding:2px 7px;background:#fff}
+.aicj-ev-head .aicj-agent-badge{font-size:9.5px;padding:2px 8px}
+/* The explainer, clamped to one line with the full text on hover. It is context, not evidence —
+   two lines of prose above the data pushed the thing the reader came for below the fold. */
+.aicj-ev-note{font-size:10.5px;color:#94a3b8;line-height:1.5;margin-top:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help}
+.aicj-ev-note b{color:#64748b;font-weight:700}
+
+/* Two columns: what it reached, what it decided. Cause on the left, consequence on the right —
+   the order they happened in, which is also the order they should be read in. */
+.aicj-ev-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.aicj-ev-col{min-width:0}
+.aicj-ev-cap{font-size:8.5px;font-weight:800;color:#a3aeba;text-transform:uppercase;letter-spacing:.6px;margin:0 0 5px}
+.aicj-ev-col .aicj-ev-cap:not(:first-child){margin-top:9px}
+/* The caption and the system it reached share one baseline, so "Reached — NFAdmin" reads as a
+   single statement rather than a label with a chip floating under it. */
+.aicj-ev-cap-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px}
+.aicj-ev-cap-row .aicj-ev-cap{margin:0}
+/* One returned field per line: label, its qualifier in small grey, value pinned right. */
+.aicj-rows{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1px 9px}
+.aicj-row{display:flex;align-items:baseline;gap:8px;padding:4px 0;border-bottom:1px solid #f4f7fa;min-width:0}
+.aicj-row:last-child{border-bottom:none}
+.aicj-row-k{font-size:10.5px;font-weight:600;color:var(--navy);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aicj-row-k i{font-style:normal;font-weight:500;color:#a3aeba;margin-left:6px;font-size:9.5px}
+.aicj-row-v{margin-left:auto;flex-shrink:0;font-size:10.5px;font-weight:700;color:var(--navy);white-space:nowrap}
+.aicj-row-v.on{color:#16a34a}
+.aicj-row-v.off{color:#a3aeba;font-weight:600}
+.aicj-row-v.wait{color:#b45309}
+/* The request, monospace, with its latency trailing. This one line is most of what makes a row
+   read as a real call rather than a caption describing one. */
+.aicj-ev-call{display:flex;align-items:baseline;gap:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:9.5px;color:#475569;background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 8px;margin-bottom:6px;line-height:1.45;overflow:hidden}
+.aicj-ev-call>:not(.aicj-ev-ms),.aicj-ev-call{white-space:nowrap;text-overflow:ellipsis}
+.aicj-ev-ms{margin-left:auto;flex-shrink:0;font-size:9px;color:#a3aeba;font-family:inherit}
+.aicj-ev-sys{font-size:9.5px;font-weight:700;color:var(--navy);background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 7px;cursor:pointer;font-family:inherit;transition:.15s}
+.aicj-ev-sys:hover{border-color:#94a3b8;background:#f1f5f9}
+/* Named but not a configured system record — no endpoint to open, so it must not look clickable. */
+.aicj-ev-sys.unlinked{cursor:default;color:#64748b;border-style:dashed}
+
+/* A check is a claim with a receipt: the rule, what was expected, what was actually found.
+   Showing all three is the difference between "validated ✓" and evidence. */
+/* Rule on top, then "expected → actual" on one line. Three stacked lines per check was the
+   biggest single consumer of height here, and a comparison reads better on one line anyway. */
+.aicj-check{display:grid;grid-template-columns:auto 1fr;gap:1px 7px;background:#fff;border:1px solid var(--border);border-left-width:2px;border-radius:7px;padding:5px 9px;margin-bottom:5px}
+.aicj-check::before{grid-row:1/3;align-self:start;margin-top:1px;font-size:10px;font-weight:800;line-height:1.35}
+.aicj-check-rule{font-size:10.5px;font-weight:600;color:var(--navy);line-height:1.4}
+.aicj-check-cmp{display:flex;align-items:baseline;gap:6px;min-width:0;flex-wrap:wrap}
+.aicj-check-cmp i{font-style:normal;font-size:9.5px;color:#a3aeba;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aicj-check-cmp i::after{content:'\2192';margin-left:6px;color:#cbd5e1}
+.aicj-check-cmp b{font-size:10px;font-weight:700;color:var(--navy)}
+.aicj-check.pass{border-left-color:#16a34a}
+.aicj-check.pass::before{content:'\2713';color:#16a34a}
+.aicj-check.fail{border-left-color:#dc2626;background:#fffafa}
+.aicj-check.fail::before{content:'\2715';color:#dc2626}
+.aicj-check.fail .aicj-check-cmp b{color:#dc2626}
+.aicj-check.na{border-left-color:#cbd5e1}
+.aicj-check.na::before{content:'\2013';color:#cbd5e1}
+.aicj-check.na .aicj-check-rule{color:#64748b}
+.aicj-runner-body .agrun-kv-row{margin-top:0;gap:5px}
+.aicj-runner-body .agrun-kv{padding:3px 7px;border-radius:6px}
+.aicj-runner-body .agrun-kv span{font-size:8.5px}
+.aicj-runner-body .agrun-kv b{font-size:10.5px}
+
+/* The halt strip. Amber only when someone is genuinely blocked; a step waiting on a third party
+   is not the reader's emergency and stays grey. */
+.aicj-act{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:9px;padding:7px 10px;border-radius:9px;background:#fff;border:1px solid var(--border);border-left:2.5px solid #cbd5e1}
+.aicj-act-why{font-size:10.5px;color:#64748b;line-height:1.5}
+.aicj-act.act{border-left-color:var(--orange);background:#fffdf8}
+.aicj-act.act .aicj-act-why{color:var(--navy);font-weight:600}
+.aicj-act.handoff{border-left-color:#94a3b8}
+
+@media(prefers-reduced-motion:reduce){.aicj-runner-body{animation:none}.aicj-sub,.aicj-sub-mark,.aicj-sub-name{transition:none}}
+/* Below ~760px the two evidence columns stop being comparable and simply stack. */
+@media(max-width:860px){
+  .aicj-ev-grid{grid-template-columns:1fr;gap:14px}
+  .aicj-runner-body{padding-left:18px}
+  .aicj-sub-sum,.aicj-sub-own{max-width:38%}
+}
 /* Contract Creation Journey — persistent animated step bar */
 /* Same measure as .ai-exec-page. In focus mode the sidebar is gone, so without a cap the stepper
    and the step under it would stretch the full viewport on a wide monitor — trading a cramped
@@ -2142,3 +2361,12 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
   .cfg-step-head,.cfg-step-footer{flex-direction:column;align-items:flex-start}
   .cfg-owner-pill{white-space:normal}
 }
+/* Where a page's own Approve button used to be while the runner is hosting that same decision
+   beside its evidence. A pointer, not a second button — the whole point is that exactly one
+   affordance exists for one decision. */
+.aicj-deferred{font-size:11.5px;font-weight:600;color:#94a3b8;background:#f8fafc;border:1px dashed var(--border);border-radius:8px;padding:9px 14px;text-align:center}
+/* The live step's activity line. One moving thing on the page at a time. */
+.aicj-runner-body.working .agrun-activity{margin:0 0 9px}
+/* A step the runner resolved on someone else's behalf. Labelled, always — a viewer must never
+   be left thinking the client actually signed something at that moment. */
+.aicj-sim{font-size:8.5px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.5px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:2px 7px}

@@ -418,11 +418,19 @@ function buildAmHeaderHTML(p){
      the rail below already filters, and the rail is the better instrument: it covers every
      stage rather than three hand-picked cuts, and it does not put a second set of headline
      numbers on screen for the reader to reconcile against the first. */
+  /* The one action this page was missing. An Account Manager's job starts with a client asking
+     for people, and until now there was nowhere on their own page to log that — the only route
+     in was the + on the Contracts listing, two navigations away. It opens the rebuilt
+     contract-creation journey (js/contract-journey.js), which is stage 1 of this same rail. */
   return '<div class="am-head">'
     +'<div class="am-head-left">'
       +'<div class="am-head-title">'+p.name+' <span class="am-head-role">'+p.label+'</span></div>'
       +'<div class="am-head-sub">You are looking after '+amDeals.length+' pieces of work.</div>'
-    +'</div></div>';
+    +'</div>'
+    +'<button class="am-head-new" onclick="ccjStartNewRun()">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+      +'New request</button>'
+    +'</div>';
 }
 /* Ten rows a page, matching the rest of the app. Changing page closes any open drawer, since
    the record it describes is by definition no longer in the table. */
@@ -4225,7 +4233,10 @@ function buildContractsListingHTML(){
         +'<button class="ct-dots-btn" onclick="openCtSidebar('+c.id+',\'basic-details\');event.stopPropagation()">'+dotsIco+'</button>'
         +'<div class="ct-action-menu" id="ctm-'+c.id+'">'+menuItems+'</div>'
         +'</div>';
-    return '<tr class="ct-row'+(ctSelectedId===c.id?' lp-row-selected':'')+'" id="ct-row-'+c.id+'" style="cursor:pointer" onclick="openCtSidebar('+c.id+')">'
+    // -- `ccjNew` is set by the rebuilt contract journey on the row it writes when a placement goes
+    // active. It is a flag on the ROW rather than a global the listing has to reach for, so the
+    // listing has no dependency on js/contract-journey.js having loaded. --
+    return '<tr class="ct-row'+(ctSelectedId===c.id?' lp-row-selected':'')+(c.ccjNew?' ccj-new-row':'')+'" id="ct-row-'+c.id+'" style="cursor:pointer" onclick="openCtSidebar('+c.id+')">'
       +'<td style="color:#6b7280;font-size:13px">'+(ctIdx+1)+'</td>'
       +'<td style="font-weight:600;color:var(--navy)">'+c.contractId+'</td>'
       +'<td><div style="font-weight:600;color:var(--navy)">'+c.empName+'</div><div style="font-size:11px;color:#9ca3af">'+c.empDesig+'</div></td>'
@@ -4253,6 +4264,13 @@ function buildContractsListingHTML(){
     +'<div class="listing-stats">'
     +'<div class="listing-stat'+(ctQuickStatusFilter==='Proposal Sent'?' stat-selected':'')+'" onclick="ctToggleStatFilter(\'Proposal Sent\')"><div class="listing-stat-count" style="color:#7c3aed">'+proposalPending+'</div><div class="listing-stat-label">Proposal Pending</div></div>'
     +'<div class="listing-stat'+(ctQuickStatusFilter==='Contract Sent'?' stat-selected':'')+'" onclick="ctToggleStatFilter(\'Contract Sent\')"><div class="listing-stat-count" style="color:#2563eb">'+contractPending+'</div><div class="listing-stat-label">Contract Pending</div></div>'
+    // -- Entry into the rebuilt contract-creation journey (js/contract-journey.js), which the
+    // topbar + now opens as well. The link under it keeps the ORIGINAL journey reachable —
+    // nothing has been removed, and it still owns the stages the rebuild has not reached. --
+    +'<div class="ccj-entry-wrap">'
+    +'<button class="ccj-entry-btn" onclick="ccjStartNewRun()">Create contract</button>'
+    +'<button class="ccj-entry-alt" onclick="openLegacyContractJourney()">Open the previous journey</button>'
+    +'</div>'
     +'</div></div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr>'
@@ -6297,6 +6315,21 @@ function buildAIClientsListingHTML(){
     +'</div>';
 }
 
+/* -- Launcher copy for the AI Executive cards. The catalogue name is what the journey IS
+   ("User Master Data Creation Journey"); this is what the reader is about to DO. An Account
+   Manager opening this page is creating a client or creating a contract, and does not need the
+   platform's own vocabulary for it, nor a description of the plumbing underneath.
+
+   Scoped to these cards deliberately, rather than renaming the journeys. `name` is load-bearing
+   elsewhere — agents reference "Contract Creation Journey" in their usedIn and skill.md text,
+   run records carry it, and the journey detail page is a governance surface where the formal
+   name is the right one. -- */
+const AI_EXEC_CARD_COPY={
+  'user-master-data':{name:'Client Creation Journey',
+    desc:'Capture a new client on the NewForce intake form and register them here as a client record.'},
+  'contract-creation':{name:'Contract Creation Journey',
+    desc:'Take a hire from quote and approval through signing, deposit and onboarding to payroll ready.'}
+};
 function buildAIExecutiveDashboardHTML(){
   const persona=portalRole==='entity-user'?getActivePersona():null;
   const visibleJourneyIds=portalRole==='entity-user'?activePersonaJourneyIds():null;
@@ -6328,25 +6361,22 @@ function buildAIExecutiveDashboardHTML(){
     // -- The card leads with an icon and closes with a meta strip so the grid can be scanned by
     // shape and size, not just by reading three similar-length sentences. Roadmap journeys come
     // from cfgJourneys and carry neither `icon` nor `modules`, so both fall back. --
-    const stepCount=(aiJourneyEvents[j.id]||j.steps||[]).length;
-    const moduleList=j.modules||(j.tags&&j.tags[1]?j.tags[1].split(',').map(function(s){return s.trim();}):[]);
-    const metaChips=[];
-    if(stepCount)metaChips.push(stepCount+' step'+(stepCount===1?'':'s'));
-    if(moduleList.length)metaChips.push(moduleList.slice(0,2).join(' &middot; ')+(moduleList.length>2?' +'+(moduleList.length-2):''));
-    if(isActive)metaChips.push(journeyModeLabel(j.id));
-    const metaRow=(!locked&&metaChips.length)
-      ?'<div class="ai-journey-meta-row">'+metaChips.map(function(m){return '<span class="ai-journey-meta-chip">'+m+'</span>';}).join('')+'</div>'
-      :'';
+    // -- No meta chips. "3 steps · Client · Master Data +1 · Manual Mode" described the journey
+    // as a piece of configuration; the person reading this card is an Account Manager about to
+    // start work, and none of the three changes what they do next. Step counts and module lists
+    // still live on the journey detail page, where someone governing the journey will look. --
+    const card=(AI_EXEC_CARD_COPY[j.id]||{});
+    const cardName=card.name||j.name;
+    const cardDesc=card.desc||j.desc;
     return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
       +'<div class="ai-journey-card-head">'
       +'<span class="ai-journey-icon">'+(j.icon||'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>')+'</span>'
       +'<div class="ai-journey-head-text">'
-      +'<div class="ai-journey-name-row"><span class="ai-journey-name">'+j.name+'</span>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
+      +'<div class="ai-journey-name-row"><span class="ai-journey-name">'+cardName+'</span>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
       +'</div>'
       +(isActive?'<span class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</span>':'')
       +'</div>'
-      +'<div class="ai-journey-desc">'+j.desc+'</div>'
-      +metaRow
+      +'<div class="ai-journey-desc">'+cardDesc+'</div>'
       +(!locked&&j.status==='Draft'
         ?'<div class="ai-journey-draft-banner" onclick="event.stopPropagation();startAutomateJourney(\''+j.id+'\')"><span class="ai-journey-draft-banner-text">Draft pending</span><span class="ai-journey-draft-banner-cta">Continue now to automate your journey &rarr;</span></div>'
         :'')
@@ -8835,6 +8865,8 @@ function buildJourneySimulationHTML(){
 function aiJourneyCTA(j){
   const mode=journeyModeLabel(j.id);
   // -- Contract Creation's first step *is* capturing the real deal/employee details, so it always opens the real contract form (whatever name gets typed in becomes the run's subject) rather than the generic placeholder-subject manual-run starter used by other journeys. --
+  // -- The button names the action, the card title names the journey. "Start" was ambiguous the
+  // moment two cards sat side by side with the same word on both. --
   if(j.id==='contract-creation')return {label:'Create Contract',action:"addListingItem('contracts')"};
   // -- Same entry point as the sidebar's Client > Create Client: the journey's first step *is* the
   // intake form, so the card opens that form rather than a placeholder-subject manual run. --
@@ -10198,18 +10230,576 @@ function buildAIJourneyBarHTML(journeyId,stage,animationKey){
   }).join('<div class="aicj-track-split" aria-hidden="true"></div>');
   return label+'<div class="aicj-bar"><div class="aicj-bar-scroll aicj-bar-tracked">'+groups+'</div></div>';
 }
-/* == CONTRACT CREATION — THE STAGE RAIL ==================================================
-   The contract journey used to draw its nine stages as cards while payroll and H2R drew the
-   numbered dot-and-line rail, so the product showed two different shapes for the same idea.
-   It now renders through buildAIJourneyBarHTML like every other journey — one rail vocabulary
-   across the whole system.
+/* == THE RUNNER ENGINE — STITCHING THE SUB-STATUSES INTO THE JOURNEY =====================
+   The journey already knew how to walk its nine stages. What it did not do was say anything
+   about the work inside each one: it waited on a bare setTimeout and then swapped the page.
+   This engine plays a stage's sub-statuses in that same interval, and — critically — becomes
+   the thing that decides when the stage is finished.
 
-   Nothing about the stages themselves changed: the labels still come from
-   aiJourneyEvents['contract-creation'] through aiCjShortLabel(), so the names under the
-   circles read exactly as they did on the cards. The engagement / placement split survives
-   too — buildAIJourneyBarHTML groups by each event's `track` and draws the same dashed
-   divider the Account Manager pipeline board uses, with the five stages left of it happening
-   once per client request and the four right of it repeating per hire. == */
+   HOW THE TWO FIT TOGETHER. Every existing transition is wrapped in aicjHandoff(). If the
+   runner is provably live on that exact stage it takes ownership: the original callback is
+   held and fired when the last sub-status settles. In every other case — kill switch off, no
+   run, stale generation, wrong stage, reload mid-flow — it falls straight through to the
+   original setTimeout with the original delay. So a transition can never have two owners, and
+   the journey behaves exactly as it did today whenever the runner is not there.
+
+   WHERE THE GATES ACTUALLY ARE. Reading the operating model against the pages: stages 3, 4 and
+   6 carry their approval at STAGE level, not on a sub-status. The page says "waiting for the
+   Deal Manager" while that stage's sub-statuses (Won, Client tenant provisioned, CSM confirmed)
+   are what happens once they say yes. So those stages halt on ARRIVAL, host the approval, and
+   then play their sub-statuses as the consequence of it. The others simply run.        == */
+const AICJ_ON=true;                    // false restores today's behaviour exactly
+let aicjGen=0;                         // generation token; bumped on reset
+let aicjRun=null;
+/* aicjRun={gen,stage,idx,phase,shown{fetched,checks,captured},halted,haltKind,
+            onDone,fallbackMs,timer,watchdog,done[]} */
+
+/* Which stages gate on arrival, and what approving one actually calls. The handler is the
+   page's OWN function — the runner never reimplements an approval, it just hosts the button so
+   the decision sits with the evidence that justifies it. */
+function aicjStageGate(stage){
+  if(stage===3)return {why:'The Deal Manager needs to accept the quote before the client is set up.',
+    label:'Approve quote', fn:'aiSimulateApproval'};
+  if(stage===4)return {why:'The agreement is drafted and needs approval before it goes to the client.',
+    label:'Approve agreement', fn:'aiContractDocApprove'};
+  if(stage===6)return {why:'The signed contract needs Ops Manager approval before onboarding starts.',
+    label:'Approve contract', fn:'aiSimulateContractApproval'};
+  return null;
+}
+// True while the runner is holding a stage's approval, so the page below must not draw its own.
+function aicjOwnsApproval(stage){
+  return !!(AICJ_ON&&aicjRun&&aicjRun.gen===aicjGen&&aicjRun.stage===stage
+    &&aicjRun.halted&&aicjRun.haltKind==='gate');
+}
+/* THE ONLY TIMER IN THE ENGINE. Clears before it sets, so two calls can never leave two alive.
+   Three guards on the way out: identity + generation (a reset invalidates every timer already
+   in flight), and location (navigating away suspends rather than firing into a dead page). */
+function aicjSchedule(fn,ms){
+  const r=aicjRun; if(!r)return;
+  if(r.timer)clearTimeout(r.timer);
+  const gen=r.gen, expect=page;
+  r.timer=setTimeout(function(){
+    if(!aicjRun||aicjRun!==r||aicjRun.gen!==aicjGen||aicjRun.gen!==gen)return;
+    if(page!==expect){aicjSuspend();return;}
+    r.timer=null;
+    // A descriptor that throws must not freeze the run in front of a customer. Mark, log, move on.
+    try{fn();}catch(e){
+      if(typeof console!=='undefined'&&console.warn)console.warn('[runner]',e&&e.message);
+      aicjStepSettle();
+    }
+  },Math.max(60,ms));
+}
+function aicjSuspend(){
+  if(!aicjRun)return;
+  if(aicjRun.timer)clearTimeout(aicjRun.timer);
+  aicjRun.timer=null;
+}
+function aicjReset(){aicjGen++;aicjSuspend();aicjRun=null;aicjInspecting=null;}
+
+// Sub-statuses that are not applicable never become "current" — they resolve instantly with
+// their reason, which is itself evidence of the agent reasoning.
+function aicjApplies(stage,step){
+  const d=aicjDescriptorFor(stage,step);
+  return !(d&&d.applies&&!aicjVal(d.applies,aicjCtx()));
+}
+function aicjNextIdx(stage,from){
+  const steps=aicjSteps(stage);
+  for(let i=from;i<steps.length;i++){if(aicjApplies(stage,steps[i]))return i;}
+  return steps.length;
+}
+
+/* Start (or resume) the run for a stage. Idempotent: called on every render of every wizard
+   page, and returns immediately if it is already on this stage. */
+function aicjOnStageRendered(stage){
+  if(!AICJ_ON||stage<0)return;
+  if(aicjRun&&aicjRun.gen===aicjGen&&aicjRun.stage===stage){
+    // Same stage, re-rendered (a page swap within the stage, or a re-paint). Re-arm only if
+    // nothing is already scheduled, so a repaint mid-beat does not double the clock.
+    if(!aicjRun.timer&&!aicjRun.halted)aicjTick();
+    return;
+  }
+  aicjGen++;
+  aicjRun={gen:aicjGen,stage:stage,idx:-1,phase:'idle',shown:{fetched:0,checks:0,captured:0},
+           halted:false,haltKind:null,onDone:null,fallbackMs:0,timer:null,done:[]};
+  aicjInspecting=null;
+  const gate=aicjStageGate(stage);
+  if(gate){
+    // Gate stages halt the moment they are reached: the approval comes first, its sub-statuses
+    // are the consequence.
+    aicjRun.halted=true;aicjRun.haltKind='gate';
+    aicjRun.idx=aicjNextIdx(stage,0);
+    aicjRenderRunner(stage);
+    return;
+  }
+  aicjRun.idx=aicjNextIdx(stage,0);
+  aicjRun.phase='announce';
+  aicjRenderRunner(stage);
+  aicjSchedule(aicjTick,700);
+}
+/* Approving a gate: hand straight to the page's own handler, then let the stage's sub-statuses
+   play as the consequence. The handler re-renders the page itself, so the runner does not. */
+function aicjApproveGate(stage){
+  const gate=aicjStageGate(stage);
+  if(!gate||!aicjRun)return;
+  aicjRun.halted=false;aicjRun.haltKind=null;
+  aicjRun.phase='announce';
+  aicjRenderRunner(stage);
+  aicjSchedule(aicjTick,420);
+  // The page's transition is now owned by the runner (see aicjHandoff), so calling the handler
+  // starts its work without immediately swapping the page out from under the sub-statuses.
+  const fn=(typeof window!=='undefined'&&window[gate.fn])||null;
+  if(typeof fn==='function')fn();
+}
+
+/* THE BEAT MACHINE. One phase per call, each scheduled by the single scheduler above. Beats 2
+   and 3 are SKIPPED, not faked, when a step has no system call or no rule — a step that invents
+   a fetch to look busy destroys the exact feeling this exists to create. */
+function aicjTick(){
+  const r=aicjRun; if(!r||r.halted)return;
+  const steps=aicjSteps(r.stage), step=steps[r.idx];
+  if(!step){aicjStageComplete();return;}
+  const d=aicjDescriptorFor(r.stage,step)||{}, c=aicjCtx();
+  const fetched=aicjVal(d.fetched,c)||[], checks=aicjVal(d.checks,c)||[], captured=aicjVal(d.captured,c)||[];
+  const brisk=!!d.derived||(!fetched.length&&!checks.length);
+
+  switch(r.phase){
+    case 'announce':
+      /* WHERE THE RUN ACTUALLY STOPS. Only on a decision this user owns — everything else
+         resolves and keeps moving, labelled as simulated.
+
+         The alternative was stopping at every step owned by anyone: Pricing in stage 1, the
+         client in stages 2 and 5, Onboarding Ops in stage 7. That is ten interruptions on top
+         of the three approvals, and it is not what "stop at the approval" means. A demo that
+         asks the viewer to click through other people's work never gets to show the work.
+
+         Nothing is faked by this: a step resolved on someone else's behalf says so in the panel
+         and carries their name, the same discipline amAdvanceStep already applies when it
+         separates a real completion from a simulated one. */
+      const mode=aicjStepMode(r.stage,step);
+      if(mode==='act'){aicjHalt(mode);return;}
+      if(mode!=='auto'){r.simulated=true;}else{r.simulated=false;}
+      r.phase=fetched.length?'fetch':(checks.length?'validate':'settle');
+      aicjRenderRunner(r.stage);
+      aicjSchedule(aicjTick,brisk?420:700);
+      return;
+    case 'fetch':
+      r.shown.fetched=fetched.length;
+      r.phase=checks.length?'validate':(captured.length?'capture':'settle');
+      aicjRenderRunner(r.stage);
+      aicjSchedule(aicjTick,620);
+      return;
+    case 'validate':
+      r.shown.checks=checks.length;
+      r.phase=captured.length?'capture':'settle';
+      aicjRenderRunner(r.stage);
+      aicjSchedule(aicjTick,620);
+      return;
+    case 'capture':
+      r.shown.captured=captured.length;
+      r.phase='settle';
+      aicjRenderRunner(r.stage);
+      aicjSchedule(aicjTick,480);
+      return;
+    default:
+      aicjStepSettle();
+  }
+}
+function aicjStepSettle(){
+  const r=aicjRun; if(!r)return;
+  if(r.done.indexOf(r.idx)===-1)r.done.push(r.idx);
+  const next=aicjNextIdx(r.stage,r.idx+1);
+  r.idx=next; r.phase='announce'; r.shown={fetched:0,checks:0,captured:0};
+  if(next>=aicjSteps(r.stage).length){aicjRenderRunner(r.stage);aicjStageComplete();return;}
+  aicjRenderRunner(r.stage);
+  aicjSchedule(aicjTick,560);
+}
+function aicjHalt(kind){
+  const r=aicjRun; if(!r)return;
+  r.halted=true; r.haltKind=kind;
+  aicjRenderRunner(r.stage);
+}
+/* The human resolved a halted sub-status. Record it and carry on. */
+function aicjResolveStep(){
+  const r=aicjRun; if(!r||!r.halted)return;
+  r.halted=false; r.haltKind=null; r.phase='fetch';
+  aicjRenderRunner(r.stage);
+  aicjSchedule(aicjTick,380);
+}
+/* Every sub-status in this stage is resolved: fire whatever the journey was going to do next. */
+function aicjStageComplete(){
+  const r=aicjRun; if(!r)return;
+  const fn=r.onDone; r.onDone=null;
+  r.phase='done';
+  aicjRenderRunner(r.stage);
+  if(typeof fn==='function')aicjSchedule(fn,320);
+}
+/* THE WRAP. Called from inside each existing transition in place of its setTimeout. Ownership
+   is only ever taken when the runner is provably live on that exact stage; every other path
+   falls through to the original behaviour, unchanged. */
+function aicjHandoff(stage,fn,fallbackMs){
+  if(!AICJ_ON||!aicjRun||aicjRun.gen!==aicjGen||aicjRun.stage!==stage){
+    return setTimeout(fn,fallbackMs);
+  }
+  aicjRun.onDone=fn; aicjRun.fallbackMs=fallbackMs;
+  // Already finished its sub-statuses (a gate whose steps all ran before the human approved) —
+  // then there is nothing to wait for.
+  if(aicjRun.phase==='done'){const f=aicjRun.onDone;aicjRun.onDone=null;aicjSchedule(f,320);}
+  return null;
+}
+
+/* == THE SUB-STATUS RUNNER — WHAT THE MACHINE IS ACTUALLY DOING ==========================
+   One long card between the nine-card rail and the stage content. The rail says which of the
+   nine client-facing stages the run is on; this says what is happening inside it.
+
+   The stage's sub-statuses are listed vertically and activate one at a time. The active one
+   expands IN PLACE and shows its evidence directly beneath its own name — which system was
+   reached and what came back, which rule was checked and the verdict, what was captured. A
+   horizontal strip of pips was the obvious alternative and is worse: it puts the detail in a
+   panel disconnected from the step it describes, so the reader has to hold "which pip is lit"
+   in their head while reading the evidence. Completed rows collapse to one line, so history
+   accumulates without pushing the live step off screen.
+
+   Phase 0 is deliberately STATIC — it renders the current stage read-only from amSubSteps,
+   with no timers and no run state. The engine that animates it arrives next; getting all 41
+   sub-statuses and their evidence on screen and reviewable first is the point. == */
+
+// Where the run is. With a live run this is its cursor; without one (a stage the engine is not
+// driving, or the kill switch off) it falls back to the first applicable sub-status so the card
+// still renders something truthful.
+function aicjViewIndex(stage){
+  const steps=aicjSteps(stage);
+  if(!steps.length)return -1;
+  if(AICJ_ON&&aicjRun&&aicjRun.gen===aicjGen&&aicjRun.stage===stage){
+    return Math.min(Math.max(aicjRun.idx,0),steps.length-1);
+  }
+  for(let i=0;i<steps.length;i++){if(aicjApplies(stage,steps[i]))return i;}
+  return 0;
+}
+function aicjRowState(stage,idx,viewIdx){
+  const steps=aicjSteps(stage), step=steps[idx];
+  if(!aicjApplies(stage,step))return 'skipped';
+  const live=AICJ_ON&&aicjRun&&aicjRun.gen===aicjGen&&aicjRun.stage===stage;
+  if(live){
+    if(aicjRun.done.indexOf(idx)>-1)return 'done';
+    if(idx===aicjRun.idx)return aicjRun.halted?'halt':'current';
+    return idx<aicjRun.idx?'done':'upcoming';
+  }
+  if(idx<viewIdx)return 'done';
+  if(idx===viewIdx)return 'current';
+  return 'upcoming';
+}
+/* One sub-status on the rail. This is the nine-card stage rail's shape at a smaller scale, on
+   purpose: a reader learns the card once at stage level and reads it again here without a
+   legend. One shape, two scales — the stage rail says which of nine stages the run is on, this
+   says which of that stage's sub-statuses is running.
+
+   Evidence does NOT live in the card. It plays in the single panel below, so the box stays the
+   same height whether a stage has three sub-statuses or six. */
+function aicjScardHTML(stage,idx,viewIdx){
+  const steps=aicjSteps(stage), step=steps[idx];
+  const state=aicjRowState(stage,idx,viewIdx);
+  const own=amOwnerInfo(step.owner);
+  const mark=state==='done'
+    ?'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+    :state==='skipped'?'&ndash;':String(idx+1);
+  // Only a resolved step can be inspected. An upcoming one has produced nothing to look at, so
+  // it must not invite a click that would show an empty panel.
+  const open=state==='done'||state==='skipped'||state==='current';
+  // A skipped card carries its reason in the tooltip and a visible marker in the rail, so the
+  // reader is not required to click to learn why a step did not run. "Not applicable, because…"
+  // is itself evidence of the agent reasoning, and hiding it would waste that.
+  const tip=step.label+' — '+own.who+' ('+step.owner+')'
+    +(state==='skipped'?' — not applicable: '+(step.cond||'condition not met')
+      :state==='upcoming'?' — not started yet':'');
+  return '<'+(open?'button type="button"':'div')+' class="aicj-scard '+state+'"'
+    +(open?' onclick="aicjInspect('+stage+','+idx+')"':' aria-disabled="true"')
+    +' title="'+attrSafe(tip)+'">'
+    +'<span class="aicj-scard-rule"></span>'
+    +'<span class="aicj-scard-mark">'+mark+'</span>'
+    +'<span class="aicj-scard-name">'+step.label
+    +(state==='skipped'?'<i class="am-sub-cond">'+(step.cond||'not applicable')+'</i>':'')
+    +'</span>'
+    +'</'+(open?'button':'div')+'>';
+}
+// The single evidence panel. One sub-status at a time: what it reached, what it validated, what
+// it kept. The rail above selects; this shows. Fixed position in the card, so the box does not
+// grow as a stage's sub-statuses go by.
+function aicjEvidenceHTML(stage,idx,inspecting){
+  const steps=aicjSteps(stage), step=steps[idx];
+  if(!step)return '';
+  const d=aicjDescriptorFor(stage,step)||{}, c=aicjCtx();
+  const own=amOwnerInfo(step.owner);
+  const mode=aicjStepMode(stage,step);
+  let fetched=aicjVal(d.fetched,c)||[], checks=aicjVal(d.checks,c)||[], captured=aicjVal(d.captured,c)||[];
+  const call=aicjVal(d.call,c), latency=aicjVal(d.latency,c);
+  /* While this step is the live one, reveal its evidence in the order the machine produced it:
+     the call, then what came back, then the verdicts, then the values kept. Inspecting a
+     finished step or rendering without a run shows all of it at once — there is nothing left to
+     wait for. `shown` is the only thing that makes the panel feel like work happening rather
+     than a report that was already written. */
+  const live=AICJ_ON&&aicjRun&&aicjRun.gen===aicjGen&&aicjRun.stage===stage
+    &&aicjRun.idx===idx&&!inspecting&&aicjRun.phase!=='done';
+  const working=live&&!aicjRun.halted;
+  if(live&&!aicjRun.halted){
+    fetched=fetched.slice(0,aicjRun.shown.fetched);
+    checks=checks.slice(0,aicjRun.shown.checks);
+    captured=captured.slice(0,aicjRun.shown.captured);
+  }
+
+  // The system stamp resolves either to a real cfgSystems record (clickable through to its
+  // detail page) or, for systems the product names but does not hold a record for — Compliance
+  // Hub, Docuseal, the bank webhook — through the agent that owns the step, whose chip opens a
+  // real skill.md. Either way the reader has somewhere true to click; no link goes nowhere.
+  const sysReal=d.systemId&&typeof cfgSystems!=='undefined'
+    &&cfgSystems.find(function(s){return s.id===d.systemId;});
+  const sysHTML=d.system
+    ?(sysReal
+      ?'<button class="aicj-ev-sys" onclick="selectedCfgSystemId=\''+d.systemId+'\';navigatePage(\'cfg-system-detail\')">'+d.system+(d.ref?' &middot; '+d.ref:'')+'</button>'
+      :'<span class="aicj-ev-sys unlinked">'+d.system+(d.ref?' &middot; '+d.ref:'')+'</span>')
+    :'';
+
+  const ev=(aiJourneyEvents['contract-creation']||[])[stage]||{};
+  const agent=aiAgentBadgeHTML(ev.source);
+
+  // The rail card above is the tab; this is its panel. It restates the step name because a rail
+  // card truncates at ~110px, and adds what the card has no room for at all: the person behind
+  // the owning role, the agent that ran it, the SLA.
+  const state=aicjRowState(stage,idx,aicjViewIndex(stage));
+  // A step the runner resolved on someone else's behalf is always labelled as such. The viewer
+  // must never be left believing the client really signed something at that moment.
+  const simulated=mode!=='auto'&&mode!=='act';
+  const simTag=simulated?'<span class="aicj-sim">Simulated &middot; '+own.who+'</span>':'';
+  const head='<div class="aicj-ev-head">'
+    +'<span class="aicj-ev-name">'+step.label+'</span>'
+    +(inspecting?'<span class="aicj-ev-past">Completed</span>':'')
+    +simTag
+    +'<span class="aicj-owner"><span class="aicj-owner-av">'+own.initials+'</span>'+own.who+'</span>'
+    +agent
+    +(step.sla?'<span class="aicj-ev-sla">SLA '+step.sla+'</span>':'')
+    +'</div>';
+  // A skipped step has no evidence to show — it has a reason, and that is the whole point.
+  if(state==='skipped'){
+    return '<div class="aicj-runner-body skipped" id="aicj-runner-body">'+head
+      +'<div class="aicj-skip">Not applicable &mdash; '+(step.cond||'condition not met')+'.'
+      +(d.note?' <span>'+d.note+'</span>':'')+'</div></div>';
+  }
+
+  const reached=(sysHTML||call||fetched.length)
+    ?'<section class="aicj-ev-col">'
+      +'<div class="aicj-ev-cap-row"><span class="aicj-ev-cap">Reached</span>'+sysHTML+'</div>'
+      +(call?'<div class="aicj-ev-call">'+call+(latency&&latency!=='—'?'<span class="aicj-ev-ms">'+latency+'</span>':'')+'</div>':'')
+      // One line per returned field, not the three-line .ea-req-row this used to borrow — that
+      // row is built for a full-page list and spends ~55px each. The qualifier moves inline
+      // after the label, so four fields cost ~96px instead of ~220px and still read cleanly.
+      +(fetched.length
+        ?'<div class="aicj-rows">'+fetched.map(function(r){
+            // 'inactive' is neutral grey, not error red. A rule the country has on the books but
+            // is not currently applying is a fact, not a failure.
+            const tone=r.state==='inactive'?'off':(r.state==='pending'?'wait':'on');
+            return '<div class="aicj-row">'
+              +'<span class="aicj-row-k">'+r.k+(r.sub?'<i>'+r.sub+'</i>':'')+'</span>'
+              +'<span class="aicj-row-v '+tone+'">'+r.v+'</span></div>';
+          }).join('')+'</div>'
+        :'')
+      +'</section>'
+    :'';
+
+  const validated=(checks.length||captured.length)
+    ?'<section class="aicj-ev-col">'
+      // Rule on line one, then expected and actual on ONE line separated by an arrow. Three
+      // stacked lines per check was the single biggest consumer of height in this panel, and
+      // "expected X → got Y" is the more natural reading of a comparison anyway.
+      +(checks.length?'<div class="aicj-ev-cap">Validated</div>'
+        +checks.map(function(k){
+          return '<div class="aicj-check '+(k.verdict||'na')+'">'
+            +'<span class="aicj-check-rule">'+k.rule+'</span>'
+            +'<span class="aicj-check-cmp"><i>'+k.expected+'</i>'
+            +'<b>'+k.actual+'</b></span>'
+            +'</div>';
+        }).join(''):'')
+      +(captured.length?'<div class="aicj-ev-cap">Captured</div>'
+        +'<div class="agrun-kv-row">'+captured.map(function(k){
+            return '<div class="agrun-kv"><span>'+k.k+'</span><b>'+k.v+'</b></div>';
+          }).join('')+'</div>':'')
+      +'</section>'
+    :'';
+
+  /* THE HALT STRIP. The decision is taken here, beside the evidence that justifies it — which
+     is why the page's own Approve bar stands down while this is showing (aicjOwnsApproval).
+     One handler, two possible hosts, only ever one rendered.
+
+     Who gets a button is derived, never authored: a Client can be chased, a Worker or the
+     System cannot be touched at all (persona:null), and an owned decision is actionable. That
+     is the same rule amCanAdvance already applies on the pipeline board. */
+  const gate=aicjStageGate(stage);
+  const gateHalt=aicjOwnsApproval(stage);
+  let act='';
+  if(gateHalt&&gate){
+    act='<div class="aicj-act act">'
+      +'<span class="aicj-act-why">'+gate.why+'</span>'
+      +'<button class="am-act do" onclick="aicjApproveGate('+stage+')">'+gate.label+'</button>'
+      +'</div>';
+  }else if(live&&aicjRun.halted&&mode!=='auto'){
+    const btn=mode==='act'
+      ?'<button class="am-act do" onclick="aicjResolveStep()">Mark done</button>'
+      :mode==='handoff'
+        ?'<button class="am-act chase" onclick="aicjResolveStep()">Notify '+own.who+'</button>'
+        :mode==='external-chase'
+          ?'<button class="am-act chase" onclick="aicjResolveStep()">&#9231; Simulate: client responds</button>'
+          // persona:null and not the client — nobody in this portal may move it. No button, ever.
+          :'<span class="am-act wait">Waiting on '+own.who+'</span>';
+    act='<div class="aicj-act '+mode+'">'
+      +'<span class="aicj-act-why">'
+      +(mode==='act'?'This step is yours to complete.'
+        :mode==='handoff'?('Owned by '+own.who+' &middot; '+step.owner+'.')
+        :(d.waitCopy||('Waiting on the '+step.owner.toLowerCase()+'.')))
+      +'</span>'+btn+'</div>';
+  }else if(mode!=='auto'&&!live){
+    act='<div class="aicj-act '+mode+'"><span class="aicj-act-why">'
+      +(mode==='act'?'This step is yours to complete.'
+        :mode==='handoff'?('Owned by '+own.who+' &middot; '+step.owner+'.')
+        :(d.waitCopy||('Waiting on the '+step.owner.toLowerCase()+'.')))
+      +'</span></div>';
+  }
+  // The live activity line, so the panel reads as work in progress rather than a finished report.
+  // A step resolved on someone else's behalf says whose behalf, and says it is simulated — the
+  // viewer must never be left thinking the client really signed something just then.
+  const activity=working
+    ?'<div class="agrun-activity"><span class="agrun-activity-dot"></span>'
+      +(simulated
+        ?('Simulating: '+own.who+' &middot; '+step.owner+'&hellip;')
+        :(aicjVal(d.doing,c)||('Running '+step.label.toLowerCase()+'&hellip;')))
+      +'</div>'
+    :'';
+
+  // The note is the explainer, not the evidence — it earns one clamped line, with the full text
+  // on hover. Two lines of prose above the data was pushing the thing the reader came for below
+  // the fold on every single step.
+  return '<div class="aicj-runner-body'+(d.derived?' derived':'')+(working?' working':'')+'" id="aicj-runner-body">'
+    +head
+    +activity
+    +((reached||validated)?'<div class="aicj-ev-grid">'+reached+validated+'</div>':'')
+    +(d.note?'<div class="aicj-ev-note" title="'+attrSafe(String(d.note).replace(/<[^>]*>/g,''))+'">'+d.note+'</div>':'')
+    +act
+    +'</div>';
+}
+/* Which sub-status the panel is showing. Null means "whatever the run is on" — an explicit
+   value means the reader clicked back into a finished step to inspect it, and the panel stays
+   there until they return to live. Kept out of the DOM so every render is a pure function of
+   this plus the stage. */
+let aicjInspecting=null;
+function aicjPanelIndex(stage){
+  if(aicjInspecting&&aicjInspecting.stage===stage)return aicjInspecting.idx;
+  return aicjViewIndex(stage);
+}
+function aicjInspect(stage,idx){
+  const live=aicjViewIndex(stage);
+  aicjInspecting=(idx===live)?null:{stage:stage,idx:idx};
+  aicjRenderRunner(stage);
+}
+function aicjBackToLive(stage){aicjInspecting=null;aicjRenderRunner(stage);}
+/* The ONLY render the runner performs. It rewrites the runner node and nothing else — never
+   renderADTPage(), never navigatePage(). That is load-bearing: a full page render re-runs
+   dispatchAIContractWizardPage, which re-runs initAICtChatPanel() and would destroy the chat
+   DOM and steal the caret from a form the user is typing into. Same discipline as
+   renderAgentRunPanel, which repaints its own panel for exactly this reason. */
+function aicjRenderRunner(stage){
+  const el=document.getElementById('aicj-runner');
+  if(!el)return;
+  el.innerHTML=aicjRunnerInnerHTML(stage);
+}
+function aicjRunnerInnerHTML(stage){
+  const steps=aicjSteps(stage);
+  const st=(typeof amPipelineStages!=='undefined'&&amPipelineStages[stage])||{};
+  const liveIdx=aicjViewIndex(stage);
+  const panelIdx=aicjPanelIndex(stage);
+  const inspecting=panelIdx!==liveIdx;
+  const autoCount=steps.filter(function(s){return s.auto;}).length;
+  const sla=(typeof amStageSla!=='undefined'&&amStageSla[st.id])||'';
+  return '<div class="aicj-runner-head">'
+      +'<span class="aicj-runner-title">Inside &ldquo;'+(st.short||'')+'&rdquo;</span>'
+      +'<span class="aicj-runner-count">Task '+(liveIdx+1)+' of '+steps.length+'</span>'
+      +'<span class="am-sub-tag auto"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>'+autoCount+' of '+steps.length+' auto</span>'
+      // Inspecting a finished step replaces the SLA with the way back, so a reader can never be
+      // stranded looking at history wondering why nothing is moving.
+      +(inspecting
+        ?'<button class="aicj-runner-live" onclick="aicjBackToLive('+stage+')">&larr; Back to live</button>'
+        :(sla?'<span class="aicj-runner-sla">Should take: '+sla+'</span>':''))
+    +'</div>'
+    +'<div class="aicj-srail" id="aicj-srail">'
+      +steps.map(function(s,i){return aicjScardHTML(stage,i,liveIdx);}).join('')
+    +'</div>'
+    +aicjEvidenceHTML(stage,panelIdx,inspecting);
+}
+// The whole card. Pure string, no side effects — safe to call from the renderer on every paint.
+function buildAICtRunnerHTML(stage){
+  if(!aicjSteps(stage).length)return '';
+  const st=(typeof amPipelineStages!=='undefined'&&amPipelineStages[stage])||{};
+  return '<div class="aicj-runner" id="aicj-runner" role="region" aria-live="polite"'
+    +' aria-label="Sub-statuses inside '+attrSafe(st.short||'this stage')+'">'
+    +aicjRunnerInnerHTML(stage)
+    +'</div>';
+}
+/* == CONTRACT CREATION — THE NINE-CARD RAIL ==============================================
+   The contract journey draws its nine stages as cards rather than the dot-and-line rail the
+   other journeys use, matching the Account Manager pipeline board so a reader moving between
+   the board and a live run sees one shape, not two.
+
+   The cards carry the stage name only. On the board the big number is a record count — how
+   many deals sit at that stage — and this surface is a single run, where that number would
+   either be meaningless or, worse, read as a count of something. State does the work instead:
+   a filled rule and ink text for what's done, an outlined card with a ring for where the run
+   is now, muted for what's ahead. The dashed divider after Client signing is the same
+   engagement / placement split the board draws — the five stages left of it happen once per
+   client request, the four right of it repeat per hire.
+
+   Contract Creation only. buildAIJourneyBarHTML above is untouched and still draws the
+   numbered dot rail for payroll and H2R; both call aiJourneyLabelHTML for the step header, so
+   the two rails share one header and differ only below it. == */
+function buildAIContractJourneyBarHTML(stage){
+  const events=aiJourneyEvents['contract-creation']||[];
+  const animateThisRender=stage>aiCtAnimatedStage;
+  if(animateThisRender)aiCtAnimatedStage=stage;
+  const label=aiJourneyLabelHTML('contract-creation',stage);
+  // Every card carries its step number, and a completed one swaps the number for a check. At
+  // nine stages an unnumbered box gives no sense of position — you have to count along the row
+  // to answer "where am I", which is the one question this component exists to answer. The
+  // number is also what makes the row readable at a glance when nothing is done yet: at stage 1
+  // the states alone would leave eight interchangeable rectangles.
+  const cardHTML=function(e,i){
+    const state=i<stage?'done':i===stage?'current':'pending';
+    const mark=state==='done'
+      ?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+      :String(i+1);
+    return '<div class="aicj-card '+state+(state==='current'&&animateThisRender?' enter':'')+'"'
+      +' title="'+attrSafe('Step '+(i+1)+' of '+events.length+' — '+String(e.name).replace(/&mdash;/g,'—'))+'">'
+      +'<span class="aicj-card-rule"></span>'
+      +'<span class="aicj-card-num">'+mark+'</span>'
+      +'<span class="aicj-card-name">'+aiCjShortLabel(e.name)+'</span>'
+      +'</div>';
+  };
+  const trackIds=[];
+  events.forEach(function(e){if(e.track&&trackIds.indexOf(e.track)===-1)trackIds.push(e.track);});
+  if(trackIds.length<2){
+    return label+'<div class="aicj-cards-card"><div class="aicj-cards"><div class="aicj-cards-row">'
+      +events.map(cardHTML).join('')+'</div></div></div>';
+  }
+  const tracks=(typeof amPipelineTracks!=='undefined'?amPipelineTracks:[]);
+  const groups=trackIds.map(function(tid){
+    const idxs=[];
+    events.forEach(function(e,i){if(e.track===tid)idxs.push(i);});
+    const t=tracks.find(function(x){return x.id===tid;});
+    const doneAll=idxs[idxs.length-1]<stage;
+    const inTrack=idxs.indexOf(stage)>-1;
+    const capState=inTrack?' current':doneAll?' done':'';
+    return '<div class="aicj-cards-group" style="flex:'+idxs.length+' 1 0"'
+      +(t?' title="'+attrSafe(t.label+' — '+t.plain)+'"':'')+'>'
+      +'<div class="aicj-cards-cap'+capState+'">'+(t?t.label:tid)+'</div>'
+      +'<div class="aicj-cards-row">'+idxs.map(function(i){return cardHTML(events[i],i);}).join('')+'</div>'
+      +'</div>';
+  }).join('<div class="aicj-cards-div" aria-hidden="true"></div>');
+  return label+'<div class="aicj-cards-card"><div class="aicj-cards">'+groups+'</div></div>';
+}
 /* == THE ENGAGEMENT MODEL CHOOSER ========================================================
    Three cards above the rail. EOR is the automated path and the only live one; PEO and
    Contract based are drawn in the same shape but locked, because showing the full menu and
@@ -10877,7 +11467,9 @@ function aiSubmitAssistedContract(type){
   };
   aiUpsertRun('contract-creation',aiProposalDraft.runId,{client:aiProposalDraft.name,country:aiProposalDraft.country,contractType:aiProposalDraft.type,currentStepIdx:2,status:'In Progress',lastActivity:'Just now'});
   aiShowLoader('Creating Proposal&hellip;','Compiling contract data into a proposal for '+aiProposalDraft.name);
-  setTimeout(function(){page='ai-proposal-created';renderADTPage();},2000);
+  // T1 · stage 1 -> 2. The runner plays quote-prep's six sub-statuses in this interval and
+  // fires this when the last one settles; without a run it is the original 2000ms timer.
+  aicjHandoff(1,function(){page='ai-proposal-created';renderADTPage();},2000);
 }
 let _aiAutoAdvanceTimer=null;
 function aiScheduleAutoAdvance(expectedPage,fn,delay){
@@ -11052,6 +11644,8 @@ function aiSendProposalForApproval(){
       (ctLogsData[aiCreatedContractId]=ctLogsData[aiCreatedContractId]||[]).unshift({date:now.date,time:now.time,user:'Pallavi Parate',status:'Proposal Sent',action:'Proposal sent to '+aiDealManager.name+' ('+aiDealManager.role+') for approval.'});
     }
   }
+  // T3 · stage 2 -> 3, the tail of the handoff the runner already released. Left as a plain
+  // timer: it paces the 'Notifying...' loader, not the stage.
   setTimeout(function(){page='ai-proposal-waiting-approval';renderADTPage();},2000);
 }
 function buildAIWaitingApprovalHTML(opts){
@@ -11060,7 +11654,15 @@ function buildAIWaitingApprovalHTML(opts){
   const showDataPanel=portalRole==='entity-user'&&!!opts.approvalPanelHTML;
   const sidePanelHTML=showDataPanel?opts.approvalPanelHTML:opts.sidePanelHTML;
   const showSidePanel=!!sidePanelHTML;
-  const actionButtons=showDataPanel
+  /* When the runner is holding this stage's approval it renders the Approve button beside the
+     evidence that justifies it, so this page must not draw a second one. An omission, not a
+     deletion: with the runner absent, suspended, off, or after a reload, `aicjOwnsApproval`
+     is false and this bar comes back exactly as it was. One decision, one button, always. */
+    const ownedByRunner=typeof aicjOwnsApproval==='function'&&opts.runnerStage!=null
+      &&aicjOwnsApproval(opts.runnerStage);
+  const actionButtons=ownedByRunner
+    ?'<div class="aicj-deferred">Approve this from the sub-status panel above &uarr;</div>'
+    :showDataPanel
     ?'<button class="btn btn-secondary" onclick="openNotifyManagerModal(\''+(opts.managerName||'')+'\',\''+(opts.noteContextLabel||'')+'\',\''+(opts.noteRefId||'')+'\')">Notify Entity Admin</button><button class="action-btn action-approve" onclick="'+opts.onApprove+'">Approve</button>'
     :'<button class="action-btn action-approve" onclick="'+opts.onApprove+'">'+opts.approveLabel+'</button>';
   const card='<div class="ep-form-card" style="padding:40px 32px">'
@@ -11103,7 +11705,7 @@ function buildAIProposalWaitingApprovalHTML(){
       {label:'Waiting for '+aiDealManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
       {label:'Client signing (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
     ],
-    onApprove:'aiSimulateApproval()',
+    onApprove:'aiSimulateApproval()',runnerStage:3,
     approveLabel:'Simulate: '+aiDealManager.name+' Approves',
     approvalPanelHTML:buildAIProposalApprovalDataHTML(d,rec),
     managerName:aiDealManager.name,
@@ -11128,7 +11730,7 @@ function buildAIContractAwaitingSignatureHTML(){
       {label:'Waiting for '+aiOpsManager.name+'\'s Approval',dotClass:'human',chips:[{cls:'ai-chip-human',label:'Human Required'},{cls:'ai-chip-approval',label:'Approval Required'}]},
       {label:'Onboarding (pending)',dotClass:'system',chips:[{cls:'ai-chip-system',label:'System Action'}],pending:true}
     ],
-    onApprove:'aiSimulateContractApproval()',
+    onApprove:'aiSimulateContractApproval()',runnerStage:6,
     approveLabel:'Approve',
     approvalPanelHTML:docPanel,
     sidePanelHTML:docPanel,
@@ -11139,7 +11741,7 @@ function buildAIContractAwaitingSignatureHTML(){
 }
 function aiSimulateContractApproval(){
   aiShowLoader('Approving Contract&hellip;',aiOpsManager.name+' is reviewing the signed contract');
-  setTimeout(function(){
+  aicjHandoff(6,function(){
     if(notifData[0]&&notifData[0].pending)notifData[0].pending=false;
     if(aiCreatedContractId){
       const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
@@ -11153,10 +11755,14 @@ function aiSimulateContractApproval(){
     }
     if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:7,status:'In Progress',lastActivity:'Just now'});
     page='ai-onboarding-run';renderADTPage();aiCtStartOnboarding();
+  // T7 · stage 6 -> 7. employment-contract's six sub-statuses play before onboarding opens.
   },2000);
 }
 let aiContractEditMode=false;
 function aiContractDocActionBarHTML(){
+  // Suppressed while the runner hosts this stage's approval — see buildAIWaitingApprovalHTML.
+  if(typeof aicjOwnsApproval==='function'&&aicjOwnsApproval(4))
+    return '<div class="aicj-deferred">Approve this from the sub-status panel above &uarr;</div>';
   if(aiContractEditMode){
     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding:10px 16px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:10px">'
       +'<div style="font-size:12.5px;font-weight:600;color:#1a1a1a">Editing contract &mdash; make your changes below, then save.</div>'
@@ -11248,7 +11854,7 @@ function aiSendContractForApproval(){
   }
   setTimeout(function(){
     aiShowLoader('Awaiting Client Signature&hellip;','Simulating '+empName+' opening the Docuseal link, reviewing the contract, and countersigning it&hellip;');
-    setTimeout(function(){
+    aicjHandoff(4,function(){
       if(aiCreatedContractId){
         const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
         if(rec){
@@ -11262,6 +11868,7 @@ function aiSendContractForApproval(){
       notifData.unshift({name:'Contract signed — pending approval for '+empName,cid:aiCreatedContractId||'',time:'Just now',pending:true});
       showAiToast('Contract countersigned',empName+' has signed — routing to '+aiOpsManager.name+' for approval');
       page='ai-contract-awaiting-signature';renderADTPage();
+    // T6 · stage 4 -> 6. agreement-signature's five sub-statuses play across this interval.
     },2200);
   },1500);
 }
@@ -11904,7 +12511,7 @@ function aiResolveException(runId,journeyId){
 
 function aiSimulateApproval(){
   aiShowLoader('Approving Proposal&hellip;',aiDealManager.name+' is reviewing '+((aiProposalDraft&&aiProposalDraft.proposalId)||''));
-  setTimeout(function(){
+  aicjHandoff(3,function(){
     if(notifData[0]&&notifData[0].pending)notifData[0].pending=false;
     if(aiCreatedContractId){
       const rec=contractsData.find(function(c){return c.id===aiCreatedContractId;});
@@ -11919,5 +12526,7 @@ function aiSimulateApproval(){
     if(aiProposalDraft&&aiProposalDraft.runId)aiUpsertRun('contract-creation',aiProposalDraft.runId,{currentStepIdx:4,status:'In Progress',lastActivity:'Just now'});
     aiContractEditMode=false;
     page='ai-contract-document';renderADTPage();
+  // T4 · stage 3 -> 4. The gate is approved first; quote-approved's sub-statuses (Won, tenant
+  // provisioned, CSM confirmed) then play as the consequence, and this fires when they settle.
   },2000);
 }

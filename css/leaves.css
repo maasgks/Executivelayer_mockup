@@ -237,6 +237,16 @@
 .ct-sb-badge.quotation-approved,.ct-sb-badge.proposal-approved,.ct-sb-badge.contract-approved{color:#2563eb;border-color:#93c5fd;background:#eff6ff}
 .ct-sb-badge.proposal-sent,.ct-sb-badge.contract-sent{color:#16a34a;border-color:#86efac;background:#f0fdf4}
 .ct-sb-badge.inactive{color:#ef4444;border-color:#fca5a5;background:#fef2f2}
+/* The tail of ctFlow had no styles, so a contract that had actually got somewhere rendered in the
+   inherited text colour while a freshly submitted one was green. Active is the terminal state the
+   contract journey writes; the two before it are the steps that lead to it. */
+.ct-sb-badge.active{color:#fff;border-color:#16a34a;background:#16a34a}
+.ct-sb-badge.onboarding{color:#7c3aed;border-color:#ddd6fe;background:#faf5ff}
+.ct-sb-badge.ready-for-payroll{color:#0f766e;border-color:#99f6e4;background:#f0fdfa}
+/* The row the contract journey just created, so "View contract" lands on something findable
+   rather than on a table the user has to search. */
+.ct-row.ccj-new-row>td{background:#f0fdf4}
+.ct-row.ccj-new-row>td:first-child{box-shadow:inset 3px 0 0 #16a34a}
 .ct-pending-stats{display:flex;gap:0;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;flex-shrink:0}
 .ct-pending-stat{padding:12px 22px;text-align:center;border-right:1px solid var(--border)}
 .ct-pending-stat:last-child{border-right:none}

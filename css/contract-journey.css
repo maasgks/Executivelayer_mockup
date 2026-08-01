@@ -1,0 +1,1341 @@
+/* == CONTRACT CREATION JOURNEY — REBUILT FROM SCRATCH ====================================
+   Styles for the ccj-* journey only. Prefixed `ccj-` throughout: `cc-` is the cost
+   calculator's and `aicj-` is the original journey's, and all three load on the same page.
+   Nothing here overrides or depends on either of those files.
+
+   TWO STRUCTURAL RULES, and every screen of every stage inherits both.
+
+   1. THE PAGE DOES NOT SCROLL — THE COLUMNS DO. #adt-content normally scrolls the whole page;
+      while a ccj page is mounted it becomes a fixed-height flex column instead, and every
+      scrolling region below is an internal one with its own min-height:0.
+
+   2. THE PANEL IS A QUARTER, AND IT STANDS. .ccj-panel is 25% of the body and is built once
+      per STAGE. Screens change inside .ccj-work beside it; the panel is never remounted, so
+      it keeps its scroll position, its spinner and its place for the whole stage.        == */
+
+/* ---- WAYS IN -----------------------------------------------------------------------------
+   Three, and they all land on the same rebuilt journey: the topbar + on Contracts, the
+   "New request" action on the Account Manager's own page, and the pill on the Contracts
+   listing. The fourth control here opens the ORIGINAL journey, kept reachable as reference. */
+.am-head-new{display:inline-flex;align-items:center;gap:7px;align-self:flex-end;padding:10px 18px;border:none;border-radius:22px;background:var(--navy);color:#fff;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:.15s;flex-shrink:0}
+.am-head-new svg{width:13px;height:13px}
+.am-head-new:hover{background:#1e293b;transform:translateY(-1px);box-shadow:0 4px 14px rgba(15,23,42,.18)}
+
+.ccj-entry-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:5px;align-self:center}
+.ccj-entry-btn{padding:9px 16px;border:1px solid var(--navy);border-radius:20px;background:var(--navy);color:#fff;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:.15s}
+.ccj-entry-btn:hover{background:#1e293b;transform:translateY(-1px)}
+.ccj-entry-alt{border:none;background:none;padding:0;font-size:10.5px;color:var(--gray);font-family:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
+.ccj-entry-alt:hover{color:var(--navy)}
+
+/* ---- SHELL ---------------------------------------------------------------------------- */
+.page-content.ccj-host{padding:18px 22px;display:flex;flex-direction:column;overflow:hidden}
+.ccj-shell{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;max-width:1560px;width:100%;margin:0 auto}
+
+/* ---- HEADER — one 34px row ------------------------------------------------------------- */
+.ccj-head{display:flex;align-items:center;gap:10px;height:34px;flex-shrink:0;margin-bottom:12px}
+.ccj-back{width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--gray);cursor:pointer;transition:.15s;padding:0}
+.ccj-back svg{width:14px;height:14px}
+.ccj-back:hover{border-color:var(--navy);color:var(--navy)}
+.ccj-head-step{flex-shrink:0;padding:4px 9px;border-radius:6px;background:var(--navy);color:#fff;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.ccj-head-name{font-size:15px;font-weight:700;color:var(--navy);white-space:nowrap}
+.ccj-head-model{display:inline-flex;align-items:center;gap:4px;flex-shrink:0;padding:3px 9px;border:1px solid var(--border);border-radius:20px;font-size:10.5px;font-weight:700;color:var(--navy);background:var(--card);cursor:default;font-family:inherit}
+.ccj-head-model.live{cursor:pointer;transition:.15s}
+.ccj-head-model.live svg{width:10px;height:10px;color:var(--gray)}
+.ccj-head-model.live:hover{border-color:var(--navy);background:var(--light)}
+.ccj-head-agent{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #e9d5ff;border-radius:20px;background:#faf5ff;color:#7c3aed;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s;white-space:nowrap}
+.ccj-head-agent svg{width:11px;height:11px}
+.ccj-head-agent:hover{background:#f3e8ff}
+.ccj-head-wait{margin-left:auto;font-size:11.5px;color:var(--gray);white-space:nowrap}
+.ccj-head-wait b{color:var(--navy);font-weight:600}
+
+/* ---- RAIL — 56px for what used to take 150px -------------------------------------------- */
+.ccj-rail{flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 14px 9px;margin-bottom:12px;overflow:hidden}
+.ccj-rail-scroll{display:flex;align-items:flex-end;overflow-x:auto;scrollbar-width:none}
+.ccj-rail-scroll::-webkit-scrollbar{display:none}
+.ccj-rail-scroll.tracked{align-items:stretch}
+.ccj-track{display:flex;flex-direction:column;min-width:0}
+.ccj-track-cap{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#cbd5e1;margin-bottom:5px;padding-left:2px;white-space:nowrap;transition:color .2s}
+.ccj-track-cap.current{color:var(--navy)}
+.ccj-track-cap.done{color:var(--gray)}
+.ccj-track-steps{display:flex;align-items:flex-start;flex:1;min-width:0}
+.ccj-track-split{width:1px;background:var(--border);margin:14px 12px 0;flex-shrink:0}
+.ccj-step{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;flex:0 0 auto;width:74px}
+.ccj-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0;border:1.5px solid var(--border);background:var(--card);color:#cbd5e1;transition:.25s}
+.ccj-dot svg{width:11px;height:11px}
+.ccj-dot.done{background:var(--navy);border-color:var(--navy);color:#fff}
+.ccj-dot.current{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 0 0 4px rgba(15,23,42,.10)}
+.ccj-step-label{font-size:9.5px;font-weight:600;line-height:1.25;text-align:center;color:#cbd5e1;max-width:74px;transition:color .25s}
+.ccj-step-label.done{color:var(--gray)}
+.ccj-step-label.current{color:var(--navy);font-weight:700}
+.ccj-line{height:1.5px;background:var(--border);flex:1;min-width:8px;margin-top:10.5px;transition:background .3s}
+.ccj-line.filled{background:var(--navy)}
+
+/* ---- BODY — work area (3/4) beside the panel (1/4) ---------------------------------------
+   .ccj-work splits again: the conversation column and the screen's own surface. On the first
+   screen the conversation IS the screen and takes the whole area. */
+.ccj-body{flex:1;min-height:0;display:flex;gap:12px}
+.ccj-work{flex:1;min-width:0;min-height:0;display:flex;gap:12px}
+/* ARRIVING AT A SCREEN. Without this the three-column layout appears fully formed in one frame,
+   which reads as the page having been replaced rather than the run having moved on. Instead the
+   conversation narrows from the width it occupied to its column, and the screen it made room for
+   slides in beside it — one movement, and it is the same movement every time a stage advances. */
+.ccj-enter .ccj-chat-col{animation:ccjNarrow .46s cubic-bezier(.4,0,.2,1) both}
+.ccj-enter .ccj-screen{animation:ccjScreenIn .46s cubic-bezier(.4,0,.2,1) both}
+.ccj-enter .ccj-work-full{animation:ccjScreenIn .34s cubic-bezier(.4,0,.2,1) both}
+@keyframes ccjNarrow{
+  0%{flex-basis:62%}
+  100%{flex-basis:300px}
+}
+@keyframes ccjScreenIn{
+  0%{opacity:0;transform:translateX(18px)}
+  60%{opacity:1}
+  100%{opacity:1;transform:translateX(0)}
+}
+@media(prefers-reduced-motion:reduce){
+  .ccj-enter .ccj-chat-col,.ccj-enter .ccj-screen,.ccj-enter .ccj-work-full,.ccj-empty.ghost{animation:none}
+  .ccj-empty.ghost{display:none}
+}
+.ccj-work-full{flex:1;min-width:0;min-height:0;display:flex;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.ccj-chat-col{flex:0 0 300px;min-width:0;min-height:0;display:flex;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.ccj-screen{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.ccj-panel{flex:0 0 25%;min-width:300px;max-width:420px;min-height:0;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+/* Targeted by class, not by `.ccj-panel>div` — the progress bar is the panel's other child and
+   must keep its 3px, not be handed flex:1 alongside the region it measures. */
+.ccj-panel-inner{display:flex;flex-direction:column;min-height:0;flex:1}
+
+/* ---- CHAT ------------------------------------------------------------------------------- */
+.ccj-chat{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+.ccj-chat-head{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.ccj-chat-spark{width:28px;height:28px;flex-shrink:0;border-radius:9px;background:var(--ol);display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.ccj-chat-spark svg{width:14px;height:14px}
+.ccj-chat-headtext{min-width:0;flex:1}
+.ccj-chat-title{font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ccj-chat-sub{font-size:10.5px;color:var(--gray);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ccj-stream{position:relative;flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.08) transparent}
+.ccj-stream::-webkit-scrollbar{width:4px}
+.ccj-stream::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+.ccj-chat.full .ccj-stream{padding:20px 26px;gap:14px}
+
+.ccj-empty{margin:auto;text-align:center;max-width:440px;padding:20px 0}
+/* The invitation on its way out. Absolutely positioned so it takes no space — the first
+   messages lay out underneath it while it fades, instead of replacing it in a single frame. */
+.ccj-empty.ghost{position:absolute;inset:0;margin:0;max-width:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 26px;pointer-events:none;z-index:2;animation:ccjEmptyOut .42s cubic-bezier(.4,0,.2,1) forwards}
+.ccj-empty.ghost .ccj-empty-chips{width:100%;max-width:440px}
+@keyframes ccjEmptyOut{
+  0%{opacity:1;transform:translateY(0) scale(1)}
+  100%{opacity:0;transform:translateY(-10px) scale(.985)}
+}
+.ccj-empty-title{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:7px}
+.ccj-empty-text{font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:18px}
+.ccj-empty-chips{display:flex;flex-direction:column;gap:7px}
+.ccj-chip{padding:9px 13px;border:1px solid var(--border);border-radius:10px;background:var(--light);font-size:12px;font-weight:500;color:var(--navy);font-family:inherit;cursor:pointer;text-align:left;transition:.15s}
+.ccj-chip:hover{border-color:var(--navy);background:var(--card)}
+
+/* Only `.in` — the newest message — animates. The stream is rebuilt on every push, so
+   animating all of them would replay the whole conversation each time a line lands. */
+.ccj-msg{display:flex;gap:8px;align-items:flex-start}
+.ccj-msg.in{animation:ccjIn .26s ease both}
+.ccj-msg.user{justify-content:flex-end}
+@keyframes ccjIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.ccj-av{width:22px;height:22px;flex-shrink:0;border-radius:7px;background:var(--ol);display:flex;align-items:center;justify-content:center;color:var(--navy);margin-top:2px}
+.ccj-av svg{width:11px;height:11px}
+.ccj-bubble{max-width:86%;padding:10px 12px;border-radius:12px;background:var(--light);border:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--navy);min-width:0;word-wrap:break-word}
+.ccj-msg.user .ccj-bubble{background:var(--navy);border-color:var(--navy);color:#fff;max-width:82%}
+.ccj-chat.full .ccj-bubble{font-size:12.5px;max-width:78%}
+
+.ccj-searching{font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--gray);margin-bottom:10px;line-height:1.5}
+.ccj-skel{display:flex;align-items:center;gap:10px}
+.ccj-skel-av{width:30px;height:30px;border-radius:50%;flex-shrink:0}
+.ccj-skel-l{height:8px;border-radius:5px;margin-bottom:6px}
+.ccj-skel-l:last-child{margin-bottom:0}
+.ccj-skel-av,.ccj-skel-l{background:linear-gradient(90deg,#eef1f5 25%,#e2e8f0 50%,#eef1f5 75%);background-size:200% 100%;animation:ccjShimmer 1.3s infinite}
+@keyframes ccjShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+.ccj-match{background:var(--card)}
+.ccj-match-tag{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#16a34a;margin-bottom:10px}
+.ccj-match-tag svg{width:10px;height:10px}
+.ccj-match-top{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+.ccj-match-av{width:32px;height:32px;flex-shrink:0;border-radius:50%;background:var(--ol);display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;color:var(--navy)}
+.ccj-match-name{font-size:12.5px;font-weight:700;color:var(--navy)}
+.ccj-match-id{font-size:10.5px;color:var(--gray);margin-top:1px}
+.ccj-match-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ccj-match-kv{background:var(--card);padding:7px 9px;min-width:0}
+.ccj-match-kv span{display:block;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-bottom:2px}
+.ccj-match-kv b{font-size:11.5px;font-weight:600;color:var(--navy);word-break:break-word}
+
+/* ---- DOCUMENT PARSING — the uploaded file, and what came out of it -------------------------
+   One card that grows as each field lands, not a message per field. What a reviewer needs is
+   not "what did you find" but "where did you get it and how sure are you", so every row cites
+   the part of the document it came from and carries a confidence mark. */
+.ccj-file{display:flex;align-items:center;gap:8px;background:var(--navy);border-color:var(--navy);color:#fff}
+.ccj-file svg{width:14px;height:14px;flex-shrink:0;opacity:.8}
+.ccj-file-n{font-size:11.5px;font-weight:600;min-width:0;word-break:break-all}
+.ccj-file-s{font-size:10px;opacity:.6;flex-shrink:0}
+
+.ccj-doc{background:var(--card);max-width:94%}
+.ccj-doc-head{display:flex;align-items:center;gap:9px;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:9px}
+.ccj-doc-ico{width:28px;height:28px;flex-shrink:0;border-radius:8px;background:var(--ol);display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.ccj-doc-ico svg{width:13px;height:13px}
+.ccj-doc-name{font-size:11.5px;font-weight:700;color:var(--navy);word-break:break-all}
+.ccj-doc-stat{font-size:10.5px;color:var(--gray);margin-top:1px}
+.ccj-doc-head .ccj-spin{margin-left:auto;flex-shrink:0}
+/* Stacked, not columns. This lives in a 300px conversation column; a label/value split left the
+   value about fifty pixels wide and wrapped a job description to one character per line.
+   Label and confidence share the top line — they are both metadata about the value — and the
+   value gets the full width beneath, with its citation under that. */
+.ccj-doc-rows{display:flex;flex-direction:column;gap:2px}
+.ccj-doc-row{padding:7px 0;border-bottom:1px dashed #eef1f5;animation:ccjEvIn .3s ease both;min-width:0}
+.ccj-doc-row:last-child{border-bottom:none}
+.ccj-doc-k{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--gray);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ccj-doc-v{font-size:12px;color:var(--navy);line-height:1.5;word-break:break-word;font-weight:500}
+.ccj-doc-src{font-size:9.5px;font-style:italic;color:#94a3b8;margin-top:2px;line-height:1.4}
+.ccj-doc-absent{margin-top:10px;padding:8px 10px;border-radius:7px;background:var(--light);border:1px solid var(--border);font-size:10.5px;color:var(--gray);line-height:1.5}
+.ccj-doc-absent b{display:block;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--navy);margin-bottom:2px}
+
+/* ---- COMPOSER — pinned, never scrolls away ----------------------------------------------- */
+.ccj-composer{flex-shrink:0;border-top:1px solid var(--border);padding:10px 12px 12px;background:var(--card)}
+.ccj-chat.full .ccj-composer{padding:12px 26px 16px}
+/* Directly above the input, not up in the header. Uploading a document is an alternative way of
+   answering the same thing the input asks for, so it belongs in the band the eye is already on
+   when it decides how to reply. Dashed, because it is a drop target in spirit. */
+.ccj-upload{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-bottom:8px;padding:8px 12px;border:1px dashed #cbd5e1;border-radius:9px;background:var(--light);color:var(--gray);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-upload svg{width:13px;height:13px;flex-shrink:0}
+.ccj-upload:hover{border-color:var(--navy);color:var(--navy);background:var(--card)}
+.ccj-upload:active{transform:scale(.995)}
+.ccj-models{display:flex;align-items:center;gap:6px;margin-bottom:9px;flex-wrap:wrap}
+.ccj-models-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-right:2px}
+.ccj-model{padding:4px 11px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:11px;font-weight:600;color:var(--gray);font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-model:hover{border-color:var(--navy);color:var(--navy)}
+.ccj-model.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.ccj-input-row{display:flex;align-items:flex-end;gap:7px}
+.ccj-input{flex:1;min-width:0;resize:none;padding:9px 11px;border:1.5px solid var(--border);border-radius:11px;font-size:12px;font-family:inherit;line-height:1.5;color:var(--navy);background:var(--light);max-height:110px;transition:.15s}
+.ccj-input:focus{outline:none;border-color:var(--navy);background:var(--card)}
+.ccj-send{width:34px;height:34px;flex-shrink:0;border:none;border-radius:10px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s}
+.ccj-send svg{width:14px;height:14px}
+.ccj-send:hover{background:#1e293b;transform:translateY(-1px)}
+
+/* ---- PROCESS PANEL — every sub-status, top to bottom, with its detail --------------------- */
+.ccj-panel-prog{flex-shrink:0;height:3px;background:var(--ol)}
+.ccj-panel-prog-fill{height:100%;background:var(--navy);transition:width .45s cubic-bezier(.4,0,.2,1)}
+.ccj-panel-head{flex-shrink:0;padding:12px 14px 11px;border-bottom:1px solid var(--border)}
+.ccj-panel-title{font-size:13px;font-weight:700;color:var(--navy)}
+.ccj-panel-meta{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:10.5px;color:var(--gray);flex-wrap:wrap}
+.ccj-panel-count{font-weight:700;color:var(--navy)}
+.ccj-panel-dot{opacity:.5}
+.ccj-panel-sla{margin-left:auto;padding:2px 7px;border-radius:5px;background:var(--ol);font-size:9.5px;font-weight:700;color:var(--gray)}
+.ccj-panel-body{flex:1;min-height:0;overflow-y:auto;padding:6px;scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.08) transparent}
+.ccj-panel-body::-webkit-scrollbar{width:4px}
+.ccj-panel-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+
+.ccj-row{padding:8px 8px 9px;border-radius:10px;margin-bottom:2px;transition:background .25s}
+.ccj-row.current{background:var(--light);box-shadow:inset 2px 0 0 var(--navy)}
+.ccj-row-top{display:flex;align-items:flex-start;gap:9px}
+.ccj-row-ico{width:19px;height:19px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;border:1.5px solid var(--border);color:#cbd5e1;background:var(--card);margin-top:1px}
+.ccj-row-ico svg{width:10px;height:10px}
+.ccj-row.done .ccj-row-ico{background:var(--navy);border-color:var(--navy);color:#fff}
+.ccj-row.current .ccj-row-ico{border-color:var(--navy);background:var(--card)}
+.ccj-row-main{flex:1;min-width:0}
+.ccj-row-label{font-size:12px;font-weight:600;color:var(--navy);line-height:1.4}
+.ccj-row.pending .ccj-row-label{color:#94a3b8;font-weight:500}
+.ccj-row-cond{display:block;font-size:9.5px;font-style:italic;color:#94a3b8;margin-top:1px}
+.ccj-row-sum{font-size:11px;color:var(--gray);margin-top:2px;line-height:1.4}
+.ccj-row-owner{flex-shrink:0;min-width:30px;text-align:center;padding:2px 6px;border-radius:5px;background:var(--ol);font-size:9px;font-weight:700;letter-spacing:.3px;color:var(--gray);margin-top:2px}
+.ccj-row-owner.auto{background:#f5f3ff;color:#7c3aed}
+
+.ccj-spin{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ol);border-top-color:var(--navy);animation:ccjSpin .65s linear infinite}
+@keyframes ccjSpin{to{transform:rotate(360deg)}}
+
+/* ---- ROW DETAIL — the same 28px indent whatever the row is saying -------------------------- */
+.ccj-ev{margin:7px 0 0 28px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--card)}
+.ccj-ev.pending{background:transparent;border-style:dashed;border-color:#e8edf3}
+.ccj-will{font-size:11px;color:#94a3b8;line-height:1.55}
+.ccj-will-sla{font-size:9.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#cbd5e1;margin-top:5px}
+/* A line not yet reached holds its space but stays invisible, so the block does not jump each
+   time a beat lands. Only `.new` — the line that just arrived — animates; the ones already on
+   screen are painted at rest. A keyframe rather than a transition on purpose: the container is
+   replaced on each beat, and a transition has no previous state to run from. */
+.ccj-ev.skipped{background:transparent;border-style:dashed;border-color:#e8edf3;opacity:.8}
+@keyframes ccjEvIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---- THE ACTION LOG — one line per thing the step actually does ------------------------------
+   Only the line currently running animates. The list is rebuilt on every beat, so animating the
+   finished ones again would read as a flicker rather than as progress. */
+.ccj-act{display:flex;align-items:flex-start;gap:7px;padding:4px 0}
+.ccj-act.new{animation:ccjEvIn .3s cubic-bezier(.4,0,.2,1) both}
+.ccj-act-ico{width:14px;height:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;color:#16a34a}
+.ccj-act-ico svg{width:11px;height:11px}
+.ccj-act-body{flex:1;min-width:0;display:flex;flex-direction:column}
+.ccj-act-label{font-size:11px;color:var(--navy);line-height:1.45;font-weight:500}
+.ccj-act.doing .ccj-act-label{color:var(--gray)}
+.ccj-act-label.ok{color:#15803d;font-weight:600}
+.ccj-spin.sm{width:10px;height:10px;border-width:1.5px}
+
+.ccj-act-rows{display:flex;flex-direction:column;gap:1px;margin-top:5px;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--border)}
+.ccj-act-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:5px 8px;background:var(--card)}
+.ccj-act-row.off{opacity:.42}
+.ccj-act-row b{font-size:10px;font-weight:600;color:var(--navy);min-width:0;line-height:1.35}
+.ccj-act-row i{font-size:10px;font-style:normal;color:var(--gray);text-align:right;flex-shrink:0;max-width:52%;word-break:break-word}
+.ccj-act-more{padding:4px 8px;background:var(--light);font-size:9.5px;font-weight:600;color:var(--gray)}
+.ccj-act-check{display:flex;align-items:flex-start;gap:6px;padding:5px 8px;background:var(--card)}
+.ccj-act-check>span:last-child{min-width:0;display:flex;flex-direction:column}
+.ccj-act-check b{font-size:10px;font-weight:500;color:var(--navy);line-height:1.4}
+.ccj-act-check i{font-size:9.5px;font-style:normal;color:var(--gray);margin-top:1px;line-height:1.4}
+.ccj-act-vd{flex-shrink:0;width:12px;text-align:center;font-size:10px;font-weight:700;line-height:1.4}
+.ccj-act-check.pass .ccj-act-vd{color:#16a34a}
+.ccj-act-check.fail .ccj-act-vd{color:#dc2626}
+.ccj-act-check.na .ccj-act-vd{color:#94a3b8}
+.ccj-ev-more{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:7px;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--light);font-size:10.5px;font-weight:600;color:var(--navy);font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-ev-more svg{width:10px;height:10px;color:var(--gray)}
+.ccj-ev-more:hover{border-color:var(--navy);background:var(--card)}
+
+/* ---- HELD — done its part, waiting on the rest of the stage --------------------------------- */
+.ccj-hold{position:relative;margin-top:8px;padding:8px 10px 8px 12px;border-radius:7px;background:#fffbeb;border:1px solid #fde68a;font-size:10.5px;line-height:1.55;color:#78350f;overflow:hidden}
+.ccj-hold-bar{position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#f59e0b,#fbbf24);animation:ccjHoldPulse 1.8s ease-in-out infinite}
+@keyframes ccjHoldPulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+/* ---- THE GATE — where a person is asked ------------------------------------------------------ */
+.ccj-gate{margin:7px 0 0 28px;padding:11px 12px;border-radius:9px;border:1px solid #fde68a;background:#fffbeb}
+.ccj-gate.external{border-color:#bfdbfe;background:#eff6ff}
+.ccj-gate.stopped{border-color:#fecaca;background:#fef2f2}
+.ccj-gate-ask{font-size:12px;font-weight:700;color:var(--navy);line-height:1.45;margin-bottom:5px}
+.ccj-gate-why{font-size:10.5px;color:var(--gray);line-height:1.55;margin-bottom:9px}
+.ccj-gate-who{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--gray);margin-bottom:10px}
+.ccj-gate-behalf{margin-left:auto;flex-shrink:0;padding:2px 6px;border-radius:5px;background:var(--card);border:1px solid var(--border);font-size:8.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray)}
+.ccj-gate-av{width:19px;height:19px;flex-shrink:0;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;color:var(--navy)}
+.ccj-gate-btns{display:flex;gap:7px}
+.ccj-gate-btn{flex:1;padding:8px 10px;border-radius:8px;border:1px solid transparent;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-gate-btn.go{background:var(--navy);color:#fff}
+.ccj-gate-btn.go:hover{background:#1e293b}
+.ccj-gate-btn.stop{background:var(--card);border-color:var(--border);color:#dc2626}
+.ccj-gate-btn.stop:hover{border-color:#dc2626;background:#fef2f2}
+.ccj-gate-btn.ghost{background:var(--card);border-color:var(--border);color:var(--navy)}
+.ccj-gate-btn.ghost:hover{border-color:var(--navy)}
+.ccj-gate-locked{font-size:10.5px;color:var(--gray);font-style:italic}
+
+/* ---- THE CONTRACT FORM ------------------------------------------------------------------------ */
+.ccj-form-scroll{flex:1;min-height:0;overflow-y:auto;padding:20px 24px 24px;scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.08) transparent}
+.ccj-form-scroll::-webkit-scrollbar{width:5px}
+.ccj-form-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+.ccj-form-head{margin-bottom:14px}
+.ccj-form-title{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
+.ccj-form-sub{font-size:12px;color:var(--gray);margin-top:2px}
+.ccj-prefill{display:flex;align-items:flex-start;gap:11px;padding:12px 14px;border-radius:11px;background:var(--light);border:1px solid var(--border);margin-bottom:18px}
+.ccj-prefill-ico{width:28px;height:28px;flex-shrink:0;border-radius:9px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.ccj-prefill-ico svg{width:13px;height:13px}
+.ccj-prefill-t{font-size:12.5px;font-weight:700;color:var(--navy)}
+.ccj-prefill-s{font-size:11.5px;color:var(--gray);margin-top:2px;line-height:1.5}
+
+.ccj-fsec{border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.ccj-fsec-t{padding:12px 16px;background:#fafbfc;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;color:var(--navy)}
+.ccj-fgrid{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ccj-fgroup{min-width:0;display:flex;flex-direction:column}
+.ccj-fgroup.full{grid-column:1/-1}
+/* The field the conversation is asking about right now. The ring is how the two halves of the
+   screen stay tied together — the question on the left always has a visible target on the right. */
+.ccj-fgroup.asking{position:relative}
+.ccj-fgroup.asking .ccj-inp,.ccj-fgroup.asking .ccj-radios{box-shadow:0 0 0 3px rgba(15,23,42,.10);border-color:var(--navy)}
+/* The field a document just landed in. A keyframe, not a transition — the form is re-rendered
+   on every fill, so a transition would have no previous state to run from. */
+.ccj-fgroup.just .ccj-inp{animation:ccjJustFill .7s ease both}
+@keyframes ccjJustFill{
+  0%{background:#dcfce7;border-color:#4ade80;box-shadow:0 0 0 4px rgba(74,222,128,.22)}
+  70%{background:#f0fdf4;border-color:#86efac;box-shadow:0 0 0 2px rgba(74,222,128,.10)}
+  100%{background:var(--card);border-color:var(--border);box-shadow:none}
+}
+.ccj-flabel{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--navy);margin-bottom:6px}
+.ccj-req{color:#dc2626;font-weight:700}
+.ccj-ai{padding:1px 5px;border-radius:4px;background:#f5f3ff;color:#7c3aed;font-size:8.5px;font-weight:700;letter-spacing:.4px;cursor:help}
+.ccj-inp{width:100%;min-width:0;height:38px;padding:0 11px;border:1px solid var(--border);border-radius:9px;font-size:12.5px;font-family:inherit;color:var(--navy);background:var(--card);outline:none;transition:.15s;box-sizing:border-box}
+.ccj-inp:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(15,23,42,.08)}
+.ccj-ta{height:auto;padding:9px 11px;line-height:1.55;resize:vertical;min-height:74px}
+select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a7282' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:13px;padding-right:30px}
+.ccj-fgroup.missing .ccj-inp{border-color:#fca5a5;background:#fffafa}
+.ccj-fhint{font-size:10.5px;color:var(--gray);margin-top:5px;line-height:1.5}
+.ccj-money,.ccj-unit{display:flex;align-items:center;gap:8px}
+.ccj-money>span{font-size:12.5px;font-weight:600;color:var(--gray);flex-shrink:0}
+.ccj-unit>span{font-size:12px;color:var(--gray);flex-shrink:0}
+.ccj-radios{display:flex;flex-direction:column;gap:7px}
+.ccj-radio{display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:500;color:var(--navy);font-family:inherit;cursor:pointer;text-align:left;transition:.15s}
+.ccj-radio:hover{border-color:var(--navy)}
+.ccj-radio-dot{width:15px;height:15px;flex-shrink:0;border-radius:50%;border:2px solid #d1d5db;transition:.15s}
+.ccj-radio.on{border-color:var(--navy);background:var(--light)}
+.ccj-radio.on .ccj-radio-dot{border-color:var(--navy);border-width:4px}
+
+.ccj-form-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0 4px;flex-wrap:wrap}
+.ccj-form-foot-note{font-size:12px;color:var(--gray)}
+.ccj-form-foot-note b{color:#dc2626;font-weight:700}
+/* Replaces the submit button. There is no decision left to take, so this reports rather than
+   asks — and it is visible for the whole pause, so the screen changing is never a surprise. */
+.ccj-form-foot-go{display:flex;align-items:center;gap:9px;width:100%;padding:11px 14px;border-radius:10px;background:var(--light);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--navy)}
+.ccj-form-foot-go .ccj-spin{flex-shrink:0}
+.ccj-primary{padding:11px 22px;border:none;border-radius:10px;background:var(--navy);color:#fff;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-primary:hover{background:#1e293b;transform:translateY(-1px)}
+.ccj-primary.disabled,.ccj-primary:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed;transform:none}
+
+/* ---- ENGAGEMENT MODEL — its own page, before the journey frame exists -------------------------
+   Centred in the viewport with nothing around it: no rail, no panel, no step counter. The three
+   cards ARE the screen. */
+.ccj-model-page{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.ccj-model-back{position:absolute;top:0;left:0;z-index:2}
+.ccj-model-screen{flex:1;min-height:0;overflow-y:auto;padding:38px 34px;display:flex;flex-direction:column;justify-content:center;scrollbar-width:thin}
+.ccj-model-screen::-webkit-scrollbar{width:5px}
+.ccj-model-screen::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+.ccj-model-head{text-align:center;max-width:560px;margin:0 auto 28px}
+.ccj-model-title{font-size:22px;font-weight:700;color:var(--navy);letter-spacing:-.3px;margin-bottom:8px}
+.ccj-model-sub{font-size:12.5px;color:var(--gray);line-height:1.6}
+.ccj-model-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:960px;margin:0 auto;width:100%}
+.ccj-mcard{position:relative;display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:22px 20px;border:1.5px solid var(--border);border-radius:14px;background:var(--card);font-family:inherit;cursor:pointer;transition:border-color .18s,box-shadow .18s,transform .18s}
+.ccj-mcard:hover{border-color:#94a3b8;transform:translateY(-3px);box-shadow:0 10px 28px rgba(15,23,42,.09)}
+.ccj-mcard.on{border-color:var(--navy);box-shadow:0 0 0 3px rgba(15,23,42,.07)}
+.ccj-mcard-top{display:flex;align-items:flex-start;justify-content:space-between;width:100%;margin-bottom:14px}
+.ccj-mcard-ico{width:38px;height:38px;border-radius:11px;background:var(--ol);display:flex;align-items:center;justify-content:center;color:var(--navy);flex-shrink:0;transition:.18s}
+.ccj-mcard-ico svg{width:18px;height:18px}
+.ccj-mcard.on .ccj-mcard-ico{background:var(--navy);color:#fff}
+.ccj-mcard-check{width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:0;transform:scale(.6);transition:.18s}
+.ccj-mcard-check svg{width:10px;height:10px}
+.ccj-mcard.on .ccj-mcard-check{opacity:1;transform:scale(1)}
+.ccj-mcard-title{font-size:15px;font-weight:700;color:var(--navy);line-height:1.3}
+.ccj-mcard-sub{font-size:11px;font-weight:600;color:var(--gray);margin-top:2px;line-height:1.4}
+.ccj-mcard-desc{font-size:12px;color:var(--gray);line-height:1.6;margin-top:12px}
+@media(max-width:1160px){
+  .ccj-model-grid{grid-template-columns:1fr;max-width:520px}
+  .ccj-mcard-desc{margin-top:8px}
+  .ccj-model-screen{justify-content:flex-start;padding:44px 22px 22px}
+}
+
+/* ---- STAGE 2: THE QUOTE ------------------------------------------------------------------------
+   Fills in as the sub-statuses beside it settle. A pending line holds its space with a shimmer
+   rather than appearing from nothing, so the card never reflows as the numbers arrive. */
+.ccj-q{flex:1;min-height:0;overflow-y:auto;padding:22px 24px 26px;scrollbar-width:thin}
+.ccj-q::-webkit-scrollbar{width:5px}
+.ccj-q::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+.ccj-q-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
+.ccj-q-title{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
+.ccj-q-sub{font-size:12px;color:var(--gray);margin-top:2px}
+.ccj-q-status{flex-shrink:0;padding:4px 11px;border-radius:20px;background:#fef3c7;color:#92400e;font-size:10.5px;font-weight:700;letter-spacing:.3px}
+.ccj-q-status.ok{background:#dcfce7;color:#15803d}
+.ccj-q-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.ccj-q-sec{padding:11px 15px;background:#fafbfc;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray)}
+.ccj-q-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 15px;border-bottom:1px solid var(--border)}
+.ccj-q-k{font-size:12.5px;font-weight:600;color:var(--navy);min-width:0}
+.ccj-q-k span{display:block;font-size:10.5px;font-weight:400;color:var(--gray);margin-top:1px}
+.ccj-q-v{font-size:13px;font-weight:600;color:var(--navy);flex-shrink:0;text-align:right}
+.ccj-q-row.pend .ccj-q-k{color:#94a3b8}
+.ccj-q-skel{display:block;width:78px;height:11px;border-radius:5px;background:linear-gradient(90deg,#eef1f5 25%,#e2e8f0 50%,#eef1f5 75%);background-size:200% 100%;animation:ccjShimmer 1.3s infinite}
+.ccj-q-total{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 15px;background:var(--navy)}
+.ccj-q-total span{font-size:12px;font-weight:600;color:#cbd5e1}
+.ccj-q-total b{font-size:16px;font-weight:700;color:#fff}
+.ccj-q-meta{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.ccj-q-mrow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 15px;border-bottom:1px solid var(--border)}
+.ccj-q-mrow:last-child{border-bottom:none}
+.ccj-q-mrow span{font-size:11.5px;color:var(--gray)}
+.ccj-q-mrow b{font-size:12px;font-weight:600;color:var(--navy);text-align:right}
+.ccj-q-mrow.pend b{color:#94a3b8;font-weight:500}
+.ccj-q-note{margin-top:14px;padding:11px 13px;border-radius:9px;background:#f0fdf4;border:1px solid #bbf7d0;font-size:12px;color:#15803d}
+
+/* ---- STAGE 3: THE CLIENT THREAD ----------------------------------------------------------------
+   Four kinds of message, and they look different because they carry different weight: what we
+   sent, what the client sent, a system note, and a draft nobody has sent yet. A draft styled like
+   a sent message would be the worst possible confusion on a screen whose job is talking to a
+   customer, so it is the only one with a border and a button. */
+.ccj-chat-col.wide{flex:0 0 380px}
+.ccj-chat-av{width:28px;height:28px;flex-shrink:0;border-radius:9px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700}
+
+.ccj-cmsg{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.ccj-cmsg.in{animation:ccjIn .26s ease both}
+.ccj-cmsg.us{align-items:flex-end}
+.ccj-cmsg>i{font-size:9.5px;font-style:normal;color:#94a3b8;padding:0 2px}
+.ccj-cbubble{max-width:100%;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.6;background:var(--light);border:1px solid var(--border);color:var(--navy);word-wrap:break-word}
+.ccj-cmsg.us .ccj-cbubble{background:var(--navy);border-color:var(--navy);color:#fff}
+.ccj-cbubble.accept{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
+.ccj-cmsg.us .ccj-cbubble.accept{background:#f0fdf4;color:#15803d}
+.ccj-cmsg.note{align-items:center;flex-direction:row;justify-content:center;gap:7px;padding:2px 0}
+.ccj-cmsg.note span{font-size:10px;color:#94a3b8}
+.ccj-cmsg.note.chase span{color:#b45309;font-weight:600}
+.ccj-cmsg.note i{font-size:9.5px;color:#cbd5e1}
+
+.ccj-cbubble.draft{background:#faf5ff;border:1px dashed #d8b4fe;color:var(--navy);max-width:100%}
+.ccj-draft-tag{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#7c3aed;margin-bottom:7px}
+.ccj-draft-tag svg{width:10px;height:10px}
+.ccj-draft-btns{margin-top:10px}
+.ccj-draft-send{padding:7px 14px;border:none;border-radius:8px;background:#7c3aed;color:#fff;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-draft-send:hover{background:#6d28d9}
+.ccj-draft-note{display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 9px;border-radius:7px;background:#faf5ff;border:1px solid #e9d5ff;font-size:10.5px;font-weight:600;color:#7c3aed}
+.ccj-draft-note svg{width:10px;height:10px;flex-shrink:0}
+
+/* The quote itself, inside the thread. v2 shows what moved rather than only the new number. */
+.ccj-cbubble.quote{background:var(--card);border-color:var(--border);padding:0;overflow:hidden;width:100%}
+.ccj-qc-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fafbfc;border-bottom:1px solid var(--border)}
+.ccj-qc-v{padding:2px 7px;border-radius:5px;background:var(--navy);color:#fff;font-size:9px;font-weight:700;letter-spacing:.4px}
+.ccj-qc-name{font-size:10.5px;color:var(--gray);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ccj-qc-total{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:11px 12px 4px}
+.ccj-qc-total span{font-size:10.5px;color:var(--gray)}
+.ccj-qc-total b{font-size:16px;font-weight:700;color:var(--navy)}
+.ccj-qc-was{padding:0 12px 9px;font-size:10px;color:#15803d;font-weight:600}
+/* A terms change is not a saving, so it is not green. It reports what moved, in neutral. */
+.ccj-qc-was.terms{color:var(--gray);font-weight:500;line-height:1.5}
+.ccj-qc-lines{display:flex;flex-wrap:wrap;gap:1px;background:var(--border);border-top:1px solid var(--border)}
+.ccj-qc-lines span{flex:1;min-width:88px;padding:7px 10px;background:var(--card);font-size:11px;color:var(--navy)}
+.ccj-qc-lines b{display:block;font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--gray);margin-bottom:2px}
+
+/* ---- STAGE 3 SCREEN — has it been opened, when did I chase, what did they say ------------------ */
+.ccj-sent{flex:1;min-height:0;overflow-y:auto;padding:22px 24px 26px;scrollbar-width:thin}
+.ccj-sent::-webkit-scrollbar{width:5px}
+.ccj-sent::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+.ccj-sent-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px}
+.ccj-sent-title{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
+.ccj-sent-sub{font-size:12px;color:var(--gray);margin-top:2px}
+.ccj-sent-state{flex-shrink:0;padding:4px 11px;border-radius:20px;background:var(--ol);color:var(--gray);font-size:10.5px;font-weight:700;letter-spacing:.3px}
+.ccj-sent-state.warn{background:#fef3c7;color:#92400e}
+.ccj-sent-state.ok{background:#dcfce7;color:#15803d}
+
+.ccj-tl{position:relative;padding-left:2px;margin-bottom:22px}
+.ccj-tl-row{position:relative;display:flex;align-items:flex-start;gap:12px;padding:0 0 16px 18px}
+.ccj-tl-row:before{content:'';position:absolute;left:4px;top:12px;bottom:0;width:1.5px;background:var(--border)}
+.ccj-tl-row:last-child:before{display:none}
+.ccj-tl-dot{position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:50%;background:var(--card);border:1.5px solid var(--border)}
+.ccj-tl-row.done .ccj-tl-dot{background:var(--navy);border-color:var(--navy)}
+.ccj-tl-body{flex:1;min-width:0}
+.ccj-tl-label{font-size:12.5px;font-weight:600;color:#94a3b8;line-height:1.4}
+.ccj-tl-row.done .ccj-tl-label{color:var(--navy)}
+.ccj-tl-sub{font-size:11px;color:var(--gray);margin-top:1px;line-height:1.45}
+.ccj-tl-when{flex-shrink:0;font-size:11px;color:var(--gray);white-space:nowrap;padding-top:1px}
+
+/* Demo scaffolding, and it says so. Fires the same events the script does. */
+.ccj-sim{border:1px dashed #cbd5e1;border-radius:11px;padding:13px 14px;background:var(--light)}
+.ccj-sim-head{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray);margin-bottom:10px}
+.ccj-sim-head span{padding:1px 6px;border-radius:4px;background:var(--card);border:1px solid var(--border);font-size:8.5px;color:#94a3b8}
+.ccj-sim-btns{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:9px}
+.ccj-sim-btn{padding:7px 13px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:11.5px;font-weight:600;color:var(--navy);font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-sim-btn:hover:not(:disabled){border-color:var(--navy);transform:translateY(-1px)}
+.ccj-sim-btn:disabled{opacity:.4;cursor:not-allowed}
+.ccj-sim-note{font-size:10.5px;color:#94a3b8;line-height:1.5}
+
+@media(max-width:1380px){.ccj-chat-col.wide{flex:0 0 330px}}
+@media(max-width:1160px){.ccj-chat-col.wide{flex:0 0 280px}}
+
+/* ---- STAGE 4: DEAL WON, ACCOUNT CREATED --------------------------------------------------------
+   Three bands: what was won, what was provisioned, who now owns the relationship. The won band is
+   the only place in nine stages that states a commercial outcome as an outcome, so it is the only
+   thing on the journey allowed to be this loud. */
+.ccj-acct{flex:1;min-height:0;overflow-y:auto;padding:22px 24px 26px;scrollbar-width:thin}
+.ccj-acct::-webkit-scrollbar{width:5px}
+.ccj-acct::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+
+.ccj-won{position:relative;overflow:hidden;padding:22px 24px;border-radius:14px;margin-bottom:14px;
+  background:var(--light);border:1px solid var(--border);transition:.4s}
+.ccj-won.on{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border-color:#0f172a}
+.ccj-won-tag{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);margin-bottom:9px;transition:.3s}
+.ccj-won.on .ccj-won-tag{color:#4ade80}
+.ccj-won-val{display:flex;align-items:baseline;gap:8px;font-size:32px;font-weight:800;letter-spacing:-1px;color:#cbd5e1;line-height:1;transition:.3s}
+.ccj-won.on .ccj-won-val{color:#fff}
+.ccj-won-val span{font-size:12.5px;font-weight:500;letter-spacing:0;color:var(--gray)}
+.ccj-won.on .ccj-won-val span{color:#94a3b8}
+.ccj-won-sub{font-size:12px;color:var(--gray);margin-top:9px;line-height:1.5}
+.ccj-won.on .ccj-won-sub{color:#94a3b8}
+
+.ccj-pv{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.ccj-pv-head{display:flex;align-items:center;gap:9px;padding:11px 15px;background:#fafbfc;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray)}
+.ccj-pv-note{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:500;font-size:10.5px;color:#b45309}
+.ccj-pv-note.new{color:#15803d}
+.ccj-pv-row{display:flex;align-items:center;gap:10px;padding:10px 15px;border-bottom:1px solid var(--border)}
+.ccj-pv-row:last-child{border-bottom:none}
+.ccj-pv-tick{width:16px;height:16px;flex-shrink:0;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:#fff;transition:.25s}
+.ccj-pv-tick svg{width:9px;height:9px}
+.ccj-pv-row.done .ccj-pv-tick{background:#16a34a;border-color:#16a34a}
+.ccj-pv-k{font-size:12px;color:var(--gray);flex:1;min-width:0}
+.ccj-pv-row.done .ccj-pv-k{color:var(--navy);font-weight:500}
+.ccj-pv-v{font-size:12px;font-weight:600;color:#94a3b8;text-align:right;word-break:break-all}
+.ccj-pv-row.done .ccj-pv-v{color:var(--navy)}
+
+.ccj-csm{display:flex;align-items:center;gap:13px;padding:15px 16px;border:1px solid var(--border);border-radius:12px;transition:.3s}
+.ccj-csm.on{border-color:#bbf7d0;background:#f0fdf4}
+.ccj-csm-av{width:44px;height:44px;flex-shrink:0;border-radius:50%;background:var(--ol);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--navy);transition:.3s}
+.ccj-csm.on .ccj-csm-av{background:var(--navy);color:#fff}
+.ccj-csm-body{flex:1;min-width:0}
+.ccj-csm-name{font-size:14px;font-weight:700;color:var(--navy)}
+.ccj-csm-role{font-size:11.5px;color:var(--gray);margin-top:1px}
+.ccj-csm-mail{font-size:11px;color:#94a3b8;margin-top:2px;word-break:break-all}
+.ccj-csm-state{flex-shrink:0;padding:4px 10px;border-radius:20px;background:var(--ol);font-size:10px;font-weight:700;letter-spacing:.3px;color:var(--gray)}
+.ccj-csm.on .ccj-csm-state{background:#dcfce7;color:#15803d}
+
+.ccj-acct-foot{margin-top:18px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;animation:ccjIn .3s ease both}
+.ccj-acct-done{font-size:12px;color:var(--gray)}
+
+/* The CSM introduction, in the client thread. */
+.ccj-cbubble.csm{background:var(--card);border-color:var(--border);color:var(--navy)}
+.ccj-cmsg.us .ccj-cbubble.csm{background:var(--card);border-color:var(--border);color:var(--navy)}
+.ccj-csmc-top{display:flex;align-items:center;gap:9px;padding-bottom:9px;margin-bottom:9px;border-bottom:1px solid var(--border)}
+.ccj-csmc-av{width:32px;height:32px;flex-shrink:0;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700}
+.ccj-csmc-top b{display:block;font-size:12.5px;font-weight:700;color:var(--navy)}
+.ccj-csmc-top i{display:block;font-size:10.5px;font-style:normal;color:var(--gray);margin-top:1px}
+
+/* ---- STAGE 5: THE MASTER SERVICES AGREEMENT ----------------------------------------------------
+   Rendered as a document, not as a form. Paper white on a grey desk, a real header block, numbered
+   clauses in a serif face and signature blocks that fill in as each party signs. It has to read as
+   something a general counsel would put their name on. */
+.ccj-msa-wrap{flex:1;min-height:0;overflow-y:auto;padding:20px;background:#eef1f5;scrollbar-width:thin}
+.ccj-msa-wrap::-webkit-scrollbar{width:6px}
+.ccj-msa-wrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.14);border-radius:99px}
+/* NOT `.ccj-doc`. That belongs to the document-extraction card in the chat, and defining it a
+   second time here put a 720px page with 44px padding inside a 300px chat bubble — the text
+   wrapped to one character per line. Third class-name collision in this file; the rule is that
+   two components never share a root, and no class is a prefix of another. */
+.ccj-msa{position:relative;max-width:720px;margin:0 auto;background:#fff;border:1px solid #dbe1e8;border-radius:4px;box-shadow:0 4px 22px rgba(15,23,42,.10);padding:38px 44px 44px}
+.ccj-msa.pending{opacity:.45}
+.ccj-msa-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:2px solid var(--navy);margin-bottom:24px}
+.ccj-msa-brand{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--navy);line-height:1}
+.ccj-msa-brandsub{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);margin-top:3px}
+.ccj-msa-ref{text-align:right}
+.ccj-msa-kind{font-size:11px;font-weight:700;letter-spacing:1.1px;color:var(--navy)}
+.ccj-msa-no{font-size:10.5px;color:var(--gray);margin-top:3px}
+.ccj-msa-stamp{position:absolute;top:30px;right:40px;padding:5px 14px;border:2px solid #16a34a;border-radius:4px;color:#16a34a;font-size:12px;font-weight:800;letter-spacing:2px;transform:rotate(-7deg);opacity:.9}
+.ccj-msa-sec{margin-bottom:26px}
+.ccj-msa-sec-t{font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--navy);padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.ccj-msa-kv{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:5px 0;font-size:12.5px}
+.ccj-msa-kv span{color:var(--gray);flex-shrink:0}
+.ccj-msa-kv b{color:var(--navy);font-weight:600;text-align:right;word-break:break-word}
+.ccj-msa-sched{margin-top:10px;padding:9px 11px;border-radius:6px;background:var(--light);font-size:11.5px;color:var(--gray);line-height:1.6}
+.ccj-msa-cl{margin-bottom:14px}
+.ccj-msa-cl-h{display:flex;gap:9px;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px}
+.ccj-msa-cl-h span{flex-shrink:0;color:var(--gray);font-weight:600;min-width:26px}
+.ccj-msa-cl p{font-size:12px;line-height:1.75;color:#334155;margin-left:35px;font-family:Georgia,'Times New Roman',serif}
+.ccj-msa-sigrow{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:6px}
+.ccj-msa-sig{opacity:.55;transition:opacity .35s}
+.ccj-msa-sig.on{opacity:1}
+.ccj-msa-sig-for{font-size:10.5px;color:var(--gray);line-height:1.5;min-height:30px}
+.ccj-msa-sig-mark{height:34px;font-family:'Segoe Script','Brush Script MT','Lucida Handwriting',cursive;font-size:22px;color:#1e3a5f;transform:rotate(-2deg);transform-origin:left bottom;display:flex;align-items:flex-end}
+.ccj-msa-sig-line{border-bottom:1px solid var(--navy);margin-bottom:6px}
+.ccj-msa-sig-name{font-size:12px;font-weight:600;color:var(--navy)}
+.ccj-msa-sig-role{font-size:10.5px;color:var(--gray);margin-top:1px}
+.ccj-msa-exec{margin-top:18px;padding-top:12px;border-top:1px dashed var(--border);font-size:11px;color:var(--gray);line-height:1.6}
+
+/* A client who already has an agreement. Nothing to sign, and the stage says why. */
+.ccj-existing{max-width:520px;margin:40px auto;background:#fff;border:1px solid var(--border);border-radius:14px;padding:32px 30px;text-align:center}
+.ccj-existing-ico{width:52px;height:52px;margin:0 auto 16px;border-radius:14px;background:#f0fdf4;color:#15803d;display:flex;align-items:center;justify-content:center}
+.ccj-existing-ico svg{width:24px;height:24px}
+.ccj-existing-t{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:8px}
+.ccj-existing-s{font-size:12.5px;color:var(--gray);line-height:1.65;margin-bottom:20px}
+.ccj-existing-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;text-align:left}
+.ccj-existing-grid>div{background:#fff;padding:10px 13px}
+.ccj-existing-grid span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-bottom:2px}
+.ccj-existing-grid b{font-size:12.5px;font-weight:600;color:var(--navy)}
+
+@media(max-width:1160px){
+  .ccj-doc{padding:26px 24px 30px}
+  .ccj-msa-cl p{margin-left:0}
+  .ccj-msa-sigrow{grid-template-columns:1fr;gap:16px}
+}
+
+/* ---- STAGE 6: THE DEPOSIT INVOICE ---------------------------------------------------------------
+   Same desk as the agreement, and deliberately so — these are the two documents this journey puts
+   in front of a client, and they should read as coming from the same company. Three bands on it:
+   the money, the paper, and the ledger of what has arrived against it.
+
+   Every figure is tabular-nums. Money in a proportional face makes two amounts of the same
+   magnitude look like different lengths, and this screen exists to be compared down a column. */
+.ccj-inv-wrap{flex:1;min-height:0;overflow-y:auto;padding:20px;background:#eef1f5;scrollbar-width:thin}
+.ccj-inv-wrap::-webkit-scrollbar{width:6px}
+.ccj-inv-wrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.14);border-radius:99px}
+
+/* Band 1 — what is owed. Read before anything else on the screen, so it sits above the paper. */
+.ccj-inv-stat{max-width:720px;margin:0 auto 16px;background:var(--card);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:12px;padding:15px 18px 14px}
+.ccj-inv-stat.ok{border-left-color:#16a34a;background:#f6fdf9}
+.ccj-inv-stat.warn{border-left-color:#d97706;background:#fffbf3}
+.ccj-inv-figs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:12px}
+.ccj-inv-fig span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray);margin-bottom:3px}
+.ccj-inv-fig b{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.ccj-inv-fig.got b{color:#15803d}
+.ccj-inv-fig.out b{color:#b45309}
+.ccj-inv-bar{height:5px;border-radius:99px;background:var(--ol);overflow:hidden}
+.ccj-inv-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#15803d,#22c55e);transition:width .5s cubic-bezier(.4,0,.2,1)}
+.ccj-inv-when{font-size:11.5px;color:var(--gray);margin-top:9px;line-height:1.5}
+
+/* Band 2 — the invoice. Paper, not a card: square-ish corners, a hairline border and the shadow
+   of something sitting on a desk. */
+.ccj-inv{position:relative;max-width:720px;margin:0 auto;background:#fff;border:1px solid #dbe1e8;border-radius:4px;box-shadow:0 4px 22px rgba(15,23,42,.10);padding:34px 40px 38px}
+.ccj-inv.pending{opacity:.45}
+.ccj-inv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:16px;border-bottom:2px solid var(--navy);margin-bottom:20px}
+.ccj-inv-brand{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--navy);line-height:1}
+.ccj-inv-brandsub{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);margin-top:3px}
+.ccj-inv-ref{text-align:right}
+.ccj-inv-kind{font-size:11px;font-weight:700;letter-spacing:1.1px;color:var(--navy)}
+.ccj-inv-no{font-size:14px;font-weight:700;color:var(--navy);margin-top:3px;font-variant-numeric:tabular-nums}
+.ccj-inv-stamp{position:absolute;left:8px;top:4px;padding:6px 16px;border:2.5px solid #16a34a;border-radius:4px;color:#16a34a;font-size:15px;font-weight:800;letter-spacing:3px;transform:rotate(-8deg);opacity:.9}
+.ccj-inv-stamp.short{border-color:#d97706;color:#d97706;font-size:13px;letter-spacing:2px}
+
+.ccj-inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-bottom:20px}
+.ccj-inv-party-t{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);margin-bottom:5px}
+.ccj-inv-party-n{font-size:13px;font-weight:700;color:var(--navy);line-height:1.35}
+.ccj-inv-party-a{font-size:11.5px;color:#475569;line-height:1.65;margin-top:3px}
+.ccj-inv-party-v{font-size:10.5px;color:var(--gray);line-height:1.6;margin-top:5px;font-variant-numeric:tabular-nums}
+
+.ccj-inv-meta{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:20px}
+.ccj-inv-kv{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:3px 0;font-size:11.5px}
+.ccj-inv-kv span{color:var(--gray);flex-shrink:0}
+.ccj-inv-kv b{color:var(--navy);font-weight:600;text-align:right;word-break:break-word;font-variant-numeric:tabular-nums}
+
+.ccj-inv-lines{width:100%;border-collapse:collapse;margin-bottom:16px}
+.ccj-inv-lines th{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);text-align:right;padding:0 0 7px;border-bottom:1px solid var(--navy);white-space:nowrap}
+.ccj-inv-lines th:first-child{text-align:left}
+.ccj-inv-lines td{padding:13px 0;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--navy);text-align:right;vertical-align:top;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ccj-inv-lines td:first-child{text-align:left;white-space:normal}
+/* The numeric columns need real gutters between them. Without these the header reads
+   "UNIT PRICE AMOUNT" as one phrase and the row prints "€ 5,700€ 5,700" as one number. */
+.ccj-inv-lines th+th,.ccj-inv-lines td+td{padding-left:28px}
+.ccj-inv-lines th:nth-child(3),.ccj-inv-lines td:nth-child(3),
+.ccj-inv-lines th:nth-child(4),.ccj-inv-lines td:nth-child(4){min-width:92px}
+.ccj-inv-lines td b{display:block;font-size:12.5px;font-weight:700;color:var(--navy)}
+.ccj-inv-lines td span{display:block;font-size:11px;color:var(--gray);line-height:1.55;margin-top:3px;font-family:Georgia,'Times New Roman',serif}
+
+.ccj-inv-totwrap{position:relative;display:flex;justify-content:flex-end;margin-top:2px}
+.ccj-inv-tot{width:280px;max-width:100%}
+.ccj-inv-trow{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:5px 0;font-size:12px}
+.ccj-inv-trow span{color:var(--gray)}
+.ccj-inv-trow b{color:var(--navy);font-weight:600;font-variant-numeric:tabular-nums}
+.ccj-inv-grand{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-top:7px;padding-top:9px;border-top:2px solid var(--navy)}
+.ccj-inv-grand span{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--navy)}
+.ccj-inv-grand b{font-size:18px;font-weight:800;color:var(--navy);letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.ccj-inv-vat{margin-top:14px;padding:9px 11px;border-radius:6px;background:var(--light);font-size:11px;color:var(--gray);line-height:1.65}
+
+.ccj-inv-sec{margin-top:22px}
+.ccj-inv-sec-t{font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--navy);padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:9px}
+.ccj-inv-warn{margin-top:10px;padding:9px 11px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#78350f;line-height:1.6}
+.ccj-inv-foot{margin-top:20px;padding-top:13px;border-top:1px dashed var(--border);font-size:10.5px;color:var(--gray);line-height:1.7;font-family:Georgia,'Times New Roman',serif}
+
+/* Band 3 — the ledger. A record of what happened, in the order it happened. */
+.ccj-rem{max-width:720px;margin:16px auto 0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px 6px}
+.ccj-rem-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--navy);padding-bottom:11px;border-bottom:1px solid var(--border);margin-bottom:11px}
+.ccj-rem-head span{font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--gray);font-variant-numeric:tabular-nums}
+.ccj-rem-row{position:relative;display:flex;align-items:flex-start;gap:12px;padding:0 0 15px 18px}
+.ccj-rem-row:before{content:'';position:absolute;left:4px;top:11px;bottom:0;width:1.5px;background:var(--border)}
+.ccj-rem-row:last-child:before{display:none}
+.ccj-rem-dot{position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:50%;background:var(--navy);border:1.5px solid var(--navy)}
+.ccj-rem-row.receipt .ccj-rem-dot{background:#16a34a;border-color:#16a34a}
+.ccj-rem-row.remind .ccj-rem-dot,.ccj-rem-row.chase .ccj-rem-dot{background:var(--card);border-color:#d97706}
+.ccj-rem-row.release .ccj-rem-dot{background:#d97706;border-color:#d97706}
+.ccj-rem-body{flex:1;min-width:0}
+.ccj-rem-label{font-size:12.5px;font-weight:600;color:var(--navy);line-height:1.4}
+.ccj-rem-sub{font-size:11px;color:var(--gray);margin-top:1px;line-height:1.45}
+.ccj-rem-when{flex-shrink:0;font-size:11px;color:var(--gray);white-space:nowrap;padding-top:1px;font-variant-numeric:tabular-nums}
+.ccj-rem-amt{flex-shrink:0;min-width:82px;text-align:right;font-size:12.5px;font-weight:700;color:#15803d;white-space:nowrap;padding-top:1px;font-variant-numeric:tabular-nums}
+.ccj-rem-none{font-size:12px;color:#94a3b8;padding:2px 0 12px}
+
+/* The gate lifting. It is the outcome of the stage, so it gets the weight of one. */
+.ccj-inv-rel{max-width:720px;margin:16px auto 0;display:flex;align-items:flex-start;gap:13px;padding:15px 17px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;animation:ccjIn .3s ease both}
+.ccj-inv-rel.short{background:#fffbeb;border-color:#fde68a}
+.ccj-inv-rel-ico{flex-shrink:0;width:34px;height:34px;border-radius:10px;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center}
+.ccj-inv-rel.short .ccj-inv-rel-ico{background:#fef3c7;color:#b45309}
+.ccj-inv-rel-ico svg{width:17px;height:17px}
+.ccj-inv-rel-t{font-size:13px;font-weight:700;color:#15803d}
+.ccj-inv-rel.short .ccj-inv-rel-t{color:#b45309}
+.ccj-inv-rel-s{font-size:11.5px;color:var(--gray);line-height:1.6;margin-top:3px}
+
+.ccj-inv-next{max-width:720px;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;animation:ccjIn .3s ease both}
+.ccj-inv-next-t{font-size:12.5px;font-weight:600;color:var(--navy)}
+
+/* The simulate strip is the stage-3 component, reused. It only needs the desk margin here. */
+.ccj-inv-wrap .ccj-sim{max-width:720px;margin:16px auto 0;background:var(--card)}
+
+/* The remittance advice, in the client thread. */
+.ccj-cbubble.remit{background:var(--card);border-color:var(--border);color:var(--navy)}
+.ccj-cmsg.client .ccj-cbubble.remit{background:var(--card);border-color:var(--border);color:var(--navy)}
+.ccj-remit-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--border)}
+.ccj-remit-top b{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray)}
+.ccj-remit-top span{font-size:14px;font-weight:800;color:#15803d;letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+
+@media(max-width:1160px){
+  .ccj-inv{padding:26px 24px 30px}
+  .ccj-inv-parties{grid-template-columns:1fr;gap:16px}
+  .ccj-inv-meta{grid-template-columns:1fr}
+  .ccj-inv-tot{width:100%}
+  .ccj-inv-totwrap{padding-top:34px}
+  .ccj-inv-stamp{top:-4px;left:2px}
+  .ccj-rem-when{display:none}
+}
+
+/* ---- STAGE 7: THE EMPLOYMENT CONTRACT -----------------------------------------------------------
+   The same paper as the agreement and the invoice, with one thing neither of those has: the
+   compliance check happens ON it. Each clause takes a verdict in place, and a clause the check
+   rewrote carries the rule that rewrote it directly underneath, indented under the text it
+   changed. The annotation is deliberately quieter than the clause — it is apparatus around the
+   document, not part of it. */
+.ccj-ec-wrap{flex:1;min-height:0;overflow-y:auto;padding:20px;background:#eef1f5;scrollbar-width:thin}
+.ccj-ec-wrap::-webkit-scrollbar{width:6px}
+.ccj-ec-wrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.14);border-radius:99px}
+
+/* The band above the paper. During the check it is the progress of the check; before and after
+   it is what this document is and where it stands. */
+.ccj-ec-stat{max-width:720px;margin:0 auto 16px;background:var(--card);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:12px;padding:14px 18px}
+.ccj-ec-stat.ok{border-left-color:#16a34a;background:#f6fdf9}
+.ccj-ec-stat.wait{border-left-color:#d97706;background:#fffbf3}
+.ccj-ec-stat.stop{border-left-color:#dc2626;background:#fef6f6}
+.ccj-ec-stat.audit{border-left-color:#7c3aed;background:#faf8ff}
+.ccj-ec-stat-t{font-size:13.5px;font-weight:700;color:var(--navy);letter-spacing:-.1px}
+.ccj-ec-stat-s{font-size:11.5px;color:var(--gray);line-height:1.6;margin-top:4px}
+.ccj-ec-bar{height:4px;border-radius:99px;background:var(--ol);overflow:hidden;margin:9px 0 2px}
+.ccj-ec-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#7c3aed,#a855f7);transition:width .4s cubic-bezier(.4,0,.2,1)}
+.ccj-ec-stat.audit.ok .ccj-ec-bar span{background:linear-gradient(90deg,#15803d,#22c55e)}
+
+.ccj-ec{position:relative;max-width:720px;margin:0 auto;background:#fff;border:1px solid #dbe1e8;border-radius:4px;box-shadow:0 4px 22px rgba(15,23,42,.10);padding:34px 40px 38px}
+.ccj-ec.pending{opacity:.45}
+.ccj-ec-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:16px;border-bottom:2px solid var(--navy);margin-bottom:20px}
+.ccj-ec-brand{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--navy);line-height:1}
+.ccj-ec-brandsub{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);margin-top:3px}
+.ccj-ec-ref{text-align:right}
+.ccj-ec-kind{font-size:11px;font-weight:700;letter-spacing:1.1px;color:var(--navy)}
+.ccj-ec-no{font-size:14px;font-weight:700;color:var(--navy);margin-top:3px;font-variant-numeric:tabular-nums}
+.ccj-ec-stamp{position:absolute;bottom:30px;left:40px;padding:6px 16px;border:2.5px solid #16a34a;border-radius:4px;color:#16a34a;font-size:14px;font-weight:800;letter-spacing:3px;transform:rotate(-8deg);opacity:.9}
+
+.ccj-ec-parties{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-bottom:20px}
+.ccj-ec-party-t{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);margin-bottom:5px}
+.ccj-ec-party-n{font-size:13px;font-weight:700;color:var(--navy);line-height:1.35}
+.ccj-ec-party-a{font-size:11.5px;color:#475569;line-height:1.65;margin-top:3px}
+.ccj-ec-party-v{font-size:10.5px;color:var(--gray);line-height:1.6;margin-top:5px}
+
+.ccj-ec-meta{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:22px}
+.ccj-ec-kv{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:3px 0;font-size:11.5px}
+.ccj-ec-kv span{color:var(--gray);flex-shrink:0}
+.ccj-ec-kv b{color:var(--navy);font-weight:600;text-align:right;word-break:break-word;font-variant-numeric:tabular-nums}
+
+/* A clause. The left rule is what carries the verdict — colour on the margin, not on the text,
+   because the text is the contract and must stay black on white. */
+.ccj-ec-cl{position:relative;margin-bottom:16px;padding-left:13px;border-left:2px solid transparent;transition:border-color .3s,background .3s}
+.ccj-ec-cl.pass{border-left-color:#bbf7d0}
+.ccj-ec-cl.adjust{border-left-color:#c4b5fd}
+.ccj-ec-cl.fail{border-left-color:#fecaca}
+.ccj-ec-cl.na{border-left-color:var(--border)}
+.ccj-ec-cl.live{border-left-color:#7c3aed;background:#faf8ff}
+.ccj-ec-cl-h{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:5px}
+.ccj-ec-cl-h span{flex-shrink:0;color:var(--gray);font-weight:600;min-width:22px}
+.ccj-ec-cl p{font-size:12px;line-height:1.75;color:#334155;font-family:Georgia,'Times New Roman',serif;margin:0}
+.ccj-ec-cl p b{font-weight:700;color:var(--navy)}
+.ccj-ec-mark{margin-left:auto;display:inline-flex;align-items:center;gap:5px;flex-shrink:0;padding:2px 8px;border-radius:20px;font-size:9.5px;font-weight:700;letter-spacing:.3px;font-family:var(--font,inherit)}
+.ccj-ec-mark.pass{background:#dcfce7;color:#15803d}
+.ccj-ec-mark.adjust{background:#ede9fe;color:#6d28d9}
+.ccj-ec-mark.fail{background:#fee2e2;color:#b91c1c}
+.ccj-ec-mark.na{background:var(--ol);color:var(--gray)}
+.ccj-ec-mark.checking{background:#ede9fe;color:#6d28d9}
+.ccj-ec-mark .ccj-spin.sm{border-top-color:#6d28d9}
+
+/* The rule the clause was measured against. Sans-serif and small on purpose — this is apparatus
+   around the contract, and must never be mistaken for a term of it. */
+.ccj-ec-rule{margin-top:8px;padding:9px 11px;border-radius:7px;background:var(--light);border:1px solid var(--border)}
+.ccj-ec-rule.adjust{background:#faf8ff;border-color:#ddd6fe}
+.ccj-ec-rule.fail{background:#fef2f2;border-color:#fecaca}
+.ccj-ec-rule-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:10.5px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.ccj-ec-rule-h i{font-style:normal;font-weight:600;font-size:9.5px;color:var(--gray);flex-shrink:0}
+.ccj-ec-rule-cmp{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:10.5px;padding:1px 0}
+.ccj-ec-rule-cmp span{color:var(--gray);flex-shrink:0}
+.ccj-ec-rule-cmp b{color:var(--navy);font-weight:600;text-align:right}
+.ccj-ec-rule-n{font-size:10.5px;color:var(--gray);line-height:1.6;margin-top:5px;padding-top:5px;border-top:1px dashed var(--border)}
+.ccj-ec-rule.adjust .ccj-ec-rule-n{color:#6d28d9;font-weight:600}
+.ccj-ec-rule.fail .ccj-ec-rule-n{color:#b91c1c;font-weight:600}
+
+.ccj-ec-sec{margin-top:26px}
+.ccj-ec-sec-t{font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--navy);padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.ccj-ec-sigrow{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:6px}
+.ccj-ec-exec{margin-top:18px;padding-top:12px;border-top:1px dashed var(--border);font-size:11px;color:var(--gray);line-height:1.6}
+.ccj-ec-exec.stamped{padding-left:160px;min-height:46px;display:flex;align-items:center}
+
+/* The e-signature audit trail. A signature is worth what the record behind it says. */
+.ccj-env{max-width:720px;margin:16px auto 0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px 6px}
+.ccj-env-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--navy);padding-bottom:11px;border-bottom:1px solid var(--border);margin-bottom:11px}
+.ccj-env-head span{font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--gray)}
+.ccj-env-row{position:relative;display:flex;align-items:flex-start;gap:12px;padding:0 0 15px 18px;opacity:.45;transition:opacity .3s}
+.ccj-env-row.done{opacity:1}
+.ccj-env-row:before{content:'';position:absolute;left:4px;top:11px;bottom:0;width:1.5px;background:var(--border)}
+.ccj-env-row:last-child:before{display:none}
+.ccj-env-dot{position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:50%;background:var(--card);border:1.5px solid var(--border)}
+.ccj-env-row.done .ccj-env-dot{background:#16a34a;border-color:#16a34a}
+.ccj-env-body{flex:1;min-width:0}
+.ccj-env-label{font-size:12.5px;font-weight:600;color:var(--navy);line-height:1.4}
+.ccj-env-sub{font-size:11px;color:var(--gray);margin-top:1px;line-height:1.45;word-break:break-word}
+.ccj-env-when{flex-shrink:0;font-size:11px;color:var(--gray);white-space:nowrap;padding-top:1px;font-variant-numeric:tabular-nums}
+
+.ccj-ec-next{max-width:720px;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;animation:ccjIn .3s ease both}
+.ccj-ec-next-t{font-size:12.5px;font-weight:600;color:#15803d}
+.ccj-ec-wrap .ccj-sim{max-width:720px;margin:16px auto 0;background:var(--card)}
+
+/* The employee is a different counterparty to the client, and the avatar says so. */
+.ccj-chat-av.worker{background:#ede9fe;color:#6d28d9}
+
+@media(max-width:1160px){
+  .ccj-ec{padding:26px 24px 30px}
+  .ccj-ec-parties{grid-template-columns:1fr;gap:16px}
+  .ccj-ec-meta{grid-template-columns:1fr}
+  .ccj-ec-sigrow{grid-template-columns:1fr;gap:16px}
+  .ccj-ec-stamp{left:24px;bottom:20px}
+  .ccj-env-when{display:none}
+}
+
+/* ---- STAGE 8: ONBOARDING ------------------------------------------------------------------------
+   Not a document — a file being assembled. Six cards, and the state of each is carried by the
+   card's own weight: the running one is open and outlined, the finished ones collapse to the
+   thing they produced, the ones ahead sit quiet with what they will need. */
+.ccj-onb-wrap{flex:1;min-height:0;overflow-y:auto;padding:20px;background:#eef1f5;scrollbar-width:thin}
+.ccj-onb-wrap::-webkit-scrollbar{width:6px}
+.ccj-onb-wrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.14);border-radius:99px}
+
+.ccj-onb-hero{max-width:760px;margin:0 auto 16px;display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:12px;padding:14px 18px}
+.ccj-onb-hero.ok{border-left-color:#16a34a;background:#f6fdf9}
+.ccj-onb-hero-av{flex-shrink:0;width:40px;height:40px;border-radius:12px;background:#ede9fe;color:#6d28d9;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.ccj-onb-hero-body{flex:1;min-width:0}
+.ccj-onb-hero-t{font-size:15px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
+.ccj-onb-hero-s{font-size:11.5px;color:var(--gray);margin-top:2px}
+.ccj-onb-hero-fig{flex-shrink:0;text-align:right}
+.ccj-onb-hero-fig span{display:block;font-size:17px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.ccj-onb-hero-fig i{display:block;font-style:normal;font-size:10px;color:var(--gray);margin-top:1px}
+
+.ccj-onb-card{max-width:760px;margin:0 auto 12px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:box-shadow .25s,border-color .25s}
+.ccj-onb-card.live{border-color:#c4b5fd;box-shadow:0 4px 20px rgba(109,40,217,.10)}
+.ccj-onb-card.pending{opacity:.62}
+.ccj-onb-card-h{display:flex;align-items:center;gap:11px;padding:13px 16px}
+.ccj-onb-card.live .ccj-onb-card-h,.ccj-onb-card.done .ccj-onb-card-h{padding-bottom:11px}
+.ccj-onb-card-n{flex-shrink:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ol);color:var(--gray);font-size:11px;font-weight:700}
+.ccj-onb-card.done .ccj-onb-card-n{background:#dcfce7;color:#16a34a}
+.ccj-onb-card.done .ccj-onb-card-n svg{width:12px;height:12px}
+.ccj-onb-card.live .ccj-onb-card-n{background:#ede9fe;color:#6d28d9}
+.ccj-onb-card.live .ccj-onb-card-n .ccj-spin{border-top-color:#6d28d9}
+.ccj-onb-card-t{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--navy)}
+.ccj-onb-card-t span{display:block;font-size:11px;font-weight:500;color:var(--gray);margin-top:2px;line-height:1.5}
+.ccj-onb-card-b{padding:0 16px 15px;border-top:1px solid var(--border);margin-top:2px;padding-top:14px}
+
+/* ---- THE KYC CONSOLE ---------------------------------------------------------------------------
+   Eight phases, revealed in order. The two-column comparison is the heart of it: what the
+   document says on the left, what we already believed on the right, and a verdict per row. */
+.ccj-kyc-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.ccj-kyc-prov{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#6d28d9}
+.ccj-kyc-sid{font-size:11px;color:var(--gray);font-variant-numeric:tabular-nums}
+.ccj-kyc-ph{position:relative;padding:0 0 13px 20px;border-left:1.5px solid var(--border);margin-left:5px}
+.ccj-kyc-ph:last-child{border-left-color:transparent}
+.ccj-kyc-ph-h{display:flex;align-items:flex-start;gap:9px}
+.ccj-kyc-ph-ico{position:absolute;left:-9px;top:0;width:17px;height:17px;border-radius:50%;background:var(--card);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--gray)}
+.ccj-kyc-ph.done .ccj-kyc-ph-ico{background:#dcfce7;border-color:#bbf7d0;color:#16a34a}
+.ccj-kyc-ph-ico svg{width:9px;height:9px}
+.ccj-kyc-ph-t{font-size:12px;font-weight:600;color:var(--navy);line-height:1.35}
+.ccj-kyc-ph-t i{display:block;font-style:normal;font-size:10.5px;font-weight:400;color:var(--gray);margin-top:1px}
+/* NOT animated. The screen repaints on every beat of the check, which restarts any animation
+   on a repainted node — so an entry fade never completed and every revealed section sat
+   frozen part-way through it, permanently pale, for the whole time anyone was watching. */
+.ccj-kyc-ph-b{margin-top:9px}
+
+.ccj-kyc-rows{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.ccj-kyc-row,.ccj-kyc-cmp{display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px}
+.ccj-kyc-row:last-child,.ccj-kyc-cmp:last-child{border-bottom:none}
+.ccj-kyc-k{flex:0 0 118px;color:var(--gray)}
+.ccj-kyc-v{flex:1;min-width:0;color:var(--navy);font-weight:500;word-break:break-word}
+.ccj-kyc-doc-v{flex:0 0 34%;color:var(--navy);font-weight:700;font-variant-numeric:tabular-nums;word-break:break-word}
+.ccj-kyc-cmp-h{display:flex;gap:10px;padding:0 10px 5px;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray)}
+.ccj-kyc-cmp-h span:first-child{flex:0 0 128px}
+.ccj-kyc-cmp-h span:nth-child(2){flex:1}
+.ccj-kyc-cmp-h i{flex:0 0 18px}
+.ccj-kyc-vd{flex:0 0 16px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800}
+.ccj-kyc-vd.pass{background:#dcfce7;color:#16a34a}
+.ccj-kyc-vd.consider{background:#fef3c7;color:#b45309}
+.ccj-kyc-vd.fail{background:#fee2e2;color:#b91c1c}
+.ccj-kyc-vd.na{background:var(--ol);color:var(--gray)}
+
+/* The document, rendered as one. A row of extracted text does not tell a reviewer that a
+   passport was actually photographed. */
+.ccj-kyc-doc-card{background:linear-gradient(135deg,#1e293b,#334155);border-radius:9px;padding:11px 13px;color:#e2e8f0;max-width:400px}
+.ccj-kyc-doc-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.14);margin-bottom:9px}
+.ccj-kyc-doc-top span{font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:#94a3b8}
+.ccj-kyc-doc-top b{font-size:10px;font-weight:700;letter-spacing:1.4px;color:#e2e8f0}
+.ccj-kyc-doc-mid{display:flex;gap:12px}
+.ccj-kyc-doc-photo{flex-shrink:0;width:46px;height:58px;border-radius:5px;background:rgba(255,255,255,.10);display:flex;align-items:center;justify-content:center;color:#94a3b8}
+.ccj-kyc-doc-photo svg{width:26px;height:26px}
+.ccj-kyc-doc-fields{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}
+.ccj-kyc-doc-fields span{display:block;font-size:8px;letter-spacing:.4px;text-transform:uppercase;color:#94a3b8}
+.ccj-kyc-doc-fields b{display:block;font-size:11px;font-weight:600;color:#f1f5f9;word-break:break-word}
+.ccj-kyc-mrz{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.14);font-family:'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.6px;color:#94a3b8;word-break:break-all}
+.ccj-kyc-doc-note{font-size:10.5px;color:var(--gray);margin-top:7px}
+
+.ccj-kyc-faces{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.ccj-kyc-face{display:flex;flex-direction:column;align-items:center;gap:4px;width:58px;height:66px;border-radius:8px;border:1.5px solid var(--border);background:var(--light);color:var(--gray);justify-content:center}
+.ccj-kyc-face.live{border-color:#bbf7d0;background:#f0fdf4;color:#16a34a}
+.ccj-kyc-face svg{width:22px;height:22px}
+.ccj-kyc-face i{font-style:normal;font-size:8.5px;letter-spacing:.2px}
+.ccj-kyc-link{font-size:17px;color:#16a34a}
+
+.ccj-kyc-rtw{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0}
+.ccj-kyc-rtw.consider{background:#fffbeb;border-color:#fde68a}
+.ccj-kyc-rtw b{display:block;font-size:11.5px;font-weight:700;color:var(--navy);line-height:1.4}
+.ccj-kyc-rtw span{display:block;font-size:10.5px;color:var(--gray);line-height:1.55;margin-top:2px}
+
+.ccj-kyc-dec{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0}
+.ccj-kyc-dec.consider{background:#fffbeb;border-color:#fde68a}
+.ccj-kyc-dec.reject{background:#fef2f2;border-color:#fecaca}
+.ccj-kyc-score{flex-shrink:0;text-align:center;padding-right:14px;border-right:1px solid rgba(0,0,0,.09)}
+.ccj-kyc-score span{display:block;font-size:8.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray)}
+.ccj-kyc-score b{font-size:22px;font-weight:800;color:var(--navy);letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+.ccj-kyc-score i{font-style:normal;font-size:10px;color:var(--gray)}
+.ccj-kyc-dec-t{font-size:13px;font-weight:800;letter-spacing:1px;color:#15803d}
+.ccj-kyc-dec.consider .ccj-kyc-dec-t{color:#b45309}
+.ccj-kyc-dec.reject .ccj-kyc-dec-t{color:#b91c1c}
+.ccj-kyc-dec-s{font-size:11px;color:var(--gray);line-height:1.55;margin-top:3px}
+.ccj-onb-card-b .ccj-sim{margin-top:12px}
+
+/* ---- DOCUMENTS ---------------------------------------------------------------------------------- */
+.ccj-chk-h,.ccj-file-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--navy);margin-bottom:10px}
+.ccj-chk-h span,.ccj-file-h span{font-size:10.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--gray)}
+.ccj-chk{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ccj-chk-row{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border-bottom:1px solid var(--border)}
+.ccj-chk-row:last-child{border-bottom:none}
+.ccj-chk-row.waiting{opacity:.5}
+.ccj-chk-row.rejected{background:#fef6f6}
+.ccj-chk-st{flex-shrink:0;width:16px;height:16px;margin-top:1px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;background:var(--ol);color:var(--gray)}
+.ccj-chk-row.verified .ccj-chk-st{background:#dcfce7;color:#16a34a}
+.ccj-chk-row.rejected .ccj-chk-st{background:#fee2e2;color:#b91c1c}
+.ccj-chk-b{flex:1;min-width:0}
+.ccj-chk-l{font-size:11.5px;font-weight:600;color:var(--navy);line-height:1.4}
+.ccj-chk-opt{margin-left:7px;padding:1px 5px;border-radius:4px;background:var(--ol);font-size:8.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--gray)}
+.ccj-chk-w{font-size:10.5px;color:var(--gray);line-height:1.5;margin-top:1px}
+.ccj-chk-n{font-size:10.5px;color:#b91c1c;line-height:1.5;margin-top:3px;font-weight:600}
+.ccj-chk-row.verified .ccj-chk-n{color:#15803d}
+.ccj-chk-r{flex-shrink:0;font-size:10.5px;color:var(--gray);font-variant-numeric:tabular-nums;padding-top:1px}
+
+/* ---- FILINGS, BANK, PAYSLIP ---------------------------------------------------------------------- */
+.ccj-env.plain{margin:0;border:none;border-radius:0;padding:0;background:transparent}
+.ccj-file-out,.ccj-bank{border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-top:9px}
+.ccj-file-kv{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:8px 11px;border-bottom:1px solid var(--border);font-size:11px}
+.ccj-file-kv:last-child{border-bottom:none}
+.ccj-file-kv span{color:var(--gray);flex-shrink:0}
+.ccj-file-kv b{color:var(--navy);font-weight:600;text-align:right;word-break:break-word;font-variant-numeric:tabular-nums}
+.ccj-bank-n{font-size:10.5px;color:var(--gray);line-height:1.6;margin-top:9px}
+
+.ccj-slip{margin-top:11px;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ccj-slip-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 11px;background:var(--light);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--navy)}
+.ccj-slip-h span{font-size:10.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--gray)}
+.ccj-slip-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:8px 11px;border-bottom:1px solid var(--border)}
+.ccj-slip-row:last-child{border-bottom:none}
+.ccj-slip-row.total{background:#f6fdf9}
+.ccj-slip-k{font-size:11.5px;font-weight:600;color:var(--navy)}
+.ccj-slip-k span{display:block;font-size:10px;font-weight:400;color:var(--gray);margin-top:1px}
+.ccj-slip-v{font-size:12.5px;font-weight:600;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ccj-slip-row.total .ccj-slip-v{font-size:14px;font-weight:800;color:#15803d}
+
+.ccj-onb-next{max-width:760px;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;animation:ccjIn .3s ease both}
+.ccj-onb-next-t{font-size:12.5px;font-weight:600;color:#15803d}
+
+/* A document we could not accept, in the employee's thread. */
+.ccj-cbubble.reject{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
+
+@media(max-width:1160px){
+  .ccj-kyc-k{flex:0 0 92px}
+  .ccj-kyc-doc-v{flex:0 0 30%}
+  .ccj-kyc-doc-fields{grid-template-columns:1fr}
+}
+
+/* ---- STAGE 9: ACTIVE ----------------------------------------------------------------------------
+   Three screens on the same desk as the invoice and the contract, because two of the three ARE
+   documents — a certificate and a payslip — and the third is the record they produced.
+
+   All three scroll in their own column, like every other screen in this journey. The certificate
+   and the payslip are white paper on the grey desk; the register between them is a stack of cards,
+   because a payroll run is not one document, it is a working file that becomes one.
+
+   Nothing on these screens carries `animation:ccjIn`. Both tickers repaint the whole screen on
+   every beat, and a repaint restarts an animation — so an entry fade would never finish and the
+   content would sit permanently pale. Same rule the KYC console learnt. */
+.ccj-rdy-wrap,.ccj-pr-wrap,.ccj-act-wrap{flex:1;min-height:0;overflow-y:auto;padding:20px;background:#eef1f5;scrollbar-width:thin}
+.ccj-rdy-wrap::-webkit-scrollbar,.ccj-pr-wrap::-webkit-scrollbar,.ccj-act-wrap::-webkit-scrollbar{width:6px}
+.ccj-rdy-wrap::-webkit-scrollbar-thumb,.ccj-pr-wrap::-webkit-scrollbar-thumb,.ccj-act-wrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.14);border-radius:99px}
+
+/* -- The certificate. Paper, and it earns the stamp only once every control has been derived. -- */
+.ccj-rdy-cert{position:relative;max-width:760px;margin:0 auto;background:#fff;border:1px solid #dbe1e8;border-radius:4px;box-shadow:0 4px 22px rgba(15,23,42,.10);padding:30px 34px 34px}
+.ccj-rdy-cert.ok{border-color:#bbf7d0}
+.ccj-rdy-cert.bad{border-color:#fecaca}
+/* In the flow, not over it. See the note in buildCCJRdyHTML: floated over the header it landed on
+   the worker's own details and across the rule under them. */
+.ccj-rdy-stamp{display:inline-block;margin-top:11px;padding:5px 13px;border:2.5px solid #16a34a;border-radius:4px;color:#16a34a;font-size:11.5px;font-weight:800;letter-spacing:2.2px;transform:rotate(-4deg);transform-origin:left center;opacity:.92;white-space:nowrap}
+.ccj-rdy-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:15px;border-bottom:2px solid var(--navy);margin-bottom:15px}
+.ccj-rdy-kind{font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--navy)}
+.ccj-rdy-no{font-size:14px;font-weight:700;color:var(--navy);margin-top:3px;font-variant-numeric:tabular-nums}
+.ccj-rdy-who{text-align:right;min-width:0}
+.ccj-rdy-who b{display:block;font-size:14px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
+.ccj-rdy-who span{display:block;font-size:11px;color:var(--gray);line-height:1.6;margin-top:1px}
+.ccj-rdy-bar{height:4px;border-radius:99px;background:var(--ol);overflow:hidden}
+.ccj-rdy-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#15803d,#22c55e);transition:width .4s cubic-bezier(.4,0,.2,1)}
+.ccj-rdy-count{font-size:11px;color:var(--gray);margin:8px 0 18px}
+.ccj-rdy-count b{color:var(--navy);font-weight:700;font-variant-numeric:tabular-nums}
+
+.ccj-rdy-grp{margin-bottom:16px}
+.ccj-rdy-grp-h{display:flex;align-items:flex-start;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:2px}
+.ccj-rdy-grp-n{flex-shrink:0;width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.ccj-rdy-grp-t{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--navy)}
+.ccj-rdy-grp-t i{display:block;font-style:normal;font-size:10.5px;font-weight:400;color:var(--gray);line-height:1.55;margin-top:2px}
+
+.ccj-rdy-row{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px solid var(--border)}
+.ccj-rdy-row:last-child{border-bottom:none}
+.ccj-rdy-v{flex:0 0 17px;width:17px;height:17px;margin-top:1px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800}
+.ccj-rdy-v.pass{background:#dcfce7;color:#16a34a}
+.ccj-rdy-v.consider{background:#fef3c7;color:#b45309}
+.ccj-rdy-v.fail{background:#fee2e2;color:#b91c1c}
+.ccj-rdy-v.na{background:var(--ol);color:var(--gray)}
+.ccj-rdy-b{flex:1;min-width:0}
+.ccj-rdy-l{font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.4}
+.ccj-rdy-row.fail .ccj-rdy-l{color:#b91c1c}
+/* What the control PROVES, in the serif the documents in this journey use for their own voice —
+   it is the certificate speaking, not the interface labelling a field. */
+.ccj-rdy-p{font-size:11px;color:#475569;line-height:1.6;margin-top:2px;font-family:Georgia,'Times New Roman',serif}
+.ccj-rdy-d{font-size:11px;color:var(--gray);line-height:1.6;margin-top:4px}
+.ccj-rdy-src{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-top:6px;font-size:10px}
+.ccj-rdy-src span{padding:2px 7px;border-radius:4px;background:var(--light);color:var(--gray);font-weight:600;letter-spacing:.2px}
+.ccj-rdy-src b{color:var(--navy);font-weight:700;font-variant-numeric:tabular-nums;word-break:break-word}
+.ccj-rdy-src i{font-style:normal;color:#94a3b8;font-variant-numeric:tabular-nums}
+.ccj-rdy-foot{margin-top:18px;padding:12px 14px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;font-size:11.5px;color:#14532d;line-height:1.7}
+.ccj-rdy-foot b{font-weight:700}
+.ccj-rdy-foot.bad{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
+
+/* -- The register. Cards, because the run is assembled rather than issued. -- */
+.ccj-pr-hero{max-width:760px;margin:0 auto 14px;display:flex;align-items:center;gap:16px;background:var(--card);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:12px;padding:14px 18px}
+.ccj-pr-hero.ok{border-left-color:#16a34a;background:#f6fdf9}
+.ccj-pr-hero.held{border-left-color:#d97706;background:#fffbf3}
+.ccj-pr-hero-b{flex:1;min-width:0}
+.ccj-pr-hero-t{font-size:15px;font-weight:700;color:var(--navy);letter-spacing:-.2px;font-variant-numeric:tabular-nums}
+.ccj-pr-hero-s{font-size:11.5px;color:var(--gray);margin-top:2px}
+.ccj-pr-hero-f{flex-shrink:0;text-align:right}
+.ccj-pr-hero-f span{display:block;font-size:19px;font-weight:800;color:var(--navy);letter-spacing:-.4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ccj-pr-hero.ok .ccj-pr-hero-f span{color:#15803d}
+.ccj-pr-hero-f i{display:block;font-style:normal;font-size:10px;color:var(--gray);margin-top:1px}
+
+.ccj-pr-card{max-width:760px;margin:0 auto 12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px 15px}
+.ccj-pr-card-t{font-size:10px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--navy);padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:11px}
+
+.ccj-pr-ph{position:relative;display:flex;align-items:flex-start;gap:9px;padding:0 0 11px 20px;border-left:1.5px solid var(--border);margin-left:5px}
+.ccj-pr-ph:last-child{border-left-color:transparent;padding-bottom:0}
+.ccj-pr-ph-i{position:absolute;left:-9px;top:0;width:17px;height:17px;border-radius:50%;background:var(--card);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--gray)}
+.ccj-pr-ph.done .ccj-pr-ph-i{background:#dcfce7;border-color:#bbf7d0;color:#16a34a}
+.ccj-pr-ph-i svg{width:9px;height:9px}
+.ccj-pr-ph-t{font-size:12px;font-weight:600;color:var(--navy);line-height:1.35}
+.ccj-pr-ph-t i{display:block;font-style:normal;font-size:10.5px;font-weight:400;color:var(--gray);margin-top:1px}
+
+.ccj-pr-kvs{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
+.ccj-pr-kv{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11.5px}
+.ccj-pr-kv span{color:var(--gray);flex-shrink:0}
+.ccj-pr-kv b{color:var(--navy);font-weight:600;text-align:right;word-break:break-word;font-variant-numeric:tabular-nums}
+
+/* Money is compared down a column here more than anywhere else in the journey, so every numeric
+   cell is tabular and the amount column is pinned right with a real gutter in front of it. */
+.ccj-pr-tbl{width:100%;border-collapse:collapse;margin-bottom:12px}
+.ccj-pr-tbl:last-child{margin-bottom:0}
+.ccj-pr-tbl th{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--gray);text-align:right;padding:0 0 7px;border-bottom:1px solid var(--navy);white-space:nowrap}
+.ccj-pr-tbl th:first-child{text-align:left}
+.ccj-pr-tbl td{padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--navy);text-align:right;vertical-align:top;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ccj-pr-tbl td:first-child{text-align:left;white-space:normal}
+.ccj-pr-tbl th+th,.ccj-pr-tbl td+td{padding-left:26px}
+.ccj-pr-tbl th:last-child,.ccj-pr-tbl td:last-child{min-width:104px}
+.ccj-pr-tbl td b{display:block;font-size:12px;font-weight:700;color:var(--navy)}
+.ccj-pr-tbl td span{display:block;font-size:10.5px;font-weight:400;color:var(--gray);line-height:1.55;margin-top:2px}
+.ccj-pr-neg{color:#b45309}
+.ccj-pr-sum td{border-top:1.5px solid var(--navy);border-bottom:none;font-weight:700}
+.ccj-pr-sum.net td{color:#15803d}
+.ccj-pr-sum.net td b{color:#15803d;font-size:13.5px}
+
+.ccj-pr-rec{margin:2px 0 12px;padding:9px 11px;border-radius:7px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#78350f;line-height:1.65}
+.ccj-pr-rec.ok{background:var(--light);border-color:var(--border);color:var(--gray)}
+.ccj-pr-rec b{font-weight:700;font-variant-numeric:tabular-nums}
+
+.ccj-pr-stat{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ccj-pr-stat-r{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.ccj-pr-stat-r:last-child{border-bottom:none}
+.ccj-pr-stat-r b{display:block;font-size:12px;font-weight:700;color:var(--navy)}
+.ccj-pr-stat-r span{display:block;font-size:10.5px;color:var(--gray);line-height:1.5;margin-top:1px}
+.ccj-pr-stat-v{flex-shrink:0;text-align:right;font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ccj-pr-stat-v i{display:block;font-style:normal;font-size:10px;font-weight:500;color:var(--gray);margin-top:1px}
+.ccj-pr-note{font-size:10.5px;color:var(--gray);line-height:1.65;margin-top:10px}
+
+.ccj-pr-ctrl{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ccj-pr-ctrl-r{display:flex;align-items:center;gap:10px;padding:9px 11px;border-bottom:1px solid var(--border);font-size:11.5px}
+.ccj-pr-ctrl-r:last-child{border-bottom:none}
+.ccj-pr-ctrl-r.no{background:#fef6f6}
+.ccj-pr-ctrl-l{flex:1;min-width:0;color:var(--navy)}
+.ccj-pr-ctrl-r b{flex-shrink:0;color:var(--navy);font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+
+/* The release. It is the only moment in the journey where money leaves us for a person, so it
+   gets the weight the countersignature and the deposit release get. */
+.ccj-pr-rel{max-width:760px;margin:0 auto 12px;display:flex;align-items:flex-start;gap:13px;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px}
+.ccj-pr-rel.held{background:#fffbeb;border-color:#fde68a}
+.ccj-pr-rel-i{flex-shrink:0;width:32px;height:32px;border-radius:10px;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800}
+.ccj-pr-rel.held .ccj-pr-rel-i{background:#fef3c7;color:#b45309}
+.ccj-pr-rel-i svg{width:16px;height:16px}
+.ccj-pr-rel-t{font-size:12.5px;font-weight:700;color:#15803d}
+.ccj-pr-rel.held .ccj-pr-rel-t{color:#b45309}
+.ccj-pr-rel-s{font-size:11px;color:var(--gray);line-height:1.6;margin-top:2px}
+.ccj-pr-next{max-width:760px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px}
+.ccj-pr-next-t{font-size:12.5px;font-weight:600;color:var(--navy)}
+
+/* -- The payslip. `ccj-ps-*`: `.ccj-slip` belongs to stage 8's indicative one. -- */
+.ccj-ps{max-width:760px;margin:0 auto 12px;background:#fff;border:1px solid #dbe1e8;border-radius:4px;box-shadow:0 4px 22px rgba(15,23,42,.10);padding:26px 30px 28px}
+.ccj-ps-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding-bottom:14px;border-bottom:2px solid var(--navy);margin-bottom:14px}
+.ccj-ps-brand{font-size:15px;font-weight:800;color:var(--navy);letter-spacing:-.3px;line-height:1.3}
+.ccj-ps-addr{font-size:10.5px;color:var(--gray);margin-top:3px}
+.ccj-ps-ref{text-align:right;flex-shrink:0}
+.ccj-ps-kind{font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--navy)}
+.ccj-ps-no{font-size:13px;font-weight:700;color:var(--navy);margin-top:2px;font-variant-numeric:tabular-nums}
+.ccj-ps-per{font-size:11px;color:var(--gray);margin-top:1px}
+.ccj-ps-emp{display:grid;grid-template-columns:repeat(3,1fr);gap:9px 20px;padding-bottom:15px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.ccj-ps-emp span{display:block;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray)}
+.ccj-ps-emp b{display:block;font-size:11.5px;font-weight:600;color:var(--navy);margin-top:2px;word-break:break-word;font-variant-numeric:tabular-nums}
+.ccj-ps-sec{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--gray);margin-top:14px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.ccj-ps-l{display:flex;align-items:baseline;justify-content:space-between;gap:18px;padding:9px 0;border-bottom:1px solid var(--border)}
+.ccj-ps-l b{display:block;font-size:12px;font-weight:600;color:var(--navy)}
+.ccj-ps-l span{display:block;font-size:10.5px;color:var(--gray);line-height:1.5;margin-top:2px}
+.ccj-ps-l i{flex-shrink:0;font-style:normal;font-size:12.5px;font-weight:600;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ccj-ps-l.sum{border-top:1.5px solid var(--navy);border-bottom:none}
+.ccj-ps-l.sum i{font-weight:800}
+.ccj-ps-l.net{border-top:1.5px solid var(--navy);border-bottom:none;margin-top:2px;padding-top:11px}
+.ccj-ps-l.net b{font-size:13px;font-weight:800}
+.ccj-ps-l.net i{font-size:17px;font-weight:800;color:#15803d;letter-spacing:-.3px}
+.ccj-ps-foot{margin-top:16px;padding-top:12px;border-top:1px dashed var(--border);font-size:10.5px;color:var(--gray);line-height:1.75;font-family:Georgia,'Times New Roman',serif}
+
+/* -- The record. The end of the journey, and the only screen that looks back across all nine. -- */
+.ccj-act-hero{max-width:760px;margin:0 auto 14px;display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:12px;padding:15px 18px}
+.ccj-act-hero.ok{border-left-color:#16a34a;background:#f6fdf9}
+.ccj-act-hero-av{flex-shrink:0;width:42px;height:42px;border-radius:12px;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.ccj-act-hero-b{flex:1;min-width:0}
+.ccj-act-hero-t{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
+.ccj-act-dot{width:8px;height:8px;border-radius:50%;background:#16a34a;flex-shrink:0;box-shadow:0 0 0 3px rgba(22,163,74,.16)}
+.ccj-act-hero-s{font-size:11.5px;color:var(--gray);line-height:1.6;margin-top:3px}
+
+.ccj-act-card{max-width:760px;margin:0 auto 12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px 15px}
+.ccj-act-card-t{font-size:10px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--navy);padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.ccj-act-kvs{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
+.ccj-act-kv{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11.5px}
+.ccj-act-kv span{color:var(--gray);flex-shrink:0}
+.ccj-act-kv b{color:var(--navy);font-weight:600;text-align:right;word-break:break-word;font-variant-numeric:tabular-nums}
+
+.ccj-act-trail{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ccj-act-tr{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.ccj-act-tr:last-child{border-bottom:none}
+.ccj-act-tn{flex-shrink:0;width:20px;height:20px;margin-top:1px;border-radius:50%;background:var(--ol);color:var(--gray);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.ccj-act-tr.done .ccj-act-tn{background:#dcfce7;color:#16a34a}
+.ccj-act-tn svg{width:10px;height:10px}
+.ccj-act-tb{flex:1;min-width:0}
+.ccj-act-tl{font-size:12px;font-weight:600;color:var(--navy);line-height:1.4}
+.ccj-act-to{font-size:10.5px;color:var(--gray);line-height:1.5;margin-top:1px}
+.ccj-act-tm{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:44%}
+.ccj-act-town{padding:2px 7px;border-radius:4px;background:var(--light);color:var(--gray);font-size:9.5px;font-weight:700;letter-spacing:.2px;white-space:nowrap}
+/* A stage somebody actually decided reads differently from one the machine closed. That is the
+   distinction the whole journey turns on and it should survive into the record. */
+.ccj-act-town.human{background:#ede9fe;color:#6d28d9}
+.ccj-act-tart{font-size:10px;color:var(--gray);text-align:right;line-height:1.4;word-break:break-word}
+.ccj-act-tart b{color:var(--navy);font-weight:700;font-variant-numeric:tabular-nums}
+
+.ccj-act-done{max-width:760px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 18px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px}
+.ccj-act-done-t{font-size:13px;font-weight:700;color:#15803d}
+.ccj-act-done-s{font-size:11.5px;color:var(--gray);margin-top:2px}
+
+@media(max-width:1160px){
+  .ccj-rdy-cert{padding:22px 20px 26px}
+  .ccj-rdy-stamp{position:static;display:inline-block;transform:none;margin-bottom:10px}
+  .ccj-rdy-head{flex-direction:column;gap:10px}
+  .ccj-rdy-who{text-align:left}
+  .ccj-pr-kvs,.ccj-act-kvs,.ccj-ps-emp{grid-template-columns:1fr}
+  .ccj-ps{padding:20px 18px 22px}
+  .ccj-act-tm{max-width:34%}
+}
+
+/* ---- SUCCESS SCREENS — employee created, proposal created ------------------------------------- */
+.ccj-sc{flex:1;min-height:0;overflow-y:auto;padding:36px 30px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.ccj-sc-ico{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:16px;flex-shrink:0}
+.ccj-sc-ico.ok{background:#dcfce7;color:#16a34a}
+.ccj-sc-ico svg{width:24px;height:24px}
+.ccj-sc-title{font-size:19px;font-weight:700;color:var(--navy);margin-bottom:7px}
+.ccj-sc-text{font-size:12.5px;color:var(--gray);line-height:1.6;max-width:400px;margin-bottom:22px}
+.ccj-sc-grid{width:100%;max-width:440px;border:1px solid var(--border);border-radius:11px;overflow:hidden;margin-bottom:22px;text-align:left}
+.ccj-sc-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.ccj-sc-row:last-child{border-bottom:none}
+.ccj-sc-row span{font-size:11.5px;color:var(--gray);flex-shrink:0}
+.ccj-sc-row b{font-size:12.5px;font-weight:600;color:var(--navy);text-align:right;word-break:break-word}
+.ccj-sc-note{font-size:11.5px;color:var(--gray);line-height:1.6;max-width:420px}
+
+/* ---- EVIDENCE DRAWER — overlays the work area, never reflows the run -------------------------- */
+.ccj-dw-scrim{position:absolute;inset:0;background:rgba(15,23,42,.14);z-index:40;animation:fadeIn .18s ease}
+.ccj-dw{position:absolute;top:0;right:calc(25% + 12px);bottom:0;width:460px;max-width:60%;z-index:41;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 40px rgba(15,23,42,.16);overflow:hidden;animation:ccjSlide .22s cubic-bezier(.4,0,.2,1)}
+@keyframes ccjSlide{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+.ccj-dw-head{flex-shrink:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.ccj-dw-label{font-size:14px;font-weight:700;color:var(--navy)}
+.ccj-dw-sub{font-size:11px;color:var(--gray);margin-top:2px}
+.ccj-dw-x{width:26px;height:26px;flex-shrink:0;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--gray);font-size:12px;cursor:pointer;line-height:1;transition:.15s}
+.ccj-dw-x:hover{border-color:var(--navy);color:var(--navy)}
+.ccj-dw-body{flex:1;min-height:0;overflow-y:auto;padding:15px 16px 20px;scrollbar-width:thin}
+.ccj-dw-body::-webkit-scrollbar{width:4px}
+.ccj-dw-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+.ccj-dw-sec{margin-bottom:18px}
+.ccj-dw-sec-t{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray);margin-bottom:8px}
+.ccj-dw-call{padding:9px 11px;border-radius:8px;background:var(--navy);color:#e2e8f0;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:11px;line-height:1.5;word-break:break-all;margin-bottom:7px}
+.ccj-dw-kv{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--gray)}
+.ccj-dw-kv b{color:var(--navy);font-weight:600}
+.ccj-dw-rows{border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ccj-dw-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:9px 11px;border-bottom:1px solid var(--border)}
+.ccj-dw-row:last-child{border-bottom:none}
+.ccj-dw-row.inactive{opacity:.45}
+.ccj-dw-row-k{font-size:11.5px;font-weight:600;color:var(--navy);min-width:0}
+.ccj-dw-row-k span{display:block;font-size:10px;font-weight:400;color:var(--gray);margin-top:1px}
+.ccj-dw-row-v{font-size:11.5px;color:var(--navy);text-align:right;flex-shrink:0;max-width:52%;word-break:break-word}
+.ccj-dw-checks{display:flex;flex-direction:column;gap:8px}
+.ccj-dw-check{position:relative;padding:10px 11px;border:1px solid var(--border);border-radius:9px;background:var(--light)}
+.ccj-dw-check.pass{border-left:3px solid #16a34a}
+.ccj-dw-check.fail{border-left:3px solid #dc2626}
+.ccj-dw-check-rule{font-size:11.5px;font-weight:600;color:var(--navy);line-height:1.5;margin-bottom:7px;padding-right:44px}
+.ccj-dw-check-cmp{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0}
+.ccj-dw-check-cmp span{color:var(--gray);flex-shrink:0}
+.ccj-dw-check-cmp b{color:var(--navy);font-weight:600;text-align:right;word-break:break-word}
+.ccj-dw-verdict{position:absolute;top:10px;right:11px;padding:2px 6px;border-radius:5px;font-size:8.5px;font-weight:700;letter-spacing:.4px}
+.ccj-dw-verdict.pass{background:#dcfce7;color:#16a34a}
+.ccj-dw-verdict.fail{background:#fee2e2;color:#dc2626}
+.ccj-dw-note{padding:11px 12px;border-radius:9px;background:#faf5ff;border:1px solid #e9d5ff;font-size:11.5px;line-height:1.6;color:#581c87}
+.ccj-dw-fail{margin-top:9px;padding:11px 12px;border-radius:9px;background:#fef2f2;border:1px solid #fecaca;font-size:11.5px;line-height:1.6;color:#7f1d1d}
+.ccj-dw-fail b{display:block;font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px}
+
+/* ---- PLACEHOLDER — stages not yet designed ------------------------------------------------------ */
+.ccj-placeholder{margin:auto;padding:40px 32px;text-align:center;max-width:460px}
+.ccj-placeholder-tag{display:inline-block;padding:3px 9px;border-radius:6px;background:var(--ol);font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray);margin-bottom:11px}
+.ccj-placeholder-title{font-size:18px;font-weight:700;color:var(--navy);margin-bottom:7px}
+.ccj-placeholder-note{font-size:12.5px;color:var(--gray);line-height:1.6}
+
+/* ---- NARROWER VIEWPORTS -------------------------------------------------------------------------
+   The panel is the last thing to go, not the first. On a laptop the chat column narrows and the
+   form drops to one field per row; only below tablet width does the panel move above the work
+   area, where it keeps its progress bar and scrolls. */
+@media(max-width:1380px){
+  .ccj-chat-col{flex:0 0 268px}
+  .ccj-fgrid{gap:12px}
+  .ccj-step{width:62px}
+  .ccj-step-label{max-width:62px}
+}
+@media(max-width:1160px){
+  .ccj-chat-col{flex:0 0 240px}
+  .ccj-fgrid{grid-template-columns:1fr}
+  .ccj-fgroup.full{grid-column:auto}
+  .ccj-dw{width:auto;left:12px;right:calc(25% + 12px);max-width:none}
+}
+@media(max-width:980px){
+  .ccj-body{flex-direction:column}
+  .ccj-panel{flex:0 0 auto;max-width:none;max-height:40%}
+  .ccj-work{flex-direction:column}
+  .ccj-chat-col{flex:0 0 200px}
+  .ccj-dw{left:0;right:0}
+}
+
+/* The agreement, as it appears in the client thread. */
+.ccj-cbubble.doc{background:var(--card);border-color:var(--border);color:var(--navy)}
+.ccj-cmsg.us .ccj-cbubble.doc{background:var(--card);border-color:var(--border);color:var(--navy)}
+.ccj-cdoc{display:flex;align-items:center;gap:9px;padding-bottom:9px;margin-bottom:9px;border-bottom:1px solid var(--border)}
+.ccj-cdoc svg{width:20px;height:20px;flex-shrink:0;color:var(--gray)}
+.ccj-cdoc b{display:block;font-size:12.5px;font-weight:700;color:var(--navy)}
+.ccj-cdoc i{display:block;font-size:10.5px;font-style:normal;color:var(--gray);margin-top:1px}
+
+/* The client question — chips for who we already work with, composer for anyone new. */
+.ccj-ask{background:var(--card)}
+.ccj-ask-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}
+.ccj-ask-chip{padding:6px 11px;border:1px solid var(--border);border-radius:20px;background:var(--light);font-size:11px;font-weight:600;color:var(--navy);font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-ask-chip:hover{border-color:var(--navy);background:var(--card)}
+.ccj-ask-note{font-size:10.5px;color:#94a3b8;line-height:1.5}
+
+.ccj-tl-empty{font-size:12px;color:#94a3b8;padding:4px 0 8px}
+
+.ccj-msa-foot{max-width:720px;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;animation:ccjIn .3s ease both}
+.ccj-msa-done{font-size:12.5px;font-weight:600;color:#15803d}

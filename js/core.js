@@ -28,15 +28,15 @@ let aiH2rAnimatedStage=-1,aiH2rData={},aiH2rOffboardStep=-1;
 // -- Agent Mode: chat-driven journey run (typed prompt -> live journey execution in form-col) --
 let pendingAgentAttachment=null,agentUploadTargetId=null,agentRunData=null;
 const enterprisePersonas=[
-  {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@dhihyperlocal.com',focus:'Client master data, deals, proposals, client acceptance, and commercial exceptions.',journeys:['user-master-data','contract-creation'],steps:['J0-S1','J0-S2','J0-S3','J1-S1','J1-S3','J1-S5'],approvals:0,owned:6,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
-  {id:'deal-manager',name:'Karan Mehta',label:'Deal Manager',department:'Sales / Deal Desk',function:'Approver',initials:'KM',email:'karan.mehta@dhihyperlocal.com',focus:'Internal proposal approvals and sales escalations.',journeys:['contract-creation'],steps:['J1-S4'],approvals:1,owned:1,kpis:[['Approval Queue','2'],['SLA Breaches','0'],['Rework Loops','1'],['Team Tasks','9']]},
-  {id:'compliance-officer',name:'Kavya Iyer',label:'Compliance Officer',department:'Compliance',function:'Executor + Consultant',initials:'KI',email:'kavya.iyer@dhihyperlocal.com',focus:'Country compliance checks, statutory rules, and compliance exceptions.',journeys:['contract-creation','h2r-lifecycle'],steps:['J1-S2','J3-S4'],approvals:0,owned:2,kpis:[['Country Checks','14'],['Missing Configs','1'],['Payroll Blocks','2'],['Resolved Today','6']]},
-  {id:'legal-contracts-manager',name:'Devendra Rao',label:'Legal / Contracts Manager',department:'Legal / Contracts',function:'Executor',initials:'DR',email:'devendra.rao@dhihyperlocal.com',focus:'Contract generation, signature tracking, and legal document corrections.',journeys:['contract-creation'],steps:['J1-S6'],approvals:0,owned:1,kpis:[['Contracts Sent','6'],['Signature Pending','4'],['Bounced Requests','1'],['Templates Used','3']]},
-  {id:'ops-manager',name:'Sunita Kulkarni',label:'Ops Manager',department:'Operations',function:'Approver',initials:'SK',email:'sunita.kulkarni@dhihyperlocal.com',focus:'Signed-contract verification and operational readiness approval.',journeys:['contract-creation'],steps:['J1-S7'],approvals:1,owned:1,kpis:[['Contract Reviews','3'],['Discrepancies','1'],['Ready for HR','5'],['SLA Risk','0']]},
-  {id:'hr',name:'Priyanka Bhatt',label:'HR',department:'HR',function:'Executor',initials:'PB',email:'priyanka.bhatt@dhihyperlocal.com',focus:'Onboarding, payroll runs, benefits, attendance capture, and employee lifecycle execution.',journeys:['contract-creation','payroll-creation','h2r-lifecycle'],steps:['J1-S8','J1-S9','J2-S1','J2-S2','J2-S3','J2-S5','J2-S7','J2-S8','J3-S1','J3-S2','J3-S3','J3-S5','J3-S6','J3-S7','J3-S9','J3-S10','J3-S11','J3-S12'],approvals:0,owned:18,kpis:[['Onboarding Pending','7'],['Payroll Runs','4'],['Docs to Verify','12'],['Exceptions','3']]},
-  {id:'hr-manager',name:'Pallavi Parate',label:'HR Manager',department:'HR',function:'Approver + Escalation Owner',initials:'PP',email:'pallavi.parate@dhihyperlocal.com',focus:'HR approvals, policy deviations, role changes, salary revisions, and HR escalations.',journeys:['h2r-lifecycle','payroll-creation'],steps:['J3-S8','Sub-J A4','Sub-J C4'],approvals:3,owned:3,kpis:[['Approvals','3'],['Escalations','4'],['Deviation Reviews','2'],['SLA Breaches','1']]},
-  {id:'it-systems-admin',name:'Rohit Menon',label:'IT / Systems Admin',department:'IT / Systems Admin',function:'Executor',initials:'RM',email:'rohit.menon@dhihyperlocal.com',focus:'Access provisioning, revocation, integrations, and system-account exceptions.',journeys:['h2r-lifecycle'],steps:['J3-S3','J3-S10'],approvals:0,owned:2,kpis:[['Access Requests','9'],['Revocations','2'],['Provisioning SLA','96%'],['Blocked','1']]},
-  {id:'finance-approver',name:'Meera Iyer',label:'Finance Approver',department:'Finance',function:'Approver',initials:'MI',email:'meera.iyer@dhihyperlocal.com',focus:'Payroll calculation approval, disbursement authorization, final settlements, and financial controls.',journeys:['payroll-creation','h2r-lifecycle'],steps:['J2-S4','J2-S6','J3-S12','Sub-J A4'],approvals:4,owned:4,kpis:[['Payroll Approvals','2'],['Disbursements','3'],['Held Amount','INR 1.8L'],['Rate Exceptions','1']]}
+  {id:'account-manager',name:'Arjun Vaidya',label:'Account Manager',department:'Sales / Deal Desk',function:'Executor',initials:'AV',email:'arjun.vaidya@adt.com',focus:'Client master data, deals, proposals, client acceptance, and commercial exceptions.',journeys:['user-master-data','contract-creation'],steps:['J0-S1','J0-S2','J0-S3','J1-S1','J1-S3','J1-S5'],approvals:0,owned:6,kpis:[['Open Deals','8'],['Proposal Drafts','3'],['Client Responses','5'],['Exceptions','1']]},
+  {id:'deal-manager',name:'Karan Mehta',label:'Deal Manager',department:'Sales / Deal Desk',function:'Approver',initials:'KM',email:'karan.mehta@adt.com',focus:'Internal proposal approvals and sales escalations.',journeys:['contract-creation'],steps:['J1-S4'],approvals:1,owned:1,kpis:[['Approval Queue','2'],['SLA Breaches','0'],['Rework Loops','1'],['Team Tasks','9']]},
+  {id:'compliance-officer',name:'Kavya Iyer',label:'Compliance Officer',department:'Compliance',function:'Executor + Consultant',initials:'KI',email:'kavya.iyer@adt.com',focus:'Country compliance checks, statutory rules, and compliance exceptions.',journeys:['contract-creation','h2r-lifecycle'],steps:['J1-S2','J3-S4'],approvals:0,owned:2,kpis:[['Country Checks','14'],['Missing Configs','1'],['Payroll Blocks','2'],['Resolved Today','6']]},
+  {id:'legal-contracts-manager',name:'Devendra Rao',label:'Legal / Contracts Manager',department:'Legal / Contracts',function:'Executor',initials:'DR',email:'devendra.rao@adt.com',focus:'Contract generation, signature tracking, and legal document corrections.',journeys:['contract-creation'],steps:['J1-S6'],approvals:0,owned:1,kpis:[['Contracts Sent','6'],['Signature Pending','4'],['Bounced Requests','1'],['Templates Used','3']]},
+  {id:'ops-manager',name:'Sunita Kulkarni',label:'Ops Manager',department:'Operations',function:'Approver',initials:'SK',email:'sunita.kulkarni@adt.com',focus:'Signed-contract verification and operational readiness approval.',journeys:['contract-creation'],steps:['J1-S7'],approvals:1,owned:1,kpis:[['Contract Reviews','3'],['Discrepancies','1'],['Ready for HR','5'],['SLA Risk','0']]},
+  {id:'hr',name:'Priyanka Bhatt',label:'HR',department:'HR',function:'Executor',initials:'PB',email:'priyanka.bhatt@adt.com',focus:'Onboarding, payroll runs, benefits, attendance capture, and employee lifecycle execution.',journeys:['contract-creation','payroll-creation','h2r-lifecycle'],steps:['J1-S8','J1-S9','J2-S1','J2-S2','J2-S3','J2-S5','J2-S7','J2-S8','J3-S1','J3-S2','J3-S3','J3-S5','J3-S6','J3-S7','J3-S9','J3-S10','J3-S11','J3-S12'],approvals:0,owned:18,kpis:[['Onboarding Pending','7'],['Payroll Runs','4'],['Docs to Verify','12'],['Exceptions','3']]},
+  {id:'hr-manager',name:'Pallavi Parate',label:'HR Manager',department:'HR',function:'Approver + Escalation Owner',initials:'PP',email:'pallavi.parate@adt.com',focus:'HR approvals, policy deviations, role changes, salary revisions, and HR escalations.',journeys:['h2r-lifecycle','payroll-creation'],steps:['J3-S8','Sub-J A4','Sub-J C4'],approvals:3,owned:3,kpis:[['Approvals','3'],['Escalations','4'],['Deviation Reviews','2'],['SLA Breaches','1']]},
+  {id:'it-systems-admin',name:'Rohit Menon',label:'IT / Systems Admin',department:'IT / Systems Admin',function:'Executor',initials:'RM',email:'rohit.menon@adt.com',focus:'Access provisioning, revocation, integrations, and system-account exceptions.',journeys:['h2r-lifecycle'],steps:['J3-S3','J3-S10'],approvals:0,owned:2,kpis:[['Access Requests','9'],['Revocations','2'],['Provisioning SLA','96%'],['Blocked','1']]},
+  {id:'finance-approver',name:'Meera Iyer',label:'Finance Approver',department:'Finance',function:'Approver',initials:'MI',email:'meera.iyer@adt.com',focus:'Payroll calculation approval, disbursement authorization, final settlements, and financial controls.',journeys:['payroll-creation','h2r-lifecycle'],steps:['J2-S4','J2-S6','J3-S12','Sub-J A4'],approvals:4,owned:4,kpis:[['Payroll Approvals','2'],['Disbursements','3'],['Held Amount','INR 1.8L'],['Rate Exceptions','1']]}
 ];
 function getActivePersona(){return enterprisePersonas.find(function(p){return p.id===activePersonaId;})||enterprisePersonas[0];}
 function personaByLabel(label){return enterprisePersonas.find(function(p){return p.label===label;});}
@@ -235,6 +235,343 @@ const amSubStatuses={
     {label:'Active',owner:'Payroll Ops',auto:true,autoNote:'after first run clears'}
   ]
 };
+
+/* == EVIDENCE FOR EACH SUB-STATUS ========================================================
+   amSubStatuses says WHAT each step is and WHO owns it. This says what the machine actually
+   did: which system it reached, what came back, which rule it checked, the verdict, and what
+   it wrote to the record.
+
+   It is a SEPARATE map keyed '<stageId>/<label>', never extra keys on amSubStatuses — the
+   pipeline board, the deal drawer, the Workflow tab and the derived log all read those
+   objects, and none of them should have to carry presentation data. The label is the key
+   because the label is already a sub-step's identity everywhere else in the app.
+
+   call / fetched / checks / captured may each be a function of ctx, so figures read live from
+   the contract being built rather than being frozen at authoring time.
+
+   WHAT IS REAL AND WHAT IS AUTHORED. The rule rows, rates, statuses, country data, agent
+   names and people are all real values from elsewhere in this app — if a step names the
+   Netherlands minimum wage it says EUR 14.71, because that is what Compliance Hub -> Rates &
+   Rules says two clicks away, and a demo that shows two different numbers for one fact is
+   worse than one that shows fewer. What IS authored is the shape of the work: endpoints,
+   payload counts, latencies and the phrasing of each check. Those are invented, but never
+   inventing a new system, agent or person — only ever describing a request to something the
+   product already names. == */
+const aicjEvidence={
+
+  /* ---- 1 · New request ---------------------------------------------------------------- */
+  'request-received/New intake':{
+    system:'NewForce Solutions', systemId:'adt-solution', ref:'EmployeeIntake',
+    call:function(c){return 'GET /api/employee-intake/latest?since=cursor';},
+    latency:'210ms',
+    fetched:function(c){return [
+      {k:'Full name',sub:'Intake form',v:c.name,state:'active'},
+      {k:'Company name',sub:'Intake form',v:c.client,state:'active'},
+      {k:'Country hiring in',sub:'Intake form',v:c.country,state:'active'},
+      {k:'What are you looking for',sub:'Intake form',v:c.type==='PEO'?'PEO Services':'Employer of Record (EOR)',state:'active'}
+    ];},
+    checks:function(c){return [
+      {rule:'The submission resolves to a client, a country and an engagement type',
+       expected:'all three present',actual:c.client+' · '+c.country+' · '+c.type,verdict:'pass'},
+      {rule:'Ingest is idempotent on the source record id',
+       expected:'no existing client for this submission',actual:'no match — new client',verdict:'pass'}
+    ];},
+    captured:function(c){return [{k:'Client',v:c.client},{k:'Country',v:c.country},{k:'Contract Type',v:c.type}];},
+    summary:'Intake resolved · new client',
+    note:'This is the one genuinely wired system in the demo &mdash; the intake form is served by NewForce and polled over HTTP, not simulated in the browser.'
+  },
+
+  'request-received/CSM assigned':{
+    system:'CSM routing table', ref:'Owner directory',
+    call:function(c){return 'route(country="'+c.country+'")';},
+    latency:'34ms',
+    fetched:function(c){
+      const owner=amCsmFor({country:c.country});
+      return amCsmPool.map(function(n){return {k:n,sub:'Customer Success Manager',
+        v:n===owner?('owns '+c.country):'&mdash;',state:n===owner?'active':'inactive'};});
+    },
+    checks:function(c){return [
+      {rule:'Every country we sell in has exactly one owning CSM',expected:'one match',
+       actual:amCsmFor({country:c.country})+' owns '+c.country,verdict:'pass'},
+      {rule:'Assignment lands inside the stage SLA',expected:'within 1h',actual:'immediate',verdict:'pass'}
+    ];},
+    captured:function(c){return [{k:'CSM',v:amCsmFor({country:c.country})},{k:'Owner',v:'Arjun Vaidya'}];},
+    summary:function(c){return amCsmFor({country:c.country})+' assigned';},
+    note:'A country-to-CSM table needs no judgement, which is exactly why this automates while <b>Qualified / Disqualified</b> one row down never will &mdash; that is the one decision this stage exists to make.'
+  },
+
+  /* ---- 2 · Quote in preparation -------------------------------------------------------- */
+  'quote-prep/Country data check':{
+    system:'Compliance Hub', ref:'Rates &amp; Rules',
+    call:function(c){return 'GET /compliance/rules?country='+c.country+'&amp;applicableTo='+c.type;},
+    latency:'142ms',
+    fetched:function(c){
+      const rows=(supportPageMeta.compliance.rows||[]).filter(function(r){return r[1]===c.country;});
+      if(rows.length)return rows.map(function(r){return {k:r[2],sub:r[3]+' · '+r[4],v:r[5],
+        state:r[6]==='Active'?'active':'inactive'};});
+      // Countries the rule table does not itemise still resolve — aiH2rCountryData covers all seven.
+      const h=aiH2rCountryData[c.country]||aiH2rCountryData['India'];
+      return [{k:'Country Rate Rules',sub:'Compliance Hub',v:h.rateRules,state:'active'},
+              {k:'Statutory Requirements',sub:'Compliance Hub',v:h.statutory,state:'active'},
+              {k:'Tax Bands',sub:'Compliance Hub',v:h.taxBand,state:'active'}];
+    },
+    checks:function(c){
+      const rows=(supportPageMeta.compliance.rows||[]).filter(function(r){return r[1]===c.country;});
+      const on=rows.filter(function(r){return r[6]==='Active';}).length;
+      const tot=rows.length||3;
+      return [
+        {rule:'Country is configured in the Compliance Hub',expected:'at least one rule',
+         actual:tot+' rules found',verdict:'pass'},
+        {rule:'Only rules currently in force enter the cost build',expected:'status Active',
+         actual:(rows.length?on+' active, '+(tot-on)+' inactive (excluded)':'all active'),verdict:'pass'}
+      ];
+    },
+    captured:function(c){return [{k:'Country Rules',v:c.country+' statutory set resolved'}];},
+    summary:function(c){
+      const rows=(supportPageMeta.compliance.rows||[]).filter(function(r){return r[1]===c.country;});
+      const on=rows.filter(function(r){return r[6]==='Active';}).length;
+      return rows.length?(rows.length+' rules · '+on+' active'):'statutory set resolved';
+    },
+    note:'Read live from the Compliance Hub, not from the quote. An <b>Inactive</b> rule is one the country has on the books but is not currently applying &mdash; and none of them may enter the cost build.',
+    failure:'A country with no configuration raises an exception for the compliance team.'
+  },
+
+  'quote-prep/Partner cost requested':{
+    system:'Partner network',
+    call:function(c){return 'POST /partners/quote-request {country:"'+c.country+'"}';},
+    latency:'—',
+    // Owned countries are staffed by our own entity, so there is no partner to ask. The seven
+    // countries aiH2rCountryData covers are the owned ones; anything else routes to a partner.
+    applies:function(c){return !aiH2rCountryData[c.country];},
+    checks:function(c){return [{rule:'Partner cost is only requested for non-owned countries',
+      expected:'country not in the owned list',actual:c.country+' is owned in-house',verdict:'na'}];},
+    summary:'Not applicable',
+    note:'Skipped, and the reason is shown rather than the row silently vanishing &mdash; a step that did not need to run is itself evidence of the agent reasoning.'
+  },
+
+  'quote-prep/Cost calc built':{
+    system:'Cost engine', ref:'Compliance Hub rates',
+    call:function(c){return 'build(gross='+Math.round(c.grossMonthly)+', country="'+c.country+'", type="'+c.type+'")';},
+    latency:'380ms',
+    fetched:function(c){
+      const h=aiH2rCountryData[c.country]||aiH2rCountryData['India'];
+      return [
+        {k:'Employer loading',sub:'Applied to gross',v:h.rateRules,state:'active'},
+        {k:'Statutory set',sub:'Carried into the build',v:h.statutory,state:'active'},
+        {k:'Monthly gross',sub:'Offered',v:'EUR '+Math.round(c.grossMonthly).toLocaleString(),state:'active'}
+      ];
+    },
+    checks:function(c){return [
+      {rule:'Every in-force employer contribution is loaded onto gross',
+       expected:'employer social security + holiday pay',actual:'applied',verdict:'pass'},
+      {rule:'Margin resolves against the country rate card',expected:'within the standard band',
+       actual:'20% — standard',verdict:'pass'}
+    ];},
+    captured:function(c){return [{k:'Cost Build',v:'Complete'},{k:'Margin %',v:'20%'}];},
+    summary:'Margin 20% · standard band',
+    note:'The build is derived from the rules the previous step resolved, so a country whose rates change is re-priced rather than re-typed.'
+  },
+
+  /* cond: 'if off-standard'. The quote is built on the standard rate card, so pricing has
+     nothing to rule on — and a Pricing approval that fires on a standard quote would be asking
+     Karan Mehta to sign off a decision nobody made. */
+  'quote-prep/Pricing approval':{
+    applies:function(c){return false;},
+    note:'Only needed when the margin falls outside the standard band. This quote is on the standard rate card at 20%, so pricing has nothing to rule on.'
+  },
+  'quote-prep/Statutory floor check':{
+    system:'Rules engine', ref:'Compliance Hub · Minimum Wage',
+    call:function(c){return 'evaluate(floor="Minimum Wage", country="'+c.country+'", gross='+Math.round(c.grossMonthly)+')';},
+    latency:'96ms',
+    fetched:function(c){
+      const rows=(supportPageMeta.compliance.rows||[]).filter(function(r){
+        return r[1]===c.country&&r[6]==='Active';});
+      if(rows.length)return rows.map(function(r){return {k:r[2],sub:r[3]+' · '+r[4],v:r[5],state:'active'};});
+      const h=aiH2rCountryData[c.country]||aiH2rCountryData['India'];
+      return [{k:'Statutory Requirements',sub:'Compliance Hub',v:h.statutory,state:'active'}];
+    },
+    checks:function(c){
+      const nl=c.country==='Netherlands';
+      const floor=14.71;   // Minimum Wage, General · EOR / PEO, Active — supportPageMeta.compliance row 1
+      return nl
+        ?[{rule:'Offered rate must be at or above the statutory minimum',
+           expected:'&ge; EUR '+floor.toFixed(2)+' / hour',
+           actual:'EUR '+c.hourly.toFixed(2)+' / hour',verdict:c.hourly>=floor?'pass':'fail'},
+          {rule:'Holiday allowance is carried in the build',expected:'8.00% of gross',
+           actual:'EUR '+Math.round(c.grossMonthly*0.08).toLocaleString()+' / month',verdict:'pass'}]
+        :[{rule:'Offered rate must be at or above the statutory minimum',
+           expected:(aiH2rCountryData[c.country]||{}).statutory||'country statutory set',
+           actual:'within the statutory set',verdict:'pass'}];
+    },
+    captured:function(c){return [{k:'Statutory set',v:'resolved'},{k:'Floor result',v:'cleared'}];},
+    summary:'Above the statutory floor',
+    note:'The floor is the one number a quote cannot go under. It is checked against the live <b>Active</b> rule rather than a cached figure, because a wage floor that moved after the quote was built is the classic way a compliant quote quietly becomes non-compliant.',
+    failure:'A rate below the statutory floor blocks the quote and routes it to Compliance.'
+  },
+
+  /* ---- 3 · Quote sent ------------------------------------------------------------------ */
+  /* Two steps here exist for the path where the client pushes back, and must not run on the
+     path where they do not. Without an `applies` they would fire on every single run and the
+     journey would claim a change was requested when nothing of the sort happened — worse than
+     omitting them, because it is a false statement about the client. */
+  'quote-review/Change requested':{
+    applies:function(c){return false;},
+    note:'Only runs when the client comes back with changes. On this run they accepted the quote as sent.'
+  },
+  'quote-review/Re-issued v2':{
+    applies:function(c){return false;},
+    note:'A re-issue only exists if a change was requested. Nothing to re-issue here.'
+  },
+
+  /* ---- 4 · Quote accepted -------------------------------------------------------------- */
+  'quote-approved/Client tenant provisioned':{
+    system:'NFAdmin', systemId:'nfadmin', ref:'EntityRegistry',
+    call:function(c){return 'POST /tenants {client:"'+c.client+'", country:"'+c.country+'"}';},
+    latency:'640ms',
+    fetched:function(c){return [
+      {k:'Tenant',sub:'Client workspace',v:c.client,state:'active'},
+      {k:'Employing entity',sub:'In-country',v:'ADT '+c.country+(c.type==='PEO'?' PEO Services B.V.':' EOR Services B.V.'),state:'active'},
+      {k:'Admin seats',sub:'Initial allocation',v:'2',state:'active'}
+    ];},
+    checks:function(c){return [
+      {rule:'Tenant name is unique across the platform',expected:'no existing tenant',
+       actual:'no collision',verdict:'pass'},
+      {rule:'An employing entity exists in the hiring country',expected:'registered entity',
+       actual:c.country+' entity on file',verdict:'pass'}
+    ];},
+    captured:function(c){return [{k:'Tenant Status',v:'Provisioned'},{k:'Bound To',v:c.client}];},
+    summary:'Tenant provisioned',
+    note:'Owner is <b>System</b>, whose persona is null in the owner directory &mdash; nobody in this portal could tick this even if it were not automated. It reports itself done.'
+  },
+
+  /* ---- 5 · Client signing --------------------------------------------------------------- */
+  'agreement-signature/Client entity + sanctions check':{
+    system:'NFAdmin', systemId:'nfadmin', ref:'EntityRegistry + ComplianceFiling',
+    call:function(c){return 'POST /screening {entity:"'+c.client+'", country:"'+c.country+'"}';},
+    latency:'820ms',
+    fetched:function(c){return [
+      {k:'Entity registry',sub:c.country,v:'Registered · in good standing',state:'active'},
+      {k:'Sanctions lists',sub:'EU · UN · OFAC',v:'0 hits',state:'active'},
+      {k:'Name match confidence',sub:'Against the registry record',v:'98.6%',state:'active'},
+      {k:'Adverse media',sub:'Screening provider',v:'0 flags',state:'active'}
+    ];},
+    checks:function(c){return [
+      {rule:'The client entity is registered and in good standing',expected:'active registration',
+       actual:'registered in '+c.country,verdict:'pass'},
+      {rule:'No sanctions hit on any screened list',expected:'0 hits',actual:'0 hits',verdict:'pass'},
+      {rule:'A hit or a weak name match escalates to a human',expected:'&ge; 95% confidence to clear',
+       actual:'98.6% — cleared without escalation',verdict:'pass'}
+    ];},
+    captured:function(c){return [{k:'Screening',v:'Cleared'},{k:'Checked On',v:'Just now'}];},
+    summary:'Cleared · 0 hits',
+    note:'The confidence figure is what decides whether a person is involved at all: the sub-status is authored <i>screening API, human on hit</i>, so a hit or a weak match stops the run here instead of clearing it.'
+  },
+
+  /* ---- 6 · Deposit due ------------------------------------------------------------------ */
+  'deposit-due/Invoice raised':{
+    system:'SAP S/4HANA', systemId:'sap', ref:'API_GLACCOUNTLINEITEM',
+    call:function(c){return 'POST /invoices {client:"'+c.client+'", type:"deposit"}';},
+    latency:'510ms',
+    fetched:function(c){return [
+      {k:'Deposit invoice',sub:'Raised against the signed agreement',v:c.depositInvoice,state:'active'},
+      {k:'Amount due',sub:'Deposit',v:c.amountDue,state:'active'},
+      {k:'Payment terms',sub:'From the agreement',v:'Net 14',state:'active'}
+    ];},
+    checks:function(c){return [{rule:'A deposit invoice may only be raised once the agreement is signed',
+      expected:'agreement signed',actual:'signed',verdict:'pass'}];},
+    captured:function(c){return [{k:'Deposit Invoice',v:c.depositInvoice},{k:'Amount Due',v:c.amountDue}];},
+    summary:function(c){return c.depositInvoice+' · '+c.amountDue;},
+    note:'This stage is the one flagged as a payment gate. From here nothing moves until the money arrives.'
+  },
+
+  'deposit-due/Cleared':{
+    system:'Bank webhook', ref:'payment.cleared',
+    call:'POST /webhooks/bank/receipt',
+    latency:'—',
+    fetched:function(c){return [
+      {k:'Receipt',sub:'Matched against '+c.depositInvoice,v:'Full amount',state:'active'},
+      {k:'Amount received',sub:'Cleared funds',v:c.amountDue,state:'active'},
+      {k:'Value date',sub:'Bank',v:'Today',state:'active'}
+    ];},
+    checks:function(c){return [
+      {rule:'The deposit invoice is matched against a cleared receipt before the hold is released',
+       expected:'full amount cleared',actual:'full amount',verdict:'pass'},
+      {rule:'Part payment holds the gate',expected:'no shortfall',actual:'no shortfall',verdict:'pass'}
+    ];},
+    captured:function(c){return [{k:'Cleared On',v:'Just now'}];},
+    summary:'Receipt matched · hold lifted',
+    gateRelease:'Payment gate released &mdash; the placement can move.',
+    simulated:'Simulated bank webhook',
+    note:'The one stage the operating model calls a hard gate. Until this row is green no hire under this client can start, however far the paperwork has got.'
+  },
+
+  /* ---- 7 · Worker signing ---------------------------------------------------------------- */
+  'employment-contract/Worker signed':{
+    system:'Docuseal',
+    call:function(c){return 'GET /envelopes/'+c.envelopeId+'/status';},
+    latency:'180ms',
+    fetched:function(c){return [
+      {k:'Envelope',sub:'Docuseal',v:c.envelopeId,state:'active'},
+      {k:'Recipient',sub:'Worker',v:c.signatoryEmail,state:'active'},
+      {k:'Status',sub:'Signature',v:'Sent &mdash; awaiting signature',state:'pending'}
+    ];},
+    checks:function(c){return [];},
+    waitCopy:'Nothing here is ours to press. The envelope is open with the worker, and Docuseal will call back when it is signed.',
+    summary:'Awaiting the worker',
+    note:'Owner is <b>Worker</b>, whose persona is null &mdash; so this card offers no button at all. Ticking &ldquo;Worker signed&rdquo; on the worker&rsquo;s behalf is precisely what that null exists to prevent.',
+    failure:'A signature timeout or bounce reopens the contract for resend from Client signing.'
+  },
+
+  /* ---- 8 · Onboarding -------------------------------------------------------------------- */
+  'onboarding/Bank verified':{
+    system:'Penny-drop provider',
+    call:function(c){return 'POST /bank/verify {account:"••••4821", name:"'+c.name+'"}';},
+    latency:'1.4s',
+    fetched:function(c){return [
+      {k:'Account',sub:'Masked',v:'••••4821',state:'active'},
+      {k:'Name on account',sub:'Returned by the bank',v:c.name,state:'active'},
+      {k:'Penny-drop',sub:'Test credit',v:'EUR 0.01 accepted',state:'active'}
+    ];},
+    checks:function(c){return [
+      {rule:'The account accepts a test credit',expected:'credit accepted',actual:'accepted',verdict:'pass'},
+      {rule:'The name on the account matches the worker',expected:'exact or close match',
+       actual:'matched — '+c.name,verdict:'pass'}
+    ];},
+    captured:function(c){return [{k:'Bank Details',v:'On file (••••4821)'}];},
+    summary:'Verified · ••••4821',
+    note:'A penny-drop proves the account exists and belongs to the right person before payroll ever sends real money to it.'
+  }
+};
+
+/* Every sub-status renders, whether or not it has an authored descriptor. The fallback is
+   built from what amSubStatuses and the stage's own journey event already say, so an
+   un-authored step still shows its owner, its automation note and the stage's real validation
+   sentence rather than an empty panel. `derived` lets the card render it a shade quieter and
+   lets the test harness count how many are still stubs. */
+function aicjDescriptorFor(stageIdx,step){
+  if(!step)return null;
+  const authored=aicjEvidence[aicjStageId(stageIdx)+'/'+step.label];
+  if(authored)return authored;
+  const ev=((typeof aiJourneyEvents!=='undefined'&&aiJourneyEvents['contract-creation'])||[])[stageIdx]||{};
+  return {
+    derived:true,
+    // No system. An un-authored step has no call to report, and naming the stage's agent here
+    // would claim it "reached" something it did not — the agent already appears in the head,
+    // where it belongs. An empty Reached column is the honest rendering of "not yet authored".
+    system:null,
+    fetched:[], captured:[],
+    checks:[{rule:ev.validation||'&mdash;',expected:'&mdash;',
+             actual:step.auto?('performed by '+(ev.source||'the execution layer'))
+                             :('pending '+step.owner),
+             verdict:step.auto?'pass':'na'}],
+    summary:step.auto?'Completed':'Waiting',
+    note:step.autoNote?('Automated &mdash; '+step.autoNote+'.')
+                      :('Owned by '+step.owner+' ('+amOwnerInfo(step.owner).who+').'),
+    failure:ev.failure
+  };
+}
+/* Descriptor fields may be authored as either a value or a function of ctx. */
+function aicjVal(v,c){return typeof v==='function'?v(c):v;}
 /* Who each owner role actually is, and which persona may advance its sub-steps. `persona`
    null means nobody in this portal can advance it: Client and Worker steps land by webhook or
    e-signature callback, and System steps are provisioning. Marking them null is what stops the
@@ -260,6 +597,76 @@ function amCanAdvance(ownerRole){
   if(!info.persona)return false;
   if(portalRole==='entity-admin'||portalRole==='super-admin')return true;
   return portalRole==='entity-user'&&activePersonaId===info.persona;
+}
+
+/* == THE SUB-STATUS RUNNER: JOIN, CONTEXT, MODE ==========================================
+   The automated Contract Creation journey used to show its nine client-facing stages and
+   nothing underneath them, advancing on bare timers — a spinner, then a new screen, with no
+   evidence that anything had been done. The 41 admin sub-statuses that say what actually
+   happens inside each stage were already here in amSubStatuses, but only the Account Manager
+   board ever read them. These three functions are the bridge.
+
+   The join costs one line because the alignment already exists and is documented where
+   aiJourneyEvents is defined: stage index i is the same stage in all three stores.
+
+       aiJourneyEvents['contract-creation'][i] === amPipelineStages[i]
+                                              === amSubStatuses[amPipelineStages[i].id]
+
+   So no parallel step list is created and no new ids are minted. amSubStatuses stays the sole
+   source of label/owner/sla/cond/decision/loop, and is never mutated — the board reads the
+   very same objects. == */
+function aicjStageId(i){return (amPipelineStages[i]||{}).id||'';}
+function aicjSteps(i){return amSubSteps(aicjStageId(i));}
+
+/* The live values an evidence descriptor interpolates. Built fresh per render rather than
+   cached, so a country or a pay figure edited mid-run shows the edited value — a descriptor
+   that froze its strings at run start would quietly contradict the form beside it. Every
+   fallback chain ends in something displayable, because a half-built run is the normal state
+   at stage 0 and 'undefined' must never reach the screen. */
+function aicjCtx(){
+  const rec=(typeof contractsData!=='undefined'&&typeof aiCreatedContractId!=='undefined'
+    ?contractsData.find(function(c){return c.id===aiCreatedContractId;}):null)||{};
+  const d=(typeof aiWizardFormData!=='undefined'&&aiWizardFormData)||{};
+  const pre=(typeof aiContractPrefill!=='undefined'&&aiContractPrefill)||{};
+  const emp=(typeof aiCtJourneyEmployee!=='undefined'&&aiCtJourneyEmployee)||{};
+  const name=rec.empName||((pre.fname||'')+' '+(pre.lname||'')).trim()||emp.name||'the employee';
+  const contractId=rec.contractId?('CTR-'+String(rec.contractId).replace(/^CTR-/,'')):'CTR-000000';
+  const num=String(contractId).replace(/^CTR-/,'');
+  const gross=parseFloat(String(rec.payAmount||d.pay||pre.pay||'5700').replace(/[^0-9.]/g,''))||5700;
+  return {
+    country:rec.country||d.country||pre.country||emp.country||'Netherlands',
+    type:rec.empType||rec.type||(typeof aiCtActiveType==='function'?aiCtActiveType():'')||'EOR',
+    name:name, client:'Dhi Hyperlocal',
+    empId:emp.empId||rec.empId||'EMP-0001',
+    contractId:contractId, grossMonthly:gross,
+    // Hourly is derived, not authored: 173.33 is the standard monthly-hours divisor, so the
+    // floor check compares like with like against a per-hour statutory minimum.
+    hourly:gross/173.33,
+    signatoryEmail:(name.toLowerCase().replace(/[^a-z ]/g,'').trim().replace(/\s+/g,'.')||'employee')+'@dhihyperlocal-mock.com',
+    envelopeId:'DS-'+num, depositInvoice:'INV-'+num, amountDue:'$9,500',
+    rec:rec, emp:emp
+  };
+}
+
+/* How a sub-status behaves when the runner reaches it. Derived entirely from flags that
+   already exist — nothing new is added to amSubStatuses, because four unrelated surfaces read
+   those objects and none of them should have to carry runner state.
+
+     auto            -> runs itself and shows its work
+     persona===null  -> nobody in this portal may complete it. Client can be chased; a Worker
+                        or the System cannot, so those get no button at all. This is the same
+                        null amCanAdvance already uses to stop the UI offering an Account
+                        Manager a button to tick "Worker signed" on the worker's behalf.
+     amCanAdvance    -> this user owns the decision, so the runner hosts it and the page's
+                        duplicate Approve bar stands down
+     otherwise       -> owned by someone else in the entity; offer to notify them */
+function aicjStepMode(stageIdx,step){
+  if(!step)return 'auto';
+  if(step.auto)return 'auto';
+  const info=amOwnerInfo(step.owner);
+  if(info.persona===null)return step.owner==='Client'?'external-chase':'external-wait';
+  if(amCanAdvance(step.owner))return 'act';
+  return 'handoff';
 }
 /* An engagement-track row is the client request itself, so its `subject` is the headcount
    being quoted rather than a person. A placement-track row is one named hire under an
@@ -612,11 +1019,20 @@ const supportPageMeta={
   ]}
 };
 
-function getPageMeta(pg){if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Agent & Model Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='employees')return{title:'Employees',context:'Employees',filters:[],columns:[],rows:[]};if(pg==='timesheet')return{title:'Timesheet',context:'Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+// -- Rebuilt contract-creation journey: one page per client-facing stage, titled from the
+// stage itself so adding a stage needs no entry here. --
+function ccjPageMeta(pg){
+  if(pg==='ccj-start'||pg==='ccj-model')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};
+  const i=typeof ccjStageOf==='function'?ccjStageOf(pg):-1;
+  if(i<0)return null;
+  const s=amPipelineStages[i]||{};
+  return{title:s.short||'Contract Creation',context:'Contracts',filters:[],columns:[],rows:[]};
+}
+function getPageMeta(pg){const ccjm=typeof ccjPageMeta==='function'?ccjPageMeta(pg):null;if(ccjm)return ccjm;if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Agent & Model Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='employees')return{title:'Employees',context:'Employees',filters:[],columns:[],rows:[]};if(pg==='timesheet')return{title:'Timesheet',context:'Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return cfgUserIntakeBackPage;if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':'ai-executive';if(pg==='ai-analytics'||pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(typeof isCCJPage==='function'&&isCCJPage(pg))return 'contracts';if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return cfgUserIntakeBackPage;if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':'ai-executive';if(pg==='ai-analytics'||pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function customSelect(id,selected,options,placeholder,variant){
@@ -881,7 +1297,7 @@ function renderUserDD(){
   const nameEl=document.getElementById('user-trigger-label');if(nameEl)nameEl.textContent=portalRoleLabel(portalRole);
   const avEl=document.getElementById('user-trigger-avatar');if(avEl)avEl.textContent=portalRoleInitials(portalRole);
   const panel=document.getElementById('user-dd');if(!panel)return;
-  const emailMap={'super-admin':'pallavi@dhihyperlocal.com','entity-admin':'entity.admin@dhihyperlocal.com','entity-user':'entity.user@dhihyperlocal.com'};
+  const emailMap={'super-admin':'pallavi@adt.com','entity-admin':'entity.admin@adt.com','entity-user':'entity.user@adt.com'};
   if(userDDMode==='switch'){
     const platformRoles=['super-admin','entity-admin'];
     const platformItems=platformRoles.map(r=>`<button class="hdr-dd-item" onclick="closeAllHdrDD();setPortalRole('${r}')">
@@ -1600,8 +2016,21 @@ function lpGoToPage(n){lpCurrentPage=n;renderADTPage();}
 function addListingItem(pg){
   if(pg==='contracts'){
     // -- "Create Contract" always starts a fresh manual-step wizard under Contracts, even if this persona has an older in-progress deal — that in-progress deal stays reachable from Open Deals / My Tasks, it just doesn't hijack the create action. --
-    aiAssistedFlow=false;aiContractPrefill=null;aiCtAnimatedStage=-1;aiCtPendingEmpType='';aiCtTypeChoice='';aiCtJourneyEmployee=null;page=isJourneyAgentEnabled('contract-creation')?'ai-contract-assistant':'contract-type-select';renderADTPage();
+    // -- This is the canonical "Create Contract" action for the whole app: the topbar + on the
+    // Contracts page, and the only route an Account Manager had into the journey. It now opens
+    // the REBUILT journey (js/contract-journey.js). The original chain is untouched and still
+    // reachable from the Contracts listing — see openLegacyContractJourney below. --
+    if(typeof ccjStartNewRun==='function'){ccjStartNewRun();return;}
+    openLegacyContractJourney();
   }else if(pg==='teams'){page='team-add';renderADTPage();}else if(pg==='all-leaves'){page='leave-add';renderADTPage();}
+}
+// -- The original ai-contract-* journey, exactly as the create action used to start it. Kept
+// whole and kept reachable: it is the reference the rebuild is being measured against, and it
+// still owns the stages the new one has not been designed for yet. --
+function openLegacyContractJourney(){
+  aiAssistedFlow=false;aiContractPrefill=null;aiCtAnimatedStage=-1;aiCtPendingEmpType='';aiCtTypeChoice='';aiCtJourneyEmployee=null;
+  page=isJourneyAgentEnabled('contract-creation')?'ai-contract-assistant':'contract-type-select';
+  renderADTPage();
 }
 
 // -- DIRECT EMPLOYEE PAGE --
