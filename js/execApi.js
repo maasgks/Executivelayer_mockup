@@ -173,3 +173,29 @@ function execApiToWorkflowRows(workflow){
     };
   });
 }
+
+/* ============================================================================ stores ==
+   Bhaiyaa stores. Same shape as the employee calls above — a thin wrapper per endpoint that
+   returns the standard {ok, data, error, offline} envelope, so callers handle a stopped backend
+   the same way everywhere rather than each inventing its own failure branch. */
+function execApiListStores(opts){
+  opts = opts || {};
+  const q = new URLSearchParams();
+  if (opts.status) q.set('status', opts.status);
+  if (opts.role) q.set('role', opts.role);
+  if (opts.q) q.set('q', opts.q);
+  if (opts.page) q.set('page', String(opts.page));
+  if (opts.pageSize) q.set('pageSize', String(opts.pageSize));
+  const qs = q.toString();
+  return execApiRequest('GET', '/stores' + (qs ? '?' + qs : ''));
+}
+function execApiGetStore(code){
+  return execApiRequest('GET', '/stores/' + encodeURIComponent(code));
+}
+function execApiCreateStore(payload){
+  return execApiRequest('POST', '/stores', payload);
+}
+function execApiSetStoreStatus(code, status, note, actor){
+  return execApiRequest('PATCH', '/stores/' + encodeURIComponent(code) + '/status',
+    { status: status, note: note || '', actor_user: actor || 'Admin' });
+}

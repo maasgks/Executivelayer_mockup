@@ -147,3 +147,72 @@ CREATE TABLE sync_state (
   value      TEXT,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+-- ============================================================================ stores --
+-- MySQL twin of the `stores` block in backend/schema.sql. Same design; see that file for the
+-- reasoning behind each decision (why stores are their own table rather than a `source` on
+-- direct_employees, why consent is rows, and why the full Aadhaar number has no column here).
+CREATE TABLE stores (
+  id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  store_code         VARCHAR(20)  NOT NULL UNIQUE,          -- ours:  'STR-000001'
+  source_record_id   VARCHAR(64)  NULL,                     -- theirs: 'BHA-STR-0001'
+  source             VARCHAR(50)  NOT NULL DEFAULT 'bhaiyaa',
+  mirror_state       ENUM('not_required','pending','failed','mirrored') NOT NULL DEFAULT 'pending',
+  mirror_error       TEXT         NULL,
+  role               ENUM('seller','buyer') NOT NULL,
+  store_name         VARCHAR(200) NOT NULL,
+  auto_named         TINYINT(1)   NOT NULL DEFAULT 0,
+  handle             VARCHAR(64)  NULL,
+  category           VARCHAR(100) NULL,
+  store_type         VARCHAR(120) NOT NULL,
+  plan               VARCHAR(50)  NULL,
+  gst_position       VARCHAR(80)  NULL,
+  credit_line        VARCHAR(80)  NULL,
+  payment_terms      VARCHAR(50)  NULL,
+  first_name         VARCHAR(100) NOT NULL,
+  last_name          VARCHAR(100) NULL,
+  email              VARCHAR(180) NOT NULL,
+  phone_country_code VARCHAR(8)   NULL,
+  mobile             VARCHAR(20)  NULL,
+  mobile_verified    TINYINT(1)   NOT NULL DEFAULT 0,
+  -- Masked only: 'XXXX XXXX 9012'. There is deliberately no column for the full number.
+  aadhaar_masked     VARCHAR(20)  NULL,
+  kyc_status         ENUM('Pending','Verified','Failed') NOT NULL DEFAULT 'Pending',
+  kyc_verified_by    VARCHAR(80)  NULL,
+  kyc_verified_at    DATETIME     NULL,
+  status             ENUM('Pending','Active','Inactive') NOT NULL DEFAULT 'Pending',
+  raw_signup         JSON         NULL,
+  created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (source) REFERENCES source_systems(id),
+  -- Per source, not global: two platforms may legitimately mint the same reference.
+  UNIQUE KEY uq_stores_source_record (source, source_record_id),
+  INDEX idx_stores_status (status),
+  INDEX idx_stores_role (role),
+  INDEX idx_stores_mirror_state (mirror_state)
+);
+
+CREATE TABLE store_consents (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  store_id     INT UNSIGNED NOT NULL,
+  document     VARCHAR(100) NOT NULL,
+  accepted_at  DATETIME     NOT NULL,
+  FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
+  INDEX idx_store_consents_store (store_id, id)
+);
+
+CREATE TABLE store_events (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  store_id     INT UNSIGNED NOT NULL,
+  occurred_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  title        VARCHAR(200) NOT NULL,
+  actor_user   VARCHAR(80)  NOT NULL,
+  description  TEXT         NOT NULL,
+  FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
+  INDEX idx_store_events_store (store_id, id DESC)
+);
+
+INSERT IGNORE INTO source_systems (id, label, console_url) VALUES ('bhaiyaa', 'Bhaiyaa', NULL);
+-- Two counters because two systems mint two ids; sharing one would make them agree.
+INSERT IGNORE INTO id_sequences (name, next_value) VALUES ('store', 1);
+INSERT IGNORE INTO id_sequences (name, next_value) VALUES ('bhaiyaa_store_ref', 1);

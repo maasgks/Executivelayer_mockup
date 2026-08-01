@@ -153,3 +153,110 @@ CREATE TABLE IF NOT EXISTS sync_state (
   value       TEXT,
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
+
+-- ============================================================================ stores --
+-- Bhaiyaa stores. A separate table from direct_employees rather than another `source` on it:
+-- a store and a client answer different questions and share almost no columns — turnover band,
+-- plan, GST position, storefront handle and credit terms have no meaning for a client, and
+-- department/job title/join date have none for a store. Forcing both into one table would mean
+-- a row where half the columns are structurally NULL, which is how a schema stops describing
+-- anything.
+--
+-- What IS shared is the id pattern, deliberately: our code, their code, and the source system
+-- that issued the second one. Every integrated platform gets the same three, so the listing's
+-- columns hold for any of them.
+CREATE TABLE IF NOT EXISTS stores (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+
+  -- OUR id, minted here inside the insert transaction. 'STR-000001'.
+  store_code        TEXT    NOT NULL UNIQUE,
+  -- THEIR id. Null until Bhaiyaa has confirmed the store, exactly like source_record_id on
+  -- direct_employees — we mint first and mirror second, so the gap between is a real state.
+  source_record_id  TEXT,
+  source            TEXT    NOT NULL DEFAULT 'bhaiyaa' REFERENCES source_systems(id),
+  mirror_state      TEXT    NOT NULL DEFAULT 'pending'
+                      CHECK (mirror_state IN ('not_required','pending','failed','mirrored')),
+  mirror_error      TEXT,
+
+  -- Seller or buyer. Not a free string: it decides what was provisioned and what the credit
+  -- columns mean, so an unknown value here would make the rest of the row unreadable.
+  role              TEXT    NOT NULL CHECK (role IN ('seller','buyer')),
+
+  store_name        TEXT    NOT NULL,
+  -- Set when the merchant left the name blank and we opened the store as "<first name>'s Store".
+  -- Kept because "did they choose this name" is a different fact from what the name is.
+  auto_named        INTEGER NOT NULL DEFAULT 0,
+  handle            TEXT,               -- storefront slug (seller) or ledger slug (buyer)
+  category          TEXT,
+  store_type        TEXT    NOT NULL,   -- the turnover band, verbatim as offered
+
+  -- Derived from store_type at creation time, stored rather than recomputed: the bands can be
+  -- repriced, and a store's plan must not silently change under it when they are.
+  plan              TEXT,
+  gst_position      TEXT,
+  credit_line       TEXT,
+  payment_terms     TEXT,
+
+  first_name        TEXT    NOT NULL,
+  last_name         TEXT,
+  email             TEXT    NOT NULL,
+  phone_country_code TEXT,
+  mobile            TEXT,
+  mobile_verified   INTEGER NOT NULL DEFAULT 0,
+
+  -- KYC. The full Aadhaar number is NEVER sent to this server and has no column here — it is
+  -- needed to verify an owner and for nothing afterwards. What is kept is the masked form, who
+  -- verified it and when, which is everything an auditor asking "was this owner checked" needs.
+  aadhaar_masked    TEXT,
+  kyc_status        TEXT    NOT NULL DEFAULT 'Pending'
+                      CHECK (kyc_status IN ('Pending','Verified','Failed')),
+  kyc_verified_by   TEXT,
+  kyc_verified_at   TEXT,
+
+  status            TEXT    NOT NULL DEFAULT 'Pending'
+                      CHECK (status IN ('Pending','Active','Inactive')),
+  raw_signup        TEXT,               -- the signup exactly as submitted, for provenance
+  created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+-- Consent is evidence, so it is rows and not a boolean column. One row per document accepted,
+-- carrying the moment it was accepted — a flag cannot answer "when did they agree to the MSA",
+-- which is the only question ever asked of an acceptance record.
+CREATE TABLE IF NOT EXISTS store_consents (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id     INTEGER NOT NULL,
+  document     TEXT    NOT NULL,   -- 'Terms & Conditions' | 'MSA'
+  accepted_at  TEXT    NOT NULL,
+  FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE
+);
+
+-- The journey trail: what the run did, step by step, kept so the drawer's Workflow tab reads
+-- from the record rather than replaying a client-side definition.
+CREATE TABLE IF NOT EXISTS store_events (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id     INTEGER NOT NULL,
+  occurred_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  title        TEXT    NOT NULL,
+  actor_user   TEXT    NOT NULL,   -- 'Merchant' | 'KYC Agent' | 'Store Agent'
+  description  TEXT    NOT NULL,
+  FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_stores_status        ON stores (status);
+CREATE INDEX IF NOT EXISTS idx_stores_role          ON stores (role);
+CREATE INDEX IF NOT EXISTS idx_stores_mirror_state  ON stores (mirror_state);
+CREATE INDEX IF NOT EXISTS idx_store_consents_store ON store_consents (store_id, id);
+CREATE INDEX IF NOT EXISTS idx_store_events_store   ON store_events (store_id, id DESC);
+-- Per source, matching the clients rule: two platforms may legitimately mint the same ref.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_stores_source_record
+  ON stores (source, source_record_id);
+
+-- Bhaiyaa as a source system, so the FK above holds and the UI can print a label for it.
+INSERT OR IGNORE INTO source_systems (id, label, console_url) VALUES
+  ('bhaiyaa', 'Bhaiyaa', NULL);
+
+-- Our store id counter, and Bhaiyaa's own. Two counters because two systems mint two ids; a
+-- shared one would make them agree, and that they never agree is the point.
+INSERT OR IGNORE INTO id_sequences (name, next_value) VALUES ('store', 1);
+INSERT OR IGNORE INTO id_sequences (name, next_value) VALUES ('bhaiyaa_store_ref', 1);

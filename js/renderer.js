@@ -104,6 +104,8 @@ function renderPageContentImpl(id){
   if(page==='cfg-system-detail'){el.innerHTML=buildCfgSystemDetailHTML();return;}
   if(page==='cfg-system-add'){el.innerHTML=buildCfgSystemAddHTML();return;}
   if(page==='cfg-user-intake'){el.innerHTML=buildCfgUserIntakeHTML();return;}
+  if(page==='create-store'){el.innerHTML=buildCreateStoreHTML();return;}
+  if(page==='stores'){storesEnsureLoaded();el.innerHTML=buildStoresListingHTML();return;}
   if(page==='cfg-data-foundation'){el.innerHTML=buildCfgDataFoundationHTML();return;}
   if(page==='cfg-model-detail'){el.innerHTML=buildCfgModelDetailHTML();return;}
   if(page==='cfg-model-add'){el.innerHTML=buildCfgModelAddHTML();return;}
@@ -153,7 +155,7 @@ function renderADTPage(){
   // Show/hide + button in topbar based on current page
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
-    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','ai-analytics','journey-simulation','manual-journey-run','master-data'];
+    const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','create-store','stores','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','ai-analytics','journey-simulation','manual-journey-run','master-data'];
     const show=!noAddPages.includes(page);
     addBtn.style.display=show?'':'none';
     if(show){
@@ -168,7 +170,9 @@ function renderADTPage(){
   const sidebar=document.getElementById('adt-sidebar');
   if(sidebar)sidebar.style.display=isFocusedFlowPage(page)?'none':'';
   renderPageContent('adt-content');
-  aiScrollContentToTop();
+  // Only when the screen actually changed — see adtScrollKey. Scrolling on every redraw threw
+  // the reader to the top of a form each time they touched a control on it.
+  adtMaybeScrollTop();
   focusFlowPrimaryField();
   persistAppState();
 }
@@ -192,7 +196,7 @@ function isJourneyFocusPage(pg){
 // Plus the two linear flows that already worked this way: the cost calculator and the USER
 // intake form.
 function isFocusedFlowPage(pg){
-  return pg==='cost-calculator'||pg==='cfg-user-intake'||isJourneyFocusPage(pg);
+  return pg==='cost-calculator'||pg==='cfg-user-intake'||pg==='create-store'||isJourneyFocusPage(pg);
 }
 
 /* == PRIMARY FIELD FOCUS ================================================================
