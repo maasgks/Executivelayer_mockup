@@ -210,10 +210,14 @@ check('the nine-card rail still renders nine cards',
 check('both approval gates still reference their own handlers',
   run(`(function(){return buildAIProposalWaitingApprovalHTML().indexOf('aiSimulateApproval')>-1
         && buildAIContractAwaitingSignatureHTML().indexOf('aiSimulateContractApproval')>-1;})()`));
-check('the AI Executive cards render the launcher copy',
+// The cards show AI_EXEC_CARD_COPY names, not the catalogue names. Asserting the absence of the
+// catalogue name is the half that has teeth: it is what fails if the override map stops being
+// consulted and j.name falls through to the card.
+check('the AI Executive cards render the launcher copy, not the catalogue names',
   run(`(function(){portalRole='entity-user';activePersonaId='account-manager';
         const h=buildAIExecutiveDashboardHTML();
-        return h.indexOf('Client Creation Journey')>-1 && h.indexOf('Contract Creation Journey')>-1
+        return h.indexOf('Create Client')>-1 && h.indexOf('Hire and Onboard')>-1
+          && h.indexOf('Client Creation Journey')===-1 && h.indexOf('Contract Creation Journey')===-1
           && h.indexOf('ai-journey-meta-chip')===-1;})()`));
 
 /* ------------------------------------------------- 9. the stitch: one owner per hop ---- */

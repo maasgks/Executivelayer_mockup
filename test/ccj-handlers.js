@@ -44,6 +44,13 @@ function el(id) {
     focus: noop, click: noop, scrollTo: noop, scrollIntoView: noop
   };
   Object.defineProperty(n, 'innerHTML', { get() { return n._html; }, set(v) { n._html = v; } });
+  // The transcript appends rather than rebuilds (ccjStreamSync). This suite renders every
+  // surface and checks every inline handler on it, so a stream it could not see written would
+  // mean the messages' own controls — the client chips, the draft's Send — going unchecked.
+  n.insertAdjacentHTML = function (pos, html) {
+    if (pos === 'beforeend') n._html += html;
+    else if (pos === 'afterbegin') n._html = html + n._html;
+  };
   return n;
 }
 function byId(id) { if (!nodes[id]) nodes[id] = el(id); return nodes[id]; }

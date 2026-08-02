@@ -4242,8 +4242,12 @@ function buildContractsListingHTML(){
         +'</div>';
     // -- `ccjNew` is set by the rebuilt contract journey on the row it writes when a placement goes
     // active. It is a flag on the ROW rather than a global the listing has to reach for, so the
-    // listing has no dependency on js/contract-journey.js having loaded. --
-    return '<tr class="ct-row'+(ctSelectedId===c.id?' lp-row-selected':'')+(c.ccjNew?' ccj-new-row':'')+'" id="ct-row-'+c.id+'" style="cursor:pointer" onclick="openCtSidebar('+c.id+')">'
+    // listing has no dependency on js/contract-journey.js having loaded. `ccjv1New` is the same
+    // flag from the frozen V1 snapshot, which renamed every one of its own identifiers; both earn
+    // the same highlight because a placement is a placement whichever copy of the journey made it.
+    // The class stays `ccj-new-row`: the highlight belongs to THIS listing, not to either journey,
+    // so it should follow the live stylesheet rather than fork alongside the snapshot. --
+    return '<tr class="ct-row'+(ctSelectedId===c.id?' lp-row-selected':'')+(c.ccjNew||c.ccjv1New?' ccj-new-row':'')+'" id="ct-row-'+c.id+'" style="cursor:pointer" onclick="openCtSidebar('+c.id+')">'
       +'<td style="color:#6b7280;font-size:13px">'+(ctIdx+1)+'</td>'
       +'<td style="font-weight:600;color:var(--navy)">'+c.contractId+'</td>'
       +'<td><div style="font-weight:600;color:var(--navy)">'+c.empName+'</div><div style="font-size:11px;color:#9ca3af">'+c.empDesig+'</div></td>'
@@ -4264,21 +4268,37 @@ function buildContractsListingHTML(){
     +apCS('ct-f-country',countries,'','All Countries')
     +apCS('ct-f-type',types,'','All Types')
     +apCS('ct-f-status',['Submitted','Quotation Approved','Proposal Sent','Proposal Approved','Contract Sent','Contract Signed','Contract Approved','Inactive'],'','All Statuses')
-    +'<input class="ct-search-input" placeholder="Search by name, ID..." type="text" style="height:34px;border-radius:20px">'
+    // -- min-width overridden the way the other three .ct-search-input call sites already do it.
+    // The class floor is 160px and this row was fitting on one line with a single pixel to spare;
+    // widening the entry cluster beside it pushed Search onto a second line. The field is flex:1
+    // so it still takes every pixel going when there is room — the floor only decides how hard
+    // the row resists wrapping, and 160 was resisting one pixel too weakly. --
+    +'<input class="ct-search-input" placeholder="Search by name, ID..." type="text" style="height:34px;border-radius:20px;min-width:120px">'
     +'<button class="lp-pill-reset">Reset</button>'
     +'<button class="lp-pill-search">Search</button>'
     +'</div></div>'
+    // -- The counts and the create action, as one cluster. The button used to be a third cell
+    // INSIDE .listing-stats — a segmented card of counts with dividers and overflow:hidden — so
+    // a dark pill was being rendered as if it were a statistic, and the card clipped its corners.
+    // A count and an action are not the same kind of thing and do not share a container. They do
+    // share a baseline, which is what .ccj-entry-row is for: it centres the button against the
+    // card whatever height the card happens to be, without either one knowing the other's size.
+    //
+    // An "Open the previous journey" link used to sit under this button, from when the rebuild
+    // was partial and the original still owned stages it had not reached. All nine are built, so
+    // the link is gone: offering two doors to the same job asks the user to choose between them
+    // with nothing on screen to choose on. The original chain is NOT deleted —
+    // `openLegacyContractJourney()` is still the fallback in `addListingItem`. --
+    +'<div class="ccj-entry-row">'
     +'<div class="listing-stats">'
     +'<div class="listing-stat'+(ctQuickStatusFilter==='Proposal Sent'?' stat-selected':'')+'" onclick="ctToggleStatFilter(\'Proposal Sent\')"><div class="listing-stat-count" style="color:#7c3aed">'+proposalPending+'</div><div class="listing-stat-label">Proposal Pending</div></div>'
     +'<div class="listing-stat'+(ctQuickStatusFilter==='Contract Sent'?' stat-selected':'')+'" onclick="ctToggleStatFilter(\'Contract Sent\')"><div class="listing-stat-count" style="color:#2563eb">'+contractPending+'</div><div class="listing-stat-label">Contract Pending</div></div>'
-    // -- Entry into the rebuilt contract-creation journey (js/contract-journey.js), which the
-    // topbar + now opens as well. The link under it keeps the ORIGINAL journey reachable —
-    // nothing has been removed, and it still owns the stages the rebuild has not reached. --
-    +'<div class="ccj-entry-wrap">'
-    +'<button class="ccj-entry-btn" onclick="ccjStartNewRun()">Create contract</button>'
-    +'<button class="ccj-entry-alt" onclick="openLegacyContractJourney()">Open the previous journey</button>'
     +'</div>'
-    +'</div></div>'
+    +'<button class="ccj-entry-btn" onclick="ccjStartNewRun()">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    +'Create contract</button>'
+    +'</div>'
+    +'</div>'
     +'<div class="lp-split-wrap" style="margin-top:14px"><div class="lp-split-main"><div class="lp-table-card" style="border:none;border-radius:0;box-shadow:none">'
     +'<table class="lp-table"><thead><tr>'
     +'<th>S.No</th><th>Contract ID</th><th>Employee Name</th><th>Country</th><th>Type</th><th>Compliance</th><th>Date</th><th>Status</th><th style="text-align:right">Action</th>'
@@ -6324,17 +6344,23 @@ function buildAIClientsListingHTML(){
 
 /* -- Launcher copy for the AI Executive cards. The catalogue name is what the journey IS
    ("User Master Data Creation Journey"); this is what the reader is about to DO. An Account
-   Manager opening this page is creating a client or creating a contract, and does not need the
+   Manager opening this page is creating a client or hiring someone, and does not need the
    platform's own vocabulary for it, nor a description of the plumbing underneath.
+
+   The names are now the ACTION, with no "Journey" suffix at all. "Client Creation Journey" and
+   "Contract Creation Journey" were still the catalogue's nouns wearing friendlier words: they
+   named a thing in a list rather than a job to start, and the second one described its own
+   first stage rather than its outcome — the run does not stop at a signed contract, it stops
+   with a person hired, onboarded and on payroll. "Hire and Onboard" is what the reader gets.
 
    Scoped to these cards deliberately, rather than renaming the journeys. `name` is load-bearing
    elsewhere — agents reference "Contract Creation Journey" in their usedIn and skill.md text,
    run records carry it, and the journey detail page is a governance surface where the formal
    name is the right one. -- */
 const AI_EXEC_CARD_COPY={
-  'user-master-data':{name:'Client Creation Journey',
+  'user-master-data':{name:'Create Client',
     desc:'Capture a new client on the NewForce intake form and register them here as a client record.'},
-  'contract-creation':{name:'Contract Creation Journey',
+  'contract-creation':{name:'Hire and Onboard',
     desc:'Take a hire from quote and approval through signing, deposit and onboarding to payroll ready.'}
 };
 function buildAIExecutiveDashboardHTML(){
@@ -6371,7 +6397,14 @@ function buildAIExecutiveDashboardHTML(){
     // -- No meta chips. "3 steps · Client · Master Data +1 · Manual Mode" described the journey
     // as a piece of configuration; the person reading this card is an Account Manager about to
     // start work, and none of the three changes what they do next. Step counts and module lists
-    // still live on the journey detail page, where someone governing the journey will look. --
+    // still live on the journey detail page, where someone governing the journey will look.
+    //
+    // The O2C category badge is gone for the same reason and finishes that job — it was the last
+    // chip of that kind left on the card. "O2C" is the catalogue's filing code: it tells you
+    // which drawer the journey lives in, which matters when you are governing a list of them and
+    // not at all when you are about to hire someone. It still renders where it is doing work —
+    // the Configure journeys list and the locked-journey modal, both of which ARE lists being
+    // governed — so cfgCategoryBadge stays, it is just not called from here. --
     const card=(AI_EXEC_CARD_COPY[j.id]||{});
     const cardName=card.name||j.name;
     const cardDesc=card.desc||j.desc;
@@ -6379,7 +6412,7 @@ function buildAIExecutiveDashboardHTML(){
       +'<div class="ai-journey-card-head">'
       +'<span class="ai-journey-icon">'+(j.icon||'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>')+'</span>'
       +'<div class="ai-journey-head-text">'
-      +'<div class="ai-journey-name-row"><span class="ai-journey-name">'+cardName+'</span>'+cfgCategoryBadge(j.category)+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
+      +'<div class="ai-journey-name-row"><span class="ai-journey-name">'+cardName+'</span>'+(locked?'<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>':'')+'</div>'
       +'</div>'
       +(isActive?'<span class="ai-journey-active-badge"><span class="ai-journey-active-dot"></span>Activated</span>':'')
       +'</div>'

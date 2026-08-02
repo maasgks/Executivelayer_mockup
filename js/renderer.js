@@ -42,7 +42,7 @@ function injectPageBackBar(id){
   // Nearly every detail and wizard screen renders its own back control, pointing at the same
   // parent. Detecting that from the rendered content rather than keeping a hand-maintained
   // list of page ids means the two can never drift out of sync.
-  if(el.querySelector('.ep-back,.ep-cancel-btn,.uif-exit,.ccj-back'))return;
+  if(el.querySelector('.ep-back,.ep-cancel-btn,.uif-exit,.ccj-back,.ccjv1-back'))return;
   const bar=document.createElement('div');
   bar.className='page-back-bar';
   bar.innerHTML='<button class="page-back-btn" onclick="navigatePage(\''+parent+'\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> '+getPageTitle(parent)+'</button>';
@@ -65,6 +65,14 @@ function renderPageContentImpl(id){
   const onCCJ=typeof isCCJPage==='function'&&isCCJPage(page);
   el.classList.toggle('ccj-host',onCCJ);
   if(onCCJ){ccjRenderPage(el);return;}
+  // -- The frozen V1 snapshot of that same journey (js/contract-journey-v1.js), reached only
+  // from Support > Contract Journey V1. Its own host class, because the two stylesheets are
+  // separate and .ccj-host is the live one's; toggled the same way so leaving either journey
+  // restores normal page scrolling. The two page-id spaces (ccj-* / ccjv1-*) cannot overlap,
+  // so the order of these two checks is arbitrary and neither can steal the other's render. --
+  const onCCJV1=typeof isCCJV1Page==='function'&&isCCJV1Page(page);
+  el.classList.toggle('ccjv1-host',onCCJV1);
+  if(onCCJV1){ccjv1RenderPage(el);return;}
   if(isAIContractWizardPage(page)){
     // Screen one is the engagement-model choice and only that. Until a model is picked there is
     // no run, so there is nothing for the nine-stage rail to report — drawing it here would be
@@ -191,7 +199,8 @@ function isJourneyFocusPage(pg){
     ||pg==='journey-simulation'         // a dry run of a configured journey
     ||pg==='ai-automate-form'           // the wizard that activates one
     ||isAIContractWizardPage(pg)        // the whole contract-creation chain
-    ||(typeof isCCJPage==='function'&&isCCJPage(pg)); // and its rebuilt replacement
+    ||(typeof isCCJPage==='function'&&isCCJPage(pg))  // and its rebuilt replacement
+    ||(typeof isCCJV1Page==='function'&&isCCJV1Page(pg)); // and the frozen V1 snapshot of that
 }
 // Plus the two linear flows that already worked this way: the cost calculator and the USER
 // intake form.
@@ -210,6 +219,7 @@ function isFocusedFlowPage(pg){
 function flowPrimaryFieldId(pg){
   // The rebuilt journey's stage 1 is a conversation, and its one question is the composer.
   if(pg==='ccj-request-received')return 'ccj-prompt';
+  if(pg==='ccjv1-request-received')return 'ccjv1-prompt';   // the same stage in the frozen V1 snapshot
   if(pg==='ai-journey-run')return 'ai-run-prompt';
   if(pg==='ai-contract-assistant')return 'ai-ct-prompt';
   if(pg==='contract-eor'||pg==='contract-peo'){

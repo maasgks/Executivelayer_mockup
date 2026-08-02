@@ -34,6 +34,21 @@ const CHILD_OF = {
   'ccj-composer': ['ccj-prompt'],
   'ccj-panel-inner': ['ccj-ev-lines']
 };
+/* On a rebuilt stage the conversation is a SIBLING of the work area rather than a child of it —
+   that is the whole reason a screen change no longer tears down the sub-status blocks. The stub
+   has to model the same tree, or it will keep deleting the stream node on a work-area repaint
+   and every assertion that reads the conversation afterwards reads an empty string. Which is
+   worse than failing: several of them would have passed on `indexOf(...) === -1`. */
+function childrenOf(id) {
+  if (id !== 'ccj-work') return CHILD_OF[id] || [];
+  // Through run(), NOT ctx.ccjRun. `ccjRun` is a `let` at script top level, which is a lexical
+  // binding inside the script and never a property of the vm context — ctx.ccjRun is undefined
+  // and always will be. Reading it silently answered "not a transcript stage" for every stage,
+  // so the stream node was deleted on every work repaint and every assertion that read the
+  // conversation afterwards read an empty string. Exactly the trap this file's header warns of.
+  const transcript = run('!!(typeof ccjRun !== "undefined" && ccjRun && ccjUsesTranscript(ccjRun.stage))');
+  return transcript ? ['ccj-screen'] : CHILD_OF[id];
+}
 function el(id) {
   const n = {
     id: id || '', _html: '', outerHTML: '', textContent: '', value: '',
@@ -52,10 +67,32 @@ function el(id) {
   };
   Object.defineProperty(n, 'innerHTML', {
     get() { return n._html; },
-    set(v) { n._html = v; (CHILD_OF[id] || []).forEach((c) => { delete nodes[c]; }); }
+    set(v) {
+      if (id === 'ccj-stream') streamOps.rebuild++;
+      n._html = v;
+      childrenOf(id).forEach((c) => { delete nodes[c]; });
+    }
   });
+  // The transcript is append-only: ccjStreamSync writes each new message with
+  // insertAdjacentHTML rather than rebuilding the stream, precisely so the nodes already on
+  // screen are not re-parsed. Modelled here, or every assertion that reads the stream would
+  // report only whatever the last FULL rebuild wrote — which is to say, it would pass while
+  // being blind to almost everything the run says.
+  //
+  // Deliberately does NOT clear CHILD_OF: appending does not destroy the siblings above it.
+  // That is the entire property being tested.
+  n.insertAdjacentHTML = function (pos, html) {
+    if (id === 'ccj-stream') streamOps.append++;
+    if (pos === 'beforeend') n._html += html;
+    else if (pos === 'afterbegin') n._html = html + n._html;
+  };
   return n;
 }
+// Which of the two ways the stream was written, counted, because "the transcript appends" is not
+// observable from the HTML afterwards — an append and a rebuild that happen to produce the same
+// string are indistinguishable once they have happened. Counting the CALL is the only way to
+// assert the property rather than its shadow.
+const streamOps = { rebuild: 0, append: 0 };
 function byId(id) {
   if (!nodes[id]) nodes[id] = el(id);
   return nodes[id];
@@ -135,7 +172,17 @@ function check(name, ok, detail) {
 function run(expr) { return vm.runInContext(expr, ctx); }
 function section(t) { console.log('\n' + t); }
 function shell() { return byId('adt-content').innerHTML; }
-function panel() { return nodes['ccj-panel-inner'] ? nodes['ccj-panel-inner'].innerHTML : shell(); }
+/* Where the sub-statuses are. On a stage listed in CCJ_TRANSCRIPT_STAGES they are BLOCKS IN THE
+   CONVERSATION and there is no panel at all; everywhere else the panel is unchanged. Resolving
+   that here rather than in each assertion means the ~40 checks below go on testing the same
+   thing — what a sub-status says, and when — without caring which surface it says it on. That is
+   the right split: the panel was a container, and none of those assertions were about it. */
+function steps() {
+  if (run('ccjRun && ccjUsesTranscript(ccjRun.stage)')) return stream();
+  return nodes['ccj-panel-inner'] ? nodes['ccj-panel-inner'].innerHTML : shell();
+}
+// Kept under its old name so every existing call site reads naturally; it is the same question.
+function panel() { return steps(); }
 function work() { return nodes['ccj-work'] ? nodes['ccj-work'].innerHTML : shell(); }
 function screen() { return nodes['ccj-screen'] ? nodes['ccj-screen'].innerHTML : work(); }
 function composer() { return nodes['ccj-composer'] ? nodes['ccj-composer'].innerHTML : work(); }
@@ -383,12 +430,39 @@ section('THE IDENTITY DOCUMENT FOLLOWS NATIONALITY, NOT THE PLACE OF WORK');
     d.mrzLine.indexOf('IND') > -1, d.mrzLine.replace(/&lt;/g, '<').slice(0, 40));
   check('the rest of the pack is still the work country&rsquo;s',
     run("ccjOnbPack().taxAuthority") === 'Finanzamt', run('ccjOnbPack().taxAuthority'));
-  // The consequence, and it is the right one: this is now a decision rather than a rubber stamp.
-  check('so right to work becomes a real question instead of an automatic pass',
+  // Before the permit has been seen it is a real question, not a rubber stamp.
+  check('right to work is unanswered while the permit is only declared',
     run('ccjRightToWork().verdict') === 'consider', run('ccjRightToWork().verdict'));
   check('and a national working at home is still cleared without a permit',
     run("(function(){var w=ccjRun.form.nationality;ccjRun.form.nationality='Germany';"
       + 'var v=ccjRightToWork().verdict;ccjRun.form.nationality=w;return v;})()') === 'pass');
+})();
+
+/* The check is not weakened to make the demo flow — it is given evidence. A cross-border hire
+   photographs their permit in the same verification session as their passport, which is what a
+   real IDV flow does, and only then does right to work resolve. */
+section('THE WORK PERMIT IS CAPTURED, AND IT IS SALARY-TESTED');
+(function () {
+  const pm = run('ccjPermit()');
+  check('a non-EU national placed in Germany needs a permit', !!pm && !!pm.label, JSON.stringify(pm && pm.label));
+  check('and on this salary it is the EU Blue Card, not the general route',
+    pm.label === 'EU Blue Card' && pm.annual >= pm.min,
+    pm.label + '  ' + pm.annual + ' vs floor ' + pm.min);
+  check('the route is chosen by the salary, so a low-paid placement gets the other one',
+    run("(function(){var w=ccjRun.form.pay;ccjRun.form.pay='2000';"
+      + 'var l=ccjPermit().label;ccjRun.form.pay=w;return l;})()') === 'Residence permit for qualified employment',
+    run("(function(){var w=ccjRun.form.pay;ccjRun.form.pay='2000';var l=ccjPermit().label;ccjRun.form.pay=w;return l;})()"));
+  check('nobody who does not need a permit is given one',
+    run("(function(){var w=ccjRun.form.nationality;ccjRun.form.nationality='Germany';"
+      + 'var p=ccjPermit();ccjRun.form.nationality=w;return p;})()') === null);
+  check('an EU national moving inside the EU needs none either',
+    run("(function(){var w=ccjRun.form.nationality;ccjRun.form.nationality='Spain';"
+      + 'var p=ccjPermit();ccjRun.form.nationality=w;return p;})()') === null);
+  // The one path that must still stop: we were asked to sponsor it, so there is no permit yet.
+  check('asking us to sponsor the visa is still a decision, because no permit exists yet',
+    run("(function(){var w=ccjRun.form.workPermit;"
+      + "ccjRun.form.workPermit='Employee would like ADT to assist with the work visa';"
+      + 'var v=ccjRightToWork().verdict;ccjRun.form.workPermit=w;return v;})()') === 'consider');
 })();
 
 section('THE IDENTITY PORTRAIT IS OPTIONAL AND FAILS SOFT');
@@ -403,6 +477,55 @@ check('a missing file uncovers the placeholder rather than leaving a hole',
   && run('ccjPortraitHTML()').indexOf('onerror="ccjPortraitMissing(this)"') > -1);
 check('and with no portrait configured it is the placeholder alone',
   run("(function(){var h=ccjPortraitHTML.toString();return h.indexOf('CCJ_KYC_PORTRAIT')>-1;})()") === true);
+
+/* WHERE THE WORK IS decides the employment law, the tax authority, the social security
+   institution, the registered entity and its bank, the payroll return and the permit — every one
+   of them a per-country pack. The form offered all 54 nationalities as places of work while the
+   packs cover 7, so the other 47 fell through `||CCJ_STAT['Netherlands']` and friends: Dutch law
+   and a Dutch IBAN, but German social rates and a German permit, because those two default to
+   Germany instead. Nothing on screen said anything was wrong. */
+section('WE ONLY OFFER TO EMPLOY WHERE WE ARE ACTUALLY CONFIGURED');
+check('nationality can still be any country', run('ccjCountries().length') > 40,
+  run('ccjCountries().length'));
+check('but the places we can employ are far fewer', run('ccjWorkCountries().length') === 7,
+  run('JSON.stringify(ccjWorkCountries())'));
+// Derived by intersecting the packs, so adding one adds the country and nothing has to be
+// remembered. This is the check that would have caught the original bug.
+check('every country we offer to employ in has EVERY pack behind it',
+  run("ccjWorkCountries().every(function(c){return CCJ_STAT[c]&&CCJ_ONB[c]&&CCJ_REGISTRY[c]"
+    + '&&CCJ_PAYRUN_PACK[c]&&CCJ_RATES[c]&&CCJ_PERMITS[c];})') === true,
+  run("JSON.stringify(ccjWorkCountries().filter(function(c){return !(CCJ_STAT[c]&&CCJ_ONB[c]&&CCJ_REGISTRY[c]&&CCJ_PAYRUN_PACK[c]&&CCJ_RATES[c]&&CCJ_PERMITS[c]);}))"));
+check('and no country we cannot serve is offered as a place of work',
+  run("ccjWorkCountries().every(function(c){return ccjCanEmployIn(c);})")
+  && run("ccjCanEmployIn('Poland')") === false && run("ccjCanEmployIn('United States')") === false);
+check('the work-country field reads that list, not the nationality one',
+  run("ccjAllFields().find(function(f){return f.k==='country';}).opts") === 'workCountries',
+  run("ccjAllFields().find(function(f){return f.k==='country';}).opts"));
+check('while nationality still reads the full one',
+  run("ccjAllFields().find(function(f){return f.k==='nationality';}).opts") === 'countries');
+
+section('A COUNTRY WE CANNOT SERVE IS SAID OUT LOUD, NOT SWALLOWED');
+r = P('Hire Piotr Nowak for Helix Marine in Poland as a Data Analyst');
+check('the country is recognised and lifted out of the sentence',
+  r.unsupportedCountry === 'Poland' && r.name === 'Piotr Nowak',
+  r.unsupportedCountry + ' / ' + JSON.stringify(r.name));
+check('but it is NOT claimed as the place of work', r.country === '', JSON.stringify(r.country));
+startRun();
+say('Hire Piotr Nowak for Helix Marine in Poland as a Data Analyst');
+check('the run does not start against a country we cannot serve',
+  run('ccjRun.started') === false && run('ccjRun.awaitingCountry') === true);
+check('the agent says why, rather than just asking again',
+  stream().indexOf('not set up to employ in') > -1 && stream().indexOf('Poland') > -1
+  && stream().indexOf('would not be compliant') > -1);
+check('and it names the countries we can serve',
+  stream().indexOf('Germany') > -1 && stream().indexOf('Netherlands') > -1);
+say('Portugal then');
+check('a second unserviceable answer is refused too',
+  run('ccjRun.awaitingCountry') === true && stream().indexOf('still cannot place that one') > -1);
+say('Germany');
+check('a serviceable one is accepted and the run carries on',
+  run('ccjRun.awaitingCountry') === false && run('ccjRun.intake.country') === 'Germany',
+  run('ccjRun.intake.country'));
 
 section('A RUN WITHOUT A CLIENT ASKS FOR ONE');
 // Who the hire is for is not guessable and not optional: every number is billed to them, the
@@ -439,7 +562,7 @@ let h = shell();
 check('a new run opens on the chooser page', run('page') === 'ccj-model', run('page'));
 check('renders its own back control (suppresses the injected back bar)', h.indexOf('ccj-back') > -1);
 check('NO step counter — the journey has not started', h.indexOf('Step 1 of 9') === -1);
-check('NO nine-stage rail', h.indexOf('ccj-dot') === -1 && h.indexOf('ccj-track-cap') === -1);
+check('NO nine-stage rail', h.indexOf('ccj-dot') === -1 && h.indexOf('ccj-phase-name') === -1);
 check('NO sub-status panel', h.indexOf('ccj-panel') === -1);
 check('the cards ARE the screen', h.indexOf('ccj-model-page') > -1);
 check('three cards, one per engagement model', count(h, 'ccj-mcard') >= 3, count(h, 'class="ccj-mcard') + ' cards');
@@ -458,14 +581,44 @@ check('the choice is recorded', run('ccjRun.model') === 'PEO', run('ccjRun.model
 advance(Math.round(400*PACE));
 check('it enters the journey at stage 1', run('page') === 'ccj-request-received' && run('ccjRun.screen') === 'prompt', run('page') + '/' + run('ccjRun.screen'));
 h = shell();
-check('the journey frame arrives with the run', h.indexOf('Step 1 of 9') > -1 && count(h, 'class="ccj-dot ') === 9 && h.indexOf('ccj-panel') > -1);
-check('panel lists all three sub-statuses', count(h, 'ccj-row pending') === 3, count(h, 'ccj-row pending') + ' pending');
-// class="ccj-will" exactly — `ccj-will-sla` is a different line and would inflate a loose count.
-check('every pending row states its purpose, not a blank', count(h, 'class="ccj-will"') === 3);
-check('purposes are short and plain', h.indexOf('Assigns the CSM for the client country.') > -1);
-check('progress bar starts at zero', h.indexOf('style="width:0%"') > -1);
-check('the conversation now takes the whole work area',
-  work().indexOf('ccj-work-full') > -1 && work().indexOf('ccj-chat-col') === -1);
+/* Stage 1 is rebuilt: the rail and the header still arrive with the run, and the sub-statuses
+   now arrive in the conversation instead of in a panel beside it. The three checks that used to
+   read the pending rows are gone with the pending rows themselves — a transcript is a record of
+   what happened, so a step that has not started has no block. That is a design decision, not a
+   coverage gap, and it gets its own assertion below rather than being quietly dropped. */
+check('the journey frame arrives with the run', h.indexOf('Step 1 of 9') > -1 && count(h, 'class="ccj-dot ') === 9);
+check('the rebuilt stage has no panel at all', h.indexOf('ccj-panel') === -1);
+check('and nothing has run yet, so there are no blocks yet',
+  count(h, 'class="ccj-sb ') === 0, count(h, 'class="ccj-sb ') + ' blocks');
+/* The only assertion that the panel path is still alive at all — the day it can find no
+   un-rebuilt stage is the day buildCCJPanelHTML can be deleted.
+
+   DERIVED, not enumerated. It used to name each index by hand and had to be repointed on every
+   conversion, which is a test that needs editing to keep passing — and one edited that often
+   eventually gets edited into agreeing with whatever the code now does. It now asserts the
+   PROPERTY instead: the journey converts front to back, so the rebuilt stages must be a leading
+   run with at least one panel stage after them. That holds without maintenance until the last
+   stage moves, at which point it fails and says so. */
+const CONVERTED = (function () {
+  const n = run('ccjStages().length');
+  const rebuilt = [], panel = [];
+  for (let i = 0; i < n; i++) (run('ccjUsesTranscript(' + i + ')') ? rebuilt : panel).push(i);
+  return { n, rebuilt, panel };
+})();
+check('the stages are converted front to back, with no gaps',
+  CONVERTED.rebuilt.every((v, i) => v === i),
+  'rebuilt ' + JSON.stringify(CONVERTED.rebuilt));
+check('a stage that has NOT been rebuilt still gets its panel',
+  CONVERTED.panel.length > 0 && CONVERTED.rebuilt.length > 0,
+  CONVERTED.rebuilt.length + ' rebuilt, ' + CONVERTED.panel.length + ' still on the panel');
+// The conversation takes the whole body by the work area COLLAPSING rather than by a different
+// layout: on a conversation-led screen there is no screen to show, so ccjWorkHTML returns nothing
+// and the body is marked `solo`. Same outcome `chat:'full'` used to produce, one fewer variant.
+// Read from the rendered shell, not through work(): that helper falls back to the whole shell
+// when nothing has looked the node up yet, so `work()===''` would never be true here.
+check('the conversation now takes the whole body',
+  shell().indexOf('<div class="ccj-work" id="ccj-work"></div>') > -1
+  && shell().indexOf('ccj-body no-panel') > -1 && shell().indexOf('ccj-chat-col') > -1);
 check('composer carries the focus target id', work().indexOf('id="ccj-prompt"') > -1);
 check('the model pills are gone from the composer — the chooser owns that decision',
   composer().indexOf('ccj-models-lbl') === -1);
@@ -515,9 +668,25 @@ check('it names the system it is connecting to', evl().indexOf('Connecting to Ne
 // which is exactly the kind of test that costs more than it protects.
 delete nodes['ccj-ev-lines']; delete nodes['ccj-panel-inner'];
 run('ccjPaintBeat()');
-check('a beat repaints the log alone, never the whole panel',
-  nodes['ccj-ev-lines'] !== undefined && nodes['ccj-panel-inner'] === undefined,
-  'log=' + (nodes['ccj-ev-lines'] !== undefined) + ' panel=' + (nodes['ccj-panel-inner'] !== undefined));
+/* A beat still touches the evidence lines alone — but the id is now per block, because a held
+   block and a running block can be open at the same time and one shared id would send the second
+   block's beats into the first. Asserting the id is per-step IS the assertion: a singleton would
+   read the same everywhere and the collision would only ever show up on screen. */
+check('the evidence lines are addressed per block, not by a shared id',
+  run('ccjEvLinesId(0,1,1)') !== run('ccjEvLinesId(0,2,1)'),
+  run('ccjEvLinesId(0,1,1)') + ' vs ' + run('ccjEvLinesId(0,2,1)'));
+/* And per PASS, which is the one that bites silently. Two blocks for the same step on different
+   attempts would share an id, and getElementById returns the FIRST match — so the second
+   attempt's beats would paint into the first attempt's block, and the follow-scroll would target
+   the dead one, with no error anywhere. */
+check('and per attempt, so a re-run cannot paint into the block it replaced',
+  run('ccjEvLinesId(0,1,1)') !== run('ccjEvLinesId(0,1,2)')
+  && run('ccjStepBlockId(0,1,1)') !== run('ccjStepBlockId(0,1,2)'),
+  run('ccjEvLinesId(0,1,1)') + ' vs ' + run('ccjEvLinesId(0,1,2)'));
+check('a beat repaints the log alone, never the whole conversation',
+  nodes[run('ccjEvLinesId(0,0,1)')] !== undefined,
+  'looked for ' + run('ccjEvLinesId(0,0,1)') + ', saw '
+  + Object.keys(nodes).filter((k) => k.indexOf('ccj-ev') === 0).join(','));
 clearEv(); advance(ACT);
 check('the connect completes and the fetch starts',
   evl().indexOf('ccj-act done') > -1 && evl().indexOf('Connected') > -1 && evl().indexOf('Fetching') > -1);
@@ -555,15 +724,27 @@ advance(Math.round(60000*PACE));
 check('sixty seconds of waiting does not advance it',
   run('ccjRun.phase') === 'hold' && run('ccjRun.sub') === 0 && run('ccjRun.stage') === 0);
 
-section('THE PANEL STANDS WHILE SCREENS CHANGE');
-check('three columns now — chat, screen, panel',
-  work().indexOf('ccj-chat-col') > -1 && work().indexOf('ccj-screen') > -1 && shell().indexOf('ccj-panel') > -1);
-// Written into the live panel node: if a screen change rebuilt the panel, this is gone.
-nodes['ccj-panel-inner'].innerHTML = 'SENTINEL';
+/* THE SAME INVARIANT, ON THE SURFACE THAT NOW CARRIES IT. The panel was built once per stage and
+   never remounted so it could keep its spinner and its place; the sub-statuses have moved into
+   the conversation, so the conversation is what must now stand. It does — it is a sibling of the
+   work area rather than inside it, which is why a screen change no longer reaches it.
+
+   This is the assertion that would have caught the regression if the conversation had been left
+   inside #ccj-work: stage 1 changes screen three times, and the live block would have been torn
+   down and rebuilt on each one. */
+section('THE CONVERSATION STANDS WHILE SCREENS CHANGE');
+check('two columns now — the conversation and the screen',
+  shell().indexOf('ccj-chat-col') > -1 && work().indexOf('ccj-screen') > -1 && shell().indexOf('ccj-panel') === -1);
+check('and the conversation is given the room the panel gave up',
+  shell().indexOf('ccj-body no-panel') > -1);
+check('the conversation is OUTSIDE the work area, which is what makes it survive',
+  work().indexOf('ccj-chat-col') === -1);
+// Written into the live stream node: if a screen change rebuilt the conversation, this is gone.
+nodes['ccj-stream'].innerHTML = 'SENTINEL';
 run("ccjGoScreen('form')");
-check('changing screen does not rebuild the panel', panel() === 'SENTINEL');
-run('ccjPaint()');
-check('an explicit paint does rebuild it', panel().indexOf('ccj-row') > -1);
+check('changing screen does not rebuild the conversation', stream() === 'SENTINEL');
+run('ccjRenderChat()');
+check('an explicit rebuild does restore it', stream().indexOf('ccj-msg') > -1);
 
 section('THE FORM');
 const f = screen();
@@ -641,8 +822,35 @@ check('the typed email survived the document', run('ccjRun.form.email') === type
 // labelled LIKELY would invite doubt about something not in doubt.
 check('no confidence grading is shown', stream().indexOf('ccj-conf') === -1
   && stream().indexOf('LIKELY') === -1 && stream().indexOf('CERTAIN') === -1);
-check('extraction is ONE card, not a message per field', count(stream(), 'ccj-doc-head') === 1,
-  count(stream(), 'ccj-doc-head') + ' cards');
+// Counted in EITHER state: by now the run has moved on and the card has folded to its one line,
+// so a check that only knew the open head would report zero cards and pass a rebuild that had
+// lost it entirely.
+check('extraction is ONE card, not a message per field',
+  count(stream(), 'ccj-doc-head') + count(stream(), 'ccj-doc-closed') === 1,
+  count(stream(), 'ccj-doc-head') + ' open / ' + count(stream(), 'ccj-doc-closed') + ' folded');
+
+/* THE CARD FOLDS ONCE ITS VALUES ARE IN THE FORM. The document has done its job at that point and
+   the form is where the values live; keeping nineteen rows of them is the same information twice.
+   What it leaves behind has to be worth having, and has to be honest — `fields.length` counts
+   only what the document was ALLOWED to fill, so a line saying "19 fields" on a run where two
+   were the user's own typing would be claiming work it did not do. */
+check('the card has folded now the run has moved past it',
+  run('ccjRun.doc.open') === false && stream().indexOf('ccj-doc-closed') > -1);
+check('its line says what it filled', stream().indexOf('fields filled') > -1);
+check('and it counts the values it did NOT touch, rather than claiming them',
+  run('ccjRun.doc.kept') >= 1 && run('ccjDocFact(ccjRun.doc)').indexOf('kept ' + run('ccjRun.doc.kept') + ' of yours') > -1,
+  run('ccjDocFact(ccjRun.doc)'));
+check('what is missing is snapshotted, not recounted as the user answers',
+  typeof run('ccjRun.doc.absent') === 'number');
+// Reopening has to be free of friction — the whole line is the control, and it comes back with
+// every row it had.
+run('ccjToggleDoc()');
+check('one click brings the whole card back',
+  stream().indexOf('ccj-doc-closed') === -1 && count(stream(), 'ccj-doc-head') === 1
+  && count(stream(), 'ccj-doc-row') >= 3,
+  count(stream(), 'ccj-doc-row') + ' rows back');
+run('ccjToggleDoc()');
+check('and clicking again folds it', stream().indexOf('ccj-doc-closed') > -1);
 check('the conversation is not flooded', run('ccjRun.msgs.length') < 12, run('ccjRun.msgs.length') + ' messages');
 check('the flash marker is cleared when it finishes', run('ccjRun.justFilled') === null);
 until(() => run('ccjRun.doc.done') === true);
@@ -690,14 +898,28 @@ check('moved to the proposal screen', run('ccjRun.screen') === 'proposal', run('
 check('the proposal screen shows it', screen().indexOf('Proposal created') > -1);
 check('the hold released — new intake settled', run("!!ccjRun.settled['request-received/New intake']") === true);
 check('its result line is the authored one', panel().indexOf('Intake resolved') > -1);
-check('progress moved off zero', prog() === '33%', prog());
+/* No progress bar to read any more — it was the panel's, and the panel is gone. Progress is now
+   what the blocks themselves say, which is a stronger thing to assert: a bar can be at 33% while
+   the row it claims to describe says nothing. */
+check('the first step now reads as done', run("!!ccjRun.settled['request-received/New intake']"));
+check('and it says what it found, not just that it finished',
+  String(run("ccjRun.settled['request-received/New intake'].summary") || '').length > 0,
+  run("ccjRun.settled['request-received/New intake'].summary"));
 
 section('CSM ASSIGNED, THEN THE GATE');
 advance(Math.round(5000*PACE));
 const p2 = panel();
 check('sub-status 2 settled and names the CSM', p2.indexOf('Maya Vos assigned') > -1, 'Netherlands should route to Maya Vos');
-check('two rows are done', count(p2, 'ccj-row done') === 2, count(p2, 'ccj-row done') + ' done');
-check('progress bar moved to two-thirds by width, not by rebuild', prog() === '67%', prog());
+/* THE COLLAPSE, WHICH IS THE POINT OF THE WHOLE STEP. Two sub-statuses have finished and the
+   runner has moved to the third, so both closed — and each kept the one fact worth keeping. The
+   third is showing its gate and stays open, because closing a block with an unanswered question
+   in it would hide the only control that can advance the run. */
+check('the two finished steps have closed', count(p2, 'ccj-sb closed') === 2,
+  count(p2, 'ccj-sb closed') + ' closed');
+check('and each closed line kept a fact, not just a tick',
+  count(p2, 'ccj-sb-fact') >= 2 && p2.indexOf('<span class="ccj-sb-fact"></span>') === -1);
+check('the step being asked about is still open', count(p2, 'ccj-sb open') === 1,
+  count(p2, 'ccj-sb open') + ' open');
 check('run halted on the decision', run('ccjRun.phase') === 'halt', run('ccjRun.phase'));
 check('gate rendered in the row it belongs to', p2.indexOf('ccj-gate') > -1);
 check('gate offers both answers', p2.indexOf('>Qualify<') > -1 && p2.indexOf('>Disqualify<') > -1);
@@ -741,8 +963,25 @@ check('page followed the stage', run('page') === 'ccj-quote-prep', run('page'));
 const h2 = shell();
 check('rail moved with it', h2.indexOf('Step 2 of 9') > -1);
 check('stage 1 dot now reads done', h2.indexOf('ccj-dot done') > -1);
-check('panel switched to stage 2 sub-statuses', h2.indexOf('Quote in preparation') > -1);
-check('stage 2 shows all six of its sub-statuses', count(h2, 'class="ccj-row ') === 6, count(h2, 'class="ccj-row ') + ' rows');
+/* The old check here greped h2 for "Quote in preparation" and called that "the panel switched to
+   stage 2". It has been a no-op for as long as it has existed: the header AND the rail both print
+   the stage's `short`, so it passes with no sub-status surface on the page at all — which is
+   exactly what stage 2 now is. Replaced with something only this stage's own surface can satisfy.
+
+   And "shows all six of its sub-statuses" was a property of the PANEL, which listed every step of
+   the stage before any of them ran. A transcript has no pending blocks by design, so at this
+   moment there is exactly one. The six are asserted where they become true — at the end of the
+   stage, below. */
+check('stage 2 is a rebuilt stage, so it has no panel', run('ccjUsesTranscript(1)') === true && h2.indexOf('ccj-panel') === -1);
+/* Counted by the stage's own block ids, not by the class. The transcript is ONE conversation for
+   the whole run, so stage 1's blocks are still in it — a bare class count here is a count of the
+   journey so far, and would have passed at any number. `ccj-sb-1-` is stage index 1. */
+check('and it starts with one block, not a list of six',
+  count(stream(), 'id="ccj-sb-1-') <= 1,
+  count(stream(), 'id="ccj-sb-1-') + ' stage-2 blocks at entry, '
+  + count(stream(), 'class="ccj-sb ') + ' in the whole transcript');
+check('the stage really does have six sub-statuses to get through',
+  run("amSubSteps('quote-prep').length") === 6, run("amSubSteps('quote-prep').length") + ' steps');
 check('stage 2 has a real screen, not a placeholder', h2.indexOf('Coming soon') === -1 && h2.indexOf('ccj-q-title') > -1);
 check('the stage-1 decision is recorded', run('Object.keys(ccjRun.decisions).length') === 1);
 
@@ -778,7 +1017,12 @@ check('and the reason is shown rather than the row vanishing',
   panel().indexOf('owned in-house') > -1);
 check('a skipped step reads as a sentence, not a mangled fragment',
   panel().indexOf('Only applies to if off-standard') === -1);
-check('it does not count as work done', panel().indexOf('Not applicable') > -1);
+/* The panel said "Not applicable" and then the reason underneath. A block has one line to work
+   with, and the reason IS the more useful half — "Netherlands is owned in-house" says everything
+   "Not applicable" does and says why. So the assertion moves to what actually distinguishes a
+   skipped step now: its own mark, which is neither a green tick nor a spinner. */
+check('it does not count as work done', panel().indexOf('ccj-sb-skip') > -1
+  && panel().indexOf('ccj-sb closed skipped') > -1, 'no skipped-block marking found');
 
 // -- 3 & 4. Cost calc built, then the statutory floor --
 advance(Math.round(14000*PACE));
@@ -841,7 +1085,11 @@ check('the work being redone is un-ticked',
   run("!ccjRun.settled['quote-prep/Cost calc built']") === true
   && run("!!ccjRun.settled['quote-prep/Country data check']") === true);
 check('the run is alive, not stopped', run('ccjRun.stopped') === false);
-check('the conversation says where it went back to', stream().indexOf('Rebuilding the cost') > -1);
+// It NAMES the step. It used to say "Rebuilding the cost", which is this stage's sentence said on
+// every send-back in the journey — including stage 5's, which rebuilds an agreement and has no
+// cost in it. Asserted against the step name so it stays true wherever a rework happens.
+check('the conversation says where it went back to',
+  stream().indexOf('Picking up again from <b>Cost calc built</b>') > -1);
 advance(Math.round(30000*PACE));
 check('it works its way back to Quote QA', run('ccjRun.phase') === 'halt' && run('ccjRun.sub') === 5);
 
@@ -899,6 +1147,25 @@ const v1Total = run('ccjQuote().total');
 check('the run parks waiting on the client to open it',
   until(() => run('ccjRun.phase') === 'wait'), run('ccjRun.phase'));
 check('and the panel says what it is waiting for', panel().indexOf('Waiting for the client to open') > -1);
+/* A WAITING BLOCK MUST NOT CLAIM TO BE WORKING. This is a PRE-wait — the step parks before doing
+   anything — so there is no action underway and none may be drawn. The block rendered its first
+   action with a spinner inside a block whose own mark was the parked pulse: the two halves of one
+   block disagreeing about whether anything is happening. The suite was blind to it because the
+   post-wait, which had the same bug, was the only one anything asserted on.
+
+   Read from the LIVE block by id, not from the whole stream — stages 1 and 2 above it are full of
+   legitimately finished spinners' worth of markup, and a stream-wide search proves nothing. */
+const liveWaitBlock = (function () {
+  const id = run("ccjStepBlockId(ccjRun.stage,ccjRun.sub,ccjPass(ccjRun.stage,ccjSteps(ccjRun.stage)[ccjRun.sub]))");
+  const s = stream();
+  const at = s.indexOf('id="' + id + '"');
+  return at === -1 ? '' : s.slice(at, s.indexOf('</div>', s.indexOf('ccj-wait-note', at)));
+})();
+check('the parked block draws a pulse, not a spinner',
+  liveWaitBlock.indexOf('ccj-sb-wait') > -1 && liveWaitBlock.indexOf('ccj-spin') === -1,
+  liveWaitBlock.slice(0, 200));
+check('and claims no action it has not performed yet',
+  liveWaitBlock.indexOf('ccj-act') === -1, liveWaitBlock.slice(0, 200));
 
 section('THEY OPEN IT, THEN GO QUIET');
 check('Viewed resolves on the open',
@@ -908,8 +1175,15 @@ check('a follow-up goes out when they do not reply',
   until(() => run('ccjRun.client.chases') >= 1), run('ccjRun.client.chases') + ' chases');
 check('it appears in the thread as a chase', stream().indexOf('ccj-cmsg note chase') > -1);
 check('a second follow-up follows', until(() => run('ccjRun.client.chases') >= 2));
-check('one row counts them — the panel still has five rows, not seven',
-  count(panel(), 'class="ccj-row ') === 5, count(panel(), 'class="ccj-row ') + ' rows');
+/* The point stands, the surface moved: three follow-ups are ONE sub-status that counts them, not
+   three sub-statuses. Counted by this stage's own block ids — stage index 2 — because the
+   transcript is one conversation for the whole run and a bare class count would be counting
+   stages 1 and 2 as well. Two blocks at this moment: Sent, and the Follow-up loop still running. */
+check('the follow-ups are one block that counts them, not one block each',
+  count(stream(), 'id="ccj-sb-2-') <= 3, count(stream(), 'id="ccj-sb-2-') + ' stage-3 blocks for '
+  + run('ccjRun.client.chases') + ' chases');
+check('and the chases show in the thread rather than as blocks',
+  count(stream(), 'ccj-cmsg note chase') >= 2, count(stream(), 'ccj-cmsg note chase') + ' chase notes');
 check('and no more than three are ever sent', run('ccjRun.client.chases') <= 3);
 
 section('THE NEGOTIATION');
@@ -940,13 +1214,22 @@ check('stage 3 completes and the journey moves on',
   until(() => run('ccjRun.stage') === 3), 'stage ' + run('ccjRun.stage'));
 check('page followed', run('page') === 'ccj-quote-approved', run('page'));
 
-section('THE OVERRIDE STRIP TAKES THE OTHER BRANCH');
-// Same events, fired by hand. Accepting on first read should settle two rows and mark the
-// negotiation rows not applicable — the path the script never takes.
+/* The demo's simulate strip is gone from the rebuilt stage — it was five buttons sitting
+   permanently above the composer, on the surface a person actually works in, and CCJ_CLIENT_SCRIPT
+   already drives the client on its own timing. What it fired is what this section still fires:
+   ccjClientEvent is the event path itself, not the strip's private back door, so the branch below
+   is exercised exactly as before. The assertion that the strip was ON SCREEN is the only thing
+   that goes, and it is replaced by one that the strip is NOT — a removal nobody notices is a
+   removal that comes back. */
+section('THE CLIENT ACCEPTING OUTRIGHT TAKES THE OTHER BRANCH');
 startRun();
 say('Create an EOR contract for Anika Shah at Norrbridge Logistics in Netherlands');
 check('reaches stage 3 again', driveTo(2), 'stage ' + run('ccjRun.stage'));
-check('the simulate strip is on the screen', screen().indexOf('ccj-sim-btn') > -1);
+check('no simulate strip anywhere on a rebuilt stage',
+  screen().indexOf('ccj-sim-btn') === -1 && stream().indexOf('ccj-sim-btn') === -1
+  && composer().indexOf('ccj-sim-btn') === -1);
+check('the events it fired are still reachable — the script uses the same path',
+  run('typeof ccjClientEvent') === 'function');
 until(() => run("!!ccjRun.settled['quote-review/Sent']"));
 run("ccjClientEvent('accepted')");
 check('accepting outright answers every outstanding wait', run('ccjRun.client.state') === 'accepted');
@@ -958,6 +1241,15 @@ section('STAGE 4 — A DEAL BECOMES AN ACCOUNT');
 check('the client thread carries on into stage 4', run('ccjChatMode()') === 'client');
 check('the screen is the client account', screen().indexOf('ccj-acct') > -1);
 check('nothing on this stage asks a human', run("ccjSteps(3).every(function(s){return !!s.auto;})"));
+// Rebuilt: the sub-statuses are blocks in the conversation and there is no panel beside it.
+check('stage 4 is on the transcript', run('ccjUsesTranscript(3)') === true);
+check('so it has no panel', shell().indexOf('ccj-panel') === -1 && shell().indexOf('ccj-body no-panel') > -1);
+/* The header line under the client's name. It said "quote v2" here, which describes a
+   negotiation that has finished — on the one line whose job is saying what the conversation is
+   about now. Read from the shell because the header is built with the stage. */
+check('the thread says the quote is settled rather than still being quoted',
+  shell().indexOf('Accepted quote v') > -1 && shell().indexOf('&middot; quote v') === -1,
+  shell().slice(shell().indexOf('ccj-chat-sub'), shell().indexOf('ccj-chat-sub') + 70));
 check('Won settles with the annualised value',
   until(() => run("!!ccjRun.settled['quote-approved/Won']")) && screen().indexOf('ccj-won on') > -1);
 const annual = run('ccjQuote().total * 12');
@@ -984,6 +1276,20 @@ check('the introduction lands in the client thread, not a separate place',
   stream().indexOf('ccj-cbubble csm') > -1 && stream().indexOf('Customer Success Manager') > -1);
 check('the thread now holds the whole relationship — quote, negotiation, handover',
   count(stream(), 'ccj-cbubble quote') >= 1 && stream().indexOf('ccj-cbubble csm') > -1);
+/* The handover is the one thing on this stage the client actually receives, so it has to be in
+   the marked lane and marked OUTBOUND. Everything else stage 4 does — booking the deal at its
+   annual value, provisioning a tenant — is ours, and the same read proves it stayed ours. */
+check('the introduction is marked as something the client can see',
+  stream().indexOf('ccj-lane out') > -1 && stream().indexOf('To ' + run('ccjParties().client.name')) > -1);
+check('THE STORES DID NOT MERGE here either — only the render did',
+  run('ccjRun.msgs !== ccjRun.client.msgs')
+  && run("!ccjRun.msgs.some(function(m){return m.lane==='client';})")
+  && run("!ccjRun.client.msgs.some(function(m){return m.kind==='step';})"));
+// The commercial number is booked internally and is NOT something we told the client. A block
+// that ended up inside a lane would put it one indent from a message they received.
+check('the annualised value is in our own work, never in the lane',
+  stream().indexOf('a year') > -1
+  && run("ccjRun.client.msgs.every(function(m){return String(m.text||'').indexOf('a year')===-1;})"));
 
 section('IT RESTS ON THE SUMMARY RATHER THAN MOVING ON');
 check('the stage rests once everything has run',
@@ -991,10 +1297,86 @@ check('the stage rests once everything has run',
 check('it has not advanced', run('ccjRun.stage') === 3, 'stage ' + run('ccjRun.stage'));
 advance(Math.round(30000*PACE));
 check('and it will not advance on its own', run('ccjRun.stage') === 3 && run("ccjRun.phase==='rest'"));
-check('the screen offers the way on', screen().indexOf('Continue to client signing') > -1);
-run('ccjContinueStage()');
+/* THE ARTEFACT SHOWS, IT DOES NOT ASK. The way on used to be a button printed on the account
+   screen — the last control in the journey sitting on a surface whose only job is showing what
+   was made. It is now a block in the conversation, like every other thing that wants something. */
+check('the account screen carries no control of its own',
+  screen().indexOf('Continue to client signing') === -1 && screen().indexOf('<button') === -1,
+  screen().slice(screen().indexOf('ccj-acct-foot'), screen().indexOf('ccj-acct-foot') + 160));
+check('but it still states what is true — the client is live',
+  screen().indexOf('Client is live') > -1);
+check('the way on is asked for in the conversation',
+  stream().indexOf('Continue to client signing') > -1 && stream().indexOf('ccj-ask-block') > -1);
+/* The sentence beside the button says what clicking it BEGINS, rather than repeating the facts
+   the closed blocks and the artefact beside them already carry twice over. It opened with
+   "Nothing further is needed here", which is the account screen's own foot said a second time in
+   the other column — the exact clutter this rebuild exists to remove, and the easiest kind to
+   write by accident when the two halves live in different builders. */
+check('and it says what the next stage is for',
+  stream().indexOf(run("CCJ_STAGE_REST['quote-approved'].next")) > -1);
+check('without repeating what the account screen already says',
+  stream().indexOf('Nothing else is needed') === -1
+  && stream().indexOf('Nothing further is needed') === -1);
+// A rest stage that shipped without its sentence would render an ask with an empty body and a
+// button floating under it. Cheap to assert once for all of them rather than per stage.
+check('every resting stage has both a label and a next-step line',
+  run("Object.keys(CCJ_STAGE_REST).every(function(k){var r=CCJ_STAGE_REST[k];"
+    + "return !!(r&&r.label&&r.next);})"),
+  run('JSON.stringify(Object.keys(CCJ_STAGE_REST))'));
+check('the block the runner just left is closed behind it',
+  stream().indexOf('ccj-sb closed') > -1 && count(stream(), 'class="ccj-sb open') === 0,
+  count(stream(), 'class="ccj-sb open') + ' still open');
+// Answered through the ask's own handler, which is the click a user makes — not by reaching past
+// it to ccjContinueStage. A registry entry that did not resolve would fail here rather than at
+// click time in a browser.
+const restAsk = run("(function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})()");
+check('the ask is live and unanswered', restAsk > 0, 'id ' + restAsk);
+run('ccjAnswerAsk(' + restAsk + ')');
 check('clicking it moves to stage 5', until(() => run('ccjRun.stage') === 4), 'stage ' + run('ccjRun.stage'));
 check('page followed', run('page') === 'ccj-agreement-signature', run('page'));
+/* STAGE 5 ON A CLIENT WHO ALREADY HAS AN AGREEMENT. A master agreement is signed once per client,
+   so every step here is skipped — and a skipped step still gets a block saying why it did not run.
+   That is the transcript's rule: it is a record of what happened, and "we considered this and
+   ruled it out" is something that happened. The alternative — five steps vanishing — reads as a
+   stage that was never reached. */
+check('stage 5 rests too', answerGatesUntil(() => run("ccjRun.phase==='rest'")), run('ccjRun.phase'));
+check('and it is on the transcript', run('ccjUsesTranscript(4)') === true);
+check('every step of it got a block, even though none of them ran',
+  count(stream(), 'id="ccj-sb-4-') === run('ccjSteps(4).length'),
+  count(stream(), 'id="ccj-sb-4-') + ' blocks for ' + run('ccjSteps(4).length') + ' steps');
+// Scoped to THIS stage's block ids. A bare class count reads the whole run — stages 1 and 2 have
+// legitimately skipped steps of their own, and counting those would make this pass at 9 whatever
+// stage 5 did.
+check('and each one is marked skipped rather than ticked as done',
+  count(stream(), 'ccj-sb closed skipped" id="ccj-sb-4-') === run('ccjSteps(4).length'),
+  count(stream(), 'ccj-sb closed skipped" id="ccj-sb-4-') + ' of ' + run('ccjSteps(4).length'));
+check('and each says why, rather than leaving a blank fact beside it',
+  run("ccjSteps(4).every(function(s){var st=ccjRun.settled['agreement-signature/'+s.label];"
+    + "return st&&st.skipped&&!!st.reason;})"),
+  run("JSON.stringify(ccjSteps(4).map(function(s){var st=ccjRun.settled['agreement-signature/'+s.label];return st&&st.reason;}))"));
+check('the agreement screen states what governs instead of pretending to draft one',
+  screen().indexOf('already has a signed agreement') > -1);
+/* A REST MUST OFFER A WAY OUT OF ITSELF. This branch of the screen had no foot at all, so before
+   the way on moved into the conversation the run rested here with no control anywhere on the
+   page. The harness never caught it because driveTo() calls ccjContinueStage() directly whenever
+   it sees a rest, which walks past the surface a person actually meets. */
+check('the way on is asked for in the conversation here too',
+  stream().indexOf('Continue to deposit') > -1 && stream().indexOf('ccj-ask-block') > -1);
+check('and the agreement screen carries no control of its own',
+  screen().indexOf('<button') === -1, screen().slice(0, 200));
+const msaAsk = run("(function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})()");
+run('ccjAnswerAsk(' + msaAsk + ')');
+check('answering it reaches stage 6', until(() => run('ccjRun.stage') === 5), 'stage ' + run('ccjRun.stage'));
+/* Stage 6 is now the first stage still on the panel. Its rest asks from its SCREEN, which is what
+   proves the gate is on ccjUsesTranscript rather than on "there is a rest" — the day stage 6 is
+   rebuilt this moves again, and until then it is the only thing asserting the older path works. */
+check('a rest on a stage still using the panel keeps asking from its screen',
+  answerGatesUntil(() => run("ccjRun.phase==='rest'"))
+  && run('ccjUsesTranscript(5)') === false
+  && screen().indexOf(run("CCJ_STAGE_REST['deposit-due'].label")) > -1,
+  'phase ' + run('ccjRun.phase') + ', stage ' + run('ccjRun.stage'));
+check('and it pushed no ask into that stage\'s conversation',
+  run("!ccjRun.restAsked['deposit-due']"));
 
 section('A NEW CLIENT IS ACTUALLY PROVISIONED');
 // The path that could never be reached before: a client with no account yet. Vantage Freight and
@@ -1067,9 +1449,32 @@ section('STAGE 5 — THE MASTER SERVICES AGREEMENT');
   check('the deposit clause explains why a deposit exists',
     screen().indexOf('funds payroll ahead of invoice settlement')>-1);
   check('both signature blocks are present, unsigned', count(screen(),'ccj-msa-sig')>=2);
+  check('the stage is on the transcript, with no panel beside it',
+    run('ccjUsesTranscript(4)')===true && shell().indexOf('ccj-panel')===-1);
+  check('and the thread names the agreement rather than the quote it came from',
+    shell().indexOf(run('ccjMsa().id'))>-1 && shell().indexOf('&middot; quote v')===-1);
   // Legal reads it before anything is sent. That gate is the point of the 48h SLA.
   check('legal has to release it before it goes anywhere',
     until(()=>run("ccjRun.phase==='halt'")) && panel().indexOf('Release the agreement')>-1, run('ccjRun.phase'));
+  /* THE FIRST INTERNAL DECISION INSIDE A COUNTERPARTY'S COLUMN. Stages 3 and 4 shared the column
+     with the client but every control on them was the client's own doing; this one is OURS — a
+     lawyer deciding whether to release the paper — and it now renders one scroll from messages the
+     client received. It is safe only because of the lane rule the reader learns once: indented
+     means they can see it. So the gate must sit in the un-indented half, and the assertion is
+     exactly that. Getting this wrong puts an internal legal decision inside a customer's
+     correspondence, which is the failure this whole marking scheme exists to prevent. */
+  /* Asserted at the DATA level, which is where this is actually decided and where a string harness
+     can prove something. Whether the rendered gate is INSIDE a .ccj-lane element is a containment
+     question; markup slicing cannot answer it honestly, so that half is checked in the browser
+     with closest('.ccj-lane') rather than faked here. */
+  check('THE LEGAL DECISION IS IN OUR OWN STORE, NEVER THE CLIENT THREAD',
+    run("ccjRun.msgs.some(function(m){return m.kind==='step'&&m.stage===4;})")
+    && run("!ccjRun.client.msgs.some(function(m){return m.kind==='step'||m.kind==='ask';})"));
+  check('and only messages the client was actually sent carry a lane',
+    run("ccjRun.client.msgs.every(function(m){return m.lane==='client';})")
+    && run("ccjRun.msgs.every(function(m){return !m.lane;})"));
+  check('and it is a block in the conversation, not a control on the document',
+    stream().indexOf('ccj-gate approval')>-1 && screen().indexOf('Release the agreement')===-1);
   answerGate('released');
   check('screening runs before it is sent',
     until(()=>run("!!ccjRun.settled['agreement-signature/Client entity + sanctions check']")));
@@ -1088,7 +1493,31 @@ section('STAGE 5 — THE MASTER SERVICES AGREEMENT');
   })());
   check('and the evidence names the client address',
     run("(function(){var d=ccjEvidence(4,ccjSteps(4)[3]);return JSON.stringify(ccjVal(d.fetched,ccjCtx()));})()").indexOf(run('ccjParties().client.email'))>-1);
+  /* THE WAIT FOR A SIGNATURE. A pre-wait: nothing can be verified until the signed copy is back,
+     so the step parks before doing anything — which means it must draw no action and no spinner.
+     Its rows are declared on the wait itself; they used to be inferred from ambient client state,
+     and the inference put "Opened · Tracked" here, which records that the client opened the QUOTE
+     two stages ago and has nothing to do with the agreement. */
+  check('it parks waiting for the client to sign',
+    until(()=>run("ccjRun.phase==='wait'")), run('ccjRun.phase'));
+  const signWait=(function(){
+    const id=run("ccjStepBlockId(ccjRun.stage,ccjRun.sub,ccjPass(ccjRun.stage,ccjSteps(ccjRun.stage)[ccjRun.sub]))");
+    const s=stream(), at=s.indexOf('id="'+id+'"');
+    return at===-1?'':s.slice(at, s.indexOf('ccj-sb-body', at)+4000);
+  })();
+  check('and says so, without claiming work it has not started',
+    signWait.indexOf('Waiting for the client to sign')>-1 && signWait.indexOf('ccj-spin')===-1
+    && signWait.indexOf('ccj-act')===-1, signWait.slice(0,240));
+  check('it says who is holding it, which is the only question a wait like this raises',
+    signWait.indexOf('With')>-1 && signWait.indexOf(run('ccjParties().client.contact'))>-1);
+  check('and NOT that the quote was opened — that is a different document, two stages back',
+    signWait.indexOf('Opened')===-1, signWait.slice(signWait.indexOf('ccj-wait-rows'),
+      signWait.indexOf('ccj-wait-rows')+300));
   until(()=>run("ccjRun.phase==='halt'"));
+  // Countersigning is a POST gate: the work ran first and the decision is about its result. On the
+  // transcript that lands in the same block the signature evidence is in.
+  check('countersigning is asked for in the conversation, not on the document',
+    panel().indexOf('Countersign the agreement')>-1 && screen().indexOf('Countersign the agreement')===-1);
   answerGate();
   check('signed settles', until(()=>run("!!ccjRun.settled['agreement-signature/Signed']")));
   const m=run('ccjMsa()');
@@ -1176,8 +1605,12 @@ section('THE SIGNED AGREEMENT COMES BACK');
   // The stage rests on it rather than walking past the thing it produced.
   check('the stage rests on the signed agreement', until(()=>run("ccjRun.phase==='rest'")), run('ccjRun.phase'));
   check('it does not advance on its own', (function(){advance(30000);return run('ccjRun.stage')===4;})());
-  check('and offers the way on', screen().indexOf('Continue to deposit')>-1);
-  run('ccjContinueStage()');
+  // The document shows; the conversation asks. The executed agreement is the artefact this stage
+  // produced and it keeps saying so — it just no longer carries the button.
+  check('the executed agreement states that it is done', screen().indexOf('Agreement executed')>-1);
+  check('and the way on is asked for in the conversation',
+    stream().indexOf('Continue to deposit')>-1 && screen().indexOf('<button')===-1);
+  run("ccjAnswerAsk((function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})())");
   check('continuing reaches stage 6', until(()=>run('ccjRun.stage')===5), 'stage '+run('ccjRun.stage'));
 })();
 
@@ -2300,9 +2733,31 @@ advance(Math.round(1200*PACE));
 check('the employee screen is shown for a new hire', run('ccjRun.screen') === 'employee', run('ccjRun.screen'));
 check('it shows the record', screen().indexOf('Employee created') > -1);
 check('new intake is held here too, not settled', run('ccjRun.phase') === 'hold');
-run("ccjGoScreen('form')");
-check('continuing reaches the form', run('ccjRun.screen') === 'form');
+
+/* THE RIGHT-HAND PANE SHOWS, IT DOES NOT ASK. This section used to call ccjGoScreen('form')
+   directly, which meant the suite never touched the control at all — the button could have been
+   deleted outright and every check here would still have passed. It now goes the way a person
+   does: find the ask in the conversation, answer it, and see where that lands. */
+check('the record screen carries no control of its own',
+  screen().indexOf('ccj-primary') === -1 && screen().indexOf('<button') === -1,
+  screen().slice(-200));
+check('the ask is in the conversation instead', stream().indexOf('ccj-ask-block') > -1);
+const askId = (/ccjAnswerAsk\((\d+)\)/.exec(stream()) || [])[1];
+check('and it is answerable', !!askId, 'no ccjAnswerAsk handler found in the stream');
+run('ccjAnswerAsk(' + askId + ')');
+check('answering it reaches the form', run('ccjRun.screen') === 'form');
 check('still held on the form screen', run('ccjRun.phase') === 'hold');
+// An answered ask stays put and records that it was answered. A control that vanished would
+// leave the reader wondering whether they imagined it.
+check('the answered ask stays in the transcript, marked done',
+  stream().indexOf('ccj-ask-block done') > -1 && stream().indexOf('Continue to contract details') > -1);
+run('ccjAnswerAsk(' + askId + ')');
+check('answering a spent ask does nothing', run('ccjRun.screen') === 'form');
+// Every ask resolves to a real function. The journey has been bitten before by a handler that
+// was valid JS, sat inside a string, and failed only at click time.
+check('every ask in the registry resolves',
+  run('Object.keys(CCJ_ASKS).every(function(k){return typeof CCJ_ASKS[k]==="function";})') === true,
+  run('JSON.stringify(Object.keys(CCJ_ASKS))'));
 
 section('STALE TIMERS');
 const genBefore = run('ccjRun.gen');
@@ -2314,6 +2769,61 @@ check('a fresh run starts clean, back at the chooser',
   run('ccjRun.stage') === 0 && run('page') === 'ccj-model'
   && run('Object.keys(ccjRun.settled).length') === 0 && run('ccjRun.msgs.length') === 0);
 check('and the model chip is reopenable again', run("ccjRun.started") === false);
+
+/* == THE TRANSCRIPT APPENDS RATHER THAN REBUILDS =========================================
+   The stream used to be rebuilt from run.msgs on every push. It now appends, and the difference
+   is invisible in the HTML afterwards — which is exactly why these assertions count the calls
+   instead of reading the result. Without them the whole change could be reverted and every other
+   check in this file would still pass.
+
+   Two things here are deliberately NOT asserted, because this stub models nodes as strings and
+   asserting them would only be asserting the stub: that `.in` is stripped from the previous
+   message (a classList mutation, invisible in the HTML), and that a live block is repainted in
+   place (ccjLiveNode finds no parent here, so ccjRepaintMsg correctly falls back to a rebuild —
+   which is what keeps every OTHER assertion in this file reading the truth). Both are checked in
+   a real browser. == */
+section('THE TRANSCRIPT APPENDS RATHER THAN REBUILDS');
+run('ccjStartNewRun()');
+run("ccjChooseModel('EOR')");
+advance(2000);
+byId('ccj-prompt').value = 'Hire Shiv Kumar for Helix Marine in Germany as Director of Engineering at EUR 18,500 a month';
+run('ccjSend()');
+advance(Math.round(9000 * PACE));
+run("ccjGoScreen('form')");                 // settle on one screen: a screen change still rebuilds
+advance(Math.round(3000 * PACE));
+
+streamOps.rebuild = 0; streamOps.append = 0;
+const msgsBefore = run('ccjRun.msgs.length');
+run("ccjPush({who:'agent',text:'transcript check one'})");
+run("ccjPush({who:'user',text:'transcript check two'})");
+check('a push appends', streamOps.append === 2, 'appends=' + streamOps.append);
+check('a push does not rebuild the stream', streamOps.rebuild === 0, 'rebuilds=' + streamOps.rebuild);
+check('both messages arrived',
+  stream().indexOf('transcript check one') > -1 && stream().indexOf('transcript check two') > -1);
+check('and nothing said earlier was dropped',
+  (stream().match(/id="ccj-m-\d+"/g) || []).length === msgsBefore + 2,
+  'on screen=' + (stream().match(/id="ccj-m-\d+"/g) || []).length + ' expected=' + (msgsBefore + 2));
+check('every message carries an id, and no id is used twice', (function () {
+  const ids = stream().match(/id="ccj-m-\d+"/g) || [];
+  return ids.length > 0 && ids.length === new Set(ids).size;
+})());
+
+// History changing rather than growing is the one case an append cannot serve, and it is silent
+// when it goes wrong: the removed message stays on screen and the new one lands after it.
+streamOps.rebuild = 0; streamOps.append = 0;
+run('ccjRun.msgs.splice(1,1)');
+run("ccjPush({who:'agent',text:'after a removal'})");
+check('a message being removed forces a rebuild instead', streamOps.rebuild === 1 && streamOps.append === 0,
+  'rebuilds=' + streamOps.rebuild + ' appends=' + streamOps.append);
+check('and the stream matches the store again',
+  (stream().match(/id="ccj-m-\d+"/g) || []).length === run('ccjRun.msgs.length'));
+
+// Sticky, not forced. With no layout every measurement is 0, so the harness can only check the
+// predicate itself — the behaviour it drives is checked in the browser.
+check('at the bottom is recognised', run('ccjAtBottom')({ scrollHeight: 4000, scrollTop: 3400, clientHeight: 600 }) === true);
+check('a reader who has scrolled up is recognised', run('ccjAtBottom')({ scrollHeight: 4000, scrollTop: 900, clientHeight: 600 }) === false);
+check('the stream and the form scroll on separate glide lanes',
+  run('typeof ccjGlideLane') === 'object' && run('typeof ccjGlideTo') === 'undefined');
 
 section('THE ORIGINAL JOURNEY IS UNTOUCHED');
 check('its builders still exist', run('typeof buildAIContractAssistantHTML') === 'function' && run('typeof aiCtJourneyStage') === 'function');

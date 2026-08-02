@@ -13,7 +13,10 @@
 <link rel="stylesheet" href="css/leaves.css">
 <link rel="stylesheet" href="css/intake-flow.css">
 <link rel="stylesheet" href="css/am-pipeline.css">
-<link rel="stylesheet" href="css/contract-journey.css"></head>
+<link rel="stylesheet" href="css/contract-journey.css">
+<!-- The frozen V1 snapshot of the contract journey, reached from Support > Contract Journey V1.
+     Loaded after the live one and prefixed ccjv1- throughout, so the two never touch. -->
+<link rel="stylesheet" href="css/contract-journey-v1.css"></head>
 <body>
 <!-- ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â ADT DASHBOARD ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â -->
 <div id="v-adt" class="view active">
@@ -142,11 +145,16 @@
      one above: the two journeys share no state, and one input feeding both handlers would be
      exactly the shared surface this rebuild exists to avoid. -->
 <input type="file" id="ccj-upload-input" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="ccjHandleUpload(event)">
+<!-- And the frozen V1 snapshot's, for the same reason one step further: it renamed every id it
+     owns, so pointing it back at the input above would have been the one thread still tying the
+     snapshot to the file it was taken from. -->
+<input type="file" id="ccjv1-upload-input" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="ccjv1HandleUpload(event)">
 <script src="js/exec-config.js"></script>
 <script src="js/execApi.js"></script>
 <script src="js/core.js"></script>
 <script src="js/pages.js"></script>
 <script src="js/contract-journey.js"></script>
+<script src="js/contract-journey-v1.js"></script>
 <script src="js/renderer.js"></script>
 
 
