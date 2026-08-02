@@ -590,7 +590,18 @@ const amOwnerDirectory={
   'Payroll Ops':    {who:'Priyanka Bhatt', initials:'PB',persona:'hr'},
   'System':         {who:'AI Execution Layer',initials:'AI',persona:null},
   'Client':         {who:'Client',         initials:'CL',persona:null},
-  'Worker':         {who:'Worker',         initials:'WK',persona:null}
+  'Worker':         {who:'Worker',         initials:'WK',persona:null},
+  /* -- Added by the Bhaiyaa store journey. 'Ops Manager' is the same person as 'EOR Ops' and
+     deliberately a separate key: they are two queues, not one, and a store opening that lands
+     in the EOR Ops bucket would be unreadable to whoever works it. 'Merchant' is external and
+     gets persona null for the same reason 'Client' does — a merchant's own signup cannot be
+     ticked on their behalf from inside this portal, only chased. The two agents are named
+     rather than folded into 'System' because the journey names them, and a trail that says
+     "KYC Agent" is worth more than one that says "the system". -- */
+  'Ops Manager':    {who:'Sunita Kulkarni',initials:'SK',persona:'ops-manager'},
+  'Merchant':       {who:'Merchant',       initials:'MR',persona:null},
+  'KYC Agent':      {who:'KYC Agent',      initials:'KA',persona:null},
+  'Store Agent':    {who:'Store Agent',    initials:'SA',persona:null}
 };
 function amOwnerInfo(role){return amOwnerDirectory[role]||{who:role,initials:'?',persona:null};}
 function amSubSteps(stageId){return amSubStatuses[stageId]||[];}
@@ -846,6 +857,199 @@ function amStageIndex(id){return amPipelineStages.findIndex(function(s){return s
 function amStageCount(id){return amDeals.filter(function(d){return d.stage===id;}).length;}
 function amDealsForStage(id){return id?amDeals.filter(function(d){return d.stage===id;}):amDeals.slice();}
 
+/* == OPS MANAGER — BHAIYAA STORE OPERATIONS ==============================================
+   The same instrument as the Account Manager board above — header, rail, listing, drawer —
+   pointed at a different journey. Everything it shows is the Bhaiyaa Store Creation Journey
+   (aiJourneyEvents['bhaiyaa-store-creation']) and nothing else: five stages, in the order the
+   journey declares them, with the same owners the journey names.
+
+   WHY THIS SHAPE FOR THIS ROLE. An Ops Manager's day on store openings is not a to-do list of
+   their own steps — the journey is 3 of 5 steps automated, and the two human steps belong to
+   the merchant. Their day is the two exceptions the journey itself calls out: a merchant who
+   started a signup and stopped, and an agent run that halted. So the board is built to make
+   those two visible, and it deliberately does NOT invent ops sign-off steps to pad the human
+   column. Padding would have made the automated journey look manual, which is the one thing
+   this product should never do.
+
+   MINIMAL ON PURPOSE. Twelve sub-steps across five stages, against the contract journey's 41.
+   The store journey is short and mostly automated; a board that split it into forty operations
+   would be describing a process that does not exist. == */
+const soPipelineStages=[
+  {id:'store-role',    n:1,track:'merchant',tone:'blue', label:'Store role',      short:'Store role',   plain:'The merchant is choosing whether this store sells to customers or buys from sellers.',  internal:'Signup issued, waiting on the role choice',        waitingOn:'Merchant',merchantAction:true},
+  {id:'store-details', n:2,track:'merchant',tone:'amber',label:'Store details',   short:'Signup',       plain:'The merchant is filling in Bhaiyaa&rsquo;s signup &mdash; contact, store name, category and turnover band.',internal:'Signup in progress on the merchant&rsquo;s side',  waitingOn:'Merchant',merchantAction:true},
+  /* A gate in the same sense as the deal board's deposit stage: nothing downstream exists until
+     it clears. The journey is explicit that a failed match halts the run BEFORE a store is
+     created, which is the whole reason KYC sits here rather than after provisioning. */
+  {id:'kyc',           n:3,track:'ours',    tone:'red',  label:'KYC verification',short:'KYC',          plain:'We are checking the owner&rsquo;s Aadhaar with UIDAI before any store is opened.',      internal:'UIDAI demographic match and watchlist screen',     waitingOn:'KYC Agent',gate:true},
+  {id:'store-creation',n:4,track:'ours',    tone:'blue', label:'Store creation',  short:'Creating',     plain:'We are registering the store on Bhaiyaa and switching on the storefront or the ledger.',internal:'StoreIntake registration, then provisioning',      waitingOn:'Store Agent'},
+  {id:'store-live',    n:5,track:'ours',    tone:'green',label:'Store created',   short:'Live',         plain:'The store exists in both systems. It stays Pending until its address, GST number and bank details are added.',internal:'Live in both systems, pending the remaining details',waitingOn:'Ops Manager',terminal:true}
+];
+/* Two tracks, and the divider between them is the honest summary of this journey: the first
+   half is not ours to do, the second half is not ours to touch unless it breaks. */
+const soPipelineTracks=[
+  {id:'merchant',label:'The merchant signs up',sub:'Nothing here is yours to tick',plain:'Everything the merchant fills in themselves. You cannot complete these; you chase them.'},
+  {id:'ours',    label:'We open the store',    sub:'Runs on agents',               plain:'KYC, registration on Bhaiyaa and provisioning. Agents do the work &mdash; you step in only when one halts.'}
+];
+/* == SUB-STEPS ===========================================================================
+   Same contract as amSubStatuses: `auto` is performed by the execution layer, `owner` is who
+   answers for it either way, `cond` marks a step that only applies in some cases.
+
+   `halt` is new here, and it earns its place. The journey documents two failures that stop a
+   run dead — a UIDAI mismatch and a rejected Bhaiyaa registration — and both are handed to a
+   person to clear. Modelling them as ordinary steps would put every store through a compliance
+   review it does not need; modelling them as nothing would leave the two records an Ops Manager
+   actually works with nowhere to sit. So a halt step exists only for a record whose run halted
+   in that stage (see soSteps), and it is the LAST step of its stage, which is what keeps `sub`
+   indices stable whether it is present or not.
+
+   `act` overrides the button wording. "Mark done" is right for a step you complete and wrong
+   for one you clear, and the listing's action column is the place a user reads fastest — so
+   these are kept to two words, which is what the column can hold without truncating. == */
+const soSubStatuses={
+  'store-role':[
+    {label:'Signup issued',owner:'Ops Manager',auto:true,autoNote:'link sent to the merchant'},
+    {label:'Seller or Buyer chosen',owner:'Merchant',decision:true}
+  ],
+  'store-details':[
+    {label:'Signup completed',owner:'Merchant',sla:'2 days'},
+    {label:'Mobile verified',owner:'Merchant',auto:true,autoNote:'OTP callback'}
+  ],
+  'kyc':[
+    {label:'Aadhaar checked with UIDAI',owner:'KYC Agent',auto:true,autoNote:'name and mobile match'},
+    {label:'Watchlist screened',owner:'KYC Agent',auto:true,autoNote:'screening API'},
+    {label:'Mismatch review',owner:'Compliance',halt:true,act:'Clear review'}
+  ],
+  'store-creation':[
+    {label:'Registered on Bhaiyaa',owner:'Store Agent',auto:true,autoNote:'StoreIntake'},
+    {label:'Storefront or ledger opened',owner:'Store Agent',auto:true,autoNote:'provisioning'},
+    {label:'Registration retry',owner:'Ops Manager',halt:true,act:'Retry'}
+  ],
+  'store-live':[
+    {label:'Store details completed',owner:'Ops Manager',sla:'1 day',act:'Complete details'},
+    {label:'Active on Bhaiyaa',owner:'Store Agent',auto:true,autoNote:'once the details are complete'}
+  ]
+};
+/* `halted` holds the id of the stage the run stopped in, not a boolean — a boolean would make
+   the retry step of stage 4 appear on a record that halted in stage 3. `haltNote` is what came
+   back from the system that refused, which is the only thing that tells the reader what to do.
+   `age` is days on the current step, same as the deal board. */
+const soRuns=[
+  {id:1, ref:'STR-000112',store:'Sharma Kirana Mart',      merchant:'Ravi Sharma',      role:'seller',category:'Grocery & Kirana',        band:'Micro — ₹20 lakh to ₹1 crore',  city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-role',    sub:1},
+  {id:2, ref:'STR-000114',store:'Nandini Dairy Point',     merchant:'Meghana Rao',      role:'seller',category:'Dairy & Bakery',          band:'Nano — under ₹20 lakh a year',  city:'Bengaluru', updated:'31 Jul 2026',age:2, stage:'store-role',    sub:1},
+  {id:3, ref:'STR-000108',store:'Green Leaf Vegetables',   merchant:'Imran Qureshi',    role:'seller',category:'Fruits & Vegetables',     band:'Nano — under ₹20 lakh a year',  city:'Nagpur',    updated:'30 Jul 2026',age:3, stage:'store-details', sub:0},
+  {id:4, ref:'STR-000109',store:'Vasant Medico',           merchant:'Sneha Kulkarni',   role:'seller',category:'Pharmacy & Wellness',     band:'Micro — ₹20 lakh to ₹1 crore',  city:'Pune',      updated:'27 Jul 2026',age:6, stage:'store-details', sub:0,breach:true},
+  {id:5, ref:'STR-000110',store:'Bansal Hardware Depot',   merchant:'Naveen Bansal',    role:'buyer', category:'Hardware & Home Needs',   band:'Small — ₹1 crore to ₹5 crore',  city:'Indore',    updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
+  {id:6, ref:'STR-000111',store:'Anjali Stationers',       merchant:'Anjali Deshmukh',  role:'seller',category:'Stationery & Books',      band:'Nano — under ₹20 lakh a year',  city:'Nashik',    updated:'29 Jul 2026',age:4, stage:'store-details', sub:0},
+  {id:7, ref:'STR-000104',store:'Rohit Mobile World',      merchant:'Rohit Kadam',      role:'seller',category:'Electronics & Mobile',    band:'Small — ₹1 crore to ₹5 crore',  city:'Mumbai',    updated:'31 Jul 2026',age:2, stage:'kyc',           sub:2,halted:'kyc',
+   haltNote:'UIDAI returned a different name for this Aadhaar. The owner name on the signup does not match the demographics on record.'},
+  {id:8, ref:'STR-000106',store:'Sagar Foods &amp; Catering',merchant:'Sagar Pawar',    role:'buyer', category:'Restaurant & Food Service',band:'Medium — ₹5 crore to ₹50 crore',city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-creation',sub:2,halted:'store-creation',
+   haltNote:'Bhaiyaa rejected the registration. StoreIntake returned a duplicate GST number against this PAN, so no Bhaiyaa ref was issued.'},
+  {id:9, ref:'STR-000097',store:'Kaveri Textiles Outlet',  merchant:'Latha Menon',      role:'seller',category:'Apparel & Footwear',      band:'Small — ₹1 crore to ₹5 crore',  city:'Coimbatore',updated:'30 Jul 2026',age:3, stage:'store-live',    sub:0,bhaiyaaRef:'BHA-STR-0071'},
+  {id:10,ref:'STR-000099',store:'Mahalaxmi General Store', merchant:'Prakash Jadhav',   role:'seller',category:'General Store',           band:'Nano — under ₹20 lakh a year',  city:'Solapur',   updated:'28 Jul 2026',age:5, stage:'store-live',    sub:0,bhaiyaaRef:'BHA-STR-0073'},
+  {id:11,ref:'STR-000088',store:'Deccan Wholesale Buyers', merchant:'Farhan Shaikh',    role:'buyer', category:'Grocery & Kirana',        band:'Medium — ₹5 crore to ₹50 crore',city:'Hyderabad', updated:'21 Jul 2026',age:12,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0062'},
+  {id:12,ref:'STR-000091',store:'Sunrise Bakers',          merchant:'Neha Kulkarni',    role:'seller',category:'Dairy & Bakery',          band:'Micro — ₹20 lakh to ₹1 crore',  city:'Thane',     updated:'18 Jul 2026',age:15,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0065'}
+];
+/* The steps that apply to THIS record. A halt step belongs only to the record whose run halted
+   in that stage; for everyone else the stage is the two or three automated steps and nothing
+   more. Because every halt step is authored last, filtering it out never shifts an index that
+   `sub` already points at — which is what lets one integer describe position in both cases. */
+function soSteps(d,stageId){
+  return (soSubStatuses[stageId]||[]).filter(function(s){return !s.halt||d.halted===stageId;});
+}
+function soStageById(id){return soPipelineStages.find(function(s){return s.id===id;})||null;}
+function soStageIndex(id){return soPipelineStages.findIndex(function(s){return s.id===id;});}
+function soStageCount(id){return soRuns.filter(function(d){return d.stage===id;}).length;}
+function soRunsForStage(id){return id?soRuns.filter(function(d){return d.stage===id;}):soRuns.slice();}
+function soSubIndex(d){const steps=soSteps(d,d.stage);return Math.min(d.sub||0,Math.max(0,steps.length-1));}
+function soCurrentSub(d){return soSteps(d,d.stage)[soSubIndex(d)]||null;}
+function soIsHalted(d){return d.halted===d.stage;}
+/* Same invariant as the deal board: a record never rests on an automated step, because an
+   automated step is not a task. The one exception is the terminal stage, where there is
+   nothing after it to roll into. */
+function soSkipAutoSteps(d){
+  const skipped=[];let guard=0;
+  while(guard++<40){
+    const steps=soSteps(d,d.stage);
+    const idx=Math.min(d.sub||0,Math.max(0,steps.length-1));
+    const cur=steps[idx];
+    if(!cur||!cur.auto)break;
+    if(idx<steps.length-1){skipped.push(cur.label);d.sub=idx+1;continue;}
+    const next=soPipelineStages[soStageIndex(d.stage)+1];
+    if(!next)break;
+    skipped.push(cur.label);
+    d.stage=next.id;d.sub=0;
+  }
+  return skipped;
+}
+/* Four kinds, same as the deal board, and the reasoning is identical: auto is checked first so
+   an automated step can never grow a manual button just because the accountable role is signed
+   in. 'Merchant' behaves the way 'Client' does over there — external, chase-able, never
+   tickable on their behalf. */
+function soNextAction(d){
+  const step=soCurrentSub(d);
+  if(!step)return {kind:'wait',label:'Nothing to do',owner:'&mdash;',step:null};
+  const owner=step.owner;
+  if(step.auto)return {kind:'auto',label:'Runs automatically',owner:owner,step:step};
+  if(amCanAdvance(owner))return {kind:'do',label:step.act||'Mark done',owner:owner,step:step};
+  if(owner==='Merchant')return {kind:'chase',label:'Send reminder',owner:owner,step:step};
+  return {kind:'wait',label:'Waiting on '+owner,owner:owner,step:step};
+}
+const soExtraLog={};
+/* `at` is where the note BELONGS, not where the record is standing when it is written, and the
+   two are routinely different: a note on the last step of a stage is written by the same call
+   that moves the record into the next one, so reading d.stage here would file it under a stage
+   the step was never in. Callers that are not moving anything (a reminder) pass nothing and get
+   the current position, which for them is the same thing. */
+function soPushNote(d,label,note,at){
+  const stage=(at&&at.stage)||soStageById(d.stage)||{};
+  const now=new Date();const h=now.getHours();
+  (soExtraLog[d.id]=soExtraLog[d.id]||[]).unshift({
+    stage:stage,stageNo:stage.n,subNo:(at?at.subNo:soSubIndex(d)+1),
+    sub:{label:label},
+    owner:amOwnerInfo('Ops Manager'),ownerRole:'Ops Manager',
+    state:'note',
+    date:now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear(),
+    time:(h%12||12)+':'+String(now.getMinutes()).padStart(2,'0')+' '+(h>=12?'PM':'AM'),
+    note:note
+  });
+}
+/* Derived from stage + sub, never stored, for the same reason the deal board derives its own:
+   a hand-kept trail and a record position drift apart and then neither can be trusted. Steps
+   that do not apply to this record are absent from soSteps, so they cannot appear here as
+   things that happened. */
+function soRunLog(d){
+  const curStageIdx=soStageIndex(d.stage);
+  const entries=[];
+  soPipelineStages.forEach(function(st,si){
+    if(si>curStageIdx)return;
+    const steps=soSteps(d,st.id);
+    const upto=si<curStageIdx?steps.length:Math.min(d.sub||0,steps.length-1)+1;
+    steps.slice(0,upto).forEach(function(sub,i){
+      const isLive=si===curStageIdx&&i===upto-1;
+      entries.push({stage:st,stageNo:st.n,sub:sub,subNo:i+1,
+        owner:amOwnerInfo(sub.owner),ownerRole:sub.owner,
+        state:isLive?'current':'done',
+        breach:!!(isLive&&d.breach)});
+    });
+  });
+  const total=entries.length;
+  entries.forEach(function(e,i){
+    const stamp=amShiftDate(d.updated,(total-1-i)*2);
+    e.date=stamp.date;e.time=stamp.time;
+  });
+  entries.reverse();
+  return (soExtraLog[d.id]||[]).concat(entries);
+}
+// Stage-level expectations, in the merchant's terms rather than a duration nobody can act on.
+const soStageSla={'store-role':'Same day','store-details':'2 days, then chase','kyc':'Seconds, unless it halts','store-creation':'Minutes, unless Bhaiyaa refuses','store-live':'1 day to finish the details'};
+let soPipelineStage='';
+const SO_PAGE_SIZE=10;
+let soPage=1;
+let soSelectedId=null,soRunTab='basic-details';
+// Seeds may sit on an automated step; roll them forward once so the invariant above holds from
+// the first render. Halted records stop on their halt step and stay there, which is the point.
+soRuns.forEach(function(d){soSkipAutoSteps(d);});
+
 let openDropdowns=new Set();
 let activeSidebarItem='dashboard';
 // -- The sidebar is split in two. The `group` entry at the top holds the Executive Layer's OWN
@@ -1046,6 +1250,10 @@ function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
 function getSidebarActivePage(pg){if(typeof isCCJPage==='function'&&isCCJPage(pg))return 'contracts';if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return cfgUserIntakeBackPage;if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':'ai-executive';if(pg==='ai-analytics'||pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
+/* Copy authored for HTML, reused somewhere HTML entities do not resolve — a title attribute, a
+   toast body. Only the entities this app actually authors are handled; anything else would be a
+   half-built HTML decoder, and the fix for that case is to stop authoring the entity. */
+function stripEnt(v){return String(v).replace(/&mdash;/g,'—').replace(/&ndash;/g,'–').replace(/&rsquo;/g,'’').replace(/&amp;/g,'&');}
 function customSelect(id,selected,options,placeholder,variant){
   const safeId=String(id).replace(/[^a-zA-Z0-9_-]/g,'-');
   const opts=(options||[]).map(o=>String(o));
@@ -1609,7 +1817,6 @@ function dashboardTabsForRole(role){
       'deal-manager':[{id:'sales-team',label:'Sales Team Dashboard'},{id:'sales-approvals',label:'Deal Approvals'}],
       'compliance-officer':[{id:'compliance',label:'Compliance Dashboard'}],
       'legal-contracts-manager':[{id:'contracts-admin',label:'Contracts Dashboard'}],
-      'ops-manager':[{id:'ops',label:'Ops Dashboard'},{id:'ops-approvals',label:'Ops Approvals'}],
       'hr':[{id:'hr',label:'HR Dashboard'},{id:'manager',label:'Reporting Manager'}],
       'hr-manager':[{id:'hr',label:'HR Dashboard'},{id:'manager',label:'Reporting Manager'}],
       'it-systems-admin':[{id:'it-admin',label:'IT Systems Dashboard'}],
@@ -1621,6 +1828,14 @@ function dashboardTabsForRole(role){
     // through the sidebar — Leaves, My Timesheet, My Profile — so nothing is lost, only the
     // extra click and the tab strip above a page that already fills the viewport. --
     if(activePersonaId==='account-manager')return [{id:'sales',label:'Deal Desk'}];
+    /* -- Ops Manager leads on Store Operations: the Bhaiyaa store board is a live pipeline over
+       real records, and the two dashboards behind it are stat pages. It does not follow the
+       Account Manager all the way to a single tab, because those two are not duplicates of it —
+       they are a different domain (contracts and approvals) that this role still works. What
+       does drop is the employee self-service tab, on the same reasoning the Account Manager
+       used: Leaves, My Timesheet and My Profile all stay one click away in the sidebar, so the
+       tab bought a pill and nothing else. -- */
+    if(activePersonaId==='ops-manager')return [{id:'store-ops',label:'Store Operations'},{id:'ops',label:'Ops Dashboard'},{id:'ops-approvals',label:'Ops Approvals'}];
     // -- Personas with no dashboard of their own keep the role-scoped hero view under "My
     // Workspace", so moving the standard dashboard onto the `employee` id does not cost them it. --
     return [employeeTab].concat(map[activePersonaId]||[{id:'my-work',label:'My Workspace'}]);
@@ -1631,11 +1846,6 @@ function dashboardTabsForRole(role){
      page that only ever wanted one of them. The self-service figures stay reachable through
      the sidebar (Leaves, My Timesheet, My Profile), so only the toggle is gone. -- */
   if(role==='entity-admin')return [{id:'entity-admin',label:'Entity Admin'}];
-  /* Platform Overview leads for Super Admin, and the employee view keeps its place behind it.
-     A Super Admin operates the execution layer across every client — landing them on their own
-     leave balance and payslip answered a question they had not asked, and buried the one they
-     had (is anything broken). */
-  if(role==='super-admin')return [{id:'platform',label:'Platform Overview'},employeeTab];
   return [employeeTab];
 }
 function toggleSalesTeamQueuePanel(){
