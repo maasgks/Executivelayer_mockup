@@ -275,6 +275,135 @@ r = P('Create an EOR contract for Anika Shah in Netherlands');
 check('no client stated leaves it empty rather than guessing one', r.client === '', JSON.stringify(r.client));
 check('and the country is still read from that same sentence', r.country === 'Netherlands');
 
+/* The pay pass runs FIRST, before even the engagement model, because a figure carrying a currency
+   marker or a period word is the least ambiguous token in the sentence. The thing to guard is that
+   it takes its FRAMING with it — the first version lifted the figure and left "at ... a month"
+   behind, which the role pass then read to the end of the sentence and turned into the job title
+   "Director Of Engineering At A Month". */
+section('THE PAY, WHEN THE SENTENCE STATES IT');
+r = P('Hire Shiv Kumar for Helix Marine in Germany as Director of Engineering at EUR 18,500 a month');
+check('the pay is read out of the sentence', r.pay === '18500', JSON.stringify(r.pay));
+check('and it does not leave its framing in the job title',
+  r.jobTitle === 'Director of Engineering', JSON.stringify(r.jobTitle));
+check('the name, client and country are untouched by it',
+  r.name === 'Shiv Kumar' && r.client === 'Helix Marine B.V.' && r.country === 'Germany',
+  r.name + ' / ' + r.client + ' / ' + r.country);
+r = P('Hire Shiv Kumar at Helix Marine in Germany paying 18500 per month');
+check('a lead-in verb is consumed rather than landing in the name',
+  r.pay === '18500' && r.name === 'Shiv Kumar', r.name + ' / ' + r.pay);
+r = P('Hire Shiv Kumar for Helix Marine in Germany on a salary of 18500 monthly as CTO');
+check('"salary of ... monthly" is read too', r.pay === '18500', JSON.stringify(r.pay));
+r = P('Hire Shiv Kumar for Vantage Freight in India as Delivery Lead at Rs 950000 a month');
+check('a non-euro currency marker works the same', r.pay === '950000', JSON.stringify(r.pay));
+// A bare number must not become a salary, or "hire 2 engineers" quotes the client EUR 2 a month.
+r = P('Hire 2 engineers for Helix Marine in Germany');
+check('a bare number with no money signal is NOT read as pay', r.pay === '', JSON.stringify(r.pay));
+r = P('Hire Shiv Kumar for Helix Marine in Germany as Director of Engineering');
+check('and a sentence that states no pay leaves it for the agent to ask',
+  r.pay === '', JSON.stringify(r.pay));
+
+section('TITLE CASE DOES NOT FLATTEN WHAT THE USER ALREADY DECIDED');
+// Lower-casing the whole string first turned "CTO" into "Cto".
+check('an acronym the user capitalised survives', run("ccjTitleCase('CTO')") === 'CTO',
+  run("ccjTitleCase('CTO')"));
+check('an all-lowercase role is still lifted',
+  run("ccjTitleCase('director of engineering')") === 'Director of Engineering',
+  run("ccjTitleCase('director of engineering')"));
+check('small words stay small unless they lead',
+  run("ccjTitleCase('head of the delivery team')") === 'Head of the Delivery Team',
+  run("ccjTitleCase('head of the delivery team')"));
+check('and a name the user spelled themselves is left alone',
+  run("ccjTitleCase(\"O'Brien\")") === "O'Brien", run("ccjTitleCase(\"O'Brien\")"));
+
+section('THE SAMPLE DOCUMENT AND THE PARSER READ ONE CONSTANT');
+// Each extraction row cites the part of the document it came from. That citation is a promise the
+// value is on the paper, so the paper (sample-docs/, generated) and the extractor share a source.
+check('the sample document states an annual figure',
+  run('CCJ_SAMPLE_DOC.annual') === 222000, run('CCJ_SAMPLE_DOC.annual'));
+startRun();
+say('Hire Shiv Kumar for Helix Marine in Germany as Director of Engineering');
+until(() => run("ccjRun.screen==='form'") || run("ccjRun.screen==='employee'"), 30000);
+check('the extractor divides it to a monthly figure, because the field is monthly',
+  run("ccjDocExtract().find(function(x){return x.k==='pay';}).v") === '18500',
+  run("ccjDocExtract().find(function(x){return x.k==='pay';}).v"));
+check('and says that is what it did',
+  /annual/i.test(run("ccjDocExtract().find(function(x){return x.k==='pay';}).from")),
+  run("ccjDocExtract().find(function(x){return x.k==='pay';}).from"));
+// Nationality used to be inferred from the place of work, which is right only when the two happen
+// to agree. It is stated on the document, so it is read.
+check('nationality is read off the form, not inferred from the work country',
+  run("ccjDocExtract().find(function(x){return x.k==='nationality';}).v") === 'India'
+  // Cited to the section of the sheet it was answered in, which is where a reviewer would look.
+  && run("ccjDocExtract().find(function(x){return x.k==='nationality';}).from") === 'Eligibility',
+  run("ccjDocExtract().find(function(x){return x.k==='nationality';}).v")
+  + ' <- ' + run("ccjDocExtract().find(function(x){return x.k==='nationality';}).from"));
+// The sheet is laid out as the contract form is laid out, so every value it carries cites a real
+// heading on it — a reviewer can go and look rather than take the card's word for it.
+check('every extracted value cites a section that exists on the sheet',
+  run("ccjDocExtract().every(function(x){return /^(Eligibility|Employee information|Job details|Probation and notice)/.test(x.from);})"),
+  run("JSON.stringify(ccjDocExtract().filter(function(x){return !/^(Eligibility|Employee information|Job details|Probation and notice)/.test(x.from);}).map(function(x){return x.k+': '+x.from;}))"));
+check('uploading it fills the form COMPLETELY — nothing left to ask',
+  (function () {
+    run("ccjStartExtraction('Shiv_Kumar_Contract_Data.pdf',100000)");
+    until(() => run('!!(ccjRun.doc&&ccjRun.doc.done)'), 60000);
+    return run('ccjMissingFields().length') === 0;
+  })(),
+  'still missing: ' + run("JSON.stringify(ccjMissingFields().map(function(f){return f.k;}))"));
+// Read from the constant rather than restated, so the demo persona's details can be changed in
+// one place without a test pinning the old ones.
+check('and the values that landed are the sheet&rsquo;s own',
+  run('ccjRun.form.nationality') === 'India'
+  && run('ccjRun.form.dob') === run('CCJ_SAMPLE_DOC.fields.dob.v')
+  && run('ccjRun.form.pay') === '18500'
+  && run('ccjRun.form.probation') === '6'
+  && run('ccjRun.form.notice') === '30',
+  run('ccjRun.form.nationality') + ' / ' + run('ccjRun.form.dob') + ' / ' + run('ccjRun.form.pay')
+  + ' / probation ' + run('ccjRun.form.probation') + ' / notice ' + run('ccjRun.form.notice'));
+// A select or a radio only accepts one of its own options — "Full time — 40 hours per week" reads
+// well on paper and would have been rejected by the field.
+check('a select gets a value its own options actually contain',
+  run("(function(){var f=ccjAllFields().find(function(x){return x.k==='schedule';});"
+    + 'return f.opts.indexOf(ccjRun.form.schedule)>-1;})()') === true,
+  run('ccjRun.form.schedule'));
+check('and so does the work-permit radio',
+  run("(function(){var f=ccjAllFields().find(function(x){return x.k==='workPermit';});"
+    + 'return f.opts.indexOf(ccjRun.form.workPermit)>-1;})()') === true,
+  run('ccjRun.form.workPermit'));
+
+section('THE IDENTITY DOCUMENT FOLLOWS NATIONALITY, NOT THE PLACE OF WORK');
+/* This read the work-country pack, so an Indian national placed in Germany was shown presenting a
+   German Personalausweis — a document he cannot hold. What a person presents to prove who they
+   are, and what their employer must file where they work, are two different questions. */
+(function () {
+  const d = run('ccjKycDoc()');
+  check('an Indian national in Germany presents an Indian passport',
+    d.type === 'Indian passport' && d.issuer === 'Republic of India' && d.code === 'IND',
+    d.type + ' / ' + d.issuer);
+  check('and its machine-readable zone carries the right country code',
+    d.mrzLine.indexOf('IND') > -1, d.mrzLine.replace(/&lt;/g, '<').slice(0, 40));
+  check('the rest of the pack is still the work country&rsquo;s',
+    run("ccjOnbPack().taxAuthority") === 'Finanzamt', run('ccjOnbPack().taxAuthority'));
+  // The consequence, and it is the right one: this is now a decision rather than a rubber stamp.
+  check('so right to work becomes a real question instead of an automatic pass',
+    run('ccjRightToWork().verdict') === 'consider', run('ccjRightToWork().verdict'));
+  check('and a national working at home is still cleared without a permit',
+    run("(function(){var w=ccjRun.form.nationality;ccjRun.form.nationality='Germany';"
+      + 'var v=ccjRightToWork().verdict;ccjRun.form.nationality=w;return v;})()') === 'pass');
+})();
+
+section('THE IDENTITY PORTRAIT IS OPTIONAL AND FAILS SOFT');
+// A real photograph is a local asset that is deliberately not in the repository, so the console
+// must render correctly whether or not it is present.
+check('a portrait is wired in when one is configured',
+  run('ccjPortraitHTML()').indexOf('ccj-kyc-portrait') > -1);
+check('the drawn placeholder is kept underneath it, not replaced',
+  run('ccjPortraitHTML()').indexOf('<svg') > -1);
+check('a missing file uncovers the placeholder rather than leaving a hole',
+  run("typeof ccjPortraitMissing") === 'function'
+  && run('ccjPortraitHTML()').indexOf('onerror="ccjPortraitMissing(this)"') > -1);
+check('and with no portrait configured it is the placeholder alone',
+  run("(function(){var h=ccjPortraitHTML.toString();return h.indexOf('CCJ_KYC_PORTRAIT')>-1;})()") === true);
+
 section('A RUN WITHOUT A CLIENT ASKS FOR ONE');
 // Who the hire is for is not guessable and not optional: every number is billed to them, the
 // agreement is signed with them, the CSM is theirs. Defaulting would quietly invoice the wrong

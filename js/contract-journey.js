@@ -2741,8 +2741,12 @@ function ccjRenderChat(){
 }
 function ccjChatEmptyHTML(){return '<div class="ccj-empty">'+ccjChatEmptyInnerHTML()+'</div>';}
 function ccjChatEmptyInnerHTML(){
-  const ex=['Create an EOR contract for Anika Shah in Netherlands',
-            'Hire Rohan Verma for Helix Marine in Germany as an Operations Analyst',
+  /* The first chip is the one that gets clicked, so it is the one that shows the parser doing all
+     of its work at once: model, client, country, role AND pay out of a single sentence. The others
+     stay deliberately sparser — a run where the agent has to ask for the missing pieces is the
+     more common one, and the empty state should not imply every request arrives complete. */
+  const ex=['Hire Shiv Kumar for Helix Marine in Germany as Director of Engineering at EUR 18,500 a month',
+            'Create an EOR contract for Anika Shah in Netherlands',
             'New PEO contract for Emma Schmidt at Vantage Freight in India'];
   return ''
     +'<div class="ccj-empty-title">Who are you hiring?</div>'
@@ -2838,8 +2842,21 @@ const CCJ_MODEL_WORDS=[
 // the connective tissue around it. `contract` is here but `contractor` is not — the model pass
 // above has already taken that, and taking it here would strip the word out of the model.
 const CCJ_FILLER=/\b(hire|hiring|onboard|onboarding|engage|recruit|create|creating|new|start|starting|make|add|raise|set ?up|please|need|want|would like|contract|contracts|agreement|proposal|request|role|position|for|an|a|the|in|into|of|on|at|with|to|and|as)\b/gi;
+/* Title case that does not flatten what the user already decided. Lower-casing the whole string
+   first turned "CTO" into "Cto" and would have turned "O'Brien" into "O'brien" — so any token
+   carrying a capital is left exactly as typed, and only all-lowercase tokens are lifted. The
+   small connecting words stay down unless they lead, because "Director Of Engineering" is not
+   how anyone writes a job title. */
+const CCJ_SMALL_WORDS=['of','and','the','for','at','in','on','to','a','an','or','with','de','van'];
 function ccjTitleCase(s){
-  return String(s).toLowerCase().replace(/\b[a-z]/g,function(ch){return ch.toUpperCase();});
+  let first=true;
+  return String(s).split(/(\s+)/).map(function(w){
+    if(!w.trim())return w;
+    const lead=first;first=false;
+    if(/[A-Z]/.test(w))return w;                          // theirs, not ours
+    if(!lead&&CCJ_SMALL_WORDS.indexOf(w.toLowerCase())>-1)return w.toLowerCase();
+    return w.replace(/^[a-z]/,function(ch){return ch.toUpperCase();});
+  }).join('');
 }
 /* Every company this product already knows about — the clients with an account (aiClients) and
    the clients with a deal on the Account Manager's board (amDeals). Matching against real names
@@ -2857,9 +2874,51 @@ function ccjKnownClients(){
    strong enough signal to tell a company from the person's name two words earlier, which a bare
    "for X" is not. */
 const CCJ_CO_SUFFIX=/\b((?:[A-Z][\w&.'\-]*\s+){0,3}[A-Z][\w&.'\-]*\s+(?:Pvt\.?\s*Ltd|Private\s+Limited|Ltd|Limited|B\.?\s?V\.?|N\.?\s?V\.?|GmbH|AG|Inc\.?|LLC|PLC|S\.?A\.?|SAS|Oy|AB|A\/S))\b/;
+/* THE PAY, WHEN THE SENTENCE STATES IT. Taken out FIRST, before even the engagement model, which
+   is the confidence order the parser is built on: a figure carrying a currency marker or a period
+   word is the least ambiguous token in the sentence, and lifting it early means it can never end
+   up inside the name.
+
+   A bare number is deliberately NOT enough. "Hire 2 engineers" must not set a salary of 2, so a
+   figure only counts when something next to it says it is money — a symbol, a currency code, or
+   "a month" / "per month" / "/month" — and it has to be at least three digits. Anything less
+   confident is left in the sentence for the later passes, and the agent asks for the pay as it
+   always did. */
+const CCJ_PAY_CUR='[\\u20AC$\\u00A3\\u20B9]|\\b(?:EUR|USD|GBP|INR|Rs)\\b';
+const CCJ_PAY_NUM='\\d[\\d,. ]*\\d|\\d';
+/* The phrase, not just the figure. Lifting "EUR 18,500" out of "as Director of Engineering at EUR
+   18,500 a month" left "at   a month" behind, and the role pass — which reads to the end of the
+   sentence — swallowed it, producing the job title "Director Of Engineering At A Month". The
+   country pass already carries this same lesson in its own comment; a pass has to consume its
+   framing or it just moves the mess into the next one.
+
+   The lead-in is safe to eat greedily because it only matches immediately before a money shape:
+   "for Helix Marine" has no digits after "for", so the client keeps its preposition. */
+const CCJ_PAY_LEAD='(?:\\b(?:at|on|of|paying|pays|salary|pay|gross|worth)\\b\\s*)*';
+const CCJ_PAY_TAIL='(?:\\s*(?:\\/|\\bper\\b|\\ba\\b|\\bevery\\b)?\\s*\\bmonth(?:ly)?\\b|\\s*\\bp\\.?\\s?m\\.?)';
+const CCJ_PAY_SHAPES=[
+  // A currency marker makes it money on its own; the period words are then optional.
+  new RegExp(CCJ_PAY_LEAD+'(?:'+CCJ_PAY_CUR+')\\s*('+CCJ_PAY_NUM+')(?:'+CCJ_PAY_TAIL+')?','i'),
+  new RegExp(CCJ_PAY_LEAD+'('+CCJ_PAY_NUM+')\\s*(?:'+CCJ_PAY_CUR+')(?:'+CCJ_PAY_TAIL+')?','i'),
+  // No currency, so the period words are what make it a monthly salary — and are required.
+  new RegExp(CCJ_PAY_LEAD+'('+CCJ_PAY_NUM+')'+CCJ_PAY_TAIL,'i')
+];
+function ccjParsePay(s){
+  for(let i=0;i<CCJ_PAY_SHAPES.length;i++){
+    const m=s.match(CCJ_PAY_SHAPES[i]);
+    if(!m)continue;
+    // Separators go; a decimal point stays, the same convention ccjCtx reads the form field with.
+    const n=parseFloat(String(m[1]).replace(/[, ]/g,''));
+    if(!isFinite(n)||n<100)continue;                 // too small to be a monthly salary
+    return {amount:n,matched:m[0]};
+  }
+  return null;
+}
 function ccjParsePrompt(text){
   let s=' '+String(text||'').replace(/\s+/g,' ').trim()+' ';
-  let country='',model='',jobTitle='',client='';
+  let country='',model='',jobTitle='',client='',pay='';
+  const money=ccjParsePay(s);
+  if(money){pay=String(money.amount);s=s.replace(money.matched,' ');}
   for(let i=0;i<CCJ_MODEL_WORDS.length;i++){
     if(CCJ_MODEL_WORDS[i].re.test(s)){model=CCJ_MODEL_WORDS[i].id;s=s.replace(CCJ_MODEL_WORDS[i].re,' ');break;}
   }
@@ -2902,7 +2961,7 @@ function ccjParsePrompt(text){
   // Nair", but anything they capitalised themselves is left alone, because a name is theirs to
   // spell and "O'Brien" does not survive being title-cased.
   if(name&&name===name.toLowerCase())name=ccjTitleCase(name);
-  return {name:name,country:country,empType:model,jobTitle:jobTitle,client:client};
+  return {name:name,country:country,empType:model,jobTitle:jobTitle,client:client,pay:pay};
 }
 
 /* ---- SUBMITTING, AND ANSWERING THE AGENT'S QUESTIONS -------------------------------------
@@ -2934,7 +2993,7 @@ function ccjSubmitRequest(raw){
   const parsed=ccjParsePrompt(raw);
   if(parsed.empType)run.model=parsed.empType;
   run.intake={raw:raw,name:parsed.name||raw,country:parsed.country||'',
-    jobTitle:parsed.jobTitle||'',client:parsed.client||'',type:run.model};
+    jobTitle:parsed.jobTitle||'',client:parsed.client||'',pay:parsed.pay||'',type:run.model};
   // WHO THE HIRE IS FOR is not optional and is not guessable. Every number this run produces is
   // billed to a client, the agreement is signed with them, and the CSM is theirs — so if the
   // sentence did not say, the agent asks before anything starts, the same way it asks for a
@@ -3042,32 +3101,105 @@ function ccjUpload(){
   inp.value='';
   inp.click();
 }
+/* WHAT THE SAMPLE DOCUMENT ACTUALLY SAYS. One object, and the PDF in sample-docs/ is GENERATED
+   from it — see tools/make-sample-doc.js. Every row of the extraction card cites the part of the
+   document its value came from, and that citation is a promise the value is really on the paper.
+   Two hand-maintained copies would break that promise the first time one of them was edited, so
+   the paper and the parser read the same constant.
+
+   `annual` is the figure the document prints. The form field is MONTHLY, which is why the
+   extractor divides and says so. */
+const CCJ_SAMPLE_DOC={
+  ref:'ADT-INT-2026-0417',
+  issued:'24 July 2026',
+  entity:'ADT Germany EOR Services GmbH',
+  currency:'EUR',
+  /* `v` is what the FORM stores — it has to match the field's type and, for a select or a radio,
+     be one of its options exactly. `p` is what the PAPER prints, which is allowed to be longer and
+     to carry a unit. Where they are the same only `v` is given. Splitting them is what lets the
+     document read like a document ("6 months") while the field still receives a number ("6"). */
+  fields:{
+    nationality:{v:'India'},
+    country:    {v:'Germany'},
+    workPermit: {v:'Yes, employee has a work permit'},
+    fname:      {v:'Shiv'},
+    lname:      {v:'Kumar'},
+    /* Illustrative, not anyone's. This is a demo persona that ships in a repository with a
+       remote, so the date of birth and the address are made up on purpose — a real pair of those
+       next to a real full name is a meaningful identity disclosure, and git keeps what it is
+       given. The nationality is real because the journey genuinely branches on it. */
+    dob:        {v:'1990-06-12', p:'12 June 1990'},
+    gender:     {v:'Male'},
+    email:      {v:'shiv.kumar@personalmail.com'},
+    mobile:     {v:'+91 98110 24578'},
+    address:    {v:'12 Jubilee Hills, Hyderabad, India'},
+    jobTitle:   {v:'Director of Engineering'},
+    skill:      {v:'Platform Engineering & Team Leadership'},
+    jobDesc:    {v:'Leads the platform engineering group and owns delivery across the EU region.'},
+    term:       {v:'Permanent'},
+    schedule:   {v:'Full time', p:'Full time &mdash; 40 hours per week'},
+    fromDate:   {v:'2026-09-01', p:'1 September 2026'},
+    pay:        {v:'18500', p:'EUR 18,500 per month'},
+    probation:  {v:'6',  p:'6 months'},
+    notice:     {v:'30', p:'30 days'}
+  },
+  // The paper states the ANNUAL figure and the intake row states the monthly one it divides to,
+  // which is the unit the form actually wants. Both are printed so the arithmetic is checkable.
+  annual:222000,
+  // Not captured, and the form does not want it: End Date only exists on a fixed term.
+  omitted:[{k:'toDate',label:'End Date',why:'Not applicable &mdash; permanent engagement'}]
+};
+function ccjSampleField(k){return (CCJ_SAMPLE_DOC.fields[k]||{}).v||'';}
 /* What the sample document in sample-docs/ contains, resolved against THIS run so uploading a
-   file for Anika Shah does not suddenly report Rohan's name back. `from` is the part of the
+   file for Anika Shah does not suddenly report Shiv's name back. `from` is the part of the
    document the value was read out of — the citation is what makes the card reviewable. */
 function ccjDocExtract(){
   const run=ccjRun,it=run.intake||{},e=run.match||run.createdEmp||{};
   const parts=String(it.name||e.name||'').split(' ').filter(Boolean);
   const country=it.country||e.country||'Germany';
   const real=function(v,fallback){return v&&v!=='—'?v:fallback;};
+  const D=CCJ_SAMPLE_DOC,F=D.fields,S=ccjSampleField;
+  /* Which section of the intake form each value was read out of. The citation is the whole point
+     of the card — it tells a reviewer where to look on the paper to check the value — so it names
+     a real heading on the document rather than a vague one. */
+  const SEC={nationality:'Eligibility',country:'Eligibility',workPermit:'Eligibility',
+    fname:'Employee information',lname:'Employee information',dob:'Employee information',
+    gender:'Employee information',email:'Employee information',mobile:'Employee information',
+    address:'Employee information',
+    jobTitle:'Job details',skill:'Job details',jobDesc:'Job details',term:'Job details',
+    schedule:'Job details',fromDate:'Job details',pay:'Job details',
+    probation:'Probation and notice',notice:'Probation and notice'};
+  const from=function(k){return SEC[k]||'Intake form';};
   return [
-    {k:'fname',   v:parts[0]||'Rohan',                 from:'Candidate name'},
-    {k:'lname',   v:parts.slice(1).join(' ')||'Verma', from:'Candidate name'},
-    {k:'dob',     v:'1994-03-18',                      from:'Date of birth'},
-    {k:'gender',  v:'Male',                            from:'inferred from salutation'},
-    {k:'email',   v:real(e.email,'rohan.verma@personalmail.com'),from:'Contact block'},
-    {k:'mobile',  v:'+91 98765 43210',                 from:'Contact block'},
-    {k:'address', v:'221B Residency Road, Bengaluru, India',from:'Correspondence address'},
-    {k:'nationality',v:country,                        from:'inferred from place of work'},
-    {k:'country', v:country,                           from:'Place of work'},
-    {k:'jobTitle',v:real(e.jobTitle,'Operations Analyst'),from:'Position offered'},
-    {k:'skill',   v:'Vendor & Operations Management',  from:'Role summary'},
-    {k:'jobDesc', v:'Owns cross-border vendor coordination and operational reporting.',from:'Role summary'},
-    {k:'fromDate',v:'2026-08-01',                      from:'Start date'},
-    // Monthly, because the field is monthly. The sample document states an annual figure and
-    // this used to carry it through untouched — which quoted the client roughly €78,000 a month
-    // for one Operations Analyst. A unit mismatch is not a rounding error, it is a wrong answer.
-    {k:'pay',     v:'4600',                            from:'Gross remuneration (annual ÷ 12)'}
+    // The run's own name wins over the paper's — uploading a sheet while a different person's
+    // request is open must not rename them mid-run.
+    {k:'fname',   v:parts[0]||S('fname'),              from:from('fname')},
+    {k:'lname',   v:parts.slice(1).join(' ')||S('lname'),from:from('lname')},
+    {k:'dob',     v:S('dob'),                          from:from('dob')},
+    {k:'gender',  v:S('gender'),                       from:from('gender')},
+    {k:'email',   v:real(e.email,S('email')),          from:from('email')},
+    {k:'mobile',  v:S('mobile'),                       from:from('mobile')},
+    {k:'address', v:S('address'),                      from:from('address')},
+    // The form STATES a nationality, so it is read rather than guessed from the work country.
+    // Inferring it was wrong for exactly the case this demo is: an Indian national placed in
+    // Germany was recorded as a German national, which then chose the wrong identity document
+    // and answered the right-to-work question without ever asking it.
+    {k:'nationality',v:S('nationality'),               from:from('nationality')},
+    {k:'country', v:country||S('country'),             from:from('country')},
+    {k:'workPermit',v:S('workPermit'),                 from:from('workPermit')},
+    {k:'jobTitle',v:real(e.jobTitle,S('jobTitle')),    from:from('jobTitle')},
+    {k:'skill',   v:S('skill'),                        from:from('skill')},
+    {k:'jobDesc', v:S('jobDesc'),                      from:from('jobDesc')},
+    {k:'term',    v:S('term'),                         from:from('term')},
+    {k:'schedule',v:S('schedule'),                     from:from('schedule')},
+    {k:'fromDate',v:S('fromDate'),                     from:from('fromDate')},
+    {k:'probation',v:S('probation'),                   from:from('probation')},
+    {k:'notice',  v:S('notice'),                       from:from('notice')},
+    // Monthly, because the field is monthly. The sheet states an ANNUAL figure — 222,000 — and
+    // this used to carry it through untouched, which quoted the client the annual number every
+    // month. A unit mismatch is not a rounding error, it is a wrong answer. Keep this in step
+    // with sample-docs/: the citation promises the reader it was divided, so it must have been.
+    {k:'pay',     v:String(D.annual/12),               from:from('pay')+' (annual &divide; 12)'}
   ];
 }
 function ccjHandleUpload(e){
@@ -3249,6 +3381,10 @@ function ccjPrefillForm(){
   // What the sentence said outranks the matched record: the request is for THIS role, which
   // may not be the one the person currently holds.
   set('jobTitle',run.intake.jobTitle||(e.jobTitle&&e.jobTitle!=='—'?e.jobTitle:''));
+  // Stated in the sentence, so the agent does not ask for it again. It lands as an agent fill like
+  // every other pre-filled field — marked in the form, and overwritable — rather than as a value
+  // the user cannot tell apart from one they typed.
+  set('pay',run.intake.pay||'');
   set('term','Permanent');
   set('schedule','Full time');
   set('probation','3');
@@ -5380,10 +5516,40 @@ function ccjOnb(){
   }
   return run.onb;
 }
+/* ---- THE PORTRAIT ON THE IDENTITY DOCUMENT ---------------------------------------------------
+   A real face makes the verification console read as a verification rather than as a diagram, so
+   the portrait is a configurable asset. Drop a cropped headshot at the path below and it appears
+   on the document card and on both sides of the face match.
+
+   IT IS A HEADSHOT, NOT A DOCUMENT SCAN, and that is deliberate. Everything else on the card —
+   the passport number, the MRZ, the date of birth, the expiry — is GENERATED by ccjKycDoc from
+   the run, so nothing real is needed for the screen to look right. Putting a scan of a genuine
+   data page here would add a passport number, a signature and a machine-readable zone to a
+   repository, and git keeps what it is given even after a later delete.
+
+   `assets/kyc-portrait.*` is in .gitignore for that reason. If the file is absent the drawn
+   placeholder renders instead, so the demo never breaks on a missing asset. */
+const CCJ_KYC_PORTRAIT='assets/kyc-portrait.jpg';
+const CCJ_FACE_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>';
+/* The image sits over the drawn placeholder rather than replacing it, so a missing or unreadable
+   file simply uncovers the fallback — no state to keep, and nothing to go wrong at demo time. */
+function ccjPortraitMissing(el){if(el&&el.parentNode)el.parentNode.removeChild(el);}
+function ccjPortraitHTML(){
+  if(!CCJ_KYC_PORTRAIT)return CCJ_FACE_SVG;
+  return '<img class="ccj-kyc-portrait" src="'+attrSafe(CCJ_KYC_PORTRAIT)+'" alt="" '
+    +'onerror="ccjPortraitMissing(this)">'+CCJ_FACE_SVG;
+}
 /* Everything the identity document says, derived from the contract rather than invented — the
    whole point of the cross-check is that these two sources must agree. */
 function ccjKycDoc(){
-  const p=ccjParties(),f=(ccjRun&&ccjRun.form)||{},pack=ccjOnbPack();
+  const p=ccjParties(),f=(ccjRun&&ccjRun.form)||{};
+  /* The identity document follows NATIONALITY, not the country the work is in. This read
+     ccjOnbPack() — the work-country pack — so an Indian national placed in Germany was shown
+     presenting a German Personalausweis, a document he could not hold. The rest of the pack is
+     still the work country's, because the checklist, the tax authority and the social security
+     institution genuinely are: what a person presents to prove who they are, and what their
+     employer must file where they work, are two different questions. */
+  const pack=ccjOnbPack(f.nationality||p.worker.country);
   const sur=String(f.lname||p.worker.name.split(' ').slice(-1)[0]||'').toUpperCase();
   const giv=String(f.fname||p.worker.name.split(' ')[0]||'').toUpperCase();
   const num=(sur.slice(0,2)+String(4718321+(ccjRun.gen||0)*37)).toUpperCase();
@@ -5811,7 +5977,7 @@ function buildCCJKycHTML(){
       +'<div class="ccj-kyc-doc-card">'
       +'<div class="ccj-kyc-doc-top"><span>'+d.issuer+'</span><b>PASSPORT</b></div>'
       +'<div class="ccj-kyc-doc-mid">'
-      +'<div class="ccj-kyc-doc-photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg></div>'
+      +'<div class="ccj-kyc-doc-photo">'+ccjPortraitHTML()+'</div>'
       +'<div class="ccj-kyc-doc-fields">'
       +'<div><span>Surname</span><b>'+d.surname+'</b></div>'
       +'<div><span>Given names</span><b>'+d.given+'</b></div>'
@@ -5835,9 +6001,9 @@ function buildCCJKycHTML(){
     +phase('biometric',
       '<div class="ccj-kyc-bio">'
       +'<div class="ccj-kyc-faces">'
-      +'<span class="ccj-kyc-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg><i>Document</i></span>'
+      +'<span class="ccj-kyc-face">'+ccjPortraitHTML()+'<i>Document</i></span>'
       +'<span class="ccj-kyc-link">&#8644;</span>'
-      +'<span class="ccj-kyc-face live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg><i>Live selfie</i></span>'
+      +'<span class="ccj-kyc-face live">'+ccjPortraitHTML()+'<i>Live selfie</i></span>'
       +'</div>'+rows(c.biometric)+'</div>')
 
     +phase('authentic',rows(c.authenticity))
