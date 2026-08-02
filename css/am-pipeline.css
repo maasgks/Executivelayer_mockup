@@ -246,3 +246,15 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
 /* "Your turn" / "Gate" markers in the client-facing tab */
 .am-stage-flag{font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:20px;white-space:nowrap;line-height:1.5;background:var(--am-tint-bg);color:var(--am-tint-ink);border:1px solid var(--am-tint-line)}
 .am-stage-flag.gate{background:var(--am-strong-bg);color:var(--navy);border-color:var(--am-strong-line)}
+
+/* ===== OPS MANAGER — BHAIYAA STORE OPERATIONS ================================
+   The store board is the same instrument as the deal board above and reuses every
+   rule in this file. It needs exactly one thing the deal board never had: a way to
+   say a run has STOPPED, which is not the same as a run that is late.
+
+   It stays inside the page's monochrome law — the strong end of the ink scale, a
+   heavier left rule, and the word "stopped" doing the work. A red callout here
+   would have been the fifth colour this stylesheet removed on purpose, and the
+   thing it competes with is the one it must not: the age column that says late. */
+.so-halt{margin:-2px 0 15px;padding:10px 13px;border:1px solid var(--am-strong-line);border-left:3px solid var(--navy);border-radius:8px;background:var(--am-quiet-bg);font-size:11.5px;line-height:1.6;color:var(--gray)}
+.so-halt b{color:var(--navy);font-weight:800}

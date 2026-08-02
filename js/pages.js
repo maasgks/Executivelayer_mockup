@@ -12,7 +12,6 @@ function buildDashboardPageHTML(){
   if(!tabs.some(t=>t.id===dashboardTab))dashboardTab=tabs[0]?tabs[0].id:'employee';
   const body=dashboardTab==='employee'?buildEmployeeDashboardHTML()
     :dashboardTab==='entity-admin'?buildEntityAdminDashboardHTML()
-    :dashboardTab==='platform'?buildSuperAdminDashboardHTML()
     :portalRole==='entity-user'?buildPersonaRoleDashboardHTML(dashboardTab)
     :dashboardContentHTML;
   return buildDashboardTabsHTML()+body;
@@ -49,6 +48,7 @@ function buildPersonaRoleDashboardHTML(tab){
   if(tab==='manager')return buildReportingManagerDashboardHTML(p);
   if(tab==='finance-approval'||tab==='finance-admin')return buildFinanceApprovalDashboardHTML();
   if(tab==='compliance')return buildComplianceDashboardHTML();
+  if(tab==='store-ops')return buildStoreOpsDashboardHTML();
   if(tab==='ops')return buildOpsDashboardHTML();
   if(tab==='ops-approvals')return buildOpsApprovalsDashboardHTML();
   if(tab==='sales'||tab==='sales-approvals')return buildSalesDashboardHTML(p,tab);
@@ -933,6 +933,454 @@ function renderAmDealSidebar(){
   }
   return tabBar+'<div class="lp-isb-body">'+body+'</div>';
 }
+/* == OPS MANAGER — BHAIYAA STORE OPERATIONS ==============================================
+   The Account Manager board's three bands, pointed at the Bhaiyaa Store Creation Journey:
+   header (whose queue), rail (where everything is), listing (what to do next). It reuses that
+   page's stylesheet wholesale rather than growing a parallel one — .am-* is a pipeline-board
+   vocabulary, not an Account-Manager-only one, and two boards that are meant to read as one
+   product should not be two stylesheets that drift.
+
+   What is deliberately NOT here: stat tiles. The rail counts the same twelve records by stage
+   a few inches below where tiles would sit, and one set of counts per page is the rule this
+   pattern was built on. == */
+function buildStoreOpsDashboardHTML(){
+  return '<div class="am-page">'
+    +buildSoHeaderHTML()
+    +buildSoPipelineHTML()
+    +buildSoListingHTML()
+    +'</div>';
+}
+/* The headline counts store openings, not stores: six of these twelve have no store in either
+   system yet, and calling them stores would name something that does not exist.
+
+   The second clause counts what has STOPPED, and deliberately does not say "needs you" — one of
+   the two halts is a UIDAI mismatch, which the journey hands to Compliance, not to this role.
+   A header that claims work is yours when it is not is how a queue stops being trusted.
+
+   The action is the real store intake journey (startStoreIntake), which is stage 1 of this same
+   rail — so the page can both watch the journey and start one. */
+function buildSoHeaderHTML(){
+  const p=getActivePersona();
+  const stuck=soRuns.filter(soIsHalted).length;
+  const sub='You are looking after '+soRuns.length+' store opening'+(soRuns.length===1?'':'s')+'.'
+    +(stuck?' <b>'+stuck+'</b> ha'+(stuck===1?'s':'ve')+' stopped.':' Nothing has stopped.');
+  return '<div class="am-head">'
+    +'<div class="am-head-left">'
+      +'<div class="am-head-title">'+p.name+' <span class="am-head-role">'+p.label+'</span></div>'
+      +'<div class="am-head-sub">'+sub+'</div>'
+    +'</div>'
+    +'<button class="am-head-new" onclick="startStoreIntake()">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+      +'New store</button>'
+    +'</div>';
+}
+/* Five segments instead of nine, so they are wide enough to carry the full stage name with no
+   truncation — which is why this rail has no separate `short`/`label` split to reconcile. */
+function soSegmentHTML(s){
+  const count=soStageCount(s.id);
+  const selected=soPipelineStage===s.id;
+  const flag=s.gate?' · nothing exists until this clears':s.merchantAction?' · waiting on the merchant':'';
+  return '<button type="button" class="am-seg tone-'+s.tone+(selected?' selected':'')+(count?'':' empty')+'"'
+    +' onclick="soSelectPipelineStage(\''+s.id+'\')"'
+    +' title="'+attrSafe(stripEnt(s.label)+flag+' — '+stripEnt(s.internal))+'">'
+    +'<span class="am-seg-bar"></span>'
+    +'<span class="am-seg-top"><span class="am-seg-count">'+count+'</span></span>'
+    +'<span class="am-seg-label">'+s.short+'</span>'
+    +'</button>';
+}
+function soTrackGroupHTML(track){
+  const stages=soPipelineStages.filter(function(s){return s.track===track.id;});
+  return '<div class="am-bar-group" style="flex:'+stages.length+'"'
+    +' title="'+attrSafe(track.label+' — '+stripEnt(track.plain))+'">'
+    +stages.map(soSegmentHTML).join('')+'</div>';
+}
+function buildSoPipelineHTML(){
+  return '<div class="am-bar-card">'
+    +'<div class="am-bar">'+soTrackGroupHTML(soPipelineTracks[0])+'<span class="am-bar-div"></span>'+soTrackGroupHTML(soPipelineTracks[1])+'</div>'
+    +'</div>';
+}
+function soSelectPipelineStage(id){
+  soPipelineStage=soPipelineStage===id?'':id;
+  soSelectedId=null;soPage=1;
+  renderADTPage();
+}
+function soClearPipelineStage(){
+  soPipelineStage='';soSelectedId=null;soPage=1;
+  renderADTPage();
+}
+function soGoToPage(n){
+  soPage=Math.max(1,n);soSelectedId=null;
+  renderADTPage();
+}
+function soListPaginationHTML(total,totalPages,start){
+  const prev='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>';
+  const next='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>';
+  const buttons=Array.from({length:totalPages},function(_,i){
+    return '<button class="lp-pg-btn'+(soPage===i+1?' active':'')+'" onclick="soGoToPage('+(i+1)+')">'+(i+1)+'</button>';
+  }).join('');
+  return '<div class="lp-pagination">'
+    +'<span class="lp-pagination-info">Showing '+(total===0?0:start+1)+'&ndash;'+Math.min(start+SO_PAGE_SIZE,total)+' of '+total+' entries</span>'
+    +'<div class="lp-pagination-controls">'
+    +'<button class="lp-pg-btn lp-pg-arrow" onclick="soGoToPage('+(soPage-1)+')"'+(soPage===1?' disabled':'')+'>'+prev+'</button>'
+    +buttons
+    +'<button class="lp-pg-btn lp-pg-arrow" onclick="soGoToPage('+(soPage+1)+')"'+(soPage===totalPages?' disabled':'')+'>'+next+'</button>'
+    +'</div></div>';
+}
+function soBadgeClass(stageId){
+  const s=soStageById(stageId);if(!s)return 'pending';
+  if(s.tone==='green')return 'approved';
+  if(s.tone==='red')return 'inactive';
+  if(s.tone==='amber')return 'pending';
+  return 'expired';
+}
+function soRoleLabel(d){return d.role==='buyer'?'Buyer':'Seller';}
+/* Where it is now: the stage, the one step in progress, and how far into the stage that is.
+   A halted run says so here rather than only in the drawer — it is the difference between a
+   record that is moving slowly and one that has stopped, and the listing is where that gets
+   triaged. */
+function soWhereCellHTML(d){
+  const s=soStageById(d.stage)||{};
+  const steps=soSteps(d,d.stage);
+  if(!steps.length)return '<span class="lp-dash">&mdash;</span>';
+  const idx=soSubIndex(d);
+  const cur=steps[idx];
+  return '<div class="am-where" title="'+attrSafe(stripEnt(s.plain))+'">'
+    +'<span class="am-sub-pill '+soBadgeClass(d.stage)+'">'+s.short+'</span>'
+    +'<span class="am-where-step">'+cur.label
+      +(cur.auto?'<span class="am-sub-tag auto">'+amBoltSvg+' auto</span>':'')
+      +(soIsHalted(d)?'<span class="am-sub-tag breach">halted</span>':'')+'</span>'
+    +'<span class="am-where-prog">Step '+(idx+1)+' of '+steps.length+'</span>'
+    +'</div>';
+}
+function soNextActionCellHTML(d){
+  const a=soNextAction(d);
+  if(a.kind==='auto')return '<span class="am-act auto">'+amBoltSvg+' Auto</span>';
+  if(a.kind==='do')return '<button class="am-act do" onclick="event.stopPropagation();soCompleteStep('+d.id+')">'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> '+a.label+'</button>';
+  if(a.kind==='chase')return '<button class="am-act chase" onclick="event.stopPropagation();soRemindMerchant('+d.id+')">'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4h16v12H7l-3 3z"/></svg> '+a.label+'</button>';
+  return '<span class="am-act wait">'+a.label+'</span>';
+}
+/* Five columns and the row opener. One fewer than the deal board, because a store opening has
+   no second party to name: the merchant IS the customer, so "who this is for" and "who we are
+   waiting on" collapse into one cell. Store ID, Bhaiyaa ref, plan, GST and turnover band are
+   all things you look up about one record, so they live in the drawer. */
+function buildSoListingHTML(){
+  const hamburger='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
+  const stage=soPipelineStage?soStageById(soPipelineStage):null;
+  const all=soRunsForStage(soPipelineStage);
+  const total=all.length;
+  const totalPages=Math.max(1,Math.ceil(total/SO_PAGE_SIZE));
+  if(soPage>totalPages)soPage=totalPages;
+  if(soPage<1)soPage=1;
+  const start=(soPage-1)*SO_PAGE_SIZE;
+  const rows=all.slice(start,start+SO_PAGE_SIZE);
+  if(soSelectedId&&!rows.some(function(d){return d.id===soSelectedId;}))soSelectedId=null;
+  const title=stage?stage.short:'Every store opening';
+  const sub=stage?stripEnt(stage.plain)+' &nbsp;·&nbsp; Should take: '+(soStageSla[stage.id]||'&mdash;')
+    :'Everything you own, in one list. Click a step above to narrow it down.';
+  const compact=!!soSelectedId;
+  const columns=[
+    {w:'24%',cw:'36%',th:'Store',
+     cell:function(d){return '<div class="cell-primary am-c-client">'+d.store+'</div><div class="cell-sub">'+d.ref+'</div>';}},
+    {w:'19%',hideWhenCompact:true,th:'Merchant',
+     cell:function(d){return '<div class="cell-primary am-c-client">'+d.merchant+'</div><div class="cell-sub">'+soRoleLabel(d)+' &middot; '+d.category+'</div>';}},
+    {w:'24%',cw:'32%',th:'Where it is now',cell:soWhereCellHTML},
+    {w:'7%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
+     cell:function(d){return '<span class="am-c-age'+(d.breach?' breach':'')+'">'+d.age+'d</span>'
+       +(d.breach?'<div class="cell-sub am-c-late">Too long</div>':'');}},
+    // Wider than the deal board's action column: these labels name the action ("Retry",
+    // "Complete details") rather than saying "Mark done", and a clipped verb is worse than a
+    // generic one. The widths sum to 100 in both states — see the deal board's colgroup note
+    // for why that is generated from one list rather than written twice.
+    {w:'18%',cw:'24%',th:'What to do next',cell:soNextActionCellHTML},
+    {w:'8%',cw:'8%',th:'',
+     cell:function(d){return '<button class="lp-action-btn" onclick="event.stopPropagation();openSoRunSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>';}}
+  ].filter(function(c){return !(compact&&c.hideWhenCompact);});
+  const colgroup='<colgroup>'+columns.map(function(c){return '<col style="width:'+(compact?c.cw:c.w)+'">';}).join('')+'</colgroup>';
+  const head='<thead><tr>'+columns.map(function(c){return '<th'+(c.thTitle?' title="'+attrSafe(c.thTitle)+'"':'')+'>'+c.th+'</th>';}).join('')+'</tr></thead>';
+  const body=rows.length?rows.map(function(d){
+    return '<tr class="am-row'+(soSelectedId===d.id?' lp-row-selected':'')+'" id="so-row-'+d.id+'" style="cursor:pointer" onclick="openSoRunSidebar('+d.id+')">'
+      +columns.map(function(c){return '<td>'+c.cell(d)+'</td>';}).join('')
+      +'</tr>';
+  }).join('')
+    :'<tr><td colspan="'+columns.length+'" style="padding:34px;text-align:center;color:var(--gray);font-size:12.5px">Nothing here right now.</td></tr>';
+  return '<div class="am-list-block">'
+    +'<div class="am-list-head">'
+      +'<div><div class="am-list-title">'+title+'</div><div class="am-list-sub">'+sub+'</div></div>'
+      +'<div class="am-list-right"><span class="am-list-count">'+total+' of '+soRuns.length+'</span>'
+      +(stage?'<button class="lp-pill-reset" onclick="soClearPipelineStage()">Show all</button>':'')+'</div>'
+    +'</div>'
+    +'<div class="lp-split-wrap"><div class="lp-split-main">'
+    +'<table class="lp-table am-table">'+colgroup+head+'<tbody>'+body+'</tbody></table>'
+    +soListPaginationHTML(total,totalPages,start)
+    +'</div>'
+    +'<div class="lp-split-sb'+(soSelectedId?' open':'')+'" id="so-split-sb"><div class="lp-isb" id="so-isb-inner">'+(soSelectedId?renderSoRunSidebar():'')+'</div></div>'
+    +'</div></div>';
+}
+function soStampToday(d){
+  const now=new Date();
+  d.updated=now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear();
+  d.age=0;
+}
+/* == MOVING A RUN FORWARD ================================================================
+   The only writer. Finish the step the record is sitting on; if it was the last step of the
+   stage, the record moves to the next stage — the stage is always a consequence of the steps
+   underneath it and is never set directly.
+
+   Clearing a halt step is the same operation, plus dropping the halt: a mismatch that has been
+   reviewed or a registration that has been retried is no longer a stopped run, and leaving the
+   flag on would keep offering the same button forever. */
+function soAdvanceStep(runId,simulated){
+  const d=soRuns.find(function(x){return x.id===runId;});if(!d)return;
+  const steps=soSteps(d,d.stage);
+  const idx=soSubIndex(d);
+  const cur=steps[idx];if(!cur)return;
+  if(!simulated&&!amCanAdvance(cur.owner)){showAiToast('Not yours to complete','&ldquo;'+cur.label+'&rdquo; belongs to '+cur.owner+'.');return;}
+  const who=amOwnerInfo(cur.owner).who;
+  const commentEl=document.getElementById('so-log-comment');
+  const comment=commentEl?commentEl.value.trim():'';
+  if(!simulated&&commentEl&&!comment){showAiToast('A comment is required','Add a note for this action before marking it done.');commentEl.focus();return;}
+  const wasHalt=!!cur.halt;
+  // Where this step happened, captured before anything moves — the notes written at the end of
+  // this function belong to it, not to wherever the record ends up.
+  const at={stage:soStageById(d.stage),subNo:idx+1};
+  d.breach=false;soStampToday(d);
+  if(wasHalt){d.halted='';d.haltNote='';}
+  // Recomputed after the halt is dropped: clearing it removes the step from this stage, so the
+  // stage's last index is not what it was one line ago.
+  const liveSteps=soSteps(d,d.stage);
+  const wasLast=idx>=liveSteps.length-1;
+  const stageBefore=d.stage;
+  if(!wasLast){d.sub=idx+1;}
+  else{
+    const nextStage=soPipelineStages[soStageIndex(d.stage)+1];
+    if(nextStage){d.stage=nextStage.id;d.sub=0;}
+  }
+  const autoRan=soSkipAutoSteps(d);
+  if(comment)soPushNote(d,'Note on &ldquo;'+cur.label+'&rdquo;',comment,at);
+  // A cleared halt is worth a line of its own: the step it belonged to is gone from the derived
+  // trail the moment the flag drops, so without this the record would carry no evidence it ever
+  // stopped — which is the one thing anyone reviewing it afterwards wants to know.
+  if(wasHalt)soPushNote(d,cur.label+' cleared','The run was halted here and has been released by '+actorLabel(currentActorId())+'.',at);
+  const landed=soCurrentSub(d);
+  const autoMsg=autoRan.length?' Automation ran: '+autoRan.join(', ')+'.':'';
+  if(d.stage!==stageBefore){
+    const st=soStageById(d.stage);
+    showAiToast('Moved to &ldquo;'+st.short+'&rdquo;',d.ref+' &middot; '+d.store+' is now at &ldquo;'+stripEnt(st.label)+'&rdquo;.'+autoMsg);
+  }else if(landed&&landed!==cur){
+    showAiToast(simulated?'Simulated &mdash; '+cur.label:cur.label+' &mdash; done',
+      (simulated?who+' completed this. ':'')+d.ref+' &middot; next up: '+landed.label+'.'+autoMsg);
+  }else{
+    showAiToast('All done',d.store+' is open on Bhaiyaa.'+autoMsg);
+  }
+  renderADTPage();
+}
+function soCompleteStep(runId){soAdvanceStep(runId,false);}
+// The merchant and the two agents are the parties this portal cannot act as. Simulating them is
+// how a demo walks all five stages without a merchant on the other end of a signup link.
+function soSimulateStep(runId){soAdvanceStep(runId,true);}
+/* The real action on a merchant-owned step. It moves nothing — it records that we chased, which
+   is the evidence an Ops Manager needs when a signup has sat for a week. */
+function soRemindMerchant(runId){
+  const d=soRuns.find(function(x){return x.id===runId;});if(!d)return;
+  const cur=soCurrentSub(d)||{};
+  const stage=soStageById(d.stage)||{};
+  const now=new Date();const h=now.getHours();
+  (soExtraLog[d.id]=soExtraLog[d.id]||[]).unshift({
+    stage:stage,stageNo:stage.n,subNo:soSubIndex(d)+1,
+    sub:{label:'Reminder sent to merchant'},
+    owner:amOwnerInfo('Ops Manager'),ownerRole:'Ops Manager',
+    state:'note',reminder:true,
+    date:now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear(),
+    time:(h%12||12)+':'+String(now.getMinutes()).padStart(2,'0')+' '+(h>=12?'PM':'AM'),
+    note:'Chased &ldquo;'+cur.label+'&rdquo;.'
+  });
+  showAiToast('Reminder sent',d.merchant+' &middot; chased &ldquo;'+cur.label+'&rdquo;.');
+  renderADTPage();
+}
+function openSoRunSidebar(id){
+  soSelectedId=id;soRunTab='basic-details';
+  const sb=document.getElementById('so-split-sb');if(sb)sb.classList.add('open');
+  const inner=document.getElementById('so-isb-inner');if(inner)inner.innerHTML=renderSoRunSidebar();
+  document.querySelectorAll('.am-row').forEach(function(r){r.classList.toggle('lp-row-selected',r.id==='so-row-'+id);});
+}
+function closeSoRunSidebar(){
+  soSelectedId=null;
+  const sb=document.getElementById('so-split-sb');if(sb)sb.classList.remove('open');
+  document.querySelectorAll('.am-row').forEach(function(r){r.classList.remove('lp-row-selected');});
+}
+function navSoRunTab(tab){
+  soRunTab=tab;
+  const inner=document.getElementById('so-isb-inner');if(inner)inner.innerHTML=renderSoRunSidebar();
+}
+/* == THE RECORD DRAWER ===================================================================
+   Three tabs, not the deal board's four. Details (the facts), Logs (where you act, and the
+   trail of every step event), Workflow (the five stages, read-only). The fourth tab over there
+   is a client mirror, and this journey needs none: the merchant sees Bhaiyaa's own signup,
+   which is stages 1 and 2 themselves, not a translation of them. == */
+function renderSoRunSidebar(){
+  const d=soRuns.find(function(x){return x.id===soSelectedId;});if(!d)return '';
+  const s=soStageById(d.stage)||{};
+  const tabs=[{id:'basic-details',label:'Details'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
+  const tabBar='<div class="lp-isb-tabbar">'
+    +'<div class="lp-isb-tabs">'+tabs.map(function(t){return '<button class="lp-isb-tab'+(soRunTab===t.id?' active':'')+'" onclick="navSoRunTab(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'
+    +'<div class="lp-isb-right"><button class="lp-isb-close" onclick="closeSoRunSidebar()" title="Close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
+    +'</div>';
+  const iId='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/></svg>';
+  const iUser='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const iShop='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/></svg>';
+  const iMoney='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const iClock='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  const iTag='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
+  const fc=function(ico,label,val){return '<div class="lp-sb-field-card"><div class="lp-sb-field-icon">'+ico+'</div><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+label+'</div><div class="lp-sb-field-value">'+val+'</div></div></div>';};
+  // The halt is the first thing on every tab of a stopped record. Anything else answers a
+  // question the reader does not have yet.
+  const haltBox=soIsHalted(d)
+    ?'<div class="so-halt"><b>This run has stopped.</b> '+d.haltNote+'</div>'
+    :'';
+  let body='';
+
+  if(soRunTab==='basic-details'){
+    // Plan and GST are derived from the turnover band by the same table the journey's Store
+    // Creation step uses, so this drawer and that run can never quote different figures.
+    const band=bhaiyaaBandFor(d.band);
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.store+'</span>'
+      +'<span class="lp-status-badge '+soBadgeClass(d.stage)+'">'+s.short+'</span></div>'
+      +'<div class="am-sb-plain">'+s.plain+'</div>'
+      +haltBox
+      +'<div class="lp-sb-detail-grid">'
+      +fc(iId,'Store ID',d.ref)
+      +fc(iId,'Bhaiyaa ref',d.bhaiyaaRef||'<span style="color:var(--gray)">Not issued yet</span>')
+      +fc(iUser,'Merchant',d.merchant)
+      +fc(iShop,'What this store does',d.role==='buyer'?'Buys from sellers':'Sells to customers')
+      +fc(iTag,'Category',d.category)
+      +fc(iShop,'Where',d.city)
+      +fc(iMoney,'Turnover band',d.band)
+      +fc(iMoney,'Plan &amp; GST','<span style="color:var(--orange)">'+band.plan+'</span> &middot; '+band.gst)
+      +fc(iClock,'Last touched',d.updated)
+      +fc(iClock,'Days on this step',d.age+' day'+(d.age===1?'':'s'))
+      +'</div>';
+
+  }else if(soRunTab==='logs'){
+    /* The action lives here, above the trail it writes into — one step, one button, the same
+       next action the listing shows, so the two can never disagree. This is the only surface in
+       the board that moves a run forward. */
+    const a=soNextAction(d);
+    const steps=soSteps(d,d.stage);
+    const idx=soSubIndex(d);
+    const own=amOwnerInfo(a.owner);
+    const mine=a.kind==='do';
+    const isAuto=a.kind==='auto';
+    const simLabel=a.step&&a.step.decision?'Simulate: '+own.who+' chooses':'Simulate: '+own.who+' completes this';
+    const actionPanel=isAuto
+      ?'<div class="lp-logs-form">'
+        +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:var(--navy);display:inline-block;flex-shrink:0"></span>Runs automatically</div>'
+        +'<p class="lp-logs-form-sub">&ldquo;'+a.step.label+'&rdquo; is performed by the AI Execution Layer'+(a.step.autoNote?' &mdash; '+a.step.autoNote:'')+'. Nothing to do here.</p>'
+        +'</div>'
+      :'<div class="lp-logs-form">'
+        +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:#f59e0b;display:inline-block;flex-shrink:0"></span>Next: '+a.step.label+'</div>'
+        +'<p class="lp-logs-form-sub">'
+          +(mine?(a.step.halt?'This run halted here. Clearing it releases the journey.':'This step is yours to complete.')
+            :a.kind==='chase'?'Waiting on the merchant. You cannot fill their signup in for them.'
+            :'Owned by '+own.who+' ('+a.owner+').')
+          +' Step '+(idx+1)+' of '+steps.length+' in &ldquo;'+s.short+'&rdquo;'
+          +(a.step.sla?' &middot; should take '+a.step.sla:'')+'.</p>'
+        +'<div class="lp-logs-form-label">Comment'+(mine?' <span class="lp-logs-form-req">*</span>':'')+'</div>'
+        +'<textarea id="so-log-comment" class="lp-logs-form-textarea" placeholder="Add a note for this action..."></textarea>'
+        +(mine
+          ?'<button class="lp-logs-save-btn" onclick="soCompleteStep('+d.id+')">'+(a.step.act||'Mark &ldquo;'+a.step.label+'&rdquo; done')+'</button>'
+          :'<button class="lp-logs-save-btn" onclick="soSimulateStep('+d.id+')">'+simLabel+'</button>'
+            +(a.kind==='chase'?'<button class="am-sb-chase-link" onclick="soRemindMerchant('+d.id+')">Send the merchant a reminder instead</button>':''))
+        +'</div>';
+    const log=soRunLog(d);
+    const personSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const calSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const clkSvg='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    const timeline=log.length?log.map(function(e,i){
+      const sk=e.state==='current'||e.state==='note'?'default':'active';
+      return '<div class="lp-log-row">'
+        +'<div class="lp-log-avatar-col"><div class="lp-log-avatar lp-log-avatar--'+sk+'">'+personSvg+'</div>'+(i<log.length-1?'<div class="lp-log-connector"></div>':'')+'</div>'
+        +'<div class="lp-log-card">'
+        +'<div class="lp-log-status-row"><span class="lp-log-dot lp-log-dot--'+sk+'"></span>'
+          +'<span class="lp-log-status-text lp-log-status-text--'+sk+'">'+e.sub.label+'</span>'
+          +(e.sub.auto?'<span class="am-sub-tag auto">'+amBoltSvg+' auto</span>':'')
+          +(e.reminder?'<span class="am-sub-tag loop">reminder</span>':'')
+          +(e.state==='current'?'<span class="am-sub-tag loop">happening now</span>':'')
+          +(e.state==='current'&&soIsHalted(d)?'<span class="am-sub-tag breach">halted</span>':'')
+          +(e.breach?'<span class="am-sub-tag breach">took too long</span>':'')+'</div>'
+        // Auto steps are credited to the layer that ran them, not to the role that answers for them.
+        +'<div class="lp-log-meta-row"><span class="lp-log-meta-item">'+personSvg+'<span>'+(e.sub.auto?'AI Execution Layer':e.owner.who)+'</span></span>'
+          +'<span class="lp-log-meta-item">'+calSvg+'<span>'+e.date+'</span></span>'
+          +'<span class="lp-log-meta-item">'+clkSvg+'<span>'+e.time+'</span></span></div>'
+        +'<div class="lp-log-comment-row"><span class="lp-log-comment-label">In:</span>'+e.stageNo+'. '+e.stage.short
+          +' &middot; '+(e.note?e.note:e.state==='current'?'In progress.':'Finished.')+'</div>'
+        +'</div></div>';
+    }).join(''):'<div class="lp-logs-empty">Nothing has happened yet.</div>';
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+d.ref+' &middot; '+d.store+'</span>'
+      +'<span class="am-int-chip">Internal</span></div>'
+      +haltBox
+      +'<div class="am-sb-loghead">Everything that has happened <span>'+log.length+' entr'+(log.length===1?'y':'ies')+', newest first</span></div>'
+      +'<div class="lp-logs-wrap"><div class="lp-logs-timeline">'+timeline+'</div>'+actionPanel+'</div>';
+
+  }else{
+    /* Stage-level and read-only: the five steps of the journey, which are done, which one is
+       live, and who finished each. To change anything you go to Logs — the same division the
+       deal board draws, so a user who has read one record here can read any record anywhere. */
+    const curIdx=soStageIndex(d.stage);
+    const log=soRunLog(d);
+    const rows=soPipelineStages.map(function(st,i){
+      const state=i<curIdx?'done':i===curIdx?'current':'upcoming';
+      const steps=soSteps(d,st.id);
+      const doneCount=i<curIdx?steps.length:i===curIdx?soSubIndex(d)+1:0;
+      const last=log.filter(function(e){return e.stage.id===st.id&&!e.reminder;})[0];
+      const mark=state==='done'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>':String(st.n);
+      const autoN=steps.filter(function(x){return x.auto;}).length;
+      const cur=soCurrentSub(d)||{};
+      return '<div class="am-cv-row '+state+'">'
+        +'<div class="am-cv-markcol"><div class="am-cv-mark">'+mark+'</div>'+(i<soPipelineStages.length-1?'<div class="am-cv-line"></div>':'')+'</div>'
+        +'<div class="am-cv-body"><div class="am-cv-label">'+st.short
+          +(st.gate?'<span class="am-sub-tag breach">gate</span>':'')
+          +(autoN?'<span class="am-sub-tag auto">'+amBoltSvg+' '+autoN+' of '+steps.length+' auto</span>':'')
+          +'</div>'
+        +'<div class="am-cv-sub">'
+          +(state==='done'?doneCount+' of '+steps.length+' steps done'+(last?' &middot; last by '+last.owner.who+' on '+last.date:'')
+            :state==='current'?'On step '+doneCount+' of '+steps.length+' &middot; '+cur.label
+              +(cur.auto?' &middot; runs automatically':' &middot; waiting on '+(cur.owner||'&mdash;'))
+            :'Not started &middot; '+steps.length+' step'+(steps.length===1?'':'s')+' &middot; '+st.waitingOn)
+        +'</div></div></div>';
+    }).join('');
+    /* Automation that has already run, as facts rather than tasks — nobody will ever tick these,
+       and the Logs tab should never offer to. Upcoming automation is left out on purpose: it
+       would be a promise, not a record. */
+    const autoRan=[];
+    soPipelineStages.forEach(function(st,si){
+      if(si>curIdx)return;
+      const steps=soSteps(d,st.id);
+      const upto=si<curIdx?steps.length:soSubIndex(d)+1;
+      steps.slice(0,upto).forEach(function(sub){if(sub.auto)autoRan.push({stage:st,sub:sub});});
+    });
+    const autoSection=autoRan.length
+      ?'<div class="am-sb-steps" style="margin-top:14px">'
+        +'<div class="am-sb-steps-head">Run by the agents<span>'+autoRan.length+' action'+(autoRan.length===1?'':'s')+'</span></div>'
+        +autoRan.map(function(x){
+          return '<div class="am-auto-row">'
+            +'<span class="am-auto-bolt">'+amBoltSvg+'</span>'
+            +'<span class="am-auto-txt"><b>'+x.sub.label+'</b><i>'+(x.sub.autoNote||'automated')+' &middot; by '+x.sub.owner+' in &ldquo;'+x.stage.short+'&rdquo;</i></span>'
+            +'<span class="am-auto-done">Done</span>'
+            +'</div>';
+        }).join('')
+        +'</div>'
+      :'';
+    body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">How far this has got</span>'
+      +'<span class="am-int-chip">Internal</span></div>'
+      +haltBox
+      +'<div class="am-cv-intro">The five steps of the Bhaiyaa Store Creation Journey, and what has already been done on this one. To change anything, use the Logs tab.</div>'
+      +'<div class="am-cv-list">'+rows+'</div>'
+      +autoSection;
+  }
+  return tabBar+'<div class="lp-isb-body">'+body+'</div>';
+}
 function buildContractsAdminDashboardHTML(){
   return dashHeader('Contracts Dashboard','Generate contracts, monitor signatures, and resolve legal document exceptions.')
     +'<div class="stat-grid dash-stat-grid">'+dashStatNav('Contracts Sent','6','Awaiting signature','orange',dashIcoDoc,'contracts')+dashStatNav('Signature Pending','4','Client countersign',null,dashIcoDoc,'contracts')+dashStatNav('Bounced Requests','1','Needs resend','red',dashIcoAlert,'contracts')+dashStatNav('Templates Used','3','This week',null,dashIcoDoc,'contract-templates')+'</div>'
@@ -1141,16 +1589,13 @@ function eaNoteCardHTML(r,dot){
     +'<div class="ea-stack-issue">'+r.label+'</div>'
     +'<div class="ea-stack-meta"><div class="ea-stack-who"><div class="ea-req-requester">'+r.requestedBy+'</div></div>'+eaStackTimeHTML(r.timestamp)+'</div>';
 }
-/* == SUPER ADMIN: PLATFORM OVERVIEW =======================================================
-   A Super Admin runs the execution layer across every client, so this view answers four
-   questions in the order they get asked: is anything broken, what is stuck on a person, what
-   is running, and how automated are we overall. Employee self-service figures (leave, payslip,
-   attendance) are deliberately absent — they belong to the employee persona, and showing them
-   here was what made the old screen useless to this role.
+/* == SUPER ADMIN: PLATFORM METRICS ========================================================
+   Cross-client run and coverage figures for the Super Admin surfaces — Agent & Model
+   Analytics today, and anything else that needs the same numbers.
 
-   Every number below is derived from live data (aiAutomationRuns, manualJourneyRuns,
-   aiJourneys, aiJourneyEvents). Nothing is hardcoded, so the tiles cannot drift away from the
-   pages they link to — the failure mode of a dashboard whose figures are typed in by hand. == */
+   Every figure is derived from live data (aiAutomationRuns, manualJourneyRuns, aiJourneys,
+   aiJourneyEvents). Nothing is hardcoded, so these numbers cannot drift away from the pages
+   they describe — the failure mode of figures typed in by hand. == */
 function saAllAiRuns(){
   const out=[];
   Object.keys(aiAutomationRuns||{}).forEach(function(jid){
@@ -1196,76 +1641,10 @@ function saMetrics(){
     saved:Math.round(Math.max(0,manualHours-agentHours)*10)/10};
 }
 function saJourneyName(jid){const j=(aiJourneys||[]).find(function(x){return x.id===jid;});return j?j.name:jid;}
-// The one list worth putting above the fold: every run that has actually stopped, AI and
-// manual together, because a Super Admin does not care which engine stalled — only that it did.
-function saAttentionRowsHTML(m){
-  const rows=[];
-  m.exceptions.forEach(function(x){
-    rows.push({id:x.run.runId,journey:saJourneyName(x.journeyId),subject:x.run.client||'&mdash;',
-      kind:'Exception',why:x.run.exceptionNote||'Run stopped with an exception.',
-      when:x.run.lastActivity||'',click:"viewAIRun('"+x.run.runId+"')"});
-  });
-  m.blocked.forEach(function(r){
-    rows.push({id:r.runId,journey:saJourneyName(r.journeyId),subject:r.subject||'&mdash;',
-      kind:'Blocked',why:r.blockedReason||'Manual run is blocked.',
-      when:r.startedAt||'',click:"selectedManualRunId='"+r.runId+"';manualJourneyBackPage='dashboard';page='manual-journey-run';renderADTPage()"});
-  });
-  if(!rows.length)return '<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:18px">Nothing is stuck. Every run is moving.</td></tr>';
-  return rows.map(function(r){
-    return '<tr style="cursor:pointer" onclick="'+r.click+'">'
-      +'<td><div class="cell-primary">'+r.id+'</div><div class="cell-sub">'+r.subject+'</div></td>'
-      +'<td>'+r.journey+'</td>'
-      +'<td>'+statusMini(r.kind,r.kind==='Exception'?'rejected':'pending')+'</td>'
-      +'<td class="sa-why">'+r.why+'</td>'
-      +'<td class="cell-sub">'+r.when+'</td></tr>';
-  }).join('');
-}
-function saJourneyRowsHTML(){
-  const ai=saAllAiRuns();
-  return (aiJourneys||[]).map(function(j){
-    const mine=ai.filter(function(x){return x.journeyId===j.id;});
-    const exc=mine.filter(function(x){return x.run.status==='Exception';}).length;
-    const split=saStepSplit(j.id);
-    const cov=typeof j.coverage==='number'?j.coverage:0;
-    return '<tr style="cursor:pointer" onclick="selectedAIJourneyId=\''+j.id+'\';navigatePage(\'ai-journey-detail\')">'
-      +'<td><div class="cell-primary">'+j.name.replace(/\s*Journey$/,'')+'</div><div class="cell-sub">'+j.category+' &middot; '+split.total+' steps</div></td>'
-      +'<td><div class="sa-bar" title="'+cov+'% automated"><span style="width:'+cov+'%"></span></div><div class="cell-sub">'+cov+'% automated</div></td>'
-      +'<td>'+split.ai+' AI &middot; '+split.human+' human</td>'
-      +'<td>'+mine.length+'</td>'
-      +'<td>'+(exc?statusMini(exc+' exception'+(exc===1?'':'s'),'rejected'):statusMini('Healthy','approved'))+'</td></tr>';
-  }).join('');
-}
-function buildSuperAdminDashboardHTML(){
-  const m=saMetrics();
-  const tiles='<div class="stat-grid dash-stat-grid">'
-    +dashStatNav('Needs attention',String(m.attention),
-      m.exceptions.length+' exception'+(m.exceptions.length===1?'':'s')+' &middot; '+m.blocked.length+' blocked',
-      m.attention?'red':'green',dashIcoAlert,'ai-executive')
-    +dashStatNav('Waiting on a person',String(m.waiting),'Approvals holding runs up','orange',dashIcoUser,'ai-executive')
-    +dashStatNav('Running now',String(m.running),'Of '+m.totalRuns+' runs tracked','blue',dashIcoDoc,'ai-executive')
-    +dashStatNav('Automation coverage',m.coverage+'%',m.aiSteps+' of '+m.totalSteps+' steps run by agents','teal',dashIcoShield,'ai-analytics')
-    +'</div>';
-  const attention='<div class="listing-card dash-panel">'
-    +'<div class="dash-panel-head"><div>Needs attention</div><span onclick="navigatePage(\'ai-executive\')">Open AI Executive</span></div>'
-    +'<table class="listing-table dash-table"><thead><tr>'
-    +'<th>Run</th><th>Journey</th><th>State</th><th>What is wrong</th><th>When</th>'
-    +'</tr></thead><tbody>'+saAttentionRowsHTML(m)+'</tbody></table></div>';
-  const journeys='<div class="listing-card dash-panel">'
-    +'<div class="dash-panel-head"><div>Journeys</div><span onclick="navigatePage(\'ai-analytics\')">Agent &amp; model analytics</span></div>'
-    +'<table class="listing-table dash-table"><thead><tr>'
-    +'<th>Journey</th><th>Coverage</th><th>Step mix</th><th>Runs</th><th>Health</th>'
-    +'</tr></thead><tbody>'+saJourneyRowsHTML()+'</tbody></table></div>';
-  return '<div class="dash-ref">'
-    +'<div class="dash-ref-title">Platform Overview</div>'
-    +'<div class="dash-ref-sub">'+m.liveJourneys+' of '+m.journeys+' journeys live across '+(typeof aiClients!=='undefined'?aiClients.length:0)+' clients. '
-    +(m.attention?'<b>'+m.attention+'</b> run'+(m.attention===1?'':'s')+' need'+(m.attention===1?'s':'')+' a look.':'Nothing is stuck right now.')+'</div>'
-    +'</div>'
-    +tiles+attention+journeys;
-}
 /* == AGENT & MODEL ANALYTICS ==============================================================
-   The depth the Platform Overview deliberately leaves out. Two questions a Super Admin who
-   configures agents actually has: which agents are load-bearing, and how much of the journey
-   estate runs without a human in the loop.
+   The depth AI Executive deliberately leaves out. Two questions a Super Admin who configures
+   agents actually has: which agents are load-bearing, and how much of the journey estate runs
+   without a human in the loop.
 
    "Steps powered" is derived by matching each journey step's `source` against the agent
    catalogue, so an agent nobody wired into a journey shows 0 and is visible as dead config —
