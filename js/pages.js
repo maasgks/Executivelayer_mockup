@@ -1256,7 +1256,7 @@ function renderSoRunSidebar(){
       +fc(iShop,'What this store does',d.role==='buyer'?'Buys from sellers':'Sells to customers')
       +fc(iTag,'Category',d.category)
       +fc(iShop,'Where',d.city)
-      +fc(iMoney,'Turnover band',d.band)
+      +fc(iMoney,'Business tier',d.band)
       +fc(iMoney,'Plan &amp; GST','<span style="color:var(--orange)">'+band.plan+'</span> &middot; '+band.gst)
       +fc(iClock,'Last touched',d.updated)
       +fc(iClock,'Days on this step',d.age+' day'+(d.age===1?'':'s'))
@@ -7836,6 +7836,31 @@ function storeSavePayload(store){
     aadhaar_masked:store.aadhaarMasked,kyc_status:store.kycStatus,
     kyc_verified_by:store.kycVerifiedBy,kyc_verified_at:store.kycVerifiedAt,
     status:store.status,
+    /* -- Everything below arrived with the expanded signup. The backend's INSERT names its
+       columns explicitly, so keys it has no column for are ignored rather than rejected — which
+       is what lets the form ship ahead of the migration. `raw_signup` is the column that already
+       exists for exactly this: the whole submission, kept verbatim, so nothing entered is lost
+       while the dedicated columns are still being added. -- */
+    sub_category:store.subCategory,grand_category:store.grandCategory,
+    country:store.country,referral_code:store.referralCode,
+    business_kyc:store.businessKyc,pan_number:store.panNumber,
+    pan_aadhaar_linked:store.panAadhaarLinked,gst_number:store.gstNumber,
+    tan_number:store.tanNumber,msme_number:store.msmeNumber,
+    documents:store.documents||[],
+    bank_name:store.bankName,bank_account_holder:store.bankAccountHolder,
+    bank_account_masked:store.bankAccountMasked,bank_ifsc:store.bankIfsc,bank_branch:store.bankBranch,
+    address_line:store.addressLine,landmark:store.landmark,full_address:store.fullAddress,
+    city:store.city,state:store.state,pin_code:store.pinCode,
+    raw_signup:{
+      sub_category:store.subCategory,grand_category:store.grandCategory,country:store.country,
+      referral_code:store.referralCode,business_kyc:store.businessKyc,pan_number:store.panNumber,
+      pan_aadhaar_linked:store.panAadhaarLinked,gst_number:store.gstNumber,tan_number:store.tanNumber,
+      msme_number:store.msmeNumber,documents:store.documents||[],
+      bank_name:store.bankName,bank_account_holder:store.bankAccountHolder,
+      bank_account_masked:store.bankAccountMasked,bank_ifsc:store.bankIfsc,bank_branch:store.bankBranch,
+      address_line:store.addressLine,landmark:store.landmark,full_address:store.fullAddress,
+      city:store.city,state:store.state,pin_code:store.pinCode
+    },
     consents:store.consents.map(function(c){return {document:c.name,accepted_at:c.acceptedAt};}),
     // The trail the merchant just watched, recorded as fact rather than re-derived server-side.
     events:bhaiyaaStoreRunSteps(store).map(function(st){
@@ -7996,7 +8021,7 @@ function renderStoreSidebar(){
       +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Bhaiyaa Ref ID: '+s.bhaiyaaCode+'</span>'
       +'</div>'
       +'<div class="lp-sb-detail-grid">'
-      +fc(iTag,'Category',attrSafe(s.category)||d)+fc(iMoney,'Turnover band',attrSafe(s.storeType)||d)
+      +fc(iTag,'Category',attrSafe(s.category)||d)+fc(iMoney,'Business tier',attrSafe(s.storeType)||d)
       +fc(iTag,'Plan',attrSafe(s.plan)||d)+fc(iShield,'GST',attrSafe(s.gst)||d)
       +(seller
         ?fc(iId,'Storefront',attrSafe(s.handle))+fc(iTag,'Catalogue','Empty — 0 items')
@@ -8026,11 +8051,30 @@ function storeIntakeClearError(name){
 function storeIntakeCollect(){
   bhaiyaaStoreFields.forEach(function(f){
     if(f.type==='consent')return;                        // checkboxes write to the draft on click
+    // Documents write on pick, and reading .value off a file input would replace the {name,size}
+    // the draft is holding with the browser's "C:\fakepath\..." string.
+    if(f.type==='file')return;
     const el=document.getElementById('st-'+f.name);
     if(el)storeIntakeDraft[f.name]=el.value.trim();
   });
   const otp=document.getElementById('st-otp-code');
   if(otp)storeIntakeDraft.otp_code=otp.value.trim();
+}
+/* Documents are held as metadata, never contents — see the note on the `documents` section in
+   core.js. The re-render is what swaps the picker for the chip. */
+function storeIntakeFilePicked(name){
+  const el=document.getElementById('st-'+name);
+  const file=el&&el.files&&el.files[0];
+  storeIntakeCollect();
+  if(file)storeIntakeDraft[name]={name:file.name,size:file.size,type:file.type||'file'};
+  else delete storeIntakeDraft[name];
+  storeIntakeClearError(name);
+  renderADTPage();
+}
+function storeIntakeFileClear(name){
+  storeIntakeCollect();
+  delete storeIntakeDraft[name];
+  renderADTPage();
 }
 function storeIntakeToggleConsent(name){
   storeIntakeDraft[name]=!storeIntakeDraft[name];
@@ -8080,7 +8124,46 @@ function storeIntakeValidate(){
   if(!d.email_id)errs.email_id='Email id is required.';
   else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email_id))errs.email_id='Enter a valid email address.';
   if(!d.first_name)errs.first_name='First name is required.';
-  if(!d.store_type)errs.store_type='Store type is required — it sets the turnover band.';
+  if(!d.last_name)errs.last_name='Last name is required.';
+  if(!d.store_category)errs.store_category='Pick the category this store trades in.';
+  if(!d.store_type)errs.store_type='Store type is required — it sets the plan, GST position and credit line.';
+
+  /* -- Business & KYC. The formats are checked here because they are decidable from the value
+     alone: a PAN is five letters, four digits, a letter, and one that is not cannot be a typo
+     the KYC agent should be asked to chase. What is NOT checked here is whether the number is
+     real — that is the agent's job on the next stage, and splitting it across both would mean
+     two places to keep right about the same question. -- */
+  if(!d.business_kyc)errs.business_kyc='Pick the entity type behind this store.';
+  const pan=(d.pan_number||'').toUpperCase().replace(/\s/g,'');
+  if(!pan)errs.pan_number='PAN is required.';
+  else if(!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan))errs.pan_number='A PAN is five letters, four digits, then a letter.';
+  if(!d.pan_aadhaar_linked)errs.pan_aadhaar_linked='Bhaiyaa needs to know whether these are linked.';
+  else if(d.pan_aadhaar_linked==='No')errs.pan_aadhaar_linked='PAN and Aadhaar must be linked before a store can be opened.';
+  const gst=(d.gst_number||'').toUpperCase().replace(/\s/g,'');
+  if(gst&&!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/.test(gst))errs.gst_number='That is not a valid 15-character GSTIN.';
+
+  // Required documents. Presence only — nothing downstream reads the file.
+  if(!bhaiyaaDocPresent(d,'doc_pan'))errs.doc_pan='Upload the PAN card.';
+  if(!bhaiyaaDocPresent(d,'doc_aadhaar'))errs.doc_aadhaar='Upload the Aadhaar card.';
+
+  // Bank.
+  if(!d.bank_name)errs.bank_name='Bank name is required.';
+  if(!d.bank_account_holder)errs.bank_account_holder="The account holder's name is required.";
+  const acct=(d.bank_account_number||'').replace(/\D/g,'');
+  if(!acct)errs.bank_account_number='Account number is required.';
+  else if(acct.length<9||acct.length>18)errs.bank_account_number='An Indian account number is 9 to 18 digits.';
+  const ifsc=(d.bank_ifsc||'').toUpperCase().replace(/\s/g,'');
+  if(!ifsc)errs.bank_ifsc='IFSC code is required.';
+  else if(!/^[A-Z]{4}0[0-9A-Z]{6}$/.test(ifsc))errs.bank_ifsc='An IFSC is four letters, a zero, then six characters.';
+  if(!d.bank_branch)errs.bank_branch='Branch address is required.';
+
+  // Location.
+  if(!d.full_address)errs.full_address='The complete address is required.';
+  if(!d.city)errs.city='City is required.';
+  if(!d.state)errs.state='State is required.';
+  const pin=(d.pin_code||'').replace(/\D/g,'');
+  if(!pin)errs.pin_code='Pin code is required.';
+  else if(pin.length!==6)errs.pin_code='An Indian pin code is 6 digits.';
   // Length only. Everything else about the number — checksum, whether UIDAI knows it, whether
   // the name on it matches — is the KYC agent's job on the next stage, and duplicating that
   // check here would mean two places to keep right about what a valid Aadhaar is.
@@ -8090,6 +8173,7 @@ function storeIntakeValidate(){
   if(d.mobile_number&&storeIntakeOtpStage!=='verified')errs.mobile_number='Verify this number with an OTP, or clear it to continue without one.';
   if(!d.accept_terms)errs.accept_terms='Accept the Terms & Conditions to continue.';
   if(!d.accept_msa)errs.accept_msa='Accept the MSA to continue.';
+  if(!d.accept_fssai)errs.accept_fssai='Accept the FSSAI consent to continue.';
   return errs;
 }
 function submitStoreIntake(){
@@ -8140,15 +8224,48 @@ function storeCreateRecord(){
     storeNameAutoNamed:!named,
     handle:bhaiyaaHandle(storeName),
     category:d.store_category||'',
+    subCategory:d.sub_category||'',
+    grandCategory:d.grand_category||'',
+    country:d.country||'India',
+    referralCode:d.referral_code||'',
     storeType:d.store_type,
     plan:band.plan,gst:band.gst,creditLine:band.credit,paymentTerms:band.terms,
+    // -- Business & KYC. Identifiers are normalised on the way in rather than on the way out:
+    // a PAN typed in lower case is the same PAN, and storing it as typed would mean every
+    // comparison downstream has to remember to upper-case first. --
+    businessKyc:d.business_kyc||'',
+    panNumber:(d.pan_number||'').toUpperCase().replace(/\s/g,''),
+    panAadhaarLinked:d.pan_aadhaar_linked||'',
+    gstNumber:(d.gst_number||'').toUpperCase().replace(/\s/g,''),
+    tanNumber:(d.tan_number||'').toUpperCase().replace(/\s/g,''),
+    msmeNumber:(d.msme_number||'').toUpperCase().replace(/\s/g,''),
     // Only the last four digits survive the journey. The full number was needed to verify the
     // owner and is needed for nothing afterwards, so it is not carried onto the record.
     aadhaarMasked:bhaiyaaMaskAadhaar(d.aadhaar_number),
     kycStatus:'Verified',kycVerifiedBy:'KYC Agent',kycVerifiedAt:stamp,
+    /* Documents as a manifest, not as files: which ones were supplied and how big they were.
+       That is exactly what the KYC stage asks and all the record has any use for. */
+    documents:bhaiyaaStoreFields.filter(function(f){return f.type==='file'&&bhaiyaaDocPresent(d,f.name);})
+      .map(function(f){return {field:f.name,label:f.label,name:d[f.name].name,size:d[f.name].size};}),
+    // -- Bank. The account number is masked at the boundary, the same rule as the Aadhaar above:
+    // payouts are settled by a system that already has it, and nothing in this portal needs it. --
+    bankName:d.bank_name||'',
+    bankAccountHolder:d.bank_account_holder||'',
+    bankAccountMasked:bhaiyaaMaskAccount(d.bank_account_number),
+    bankIfsc:(d.bank_ifsc||'').toUpperCase().replace(/\s/g,''),
+    bankBranch:d.bank_branch||'',
+    // -- Location. addressLine and landmark are optional halves of one address, so they are kept
+    // apart here and joined only where one string is wanted. --
+    addressLine:d.address_line||'',
+    landmark:d.landmark||'',
+    fullAddress:d.full_address||'',
+    city:d.city||'',
+    state:d.state||'',
+    pinCode:(d.pin_code||'').replace(/\D/g,''),
     // Consent as evidence: what was accepted, and when. A boolean alone cannot answer "when did
     // they agree", which is the only question anyone ever asks of an acceptance record.
-    consents:[{name:'Terms & Conditions',acceptedAt:stamp},{name:'MSA',acceptedAt:stamp}],
+    consents:[{name:'Terms & Conditions',acceptedAt:stamp},{name:'MSA',acceptedAt:stamp},
+              {name:'FSSAI Registration Consent',acceptedAt:stamp}],
     source:'bhaiyaa',
     mirrorState:'mirrored',
     status:'Pending',
@@ -8305,23 +8422,49 @@ function buildCreateStoreHTML(){
         ?'<div class="uif-banner warn"><div><strong>Not saved yet.</strong> '+attrSafe(s.saveError||'')
           +' <button onclick="storeRetrySave()">Retry saving</button></div></div>'
         :s.persisted?'':'<div class="uif-banner"><div>Saving…</div></div>')
-      +'<p class="uif-section-label">Submitted details</p>'
-      +'<div style="margin-bottom:4px">'
+      /* -- Grouped rather than one thirty-row list, and in the same order as the form that filled
+         it. A merchant checking their own submission reads down looking for the block they
+         remember typing; a flat list makes them read all of it to find one line. -- */
+      +'<p class="uif-section-label">The store</p>'
+      +'<div class="uif-kvblock">'
       +kv('Status','<span class="lp-status-badge pending">'+s.status+'</span>')
-      +kv('Store role',s.role==='buyer'?'Buyer':'Seller')
       +kv('Store name',attrSafe(s.storeName))
-      +kv('Store category',attrSafe(s.category))
+      +kv('Category',[s.category,s.subCategory,s.grandCategory].filter(Boolean).map(attrSafe).join(' &middot; '))
       +kv('Store type',attrSafe(s.storeType))
-      +kv('Plan',attrSafe(s.plan))
+      +kv('Plan &amp; GST',attrSafe(s.plan)+' &middot; '+attrSafe(s.gst))
+      +'</div>'
+      +'<p class="uif-section-label">The owner</p>'
+      +'<div class="uif-kvblock">'
       +kv('Owner',attrSafe([s.firstName,s.lastName].filter(Boolean).join(' ')))
       +kv('Email id',attrSafe(s.email))
       +kv('Mobile number',mobile)
-      +kv('Accepted',s.consents.map(function(c){return c.name;}).join(' &middot; ')+' <span class="uif-consent-stamp">on '+s.createdAt+'</span>')
+      +'</div>'
+      +'<p class="uif-section-label">Business &amp; KYC</p>'
+      +'<div class="uif-kvblock">'
+      +kv('Entity type',attrSafe(s.businessKyc))
+      +kv('PAN','<span class="uif-mono">'+attrSafe(s.panNumber)+'</span>')
+      +kv('Aadhaar','<span class="uif-mono">'+attrSafe(s.aadhaarMasked)+'</span> <span class="uif-verified-chip">Verified</span>')
+      +kv('GST number',s.gstNumber?'<span class="uif-mono">'+attrSafe(s.gstNumber)+'</span>':'<span style="color:#9ca3af">Not registered</span>')
+      +kv('Documents on file',(s.documents||[]).length
+        ?(s.documents||[]).map(function(doc){return attrSafe(doc.label);}).join(' &middot; ')
+        :'')
+      +'</div>'
+      +'<p class="uif-section-label">Settlement &amp; location</p>'
+      +'<div class="uif-kvblock">'
+      // Escape each part, then join — escaping the joined string turns the separator into "&amp;middot;".
+      +kv('Bank',[s.bankName,s.bankIfsc].filter(Boolean).map(attrSafe).join(' &middot; '))
+      +kv('Payout account','<span class="uif-mono">'+attrSafe(s.bankAccountMasked)+'</span>')
+      +kv('Address',attrSafe([s.addressLine,s.fullAddress,s.city,s.state,s.pinCode].filter(Boolean).join(', ')))
+      +'</div>'
+      +'<p class="uif-section-label">Agreements</p>'
+      +'<div class="uif-kvblock">'
+      // storeStamp, not the raw ISO the record stores — this line is read by a person.
+      +kv('Accepted',s.consents.map(function(c){return attrSafe(c.name);}).join(' &middot; ')+' <span class="uif-consent-stamp">on '+storeStamp(s.createdAt)+'</span>')
       +'</div>'
       +(s.storeNameAutoNamed
         ?'<div class="uif-note">No store name was given, so it was opened as <strong>'+attrSafe(s.storeName)+'</strong>. It can be renamed in Settings at any time &mdash; the same as on Bhaiyaa.</div>'
         :'')
-      +'<div class="uif-note">The store is <strong>Pending</strong> because signup does not capture the address, GST number or bank details Bhaiyaa needs before a store can take orders.</div>'
+      +'<div class="uif-note">The store is <strong>Pending</strong> until Bhaiyaa has verified the documents on file. Everything it asks for at signup has been captured.</div>'
       +'<div class="uif-cta">'
       +'<button class="uif-submit" onclick="storeIntakeOpenRecord()">Open store record'
       +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
@@ -8351,15 +8494,19 @@ function buildCreateStoreHTML(){
       }).join('');
   };
 
+  /* One list of fields in, one grid of controls out. Extracted from the single flat loop this
+     used to be so the same renderer can draw each section independently — the OTP pair-skip has
+     to live inside whichever list holds the pair, which a per-section caller cannot do for it. */
+  const fieldsHTML=function(fields){
   const fieldHTML=[];
-  for(let i=0;i<bhaiyaaStoreFields.length;i++){
-    const f=bhaiyaaStoreFields[i];
-    const req=f.required?'<span class="req">*</span>':'';
+  for(let i=0;i<fields.length;i++){
+    const f=fields[i];
+    const req=f.required?'<span class="req">*</span>':(f.optional?'<span class="opt">Optional</span>':'');
 
     /* The mobile row is the one composite: dial code, number, and the OTP control that only this
        field has. It owns a full row because the verified state needs somewhere to live. */
     if(f.verify==='otp'){
-      const next=bhaiyaaStoreFields[i+1];
+      const next=fields[i+1];
       const numName=next?next.name:'mobile_number';
       const verified=storeIntakeOtpStage==='verified';
       const sent=storeIntakeOtpStage==='sent';
@@ -8411,14 +8558,73 @@ function buildCreateStoreHTML(){
       continue;
     }
 
+    /* A picked document collapses the input into a chip naming the file, because a file input
+       cannot be re-populated from script: after any re-render the browser's own control would
+       show "No file chosen" for a document the draft is holding, which is the control saying the
+       opposite of the truth. The chip reads from the draft, so it survives every render. */
+    if(f.type==='file'){
+      const picked=draft[f.name];
+      fieldHTML.push('<div class="'+wrapCls(f.name,'uif-file-field'+(f.full?' uif-full':''))+'" id="st-w-'+f.name+'">'
+        +'<label class="uif-label" for="st-'+f.name+'">'+f.label+req+'</label>'
+        +(picked&&picked.name
+          ?'<div class="uif-file-picked">'
+            +'<span class="uif-file-ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>'
+            +'<span class="uif-file-meta"><b>'+attrSafe(picked.name)+'</b><i>'+bhaiyaaDocSize(picked)+'</i></span>'
+            +'<button type="button" class="uif-file-clear" onclick="storeIntakeFileClear(\''+f.name+'\')" title="Remove">'
+              +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
+            +'</div>'
+          :'<label class="uif-file-drop" for="st-'+f.name+'">'
+            +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+            +'<span>Choose a file</span>'
+            +'<input type="file" id="st-'+f.name+'" accept="'+attrSafe(f.accept||'')+'" onchange="storeIntakeFilePicked(\''+f.name+'\')">'
+            +'</label>')
+        +errText(f.name)+hintText(f)
+        +'</div>');
+      continue;
+    }
+
     fieldHTML.push('<div class="'+wrapCls(f.name,f.full?'uif-full':'')+'" id="st-w-'+f.name+'">'
       +'<label class="uif-label" for="st-'+f.name+'">'+f.label+req+'</label>'
-      +'<input class="uif-input" type="'+(f.type==='email'?'email':'text')+'" id="st-'+f.name+'" placeholder="'+attrSafe(f.placeholder||f.label)+'"'
+      +'<input class="uif-input'+(f.mono?' mono':'')+'" type="'+(f.type==='email'?'email':'text')+'" id="st-'+f.name+'" placeholder="'+attrSafe(f.placeholder||f.label)+'"'
       +' value="'+attrSafe(draft[f.name]||'')+'"'
       +' oninput="storeIntakeClearError(\''+f.name+'\')" onkeydown="storeIntakeKeydown(event)">'
       +errText(f.name)+hintText(f)
       +'</div>');
   }
+  return fieldHTML.join('');
+  };
+
+  /* Sections, each with its own grid. The count line is not decoration: with thirty controls on
+     one screen the question a merchant actually has is "how much of this is left", and a section
+     that answers it is the difference between a long form and an endless one. */
+  const sectionsHTML=bhaiyaaStoreSections.map(function(sec){
+    const mine=bhaiyaaStoreFields.filter(function(f){return f.section===sec.id;});
+    if(!mine.length)return '';
+    // The mobile pair counts once — it is one question wearing two field definitions.
+    const required=mine.filter(function(f){return f.required&&f.label!=='';});
+    const done=required.filter(function(f){
+      if(f.type==='consent')return !!draft[f.name];
+      if(f.type==='file')return bhaiyaaDocPresent(draft,f.name);
+      return !!draft[f.name];
+    });
+    /* Filled is not the same as valid. Without this a section whose PAN is malformed and whose
+       GSTIN is rejected still reported "Complete" — the counter contradicting three red fields
+       directly beneath it, which is worse than having no counter at all. */
+    const flagged=mine.some(function(f){return !!errs[f.name];});
+    const complete=required.length&&done.length===required.length&&!flagged;
+    return '<section class="uif-sec'+(complete?' is-complete':'')+'">'
+      +'<div class="uif-sec-head">'
+        +'<div class="uif-sec-titles"><h3 class="uif-sec-title">'+sec.title+'</h3>'
+        +'<p class="uif-sec-sub">'+sec.sub+'</p></div>'
+        +(required.length
+          ?'<span class="uif-sec-count">'+(complete
+            ?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"><polyline points="20 6 9 17 4 12"/></svg> Complete'
+            :done.length+' of '+required.length)+'</span>'
+          :'')
+      +'</div>'
+      +'<div class="uif-grid">'+fieldsHTML(mine)+'</div>'
+      +'</section>';
+  }).join('');
 
   // -- The role chip that used to ride in this header went with the screen that set it. There
   // is no decision behind it any more, and a chip stating a fact nobody chose is furniture. --
@@ -8427,9 +8633,12 @@ function buildCreateStoreHTML(){
     +'<div class="uif-card-title">Welcome to Bhaiyaa</div>'
     +'<div class="uif-card-sub">Bhaiyaa’s merchant signup, filled in from here. Submitting registers the store on Bhaiyaa and keeps a copy in the Executive Layer.</div>'
     +'</div>'
-    +'<div class="uif-grid">'+fieldHTML.join('')+'</div>'
+    +sectionsHTML
     +'<div class="uif-actions">'
-    +'<div class="uif-hint">The address, GST number and bank details aren’t on this form &mdash; the store opens as <strong>Pending</strong> until they’re added.</div>'
+    /* The store still opens Pending, but no longer because these fields are missing — they are on
+       the form now. What is outstanding after submit is verification, which is a different claim
+       and has to be worded as one. */
+    +'<div class="uif-hint">Everything Bhaiyaa asks for is on this form. The store opens as <strong>Pending</strong> until KYC clears and the optional documents are on file.</div>'
     +'<button class="uif-submit" onclick="submitStoreIntake()"'+(storeIntakeBusy?' disabled':'')+'>'
     +'Create store'
     +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'

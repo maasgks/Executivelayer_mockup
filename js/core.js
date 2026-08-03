@@ -880,7 +880,7 @@ function amDealsForStage(id){return id?amDeals.filter(function(d){return d.stage
    The store journey is short and mostly automated; a board that split it into forty operations
    would be describing a process that does not exist. == */
 const soPipelineStages=[
-  {id:'store-details', n:1,track:'merchant',tone:'amber',label:'Store details',   short:'Signup',       plain:'The merchant is filling in Bhaiyaa&rsquo;s signup &mdash; contact, store name, category and turnover band.',internal:'Signup in progress on the merchant&rsquo;s side',  waitingOn:'Merchant',merchantAction:true},
+  {id:'store-details', n:1,track:'merchant',tone:'amber',label:'Store details',   short:'Signup',       plain:'The merchant is filling in Bhaiyaa&rsquo;s signup &mdash; contact, store, KYC registration, documents, bank and address.',internal:'Signup in progress on the merchant&rsquo;s side',  waitingOn:'Merchant',merchantAction:true},
   /* A gate in the same sense as the deal board's deposit stage: nothing downstream exists until
      it clears. The journey is explicit that a failed match halts the run BEFORE a store is
      created, which is the whole reason KYC sits here rather than after provisioning. */
@@ -939,20 +939,20 @@ const soSubStatuses={
    back from the system that refused, which is the only thing that tells the reader what to do.
    `age` is days on the current step, same as the deal board. */
 const soRuns=[
-  {id:1, ref:'STR-000112',store:'Sharma Kirana Mart',      merchant:'Ravi Sharma',      role:'seller',category:'Grocery & Kirana',        band:'Micro — ₹20 lakh to ₹1 crore',  city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-details', sub:0},
-  {id:2, ref:'STR-000114',store:'Nandini Dairy Point',     merchant:'Meghana Rao',      role:'seller',category:'Dairy & Bakery',          band:'Nano — under ₹20 lakh a year',  city:'Bengaluru', updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
-  {id:3, ref:'STR-000108',store:'Green Leaf Vegetables',   merchant:'Imran Qureshi',    role:'seller',category:'Fruits & Vegetables',     band:'Nano — under ₹20 lakh a year',  city:'Nagpur',    updated:'30 Jul 2026',age:3, stage:'store-details', sub:0},
-  {id:4, ref:'STR-000109',store:'Vasant Medico',           merchant:'Sneha Kulkarni',   role:'seller',category:'Pharmacy & Wellness',     band:'Micro — ₹20 lakh to ₹1 crore',  city:'Pune',      updated:'27 Jul 2026',age:6, stage:'store-details', sub:0,breach:true},
-  {id:5, ref:'STR-000110',store:'Bansal Hardware Depot',   merchant:'Naveen Bansal',    role:'buyer', category:'Hardware & Home Needs',   band:'Small — ₹1 crore to ₹5 crore',  city:'Indore',    updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
-  {id:6, ref:'STR-000111',store:'Anjali Stationers',       merchant:'Anjali Deshmukh',  role:'seller',category:'Stationery & Books',      band:'Nano — under ₹20 lakh a year',  city:'Nashik',    updated:'29 Jul 2026',age:4, stage:'store-details', sub:0},
-  {id:7, ref:'STR-000104',store:'Rohit Mobile World',      merchant:'Rohit Kadam',      role:'seller',category:'Electronics & Mobile',    band:'Small — ₹1 crore to ₹5 crore',  city:'Mumbai',    updated:'31 Jul 2026',age:2, stage:'kyc',           sub:2,halted:'kyc',
+  {id:1, ref:'STR-000112',store:'Sharma Kirana Mart',      merchant:'Ravi Sharma',      role:'seller',category:'Grocery & Kirana',        band:'MSME: Micro, Small, and Medium Enterprises',  city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-details', sub:0},
+  {id:2, ref:'STR-000114',store:'Nandini Dairy Point',     merchant:'Meghana Rao',      role:'seller',category:'Dairy & Bakery',          band:'MSME: Micro, Small, and Medium Enterprises',  city:'Bengaluru', updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
+  {id:3, ref:'STR-000108',store:'Green Leaf Vegetables',   merchant:'Imran Qureshi',    role:'seller',category:'Fruits & Vegetables',     band:'MSME: Micro, Small, and Medium Enterprises',  city:'Nagpur',    updated:'30 Jul 2026',age:3, stage:'store-details', sub:0},
+  {id:4, ref:'STR-000109',store:'Vasant Medico',           merchant:'Sneha Kulkarni',   role:'seller',category:'Pharmacy & Wellness',     band:'MSME: Micro, Small, and Medium Enterprises',  city:'Pune',      updated:'27 Jul 2026',age:6, stage:'store-details', sub:0,breach:true},
+  {id:5, ref:'STR-000110',store:'Bansal Hardware Depot',   merchant:'Naveen Bansal',    role:'buyer', category:'Hardware & Home Needs',   band:'SMB: Small and Medium-sized Business',  city:'Indore',    updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
+  {id:6, ref:'STR-000111',store:'Anjali Stationers',       merchant:'Anjali Deshmukh',  role:'seller',category:'Stationery & Books',      band:'MSME: Micro, Small, and Medium Enterprises',  city:'Nashik',    updated:'29 Jul 2026',age:4, stage:'store-details', sub:0},
+  {id:7, ref:'STR-000104',store:'Rohit Mobile World',      merchant:'Rohit Kadam',      role:'seller',category:'Electronics & Mobile',    band:'SMB: Small and Medium-sized Business',  city:'Mumbai',    updated:'31 Jul 2026',age:2, stage:'kyc',           sub:2,halted:'kyc',
    haltNote:'UIDAI returned a different name for this Aadhaar. The owner name on the signup does not match the demographics on record.'},
-  {id:8, ref:'STR-000106',store:'Sagar Foods &amp; Catering',merchant:'Sagar Pawar',    role:'buyer', category:'Restaurant & Food Service',band:'Medium — ₹5 crore to ₹50 crore',city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-creation',sub:2,halted:'store-creation',
+  {id:8, ref:'STR-000106',store:'Sagar Foods &amp; Catering',merchant:'Sagar Pawar',    role:'buyer', category:'Restaurant & Food Service',band:'Corporate: Large businesses or companies',city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-creation',sub:2,halted:'store-creation',
    haltNote:'Bhaiyaa rejected the registration. StoreIntake returned a duplicate GST number against this PAN, so no Bhaiyaa ref was issued.'},
-  {id:9, ref:'STR-000097',store:'Kaveri Textiles Outlet',  merchant:'Latha Menon',      role:'seller',category:'Apparel & Footwear',      band:'Small — ₹1 crore to ₹5 crore',  city:'Coimbatore',updated:'30 Jul 2026',age:3, stage:'store-live',    sub:0,bhaiyaaRef:'BHA-STR-0071'},
-  {id:10,ref:'STR-000099',store:'Mahalaxmi General Store', merchant:'Prakash Jadhav',   role:'seller',category:'General Store',           band:'Nano — under ₹20 lakh a year',  city:'Solapur',   updated:'28 Jul 2026',age:5, stage:'store-live',    sub:0,bhaiyaaRef:'BHA-STR-0073'},
-  {id:11,ref:'STR-000088',store:'Deccan Wholesale Buyers', merchant:'Farhan Shaikh',    role:'buyer', category:'Grocery & Kirana',        band:'Medium — ₹5 crore to ₹50 crore',city:'Hyderabad', updated:'21 Jul 2026',age:12,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0062'},
-  {id:12,ref:'STR-000091',store:'Sunrise Bakers',          merchant:'Neha Kulkarni',    role:'seller',category:'Dairy & Bakery',          band:'Micro — ₹20 lakh to ₹1 crore',  city:'Thane',     updated:'18 Jul 2026',age:15,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0065'}
+  {id:9, ref:'STR-000097',store:'Kaveri Textiles Outlet',  merchant:'Latha Menon',      role:'seller',category:'Apparel & Footwear',      band:'SMB: Small and Medium-sized Business',  city:'Coimbatore',updated:'30 Jul 2026',age:3, stage:'store-live',    sub:0,bhaiyaaRef:'BHA-STR-0071'},
+  {id:10,ref:'STR-000099',store:'Mahalaxmi General Store', merchant:'Prakash Jadhav',   role:'seller',category:'General Store',           band:'MSME: Micro, Small, and Medium Enterprises',  city:'Solapur',   updated:'28 Jul 2026',age:5, stage:'store-live',    sub:0,bhaiyaaRef:'BHA-STR-0073'},
+  {id:11,ref:'STR-000088',store:'Deccan Wholesale Buyers', merchant:'Farhan Shaikh',    role:'buyer', category:'Grocery & Kirana',        band:'Corporate: Large businesses or companies',city:'Hyderabad', updated:'21 Jul 2026',age:12,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0062'},
+  {id:12,ref:'STR-000091',store:'Sunrise Bakers',          merchant:'Neha Kulkarni',    role:'seller',category:'Dairy & Bakery',          band:'MSME: Micro, Small, and Medium Enterprises',  city:'Thane',     updated:'18 Jul 2026',age:15,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0065'}
 ];
 /* The steps that apply to THIS record. A halt step belongs only to the record whose run halted
    in that stage; for everyone else the stage is the two or three automated steps and nothing
@@ -2595,11 +2595,11 @@ const aiJourneyEvents={
      still reads correctly everywhere. What went is the question, not the column. == */
   'bhaiyaa-store-creation':[
     {name:'Store Details',chips:['Human Required','Bhaiyaa'],source:'Merchant',waitingOn:'Merchant',
-     desc:'Bhaiyaa’s own signup — contact details, store name, category and the turnover band — captured inside the Executive Layer rather than on Bhaiyaa’s site.',
-     validation:'Email, first name, store type, Aadhaar and both consents are mandatory. A mobile number, if given, must be OTP-verified.',
+     desc:'Bhaiyaa’s own signup — owner and contact details, the store, business and KYC registration, documents, bank details and store address — captured inside the Executive Layer rather than on Bhaiyaa’s site.',
+     validation:'Owner name, email, category, store type, entity type, PAN, Aadhaar, the PAN and Aadhaar cards, bank details, address and all three consents are mandatory. PAN, GSTIN, IFSC and pin code are format-checked here; whether they are real is the KYC agent&rsquo;s job. A mobile number, if given, must be OTP-verified.',
      human:'Required — the merchant completes the signup.',
      failure:'Validation errors are reported per field; nothing is submitted until all clear.',
-     next:'KYC Verification',fields:['Email Id','Mobile Number','Owner Name','Store Name','Store Category','Store Type','Aadhaar Number']},
+     next:'KYC Verification',fields:['Email Id','Mobile Number','Owner Name','Store Name','Store Category','Store Type','Business KYC','Aadhaar Number','PAN Number','GST Number','Documents','Bank Details','Store Address']},
     {name:'KYC Verification',chips:['AI Automated','Compliance'],source:'KYC Agent',waitingOn:'&mdash;',
      desc:'The KYC agent checks the Aadhaar number against UIDAI, matches the name and mobile on record against the returned demographics, and screens the merchant before any store is opened.',
      validation:'Verhoeff checksum, UIDAI demographic match on name and mobile, and a watchlist screen. All four must pass.',
@@ -2607,7 +2607,7 @@ const aiJourneyEvents={
      failure:'A mismatch or a failed screen halts the run before a store exists, which is the point of doing it here rather than after.',
      next:'Store Creation',fields:['Aadhaar Number','Name Match','Mobile Match','Screening Result']},
     {name:'Store Creation',chips:['AI Automated','Bhaiyaa'],source:'Store Agent',waitingOn:'&mdash;',
-     desc:'The agent derives the plan and GST position from the turnover band, mints the Store ID, registers the store on Bhaiyaa through StoreIntake, and provisions the storefront or the purchase ledger.',
+     desc:'The agent derives the plan and GST position from the business tier, mints the Store ID, registers the store on Bhaiyaa through StoreIntake, files the documents, attaches the payout account and address, and provisions the storefront or the purchase ledger.',
      validation:'Bhaiyaa must return its own store id before provisioning starts.',
      human:'None — fully automated.',
      failure:'A registration failure leaves the Store ID minted and the record unmirrored, so it can be retried rather than re-keyed.',
@@ -3741,32 +3741,112 @@ const cfgUserIntakeFallbackFields=[
               recorded on the store record with the timestamp they were accepted at.
 
    Ordering follows Bhaiyaa's own form exactly: who you are, then how we reach you, then what the
-   store is. A merchant filling this alongside Bhaiyaa's site should never have to hunt. == */
-const bhaiyaaStoreCategories=['Grocery & Kirana','Fruits & Vegetables','Dairy & Bakery','Pharmacy & Wellness','Restaurant & Food Service','Electronics & Mobile','Apparel & Footwear','Stationery & Books','Hardware & Home Needs','General Store'];
-/* Turnover bands, not sizes-in-the-abstract. The band a merchant picks decides whether GST
-   registration is mandatory for them and which Bhaiyaa plan they land on, so the rupee range is
-   in the option text — a merchant knows their turnover, not whether they are "Micro". */
-const bhaiyaaStoreTypes=['Nano — under ₹20 lakh a year','Micro — ₹20 lakh to ₹1 crore','Small — ₹1 crore to ₹5 crore','Medium — ₹5 crore to ₹50 crore','Large — above ₹50 crore'];
+   store is. A merchant filling this alongside Bhaiyaa's site should never have to hunt.
+
+   SECTIONS. The live signup at seller.bhaiyaa.com/sign-up spreads these over seven screens —
+   phone auth, account, KYC, bank, location, delivery, OTP. This flow keeps its own four stages
+   (see bhaiyaaStoreStages) and folds all of the merchant-entered ones into stage 1, because a
+   four-stage rail that suddenly grew to eleven would be describing the form's pagination rather
+   than the journey. What it does NOT do is stack thirty controls in one column: each field
+   declares a `section`, and the renderer draws a titled group per section. The grouping is
+   Bhaiyaa's own — a merchant filling both should recognise every block. == */
+const bhaiyaaStoreSections=[
+  {id:'account',  title:'Your account',      sub:'How Bhaiyaa reaches the owner of this store.'},
+  {id:'store',    title:'Your store',        sub:'What the store is and what it sells.'},
+  {id:'kyc',      title:'Business & KYC',    sub:'The registration details Bhaiyaa verifies before opening a store.'},
+  {id:'documents',title:'Documents',         sub:'Uploads Bhaiyaa keeps on file. Only PAN and Aadhaar are needed to open the store.'},
+  {id:'bank',     title:'Bank details',      sub:'Where payouts are settled.'},
+  {id:'location', title:'Store location',    sub:'The address customers see and deliveries go to.'},
+  {id:'consent',  title:'Agreements',        sub:'Recorded with the moment each was accepted, not as a flag.'}
+];
+/* Bhaiyaa's own 24 categories, verbatim from the live signup. They are broader than a kirana
+   list — Bhaiyaa carries diagnostics, logistics and ticketing on the same platform — so the
+   taxonomy is theirs and is not translated on the way in. A category we renamed would not match
+   the one on their record, and reconciling two spellings later costs more than it saves. */
+const bhaiyaaStoreCategories=['Grocery','Retail','Dispensary','Manufacturing','Fashion','Beauty And Personal Care','Electronics','Appliances','Home And Kitchen','Health And Wellness','Restaurant','Spa','Diagnostic','Hospital','Logistic','Business Partner - Supplier','Grocery Wholesale','Health Services','Cards And Subscription','Tickets','Service','Rooms','Amentities','Others'];
+/* Sub and grand category are the second and third levels of Bhaiyaa's hierarchy. The live form
+   populates them from the category above; here they carry one generic set, because a three-level
+   taxonomy mocked in full would be a thousand lines describing someone else's catalogue. */
+const bhaiyaaSubCategories=['General','Packaged Goods','Fresh & Perishable','Prepared Food','Devices & Hardware','Apparel & Accessories','Personal Care','Clinical','Professional Services','Other'];
+const bhaiyaaGrandCategories=['Essentials','Lifestyle','Healthcare','Industrial','Services'];
+/* Business size, not turnover. The live form asks MSME / SMB / Corporate — a registration class
+   rather than a rupee range — so that is what is asked here. The three of them still decide the
+   plan, the GST position and the credit line, which is why the option text carries what each one
+   means: "Corporate" tells a merchant nothing on its own. */
+const bhaiyaaStoreTypes=['MSME: Micro, Small, and Medium Enterprises','SMB: Small and Medium-sized Business','Corporate: Large businesses or companies'];
+/* The entity type behind the store. It is the field that decides which documents are actually
+   required — a sole proprietor has no incorporation certificate and a trust has no GST by
+   default — so it is asked before the uploads rather than after them. */
+const bhaiyaaKycEntityTypes=['Individual','Sole Proprietor / Self-employed','Partnership','Limited Liability Partnership (LLP)','Private/Public Limited',"NGO's / Trust / Society / Association"];
+const bhaiyaaCountries=['India','United Arab Emirates','Singapore','United Kingdom','United States'];
 const bhaiyaaStoreFields=[
-  {name:'email_id',label:'Email Id',type:'email',required:true,placeholder:'Enter Your email address',full:true},
-  {name:'phone_country_code',label:'Mobile Number',type:'select',options:['+91','+971','+65','+44','+1'],verify:'otp'},
-  {name:'mobile_number',label:'',type:'text',placeholder:'Enter Mobile Number'},
-  {name:'first_name',label:'First Name',type:'text',required:true,placeholder:'Enter Your First Name'},
-  {name:'last_name',label:'Last Name',type:'text',placeholder:'Enter Your Last Name'},
+  /* ---- account ---- */
+  {section:'account',name:'first_name',label:'First Name',type:'text',required:true,placeholder:'Enter Your First Name'},
+  {section:'account',name:'last_name',label:'Last Name',type:'text',required:true,placeholder:'Enter Your Last Name'},
+  {section:'account',name:'email_id',label:'Email Id',type:'email',required:true,placeholder:'Enter Your email address',full:true},
+  {section:'account',name:'phone_country_code',label:'Mobile Number',type:'select',options:['+91','+971','+65','+44','+1'],verify:'otp'},
+  {section:'account',name:'mobile_number',label:'',type:'text',placeholder:'Enter Mobile Number'},
+
+  /* ---- store ---- */
+  {section:'store',name:'store_name',label:'Enter Your Store Name',type:'text',placeholder:'Enter your store name',full:true,
+   hint:'You can always change your Store name in Settings.'},
+  {section:'store',name:'store_category',label:'Choose Your Store Category',type:'select',required:true,full:true,placeholder:'Select',options:bhaiyaaStoreCategories,
+   hint:'Select a category that defines what your store offers to your customers.'},
+  {section:'store',name:'sub_category',label:'Sub Category',type:'select',placeholder:'Select',options:bhaiyaaSubCategories},
+  {section:'store',name:'grand_category',label:'Grand Category',type:'select',placeholder:'Select',options:bhaiyaaGrandCategories},
+  {section:'store',name:'country',label:'Select Country',type:'select',placeholder:'Select',options:bhaiyaaCountries},
+  {section:'store',name:'referral_code',label:'Referral Code',type:'text',optional:true,placeholder:'If someone referred you'},
+  {section:'store',name:'store_type',label:'Choose Your Store Type',type:'select',required:true,full:true,placeholder:'Select',options:bhaiyaaStoreTypes,
+   hint:'This decides your Bhaiyaa plan, your GST position and your credit line.'},
+
+  /* ---- business & KYC ---- */
+  {section:'kyc',name:'business_kyc',label:'Your Business KYC',type:'select',required:true,full:true,placeholder:'Select',options:bhaiyaaKycEntityTypes,
+   hint:'The entity behind the store. It decides which of the documents below Bhaiyaa actually needs.'},
   /* Aadhaar is asked here and nowhere else. It is the only field on this form that exists for a
      third party's benefit rather than the merchant's, so it says why it is being asked — an
      unexplained government id on a signup form is the field people abandon a signup at. Twelve
      digits, grouped, and never shown in full again after this screen. */
-  {name:'aadhaar_number',label:'Aadhaar Number',type:'text',required:true,full:true,placeholder:'0000 0000 0000',
+  {section:'kyc',name:'aadhaar_number',label:'Aadhaar Number',type:'text',required:true,full:true,placeholder:'0000 0000 0000',
    hint:'Verified with UIDAI before your store is opened. Bhaiyaa needs a KYC-verified owner on every store.'},
-  {name:'store_name',label:'Store Name',type:'text',placeholder:'Enter your store name',full:true,
-   hint:'You can always change your Store name in Settings.'},
-  {name:'store_category',label:'Choose Your Store Category',type:'select',full:true,placeholder:'Select',options:bhaiyaaStoreCategories,
-   hint:'Select a category that defines what your store offers to your customers.'},
-  {name:'store_type',label:'Choose Your Store Type',type:'select',required:true,full:true,placeholder:'Select',options:bhaiyaaStoreTypes,
-   hint:'Select a store type that defines your annual turnover.'},
-  {name:'accept_terms',type:'consent',required:true,label:'I accept the ',linkText:'Terms & Conditions'},
-  {name:'accept_msa',type:'consent',required:true,label:'I accept the ',linkText:'MSA'}
+  {section:'kyc',name:'pan_number',label:'Pan Number',type:'text',required:true,placeholder:'ABCDE1234F',mono:true},
+  {section:'kyc',name:'pan_aadhaar_linked',label:'Is Pan & Aadhar linked?',type:'select',required:true,placeholder:'Select',options:['Yes','No'],
+   hint:'A store cannot be opened until these are linked.'},
+  {section:'kyc',name:'gst_number',label:'GST Number',type:'text',optional:true,placeholder:'22ABCDE1234F1Z5',mono:true},
+  {section:'kyc',name:'tan_number',label:'TAN',type:'text',optional:true,placeholder:'ABCD12345E',mono:true},
+  {section:'kyc',name:'msme_number',label:'MSME Registration Number',type:'text',optional:true,full:true,placeholder:'UDYAM-XX-00-0000000',mono:true},
+
+  /* ---- documents ----
+     Presence is the fact this journey needs, not contents: the KYC stage asks whether a document
+     was supplied, and nothing downstream ever reads the file. So these store the name, size and
+     type of what was picked and nothing else — a mockup that pretended to hold scans of people's
+     PAN cards would be carrying a liability it has no use for. */
+  {section:'documents',name:'doc_pan',label:'Pan Card',type:'file',required:true,accept:'.pdf,.jpg,.jpeg,.png'},
+  {section:'documents',name:'doc_aadhaar',label:'Aadhar Card',type:'file',required:true,accept:'.pdf,.jpg,.jpeg,.png'},
+  {section:'documents',name:'doc_gst',label:'GST Certificate',type:'file',optional:true,accept:'.pdf,.jpg,.jpeg,.png'},
+  {section:'documents',name:'doc_cheque',label:'Cancelled Cheque',type:'file',optional:true,accept:'.pdf,.jpg,.jpeg,.png'},
+  {section:'documents',name:'doc_fssai',label:'FSSAI',type:'file',optional:true,accept:'.pdf,.jpg,.jpeg,.png'},
+  {section:'documents',name:'doc_shop_licence',label:'Shop & Establishment License',type:'file',optional:true,accept:'.pdf,.jpg,.jpeg,.png'},
+
+  /* ---- bank ---- */
+  {section:'bank',name:'bank_name',label:"Bank Name",type:'text',required:true,placeholder:'Enter your bank name'},
+  {section:'bank',name:'bank_account_holder',label:"Bank Account Holder's Name",type:'text',required:true,placeholder:'As printed on the passbook'},
+  {section:'bank',name:'bank_account_number',label:'Account Number',type:'text',required:true,placeholder:'Enter account number',mono:true,
+   hint:'Stored masked. Only the last four digits are shown after this screen.'},
+  {section:'bank',name:'bank_ifsc',label:"Bank's IFSC Code",type:'text',required:true,placeholder:'HDFC0001234',mono:true},
+  {section:'bank',name:'bank_branch',label:'Branch Address',type:'text',required:true,full:true,placeholder:'Branch and city'},
+
+  /* ---- location ---- */
+  {section:'location',name:'address_line',label:'House / Flat / Floor Number',type:'text',placeholder:'Shop 12, Ground Floor'},
+  {section:'location',name:'landmark',label:'Landmark',type:'text',optional:true,placeholder:'Near the bus depot'},
+  {section:'location',name:'full_address',label:'Complete Address',type:'text',required:true,full:true,placeholder:'Street, area'},
+  {section:'location',name:'city',label:'City',type:'text',required:true,placeholder:'Pune'},
+  {section:'location',name:'state',label:'State',type:'text',required:true,placeholder:'Maharashtra'},
+  {section:'location',name:'pin_code',label:'Pin Code',type:'text',required:true,placeholder:'411001',mono:true},
+
+  /* ---- consents ---- */
+  {section:'consent',name:'accept_terms',type:'consent',required:true,label:'I accept the ',linkText:'Terms & Conditions'},
+  {section:'consent',name:'accept_msa',type:'consent',required:true,label:'I accept the ',linkText:'MSA'},
+  {section:'consent',name:'accept_fssai',type:'consent',required:true,label:'I accept the ',linkText:'Consent and Authorization for FSSAI Registration'}
 ];
 /* -- Seller or buyer is the first question because it is the only one whose answer changes what
    the other answers mean. A seller's category says what they put in front of customers; a
@@ -3808,15 +3888,31 @@ function bhaiyaaMaskAadhaar(n){
   if(digits.length<4)return 'XXXX XXXX XXXX';
   return 'XXXX XXXX '+digits.slice(-4);
 }
-/* -- Derived from the turnover band, not asked separately. The band a merchant picks already
+/* Same rule as the Aadhaar above, for the one other field on this form nobody downstream has a
+   reason to read in full. The last four are what a merchant identifies their own account by; the
+   rest is a number an ops board has no business displaying. */
+function bhaiyaaMaskAccount(n){
+  const digits=String(n||'').replace(/\D/g,'');
+  if(digits.length<4)return '';
+  return '•••• '+digits.slice(-4);
+}
+/* A document field holds {name,size,type} or nothing — see the note on the `documents` section.
+   These two are the only questions anything downstream asks of one. */
+function bhaiyaaDocPresent(d,name){return !!(d&&d[name]&&d[name].name);}
+function bhaiyaaDocSize(f){
+  if(!f||!f.size)return '';
+  return f.size<1024?f.size+' B'
+    :f.size<1048576?Math.round(f.size/1024)+' KB'
+    :(f.size/1048576).toFixed(1)+' MB';
+}
+/* -- Derived from the business tier, not asked separately. The tier a merchant picks already
    decides all three, so asking again would be asking them to do our arithmetic. The run shows
-   each one as it is written, which is what makes the band feel like it did something. -- */
+   each one as it is written, which is what makes the tier feel like it did something.
+   Keyed on the three values Bhaiyaa's own form offers — see bhaiyaaStoreTypes. -- */
 const bhaiyaaBandFacts={
-  'Nano — under ₹20 lakh a year':{gst:'Not mandatory at this turnover',plan:'Starter',credit:'Prepaid only',terms:'Prepaid'},
-  'Micro — ₹20 lakh to ₹1 crore':{gst:'Mandatory',plan:'Growth',credit:'₹50,000 limit',terms:'Prepaid'},
-  'Small — ₹1 crore to ₹5 crore':{gst:'Mandatory',plan:'Business',credit:'₹2,50,000 limit',terms:'Net 15'},
-  'Medium — ₹5 crore to ₹50 crore':{gst:'Mandatory',plan:'Enterprise',credit:'₹10,00,000 limit',terms:'Net 30'},
-  'Large — above ₹50 crore':{gst:'Mandatory · e-invoicing',plan:'Enterprise+',credit:'Negotiated',terms:'Net 45'}
+  'MSME: Micro, Small, and Medium Enterprises':{gst:'Mandatory above ₹40 lakh',plan:'Growth',credit:'₹50,000 limit',terms:'Prepaid'},
+  'SMB: Small and Medium-sized Business':{gst:'Mandatory',plan:'Business',credit:'₹2,50,000 limit',terms:'Net 15'},
+  'Corporate: Large businesses or companies':{gst:'Mandatory · e-invoicing',plan:'Enterprise',credit:'₹10,00,000 limit',terms:'Net 30'}
 };
 function bhaiyaaBandFor(type){return bhaiyaaBandFacts[type]||{gst:'To be confirmed',plan:'Starter',credit:'Prepaid only',terms:'Prepaid'};}
 function bhaiyaaHandle(name){return (name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,28)||'store';}
@@ -3836,17 +3932,30 @@ function bhaiyaaStoreRunSteps(s){
     // Carried forward rather than re-run: KYC happened on its own stage, and repeating it here
     // would show the same work twice. What this step does is attach the result to the record.
     {title:'Attaching the KYC result',note:'The verification from the previous stage, recorded against the store.',
-     reads:[['Aadhaar',s.aadhaarMasked],['Verified at',s.kycVerifiedAt]],
+     reads:[['Aadhaar',s.aadhaarMasked],['PAN',s.panNumber||'Not given'],['Verified at',s.kycVerifiedAt]],
      writes:[['KYC status','Verified'],['Verified by','KYC Agent']]},
-    {title:'Resolving the turnover band',note:'One answer decides the plan, the GST position and the credit line.',
-     reads:[['Store type',s.storeType]],
+    /* The document manifest. It is its own step rather than a line on the KYC one because the
+       question it answers is different: KYC says whether the owner checks out, this says what
+       Bhaiyaa is holding on file for them — and an audit asks the second one far more often. */
+    {title:'Filing the documents',note:'What the merchant supplied, recorded by name and size. The files themselves stay with Bhaiyaa.',
+     reads:(s.documents||[]).map(function(doc){return [doc.label,doc.name];}),
+     writes:[['Documents on file',String((s.documents||[]).length)],
+             ['Entity type',s.businessKyc||'Not given']]},
+    {title:'Resolving the business tier',note:'One answer decides the plan, the GST position and the credit line.',
+     reads:[['Store type',s.storeType],['GST number',s.gstNumber||'Not registered']],
      writes:seller?[['Plan',band.plan],['GST',band.gst]]:[['Plan',band.plan],['GST',band.gst],['Credit line',band.credit]]},
     {title:'Minting the Store ID',note:'The Executive Layer’s own identifier, issued before anything leaves this system.',
      reads:[],writes:[['Store ID',s.storeCode]]},
     {title:seller?'Registering the store on Bhaiyaa':'Registering the buyer profile on Bhaiyaa',
      note:'Posted to StoreIntake · Store Signup. Bhaiyaa mints its own id and returns it.',
-     reads:[['Store name',s.storeName],['Category',s.category||'Not set']],
+     reads:[['Store name',s.storeName],['Category',s.category||'Not set'],['City',s.city||'Not set']],
      writes:[['Bhaiyaa Store ID',s.bhaiyaaCode]]},
+    /* Settlement and address are written after registration, not before: both are attributes of
+       a store that exists, and Bhaiyaa has nothing to attach them to until it has issued its id. */
+    {title:'Attaching settlement and address',note:'Where payouts land and where the store trades. Recorded once Bhaiyaa has a store to hang them on.',
+     reads:[['Bank',s.bankName||'Not given'],['IFSC',s.bankIfsc||'Not given']],
+     writes:[['Payout account',s.bankAccountMasked||'Not given'],
+             ['Address',[s.city,s.state,s.pinCode].filter(Boolean).join(', ')||'Not given']]},
     seller
       ?{title:'Opening the storefront',note:'The catalogue and order inbox a customer will see.',
         reads:[['Category',s.category||'Not set']],
@@ -3860,7 +3969,7 @@ function bhaiyaaStoreRunSteps(s){
        this is the step where the thing the merchant came for starts existing, and a run where
        every step looks identical never says which one that was. */
     {title:seller?'Store created':'Buyer account created',milestone:true,
-     note:'Live in both systems and readable in Stores. It stays Pending until the address, GST number and bank details are added.',
+     note:'Live in both systems and readable in Stores. It stays Pending until Bhaiyaa has verified the documents on file.',
      reads:[],writes:[['Store',s.storeName],['Store ID',s.storeCode],['Bhaiyaa Ref ID',s.bhaiyaaCode],['Status',s.status]]}
   ];
 }

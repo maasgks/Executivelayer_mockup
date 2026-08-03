@@ -43,14 +43,50 @@
 /* align-items:flex-start matters — the default `stretch` made the card grow to the full height
    of the flex row, leaving a tall empty white block under short content. */
 .uif-body{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:16px 26px 56px}
-.uif-card{width:100%;max-width:680px;background:#fff;border:1px solid var(--border);border-radius:14px;
+/* 740, up from 680: the signup now carries six sections of two-column fields, and at the
+   old width the pairs were narrow enough that a "Bank Account Holder's Name" label wrapped
+   to two lines while its input held eleven characters. */
+.uif-card{width:100%;max-width:740px;background:#fff;border:1px solid var(--border);border-radius:14px;
   padding:30px 32px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
 .uif-card-head{margin-bottom:24px}
 .uif-card-title{font-size:18px;font-weight:700;color:var(--navy);margin-bottom:5px}
 .uif-card-sub{font-size:13px;color:var(--gray);line-height:1.6}
 
+/* -- Sections -----------------------------------------------------------------
+   The signup grew from eleven controls to thirty when it stopped summarising
+   Bhaiyaa's form and started matching it. Thirty controls in one column is not a
+   form, it is a wall — so each group of fields gets a heading, a sentence saying
+   what the group is for, and a count of its own required fields.
+
+   The count is the part that earns its place. "How much of this is left" is the
+   question a long form provokes and cannot answer, and a per-section counter
+   answers it without a progress bar that would imply a pagination this flow does
+   not have: it is still one screen, still one submit. */
+.uif-sec{padding:22px 0 4px;border-top:1px solid var(--ol)}
+.uif-sec:first-of-type{padding-top:0;border-top:none}
+.uif-sec-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.uif-sec-titles{min-width:0}
+.uif-sec-title{font-size:13.5px;font-weight:700;color:var(--navy);letter-spacing:-.1px}
+.uif-sec-sub{font-size:11.5px;color:var(--gray);line-height:1.5;margin-top:3px}
+/* Grey while counting, teal once the section is done — the same teal the stepper
+   spends on a finished stage, because it is the same claim at a smaller scale. */
+.uif-sec-count{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;font-size:10.5px;font-weight:700;
+  letter-spacing:.3px;color:var(--gray);background:var(--light);border:1px solid var(--border);
+  border-radius:20px;padding:4px 10px;white-space:nowrap;transition:.2s}
+.uif-sec.is-complete .uif-sec-count{color:#0f766e;background:#f0fdfa;border-color:#99f6e4}
+
 /* -- Form -- */
 .uif-grid{display:grid;grid-template-columns:1fr 1fr;gap:19px 20px}
+/* Identifiers — PAN, GSTIN, IFSC, pin code, account number. Tabular figures and a
+   monospace face because these are read character by character when they are checked
+   against a document, and a proportional 0/O or 1/l is where that goes wrong. */
+.uif-input.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;letter-spacing:.4px}
+.uif-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+/* Optional is stated, not implied by the absence of an asterisk. On a form this long
+   "is this one required?" is asked of every field, and answering it only half the time
+   means the reader has to hold the rule in their head. */
+.uif-label .opt{margin-left:6px;font-size:10px;font-weight:600;color:#9ca3af;letter-spacing:.2px;
+  text-transform:uppercase}
 .uif-field{display:flex;flex-direction:column;gap:7px;min-width:0}
 .uif-field.uif-full{grid-column:1 / -1}
 .uif-label{font-size:12.5px;font-weight:600;color:var(--navy)}
@@ -98,6 +134,31 @@
 .uif-verified-chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;
   color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:20px;padding:2px 9px;white-space:nowrap}
 .uif-verified-chip.lg{font-size:12px;padding:9px 14px;border-radius:9px}
+
+/* -- Document upload --------------------------------------------------------------
+   Two states, one control. Empty is a dashed drop target with the native input hidden
+   inside its own label, so the whole box is the click target rather than a 13px
+   "Choose file" button. Picked is a chip naming the file — the native control cannot
+   be re-populated from script, so after any re-render it would show "No file chosen"
+   for a document we are holding. The chip reads from the draft and cannot lie. */
+.uif-file-field{gap:7px}
+.uif-file-drop{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 14px;
+  border:1.5px dashed #cbd5e1;border-radius:9px;background:var(--light);color:var(--gray);
+  font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;text-align:center}
+.uif-file-drop:hover{border-color:#0d9488;background:#f0fdfa;color:#0f766e}
+.uif-file-drop input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.uif-file-drop svg{flex-shrink:0}
+.uif-field.has-error .uif-file-drop{border-color:var(--red);background:#fffbfb}
+.uif-file-picked{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #99f6e4;
+  border-radius:9px;background:#f0fdfa}
+.uif-file-ico{width:26px;height:26px;border-radius:7px;background:#0d9488;color:#fff;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.uif-file-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.uif-file-meta b{font-size:12px;font-weight:600;color:#0f766e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uif-file-meta i{font-size:10.5px;font-style:normal;color:#5b9c95}
+.uif-file-clear{width:24px;height:24px;flex-shrink:0;border:none;border-radius:6px;background:transparent;
+  color:#0f766e;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.uif-file-clear:hover{background:#ccfbf1}
 
 /* Consent. A button rather than a checkbox input: the whole row is the target, which
    is the difference between "accept the terms" being one click and being a 13px one. */
@@ -192,6 +253,10 @@
 
 .uif-section-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
   color:var(--gray);margin:0 0 11px}
+/* The success screen repeats the form's grouping, so the label needs air above it once there
+   is more than one block. The first keeps its original spacing. */
+.uif-section-label + .uif-kvblock + .uif-section-label{margin-top:22px}
+.uif-kvblock{margin-bottom:4px}
 .uif-kv{display:flex;justify-content:space-between;gap:18px;padding:10px 0;border-bottom:1px dashed var(--border)}
 .uif-kv:last-child{border-bottom:none}
 .uif-kv-key{font-size:12.5px;color:var(--gray);flex-shrink:0}
