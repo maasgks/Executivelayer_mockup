@@ -7723,7 +7723,7 @@ function startStoreIntake(){
 function storeIntakeReset(){
   storeIntakeStep=0;storeIntakeDraft={};storeIntakeFieldErrors={};
   storeIntakeResult=null;storeIntakeBusy=false;storeIntakeOtpStage='idle';
-  storeIntakeRole='';storeIntakeProgress=-1;
+  storeIntakeRole='seller';storeIntakeProgress=-1;
   storeKycProgress=-1;storeKycDone=false;storeReviewStage=-1;
   // The rail animates a stage only once, so a second run through the journey has to be allowed
   // to animate the same connectors again.
@@ -7732,19 +7732,6 @@ function storeIntakeReset(){
 }
 // -- Picking a role is what opens the form; there is no separate Continue button, because the
 // card IS the choice and a second click to confirm it would be a click that decides nothing. --
-function storeIntakePickRole(role){
-  storeIntakeRole=role;
-  storeIntakeStep=1;
-  renderADTPage();
-  storeIntakeFocusFirst();
-}
-// Back to the role cards. The draft survives: changing your mind about seller/buyer should not
-// cost you the email address you already typed.
-function storeIntakeBackToRole(){
-  storeIntakeCollect();
-  storeIntakeStep=0;storeIntakeFieldErrors={};
-  renderADTPage();
-}
 function storeIntakeFocusFirst(){
   setTimeout(function(){
     const el=document.getElementById('st-email_id');
@@ -8120,7 +8107,7 @@ function submitStoreIntake(){
   // Validated, so on to KYC. The record is deliberately NOT created here: nothing should exist
   // in either system until the owner's identity has been verified, which is the whole reason KYC
   // is a stage before creation rather than a checkbox after it.
-  storeIntakeStep=2;
+  storeIntakeStep=1;
   renderADTPage();
   storeRunKyc();
 }
@@ -8201,7 +8188,7 @@ function storeCreateRecord(){
      execution layer takes, and a record that appears in one frame teaches nobody what happened
      to their answers. Each tick reveals one step's reads and writes. */
   storeIntakeBusy=true;
-  storeIntakeStep=3;storeIntakeProgress=0;
+  storeIntakeStep=2;storeIntakeProgress=0;
   renderADTPage();
   const steps=bhaiyaaStoreRunSteps(store);
   const advance=function(i){
@@ -8213,7 +8200,7 @@ function storeCreateRecord(){
       // that finishes and a run that arrives.
       setTimeout(function(){
         storeIntakeBusy=false;
-        storeIntakeStep=4;
+        storeIntakeStep=3;
         renderADTPage();
       },1100);
       return;
@@ -8261,36 +8248,24 @@ function storeIntakeRunHTML(){
   }).join('');
 }
 
+/* == THE STORE INTAKE SCREENS ============================================================
+   Four stages, and the signup is the first of them. The screen that used to open this journey
+   asked "How will this store use Bhaiyaa?" — Seller or Buyer — and it is gone: seller.bhaiyaa.com
+   signs up sellers, so it was a question with one real answer standing between a merchant and
+   the form they came to fill. New stores are stamped `role:'seller'` at creation instead.
+
+   storeIntakeStep now indexes 0 = signup, 1 = KYC, 2 = the creation run, 3 = the record, which
+   is the same order as bhaiyaaStoreStages and aiJourneyEvents['bhaiyaa-store-creation']. All
+   three are read by the rail at the top of every one of these screens, so they have to agree. == */
 function buildCreateStoreHTML(){
   /* A review of a finished stage takes the body; the rail above still reports the real step. */
   if(storeReviewStage>=0&&storeReviewStage<storeIntakeStep)return buildStoreReviewHTML();
 
-  /* ---------- Stage 1: seller or buyer ---------- */
-  if(storeIntakeStep===0){
-    const cards=bhaiyaaStoreRoles.map(function(r){
-      return '<button type="button" class="st-role'+(storeIntakeRole===r.id?' on':'')+'" onclick="storeIntakePickRole(\''+r.id+'\')">'
-        +'<span class="st-role-ico">'+r.icon+'</span>'
-        +'<span class="st-role-label">'+r.label+'</span>'
-        +'<span class="st-role-sub">'+r.sub+'</span>'
-        +'<span class="st-role-blurb">'+r.blurb+'</span>'
-        +'<span class="st-role-gets">'+r.gets.map(function(g){return '<span class="st-role-get">'+g+'</span>';}).join('')+'</span>'
-        +'<span class="st-role-go">Continue<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>'
-        +'</button>';
-    }).join('');
-    return storeIntakeShellHTML('<div class="uif-card">'
-      +'<div class="uif-card-head">'
-      +'<div class="uif-card-title">How will this store use Bhaiyaa?</div>'
-      +'<div class="uif-card-sub">Asked first because it changes what the rest of the signup means &mdash; and what gets provisioned when the store is created. It can’t be switched later without opening a second store.</div>'
-      +'</div>'
-      +'<div class="st-role-grid">'+cards+'</div>'
-      +'</div>');
-  }
+  /* ---------- Stage 2: KYC ---------- */
+  if(storeIntakeStep===1)return buildStoreKycHTML();
 
-  /* ---------- Stage 3: KYC ---------- */
-  if(storeIntakeStep===2)return buildStoreKycHTML();
-
-  /* ---------- Stage 4: the creation run ---------- */
-  if(storeIntakeStep===3&&storeIntakeResult){
+  /* ---------- Stage 3: the creation run ---------- */
+  if(storeIntakeStep===2&&storeIntakeResult){
     const role=bhaiyaaStoreRoles.find(function(r){return r.id===storeIntakeResult.role;});
     return storeIntakeShellHTML('<div class="uif-card">'
       +'<div class="uif-card-head">'
@@ -8301,8 +8276,8 @@ function buildCreateStoreHTML(){
       +'</div>');
   }
 
-  /* ---------- Stage 5: the store record ---------- */
-  if(storeIntakeStep===4&&storeIntakeResult){
+  /* ---------- Stage 4: the store record ---------- */
+  if(storeIntakeStep===3&&storeIntakeResult){
     const s=storeIntakeResult;
     const kv=function(k,v){
       return '<div class="uif-kv"><span class="uif-kv-key">'+k+'</span><span class="uif-kv-val">'+(v||'<span style="color:#9ca3af">--</span>')+'</span></div>';
@@ -8355,7 +8330,7 @@ function buildCreateStoreHTML(){
       +'</div>');
   }
 
-  /* ---------- Stage 1: the form ---------- */
+  /* ---------- Stage 1: the signup form (the default body) ---------- */
   const errs=storeIntakeFieldErrors||{};
   const draft=storeIntakeDraft||{};
   const errText=function(name){
@@ -8364,14 +8339,10 @@ function buildCreateStoreHTML(){
   const wrapCls=function(name,extra){
     return 'uif-field'+(extra?' '+extra:'')+(errs[name]?' has-error':'');
   };
-  // A buyer's category says what they source, a seller's says what they put in front of
-  // customers. Same field, and the hint is the only thing that can tell them apart.
-  const buying=storeIntakeRole==='buyer';
-  const hintFor=function(f){
-    if(f.name==='store_category'&&buying)return 'Select a category that defines what your store sources from suppliers.';
-    return f.hint;
-  };
-  const hintText=function(f){const h=hintFor(f);return h?'<div class="uif-field-hint">'+h+'</div>':'';};
+  /* The category hint used to fork on seller-vs-buyer — a buyer's category says what they
+     source, a seller's what they put in front of customers. With the role question gone every
+     signup is a seller, so the field carries its own authored hint and nothing else. */
+  const hintText=function(f){return f.hint?'<div class="uif-field-hint">'+f.hint+'</div>':'';};
   const selOpts=function(f){
     const cur=draft[f.name]||'';
     return '<option value="">'+(f.placeholder||'Select')+'</option>'
@@ -8449,13 +8420,10 @@ function buildCreateStoreHTML(){
       +'</div>');
   }
 
-  const role=bhaiyaaStoreRoles.find(function(r){return r.id===storeIntakeRole;})||bhaiyaaStoreRoles[0];
+  // -- The role chip that used to ride in this header went with the screen that set it. There
+  // is no decision behind it any more, and a chip stating a fact nobody chose is furniture. --
   return storeIntakeShellHTML('<div class="uif-card">'
     +'<div class="uif-card-head">'
-    // -- The chosen role rides in the header rather than being restated as a field: it is a
-    // decision already made, and the only thing still needed from it is a way to change it. --
-    +'<div class="st-role-chip">'+role.icon+'<span>'+(role.id==='buyer'?'Buyer':'Seller')+'</span>'
-      +'<button type="button" onclick="storeIntakeBackToRole()">Change</button></div>'
     +'<div class="uif-card-title">Welcome to Bhaiyaa</div>'
     +'<div class="uif-card-sub">Bhaiyaa’s merchant signup, filled in from here. Submitting registers the store on Bhaiyaa and keeps a copy in the Executive Layer.</div>'
     +'</div>'
@@ -8502,7 +8470,6 @@ function buildStoreReviewHTML(){
   const ev=(aiJourneyEvents['bhaiyaa-store-creation']||[])[i];
   const s=storeIntakeResult;
   const d=storeIntakeDraft||{};
-  const role=bhaiyaaStoreRoles.find(function(r){return r.id===(s?s.role:storeIntakeRole);})||bhaiyaaStoreRoles[0];
   const kv=function(k,v){return '<div class="uif-kv"><span class="uif-kv-key">'+k+'</span><span class="uif-kv-val">'+(v||'<span style="color:#9ca3af">--</span>')+'</span></div>';};
   // Named from the journey definition, not the rail's short label — the button has to name the
   // step the way the rail above it does, and "Back to Store" for a stage the rail calls "Store
@@ -8511,15 +8478,11 @@ function buildStoreReviewHTML(){
   const liveLabel=(evs[storeIntakeStep]||bhaiyaaStoreStages[storeIntakeStep]||{}).name
     ||(bhaiyaaStoreStages[storeIntakeStep]||{}).label||'the current step';
 
+  /* One branch per stage, indexed the way the rail is: 0 signup, 1 KYC, 2 the run, 3 the record.
+     The branch that used to sit at 0 replayed the role choice, and it went with the screen that
+     made it — there is no longer a stage here whose answer is "what was chosen". */
   let body='';
   if(i===0){
-    body='<p class="uif-section-label">What was chosen</p>'
-      +'<div class="st-review-role"><span class="st-role-ico">'+role.icon+'</span>'
-      +'<div><div class="st-review-role-name">'+role.label+'</div>'
-      +'<div class="st-review-role-sub">'+role.blurb+'</div></div></div>'
-      +'<p class="uif-section-label" style="margin-top:18px">What it provisions</p>'
-      +'<div class="st-role-gets">'+role.gets.map(function(g){return '<span class="st-role-get">'+g+'</span>';}).join('')+'</div>';
-  }else if(i===1){
     const owner=[d.first_name||(s&&s.firstName),d.last_name||(s&&s.lastName)].filter(Boolean).join(' ');
     const mob=(d.mobile_number||(s&&s.mobile))?((d.phone_country_code||(s&&s.phoneCountryCode)||'+91')+' '+(d.mobile_number||s.mobile))
       +(storeIntakeOtpStage==='verified'||(s&&s.mobileVerified)?' <span class="uif-verified-chip">Verified</span>':''):'';
@@ -8532,7 +8495,7 @@ function buildStoreReviewHTML(){
       +kv('Store type',attrSafe(d.store_type||(s&&s.storeType)))
       +kv('Aadhaar',s?s.aadhaarMasked:bhaiyaaMaskAadhaar(d.aadhaar_number))
       +'</div>';
-  }else if(i===2){
+  }else if(i===1){
     // The same list the KYC screen drew, held at its finished state.
     const keep=storeKycProgress;
     storeKycProgress=bhaiyaaKycChecks.length;
@@ -8541,12 +8504,12 @@ function buildStoreReviewHTML(){
     body='<p class="uif-section-label">What the KYC agent checked</p>'
       +'<div class="uif-proc">'+list+'</div>'
       +(s?'<div class="uif-note">Verified by <strong>'+attrSafe(s.kycVerifiedBy)+'</strong> on '+storeStamp(s.kycVerifiedAt)+'. Only the last four digits are kept on the record.</div>':'');
-  }else if(i===3||i===4){
+  }else if(i===2||i===3){
     if(!s)body='<div class="uif-card-sub">Nothing ran here yet.</div>';
     else{
       const steps=bhaiyaaStoreRunSteps(s);
-      const shown=i===3?steps:steps.slice(-1);
-      body='<p class="uif-section-label">'+(i===3?'What the store agent did':'The record it created')+'</p>'
+      const shown=i===2?steps:steps.slice(-1);
+      body='<p class="uif-section-label">'+(i===2?'What the store agent did':'The record it created')+'</p>'
         +'<div class="uif-proc">'+shown.map(function(st,n,arr){
           const pairs=function(list,kind){
             if(!list.length)return '';
