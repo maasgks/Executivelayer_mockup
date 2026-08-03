@@ -16,16 +16,25 @@
 /* ---- WAYS IN -----------------------------------------------------------------------------
    Three, and they all land on the same rebuilt journey: the topbar + on Contracts, the
    "New request" action on the Account Manager's own page, and the pill on the Contracts
-   listing. The fourth control here opens the ORIGINAL journey, kept reachable as reference. */
+   listing. There is no fourth — `.ccj-entry-alt` was a link to the ORIGINAL journey and went
+   when the rebuild finished its ninth stage.
+
+   The two that are buttons are now the SAME button. `.ccj-entry-btn` was a slightly smaller,
+   bordered, iconless variant of `.am-head-new` for no reason anyone could have named: both
+   start the same journey, one from the Contracts listing and one from the Account Manager's
+   page, and a user who meets both should not have to work out whether they do the same thing.
+   Same metrics, same plus, same hover. `.ccj-entry-wrap` — the column that used to stack the
+   removed link under the button — is gone with it; `.ccj-entry-row` replaces it and holds the
+   stat card and the button as one cluster, centring the shorter against the taller without
+   either needing to know the other's height. */
 .am-head-new{display:inline-flex;align-items:center;gap:7px;align-self:flex-end;padding:10px 18px;border:none;border-radius:22px;background:var(--navy);color:#fff;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:.15s;flex-shrink:0}
 .am-head-new svg{width:13px;height:13px}
 .am-head-new:hover{background:#1e293b;transform:translateY(-1px);box-shadow:0 4px 14px rgba(15,23,42,.18)}
 
-.ccj-entry-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:5px;align-self:center}
-.ccj-entry-btn{padding:9px 16px;border:1px solid var(--navy);border-radius:20px;background:var(--navy);color:#fff;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:.15s}
-.ccj-entry-btn:hover{background:#1e293b;transform:translateY(-1px)}
-.ccj-entry-alt{border:none;background:none;padding:0;font-size:10.5px;color:var(--gray);font-family:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
-.ccj-entry-alt:hover{color:var(--navy)}
+.ccj-entry-row{display:flex;align-items:center;gap:16px;align-self:flex-start;flex-shrink:0}
+.ccj-entry-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border:none;border-radius:22px;background:var(--navy);color:#fff;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:.15s;flex-shrink:0}
+.ccj-entry-btn svg{width:13px;height:13px}
+.ccj-entry-btn:hover{background:#1e293b;transform:translateY(-1px);box-shadow:0 4px 14px rgba(15,23,42,.18)}
 
 /* ---- SHELL ---------------------------------------------------------------------------- */
 .page-content.ccj-host{padding:18px 22px;display:flex;flex-direction:column;overflow:hidden}
@@ -48,26 +57,62 @@
 .ccj-head-wait{margin-left:auto;font-size:11.5px;color:var(--gray);white-space:nowrap}
 .ccj-head-wait b{color:var(--navy);font-weight:600}
 
-/* ---- RAIL — 56px for what used to take 150px -------------------------------------------- */
-.ccj-rail{flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 14px 9px;margin-bottom:12px;overflow:hidden}
-.ccj-rail-scroll{display:flex;align-items:flex-end;overflow-x:auto;scrollbar-width:none}
+/* ---- RAIL — nine stages in the two phases that behave differently ------------------------
+   The rail is a shell holding two phase boxes; the boxes are the message. The gap between
+   them is the split — no divider rule is needed once each side has an edge of its own — and
+   the box you are in is the only one that lifts off the surface. Everything else is graded
+   down from it: the phase behind you keeps its numerals in navy but goes flat, the phase
+   ahead loses colour entirely. Nothing on the rail is the same weight as the stage you are
+   standing on, which is the one thing the old version got wrong at every level at once. */
+.ccj-rail{flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px;margin-bottom:12px;overflow:hidden}
+.ccj-rail-scroll{display:flex;align-items:flex-end;overflow-x:auto;scrollbar-width:none;padding:4px 10px 5px}
 .ccj-rail-scroll::-webkit-scrollbar{display:none}
-.ccj-rail-scroll.tracked{align-items:stretch}
-.ccj-track{display:flex;flex-direction:column;min-width:0}
-.ccj-track-cap{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#cbd5e1;margin-bottom:5px;padding-left:2px;white-space:nowrap;transition:color .2s}
-.ccj-track-cap.current{color:var(--navy)}
-.ccj-track-cap.done{color:var(--gray)}
-.ccj-track-steps{display:flex;align-items:flex-start;flex:1;min-width:0}
-.ccj-track-split{width:1px;background:var(--border);margin:14px 12px 0;flex-shrink:0}
-.ccj-step{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;flex:0 0 auto;width:74px}
-.ccj-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0;border:1.5px solid var(--border);background:var(--card);color:#cbd5e1;transition:.25s}
+.ccj-rail-scroll.tracked{align-items:stretch;gap:7px;padding:0}
+
+/* THE PHASE BOX. `ahead` is the base state and reads as unbuilt ground; `done` firms up to
+   show it was walked; `current` is the only one with a border and a shadow. */
+.ccj-phase{display:flex;flex-direction:column;min-width:0;border:1px solid transparent;border-radius:10px;background:#f5f7fa;padding:7px 12px 8px;transition:background .3s,border-color .3s,box-shadow .3s}
+.ccj-phase.current{background:var(--card);border-color:#d5dce5;box-shadow:0 1px 3px rgba(15,23,42,.07)}
+.ccj-phase-head{display:flex;align-items:center;gap:7px;margin-bottom:7px;min-width:0}
+/* The 1 and the 2. Says "there are two of these and this is which" without spending the word
+   "phase" twice on a rail that has 74px of height to give. */
+.ccj-phase-n{flex-shrink:0;width:15px;height:15px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;background:#dde3ea;color:#8895a5;transition:.3s}
+.ccj-phase.done .ccj-phase-n{background:#cfd8e3;color:#5b6878}
+.ccj-phase.current .ccj-phase-n{background:var(--navy);color:#fff}
+.ccj-phase-name{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#a3aebc;white-space:nowrap;transition:color .3s}
+.ccj-phase.done .ccj-phase-name{color:var(--gray)}
+.ccj-phase.current .ccj-phase-name{color:var(--navy)}
+/* The rule that makes it a phase. Sentence case on purpose — it is meant to be read, not
+   scanned, and it is the line that answers "why does the journey break here". */
+.ccj-phase-rule{font-size:10px;font-weight:500;color:#aab4c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;transition:color .3s}
+.ccj-phase.current .ccj-phase-rule{color:var(--gray)}
+.ccj-phase-count{margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:9.5px;font-weight:700;background:var(--navy);color:#fff;letter-spacing:.2px}
+.ccj-phase-of{font-weight:600;opacity:.72}
+.ccj-phase-count.done{background:#e6ebf1;color:var(--gray)}
+.ccj-phase-count.done svg{width:9px;height:9px}
+.ccj-phase-count.ahead{background:none;color:#aab4c0;padding:2px 0;font-weight:600}
+.ccj-phase-steps{display:flex;align-items:flex-start;flex:1;min-width:0}
+
+/* THE STEPS. Pending was #cbd5e1 on white — 1.5:1, invisible at 9.5px, and it made two
+   thirds of the rail look broken rather than unreached. Pending now clears 3:1 and reads as
+   a legible grey; the navy path behind the current dot carries the progress instead. */
+.ccj-step{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;flex:0 0 auto;width:84px}
+.ccj-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0;border:1.5px solid #d5dce5;background:var(--card);color:#94a0b0;transition:.25s}
 .ccj-dot svg{width:11px;height:11px}
 .ccj-dot.done{background:var(--navy);border-color:var(--navy);color:#fff}
-.ccj-dot.current{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 0 0 4px rgba(15,23,42,.10)}
-.ccj-step-label{font-size:9.5px;font-weight:600;line-height:1.25;text-align:center;color:#cbd5e1;max-width:74px;transition:color .25s}
+.ccj-dot.current{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 0 0 4px rgba(15,23,42,.12)}
+.ccj-phase.ahead .ccj-dot{background:#fbfcfd}
+/* NAVY MEANS "THE PHASE YOU ARE IN". A closed phase is five solid navy dots and four filled
+   connectors, and photographed beside a live phase that mass simply won the page — the eye
+   went to the finished half rather than to the stage being worked. Once a phase is wholly
+   behind you it recedes to grey: still unmistakably ticked off, no longer competing with the
+   one dot that matters. */
+.ccj-phase.done .ccj-dot.done{background:#98a3b2;border-color:#98a3b2}
+.ccj-phase.done .ccj-line.filled{background:#c6cdd7}
+.ccj-step-label{font-size:10px;font-weight:600;line-height:1.25;text-align:center;color:#8e9aa8;max-width:84px;transition:color .25s}
 .ccj-step-label.done{color:var(--gray)}
 .ccj-step-label.current{color:var(--navy);font-weight:700}
-.ccj-line{height:1.5px;background:var(--border);flex:1;min-width:8px;margin-top:10.5px;transition:background .3s}
+.ccj-line{height:1.5px;background:#dfe4ea;flex:1;min-width:8px;margin-top:10.5px;transition:background .3s}
 .ccj-line.filled{background:var(--navy)}
 
 /* ---- BODY — work area (3/4) beside the panel (1/4) ---------------------------------------
@@ -97,6 +142,29 @@
 }
 .ccj-work-full{flex:1;min-width:0;min-height:0;display:flex;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 .ccj-chat-col{flex:0 0 300px;min-width:0;min-height:0;display:flex;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+/* WIDER ONCE THE SUB-STATUSES MOVED IN. 300px was the width of a column that carried only
+   conversation; it now carries the machine's working too — evidence tables, rule verdicts,
+   payload rows — and those were being squeezed into a third of the room the panel used to give
+   them. The panel's 25% is free, so the conversation takes most of it back. It is a proportion
+   with a floor rather than a fixed width: on a wide screen the block should use the space, and
+   on a narrow one it must not eat the form beside it. */
+.ccj-body.no-panel .ccj-chat-col{flex:0 1 clamp(360px,34%,520px)}
+/* A conversation-led screen leaves the work area with nothing in it. It collapses rather than
+   holding a share of the row, and the conversation takes the width — the same thing `chat:'full'`
+   meant before, arrived at by the column disappearing instead of by a different layout. */
+.ccj-body.no-panel .ccj-work:empty{display:none}
+/* THE SURFACE FILLS, THE CONTENT DOES NOT. With nothing beside it the conversation takes the
+   whole body — no dead page on the right waiting for something that is not coming. But a line of
+   prose set across 1500px is unreadable, so the content inside is capped and centred instead.
+   That is the difference between a column with empty space next to it and a page: the card runs
+   edge to edge, and the reading measure stays where the eye can follow it. The cap lifts when
+   there IS something beside the conversation, because then the column is narrow already. */
+.ccj-body.no-panel.solo .ccj-chat-col{flex:1 1 auto}
+.ccj-body.no-panel.solo .ccj-stream>*,
+.ccj-body.no-panel.solo .ccj-composer>*{width:100%;max-width:860px;margin-left:auto;margin-right:auto}
+.ccj-body.no-panel.solo .ccj-chat-head{max-width:860px;width:100%;margin:0 auto;padding-left:0;padding-right:0}
+@media(max-width:1380px){.ccj-body.no-panel .ccj-chat-col{flex:0 1 clamp(330px,36%,430px)}}
+@media(max-width:1160px){.ccj-body.no-panel .ccj-chat-col{flex:0 1 clamp(300px,38%,380px)}}
 .ccj-screen{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 .ccj-panel{flex:0 0 25%;min-width:300px;max-width:420px;min-height:0;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 /* Targeted by class, not by `.ccj-panel>div` — the progress bar is the panel's other child and
@@ -131,11 +199,15 @@
 .ccj-chip{padding:9px 13px;border:1px solid var(--border);border-radius:10px;background:var(--light);font-size:12px;font-weight:500;color:var(--navy);font-family:inherit;cursor:pointer;text-align:left;transition:.15s}
 .ccj-chip:hover{border-color:var(--navy);background:var(--card)}
 
-/* Only `.in` — the newest message — animates. The stream is rebuilt on every push, so
-   animating all of them would replay the whole conversation each time a line lands. */
+/* Only `.in` — the newest message — animates. ccjStreamSync strips the class from the message
+   that WAS newest before appending the one that now is, so exactly one carries it at any moment
+   and nothing already on screen replays. */
 .ccj-msg{display:flex;gap:8px;align-items:flex-start}
 .ccj-msg.in{animation:ccjIn .26s ease both}
 .ccj-msg.user{justify-content:flex-end}
+/* A sub-status block is the machine's own working, not something anyone said, so it takes the
+   full width with no avatar and no bubble. */
+.ccj-msg.step{display:block}
 @keyframes ccjIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .ccj-av{width:22px;height:22px;flex-shrink:0;border-radius:7px;background:var(--ol);display:flex;align-items:center;justify-content:center;color:var(--navy);margin-top:2px}
 .ccj-av svg{width:11px;height:11px}
@@ -179,6 +251,34 @@
 .ccj-doc-name{font-size:11.5px;font-weight:700;color:var(--navy);word-break:break-all}
 .ccj-doc-stat{font-size:10.5px;color:var(--gray);margin-top:1px}
 .ccj-doc-head .ccj-spin{margin-left:auto;flex-shrink:0}
+/* THE READ DOCUMENT, FOLDED. Once its values are in the form, the form is where they live; the
+   card restating all nineteen of them is the same information twice and the taller of the two.
+   So it folds to one line — and the whole line is the control, which is the difference between
+   "reopenable" and "reopenable without thinking about it": there is no small target to find.
+
+   Deliberately NOT the mono register. This is a document a person sent us, not the machine's own
+   working, and it keeps the conversation's own voice for the same reason the invoice and the
+   payslip do. */
+.ccj-doc-closed{display:flex;align-items:center;gap:9px;width:100%;max-width:94%;
+  padding:8px 11px;border:1px solid var(--border);border-radius:12px;background:var(--card);
+  font-family:inherit;text-align:left;cursor:pointer;transition:.15s}
+.ccj-doc-closed:hover{border-color:var(--navy);background:var(--light)}
+.ccj-doc-closed .ccj-doc-ico{width:22px;height:22px;border-radius:7px}
+.ccj-doc-closed .ccj-doc-ico svg{width:11px;height:11px}
+.ccj-doc-cname{font-size:11.5px;font-weight:600;color:var(--navy);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:46%}
+/* The fact takes what the filename leaves and truncates rather than wrapping — a folded card
+   that grew to two lines would have given back the room it just saved. */
+.ccj-doc-cfact{flex:1;min-width:0;text-align:right;font-size:10.5px;color:var(--gray);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ccj-doc-chev{flex-shrink:0;width:12px;height:12px;color:var(--gray);display:flex;transition:.2s}
+.ccj-doc-chev svg{width:12px;height:12px}
+.ccj-doc-closed:hover .ccj-doc-chev{color:var(--navy)}
+/* Open: the chevron turns down, so the one control reads as the same control in both states
+   rather than as two different affordances that happen to sit in the same place. */
+.ccj-doc-head.foldable{cursor:pointer;margin:-2px -2px 9px;padding:2px 2px 10px}
+.ccj-doc-head.foldable:hover .ccj-doc-chev{color:var(--navy)}
+.ccj-doc-head .ccj-doc-chev{margin-left:auto;transform:rotate(90deg)}
 /* Stacked, not columns. This lives in a 300px conversation column; a label/value split left the
    value about fifty pixels wide and wrapped a job description to one character per line.
    Label and confidence share the top line — they are both metadata about the value — and the
@@ -198,10 +298,16 @@
 /* Directly above the input, not up in the header. Uploading a document is an alternative way of
    answering the same thing the input asks for, so it belongs in the band the eye is already on
    when it decides how to reply. Dashed, because it is a drop target in spirit. */
-.ccj-upload{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-bottom:8px;padding:8px 12px;border:1px dashed #cbd5e1;border-radius:9px;background:var(--light);color:var(--gray);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+/* Upload is the action; the sample is the thing it acts on. So they share a row, and the sample
+   is deliberately the quieter of the two — it is a way of getting unstuck, not the main path. */
+.ccj-upload-row{display:flex;align-items:stretch;gap:6px;margin-bottom:8px}
+.ccj-upload{display:flex;align-items:center;justify-content:center;gap:7px;flex:1;min-width:0;padding:8px 12px;border:1px dashed #cbd5e1;border-radius:9px;background:var(--light);color:var(--gray);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
 .ccj-upload svg{width:13px;height:13px;flex-shrink:0}
 .ccj-upload:hover{border-color:var(--navy);color:var(--navy);background:var(--card)}
 .ccj-upload:active{transform:scale(.995)}
+.ccj-sample-dl{display:flex;align-items:center;gap:5px;flex-shrink:0;padding:8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--gray);font-size:11px;font-weight:600;text-decoration:none;transition:.15s}
+.ccj-sample-dl svg{width:13px;height:13px;flex-shrink:0}
+.ccj-sample-dl:hover{border-color:var(--navy);color:var(--navy);background:var(--light)}
 .ccj-models{display:flex;align-items:center;gap:6px;margin-bottom:9px;flex-wrap:wrap}
 .ccj-models-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-right:2px}
 .ccj-model{padding:4px 11px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:11px;font-weight:600;color:var(--gray);font-family:inherit;cursor:pointer;transition:.15s}
@@ -241,6 +347,169 @@
 .ccj-row-sum{font-size:11px;color:var(--gray);margin-top:2px;line-height:1.4}
 .ccj-row-owner{flex-shrink:0;min-width:30px;text-align:center;padding:2px 6px;border-radius:5px;background:var(--ol);font-size:9px;font-weight:700;letter-spacing:.3px;color:var(--gray);margin-top:2px}
 .ccj-row-owner.auto{background:#f5f3ff;color:#7c3aed}
+
+/* ---- A SUB-STATUS AS A BLOCK IN THE TRANSCRIPT -------------------------------------------
+   The panel's row, in the conversation instead of beside it.
+
+   MONO, AND ONLY HERE. The machine's own working is set in monospace; people and prose keep
+   Inter, and so does everything that is a real document — the form, the quote, the invoice, the
+   payslip. That is not decoration, it is the one piece of typography doing semantic work on this
+   screen: mono means the system did this, Inter means a person said it. Setting an invoice in
+   monospace to win a consistent look would be trading a feature's quality for a vibe.
+
+   The label stays 12px and the detail 11px, matching the conversation beside it — a block that
+   also shrank its type would read as a footnote to the run rather than as the run. */
+.ccj-sb{--ccj-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  width:100%;border:1px solid var(--border);border-radius:11px;background:var(--card);
+  font-family:var(--ccj-mono);text-align:left;overflow:hidden}
+/* CLOSED: one line, and it is a button — reachable by keyboard, and saying by its own affordance
+   that there is something behind it. */
+.ccj-sb.closed{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;
+  font-family:var(--ccj-mono);font-size:11.5px;color:var(--navy);transition:.15s}
+.ccj-sb.closed:hover{border-color:var(--navy);background:var(--light)}
+.ccj-sb.closed .ccj-sb-label{font-weight:600;white-space:nowrap}
+/* The one useful fact. It takes the space the detail gave up, and truncates rather than wrapping:
+   a closed block that grew to two lines would have given the space back. */
+.ccj-sb-fact{flex:1;min-width:0;text-align:right;font-size:11px;color:var(--gray);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ccj-sb-chev{flex-shrink:0;width:12px;height:12px;color:var(--gray);display:flex}
+.ccj-sb-chev svg{width:12px;height:12px}
+.ccj-sb.closed:hover .ccj-sb-chev{color:var(--navy)}
+.ccj-sb.closed.skipped{opacity:.72}
+/* OPEN */
+.ccj-sb.open{border-color:var(--border)}
+.ccj-sb.open.asking{border-color:#fbbf24;background:#fffbeb}
+.ccj-sb-head{display:flex;align-items:center;gap:9px;padding:10px 11px;font-size:12px}
+.ccj-sb-head.clickable{cursor:pointer}
+.ccj-sb-head.clickable:hover{background:var(--light)}
+.ccj-sb-label{font-weight:600;color:var(--navy);min-width:0;display:flex;align-items:baseline;gap:6px}
+.ccj-sb-cond{font-family:inherit;font-size:10px;font-weight:400;color:var(--gray);font-style:italic}
+.ccj-sb-head .ccj-sb-fact{font-size:11px}
+/* The mark carries the state, and it is the only place the state is drawn — a block does not
+   also change its own colour, because five blocks each tinted differently is the clutter this
+   rebuild exists to remove. */
+.ccj-sb-mark{flex-shrink:0;width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+/* DONE IS GREEN, AND IT STAYS GREEN. A step that has finished has to read as finished from across
+   the screen and for the rest of the run — that is most of what a reader is scanning a closed
+   list for. A bare hairline tick did not carry that at a glance, so it sits in a soft green disc:
+   enough to be the first thing the eye finds on the row, not so much that eight of them stacked
+   up turn the conversation into a wall of colour. */
+.ccj-sb-tick{width:18px;height:18px;border-radius:50%;background:#dcfce7;color:#15803d;
+  display:flex;align-items:center;justify-content:center}
+.ccj-sb-tick svg{width:11px;height:11px}
+/* Open and settled — the moment between finishing and the next step starting, where the block is
+   still showing what it found. Same green, so the state does not appear to change when it folds. */
+.ccj-sb.open .ccj-sb-tick{background:#dcfce7}
+.ccj-sb-ask{width:16px;height:16px;border-radius:50%;background:var(--light);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:var(--gray)}
+.ccj-sb.open.asking .ccj-sb-ask{background:#fef3c7;border-color:#fbbf24;color:#92400e}
+.ccj-sb-skip{width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--gray);font-weight:700}
+/* Parked on a person. The same slow pulse the wait panel uses, so the mark and the explanation
+   underneath it read as one state rather than two — and unmistakably not the spinner, which
+   would be claiming work nobody is doing. */
+.ccj-sb-wait{width:9px;height:9px;border-radius:50%;background:#f59e0b;
+  animation:ccjWaitPulse 1.9s ease-in-out infinite}
+.ccj-sb-body{padding:0 11px 10px 36px}
+.ccj-sb-why{font-size:11px;color:var(--gray);line-height:1.5}
+/* The gate keeps its own amber block, and keeps sitting inside the step it belongs to — the
+   question and the step it answers are never separated. */
+.ccj-sb .ccj-gate{margin:0 11px 11px 36px}
+.ccj-sb .ccj-hold{margin-top:8px}
+.ccj-sb .ccj-ev-more{margin-top:8px}
+
+/* ---- WAITING ON A PERSON --------------------------------------------------------------------
+   The state a reader spends the most time looking at on this stage, and the one most likely to be
+   mistaken for a hang. A slow pulse rather than a spinner: a spinner claims the machine is
+   working, and it is not — it has handed the work to someone outside the product and is holding
+   the door. The pulse says "live, and deliberately still", which is the honest signal. */
+.ccj-wait{margin-top:9px;border:1px solid #fde68a;border-radius:9px;background:#fffbeb;padding:8px 10px}
+.ccj-wait-top{display:flex;align-items:flex-start;gap:8px}
+.ccj-wait-pulse{flex-shrink:0;width:7px;height:7px;margin-top:4px;border-radius:50%;background:#f59e0b;
+  animation:ccjWaitPulse 1.9s ease-in-out infinite}
+@keyframes ccjWaitPulse{0%,100%{opacity:.25;transform:scale(.82)}50%{opacity:1;transform:scale(1)}}
+.ccj-wait-note{font-size:11px;line-height:1.5;color:#92400e}
+.ccj-wait-rows{margin-top:7px;padding-top:7px;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:3px}
+.ccj-wait-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:10px}
+.ccj-wait-k{color:#a16207}
+.ccj-wait-v{color:#92400e;font-weight:600;text-align:right}
+.ccj-wait-on{color:#15803d;font-weight:700}
+@media(prefers-reduced-motion:reduce){.ccj-wait-pulse{animation:none;opacity:1}}
+
+/* Who the composer is addressing. Sits directly above the input rather than in the header,
+   because it has to be read at the moment of typing, not at the moment of arriving. */
+.ccj-to{display:flex;align-items:center;gap:6px;padding:0 2px 7px;font-size:10.5px;color:#b45309}
+.ccj-to b{font-weight:700}
+.ccj-to-arrow{font-size:9px}
+.ccj-to-note{margin-left:auto;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--gray);font-weight:600}
+
+/* ---- THE LANE: WHAT LEFT THE BUILDING -----------------------------------------------------
+   On a rebuilt counterparty stage, the machine's own work and the correspondence share one
+   column. The reader gets one rule: indented, with a rail, means the counterparty can see it.
+
+   The rail is the whole device — a 2px line and 14px of indent. Enough to separate two kinds of
+   content at a glance from across the desk, quiet enough that a thread of eight messages does not
+   turn into a striped page. Direction is carried by the rail's COLOUR and by a heading that
+   appears only when the direction changes, because a label on every bubble is noise, and noise is
+   what a reader learns to skip — at which point the marking that made this safe stops working. */
+.ccj-lane{position:relative;padding-left:14px;display:flex;flex-direction:column;gap:6px}
+.ccj-lane::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:2px;border-radius:2px}
+/* Outbound is the product's own navy — this is us speaking. Inbound is a warmer tone, so a reply
+   is findable when scrolling a long thread. */
+.ccj-lane.out::before{background:var(--navy);opacity:.28}
+.ccj-lane.in::before{background:#f59e0b;opacity:.55}
+.ccj-lane-head{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--gray)}
+.ccj-lane-arrow{font-size:9px;line-height:1}
+.ccj-lane.in .ccj-lane-head{color:#b45309}
+/* The bubbles inside keep their own alignment — the lane groups them, it does not restyle them. */
+.ccj-lane .ccj-cmsg{margin:0}
+
+/* ---- A SUPERSEDED ATTEMPT ------------------------------------------------------------------
+   The work behind a rejected quote, folded. Muted rather than removed: it happened, and the
+   reason it was rejected is the most useful thing on the stage — but four blocks of discarded
+   work competing with the four that replaced them is the clutter this rebuild exists to remove.
+
+   Its blocks are frozen HTML, so opening it shows exactly what was on screen at the time. */
+.ccj-att{--ccj-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  width:100%;border:1px dashed var(--border);border-radius:11px;background:transparent;
+  font-family:var(--ccj-mono);text-align:left}
+.ccj-att.closed{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;
+  font-size:11.5px;color:var(--gray);transition:.15s}
+.ccj-att.closed:hover{border-color:var(--gray);background:var(--light)}
+.ccj-att-head{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;font-size:11.5px;color:var(--gray)}
+.ccj-att-ico{flex-shrink:0;width:14px;height:14px;display:flex;color:var(--gray)}
+.ccj-att-ico svg{width:14px;height:14px}
+.ccj-att-label{font-weight:600;white-space:nowrap}
+.ccj-att-fact{flex:1;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Dimmed inside, so an open attempt still reads as history rather than as a second live run. */
+.ccj-att-body{padding:0 10px 10px;display:flex;flex-direction:column;gap:8px;opacity:.72}
+.ccj-att-body .ccj-sb{background:var(--light)}
+/* The blocks folded INTO an attempt render nothing of their own. Hidden here rather than removed
+   from run.msgs — an append-only stream that deletes its own history is not append-only. */
+.ccj-msg.step:empty{display:none}
+
+/* ---- AN ASK IN THE CONVERSATION ----------------------------------------------------------
+   The one-answer sibling of the gate. Same placement, same weight, same rule: if the journey
+   wants something from you it is here, in the column you are already reading, never on the right.
+
+   Not mono. This is the product speaking to a person, so it keeps Inter — the mono register is
+   for the machine reporting its own working. */
+.ccj-ask-block{width:100%;border:1px solid var(--border);border-radius:12px;background:var(--card);
+  padding:12px 13px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.ccj-ask-copy{font-size:12px;line-height:1.55;color:var(--navy)}
+.ccj-ask-btn{padding:9px 16px;border:none;border-radius:9px;background:var(--navy);color:#fff;
+  font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-ask-btn:hover{background:#1e293b;transform:translateY(-1px);box-shadow:0 4px 14px rgba(15,23,42,.18)}
+/* ANSWERED. It stays where it was said rather than vanishing — a control that disappears leaves
+   the reader wondering whether they imagined it — and it keeps the words they acted on, so the
+   transcript still reads as a record of what happened. */
+.ccj-ask-block.done{flex-direction:row;align-items:center;gap:8px;padding:8px 11px;
+  background:transparent;border-color:transparent}
+.ccj-ask-tick{width:16px;height:16px;flex-shrink:0;border-radius:50%;background:#dcfce7;color:#15803d;
+  display:flex;align-items:center;justify-content:center}
+.ccj-ask-tick svg{width:10px;height:10px}
+.ccj-ask-text{font-size:11.5px;color:var(--gray)}
 
 .ccj-spin{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ol);border-top-color:var(--navy);animation:ccjSpin .65s linear infinite}
 @keyframes ccjSpin{to{transform:rotate(360deg)}}
@@ -589,7 +858,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-msa-ref{text-align:right}
 .ccj-msa-kind{font-size:11px;font-weight:700;letter-spacing:1.1px;color:var(--navy)}
 .ccj-msa-no{font-size:10.5px;color:var(--gray);margin-top:3px}
-.ccj-msa-stamp{position:absolute;top:30px;right:40px;padding:5px 14px;border:2px solid #16a34a;border-radius:4px;color:#16a34a;font-size:12px;font-weight:800;letter-spacing:2px;transform:rotate(-7deg);opacity:.9}
+.ccj-msa-stamp{position:absolute;bottom:34px;left:44px;padding:6px 16px;border:2.5px solid #16a34a;border-radius:4px;color:#16a34a;font-size:13px;font-weight:800;letter-spacing:2.6px;transform:rotate(-8deg);opacity:.9}
 .ccj-msa-sec{margin-bottom:26px}
 .ccj-msa-sec-t{font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--navy);padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:12px}
 .ccj-msa-kv{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:5px 0;font-size:12.5px}
@@ -609,6 +878,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-msa-sig-name{font-size:12px;font-weight:600;color:var(--navy)}
 .ccj-msa-sig-role{font-size:10.5px;color:var(--gray);margin-top:1px}
 .ccj-msa-exec{margin-top:18px;padding-top:12px;border-top:1px dashed var(--border);font-size:11px;color:var(--gray);line-height:1.6}
+.ccj-msa-exec.stamped{padding-left:160px;min-height:46px;display:flex;align-items:center}
 
 /* A client who already has an agreement. Nothing to sign, and the stage says why. */
 .ccj-existing{max-width:520px;margin:40px auto;background:#fff;border:1px solid var(--border);border-radius:14px;padding:32px 30px;text-align:center}
@@ -625,6 +895,10 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
   .ccj-doc{padding:26px 24px 30px}
   .ccj-msa-cl p{margin-left:0}
   .ccj-msa-sigrow{grid-template-columns:1fr;gap:16px}
+  /* The stamp follows the narrower padding, and the execution line stops reserving a lane for it:
+     stacked signature blocks leave it enough room below rather than beside. */
+  .ccj-msa-stamp{left:24px;bottom:22px}
+  .ccj-msa-exec.stamped{padding-left:0;padding-bottom:34px;display:block}
 }
 
 /* ---- STAGE 6: THE DEPOSIT INVOICE ---------------------------------------------------------------
@@ -960,6 +1234,17 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-kyc-mrz{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.14);font-family:'SF Mono',Menlo,Consolas,monospace;font-size:9px;letter-spacing:.6px;color:#94a3b8;word-break:break-all}
 .ccj-kyc-doc-note{font-size:10.5px;color:var(--gray);margin-top:7px}
 
+/* The permit, captured in the same session. Quieter than the passport card because it is
+   supporting evidence rather than the identity itself, but it carries the four things the
+   right-to-work verdict actually rests on. */
+.ccj-kyc-permit{margin-top:10px;border:1px solid #bbf7d0;border-radius:8px;background:#f6fdf9;padding:9px 11px}
+.ccj-kyc-permit-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:7px;margin-bottom:7px;border-bottom:1px solid #bbf7d0}
+.ccj-kyc-permit-h b{font-size:11.5px;font-weight:700;color:#15803d}
+.ccj-kyc-permit-h span{font-size:10.5px;color:var(--gray);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ccj-kyc-permit-g{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.ccj-kyc-permit-g span{display:block;font-size:8.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray)}
+.ccj-kyc-permit-g b{display:block;font-size:10.5px;font-weight:600;color:var(--navy);margin-top:1px;line-height:1.4}
+
 .ccj-kyc-faces{display:flex;align-items:center;gap:14px;margin-bottom:10px}
 .ccj-kyc-face{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:4px;width:58px;height:66px;border-radius:8px;border:1.5px solid var(--border);background:var(--light);color:var(--gray);justify-content:center}
 .ccj-kyc-face.live{border-color:#bbf7d0;background:#f0fdf4;color:#16a34a}
@@ -1035,6 +1320,19 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 
 /* A document we could not accept, in the employee's thread. */
 .ccj-cbubble.reject{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
+
+/* THE DOCUMENT PHOTOGRAPH, as the employee sends it. Padding comes off the bubble so the picture
+   goes edge to edge — an attachment in a thread is the picture, with the caption under it, not a
+   picture inset inside a message. `aspect-ratio` holds the frame before the image decodes, so the
+   thread does not jump when it lands. */
+.ccj-cbubble.scan{padding:0;overflow:hidden;max-width:250px}
+.ccj-scan-shot{position:relative;aspect-ratio:3/2;background:#e8edf3;display:flex;align-items:center;justify-content:center;color:#94a3b8}
+.ccj-scan-shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block}
+.ccj-scan-ph svg{width:34px;height:34px}
+.ccj-scan-cap{padding:7px 10px 8px;font-size:10.5px;color:var(--gray);line-height:1.45;background:var(--card)}
+/* The worker's own bubbles are tinted; the caption strip has to sit on the same ground or the
+   attachment reads as two stacked messages rather than one. */
+.ccj-cmsg.client .ccj-cbubble.scan{background:var(--card);border-color:var(--border)}
 
 @media(max-width:1160px){
   .ccj-kyc-k{flex:0 0 92px}
@@ -1318,20 +1616,31 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 @media(max-width:1380px){
   .ccj-chat-col{flex:0 0 268px}
   .ccj-fgrid{gap:12px}
-  .ccj-step{width:62px}
-  .ccj-step-label{max-width:62px}
+  .ccj-step{width:70px}
+  .ccj-step-label{max-width:70px}
+  .ccj-phase{padding:7px 9px 8px}
 }
+/* The rule line is the first thing to go when the head runs out of width — it is the only
+   part of the phase that also survives in the tooltip, and losing the name or the count
+   would cost more. */
 @media(max-width:1160px){
   .ccj-chat-col{flex:0 0 240px}
   .ccj-fgrid{grid-template-columns:1fr}
   .ccj-fgroup.full{grid-column:auto}
   .ccj-dw{width:auto;left:12px;right:calc(25% + 12px);max-width:none}
+  .ccj-phase-rule{display:none}
+  .ccj-step{width:62px}
+  .ccj-step-label{max-width:62px}
 }
 @media(max-width:980px){
   .ccj-body{flex-direction:column}
   .ccj-panel{flex:0 0 auto;max-width:none;max-height:40%}
   .ccj-work{flex-direction:column}
   .ccj-chat-col{flex:0 0 200px}
+  /* Below this the columns stack, so a flex-basis stops meaning width and starts meaning HEIGHT.
+     The wider basis set for the transcript above would silently become a 360px-tall conversation
+     with the form squeezed under it, so it is overridden here rather than left to be reinterpreted. */
+  .ccj-body.no-panel .ccj-chat-col{flex:0 0 46%}
   .ccj-dw{left:0;right:0}
 }
 

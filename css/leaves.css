@@ -233,14 +233,29 @@
 .ct-act-step.current{background:var(--orange);color:#fff}
 .ct-act-step.next{background:#f1f5f9;color:#64748b}
 .ct-sb-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid currentColor;white-space:nowrap}
-.ct-sb-badge.submitted{color:#16a34a;border-color:#16a34a;background:#f0fdf4}
-.ct-sb-badge.quotation-approved,.ct-sb-badge.proposal-approved,.ct-sb-badge.contract-approved{color:#2563eb;border-color:#93c5fd;background:#eff6ff}
+/* ONE FORMULA FOR THE WHOLE FAMILY: a soft tint, a mid-weight border of the same hue, and the
+   saturated hue as text. Green = moving, blue = cleared a gate, purple = onboarding, teal =
+   payroll-ready, red = stopped. Two members were breaking it. Submitted drew its border at full
+   saturation while every other green drew it soft, so the first row of a fresh table looked
+   subtly heavier than the rows under it for no reason a reader could act on. And CONTRACT SIGNED
+   had no rule at all — `border:1.5px solid currentColor` on the base class meant it fell back to
+   the inherited near-black, rendering the one status that says the client actually signed as an
+   unstyled outline. It is blue: signing is the step that clears the gate the approvals sit on. */
+.ct-sb-badge.submitted{color:#16a34a;border-color:#86efac;background:#f0fdf4}
+.ct-sb-badge.quotation-approved,.ct-sb-badge.proposal-approved,.ct-sb-badge.contract-approved,.ct-sb-badge.contract-signed{color:#2563eb;border-color:#93c5fd;background:#eff6ff}
 .ct-sb-badge.proposal-sent,.ct-sb-badge.contract-sent{color:#16a34a;border-color:#86efac;background:#f0fdf4}
 .ct-sb-badge.inactive{color:#ef4444;border-color:#fca5a5;background:#fef2f2}
 /* The tail of ctFlow had no styles, so a contract that had actually got somewhere rendered in the
    inherited text colour while a freshly submitted one was green. Active is the terminal state the
-   contract journey writes; the two before it are the steps that lead to it. */
-.ct-sb-badge.active{color:#fff;border-color:#16a34a;background:#16a34a}
+   contract journey writes; the two before it are the steps that lead to it.
+
+   ACTIVE IS A TINT LIKE EVERY OTHER STATUS. It was solid green on white text — the only filled
+   badge in the family — which made the terminal state shout down a column whose whole job is to
+   be scanned for the row that needs attention, and the one row nobody has to act on was the
+   loudest thing on the page. It still has to be distinguishable from Proposal Sent and Contract
+   Sent, which are also green, so it separates by DEPTH inside the shared formula: a firmer fill
+   and a firmer border than theirs, not a different shape. */
+.ct-sb-badge.active{color:#15803d;border-color:#4ade80;background:#dcfce7}
 .ct-sb-badge.onboarding{color:#7c3aed;border-color:#ddd6fe;background:#faf5ff}
 .ct-sb-badge.ready-for-payroll{color:#0f766e;border-color:#99f6e4;background:#f0fdfa}
 /* The row the contract journey just created, so "View contract" lands on something findable
