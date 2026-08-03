@@ -2788,7 +2788,11 @@ const cfgModels=[
     sample:[['Vendor ID','VEN-2044'],['Vendor Name','Bharat Steel Traders'],['Country','India'],['Payment Terms','Net 30'],['Rating','4.2'],['Bank Details','HDFC •••• 2210']]},
   // -- Client is the live one: its mapped fields are exactly what NewForce Solutions's intake form
   // submits, and its enrichment fields are exactly what that form does NOT capture — which is
-  // why an ingested record sits in Pending until HR supplies them. intakeFormPage marks this as
+  // why an ingested record sits in Pending until the account team supplies them. What the form
+  // returns is a lead: someone typed a company name and booked a slot. What a client has to be,
+  // before a deal can be raised against it, is an owned account with a tier, a stage and a
+  // commercial shape. That gap is the enrichment set, and it is why the two lists below read as
+  // two different vocabularies. intakeFormPage marks this as
   // the object Create Contract fills in, and names the page that renders its form
   // (startContractIntake, js/pages.js). No systemId: the card belongs on Data Foundation, where
   // objects are described, and the system page it used to also appear on is now just the
@@ -2821,14 +2825,37 @@ const cfgModels=[
       ['Company Name','company_name','string'],
       ['Country Hiring In','country_hiring_in','string'],
       ['Looking For','looking_for','string'],
-      ['Heard About Us','heard_about_us','string']
+      ['Heard About Us','heard_about_us','string'],
+      // The free-text box the form reveals when "How did you hear about us" is answered Other.
+      // Mapped rather than dropped: it is the only place an unlisted channel is ever named.
+      ['Heard About Us Detail','heard_about_us_other','string'],
+      // The demo slot the lead picked. Typed string, not date: it carries a time and a zone, and
+      // 'date' in this vocabulary means a calendar day (Contract Start Date). Storing an instant
+      // under a day type is the category error the logs table already had to be corrected for.
+      ['Demo Slot','demo_datetime','string']
     ],
+    // -- Account and commercial. Not one of these is on the intake form, and that is the point:
+    // the form produces a lead, and these seven are what a lead has to acquire before it can be
+    // contracted against. Service Line Confirmed sits deliberately next to the mapped Looking For
+    // — the form's answer is what the lead said they wanted, this is what they actually bought,
+    // and conflating the two is how a pipeline reports revenue against a wish. --
+    //
+    // The employee-shaped set this replaced (Department, Job Title, Branch, Joining Date) was a
+    // leftover from when this object was called `user` and held a person. It holds a company.
+    // Status went with them: a record's lifecycle state is set by the system, not supplied by an
+    // operator, so it was never an enrichment field — it is still on the record and still what
+    // Pending/Active reports.
     enrichment:[
-      {name:'Department',type:'string'},{name:'Job Title',type:'string'},
-      {name:'Branch',type:'string'},{name:'Joining Date',type:'date'},{name:'Status',type:'string'}
+      {name:'Account Owner',type:'string'},
+      {name:'Client Tier',type:'string'},
+      {name:'Lead Stage',type:'string'},
+      {name:'Expected Headcount',type:'number'},
+      {name:'Service Line Confirmed',type:'string'},
+      {name:'Contract Start Date',type:'date'},
+      {name:'Billing Currency',type:'string'}
     ],
     rules:{makerChecker:true,validation:'Full name and work email are required. Client ID is minted here and unique; Source Record ID must be unique too — a repeat resolves to the existing client instead of creating a second one. Record enters as Pending until enrichment fields are supplied'},
-    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Status','Pending']]}
+    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Client Tier','Mid-market'],['Lead Stage','Qualified'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contract Start Date','2026-09-01'],['Billing Currency','EUR']]}
 ];
 let cfgModelTested={};
 let cfgModelEditing=false;
