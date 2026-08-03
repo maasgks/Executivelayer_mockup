@@ -1052,19 +1052,74 @@ function soWhereCellHTML(d){
     +'<span class="am-where-prog">Step '+(idx+1)+' of '+steps.length+'</span>'
     +'</div>';
 }
-function soNextActionCellHTML(d){
-  const a=soNextAction(d);
-  if(a.kind==='auto')return '<span class="am-act auto">'+amBoltSvg+' Auto</span>';
-  if(a.kind==='do')return '<button class="am-act do" onclick="event.stopPropagation();soCompleteStep('+d.id+')">'
-    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> '+a.label+'</button>';
-  if(a.kind==='chase')return '<button class="am-act chase" onclick="event.stopPropagation();soRemindMerchant('+d.id+')">'
-    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4h16v12H7l-3 3z"/></svg> '+a.label+'</button>';
-  return '<span class="am-act wait">'+a.label+'</span>';
+/* == THE KYC HAND-OFF ====================================================================
+   What Bhaiyaa returned for this store, shown in the drawer before you leave for the journey.
+   It is a preview rather than the whole record on purpose: enough to recognise which merchant
+   this is and that there is something real to check, not enough to make the trip pointless. == */
+function soKycPreviewHTML(d){
+  const sg=soSignupFor(d);
+  if(!sg)return '';
+  const row=function(k,v){
+    return '<div class="so-kycp-row"><span class="so-kycp-k">'+k+'</span>'
+      +'<span class="so-kycp-v">'+attrSafe(v)+'</span></div>';
+  };
+  return '<div class="so-kycp">'
+    +'<div class="so-kycp-head">'
+      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><polyline points="21 3 21 9 15 9"/></svg>'
+      +'Fetched from seller.bhaiyaa</div>'
+    +row('Owner',sg.owner)
+    +row('Aadhaar',bhaiyaaMaskAadhaar(sg.aadhaar))
+    +row('PAN',sg.pan)
+    +row('Entity',sg.entity)
+    +'</div>';
 }
-/* Five columns and the row opener. One fewer than the deal board, because a store opening has
+/* Leaves the board for the journey, remembering which record to come back to. storeIntakeDraft
+   is loaded from what Bhaiyaa returned, because the KYC screen was written to read a draft and
+   a verification of an existing store is the same screen reading a different source. */
+function soOpenKycVerification(runId){
+  const d=soRuns.find(function(x){return x.id===runId;});if(!d)return;
+  const sg=soSignupFor(d)||{};
+  soKycRunId=runId;
+  soKycVerified=false;
+  // The board is a dashboard tab, not a page of its own — so Exit lands on 'dashboard' and the
+  // tab is restored separately on the way back. Sending it to 'store-ops' would 404 the router.
+  storeIntakeBackPage='dashboard';
+  storeIntakeDraft={
+    first_name:(sg.owner||d.merchant||'').split(' ')[0]||'',
+    last_name:(sg.owner||d.merchant||'').split(' ').slice(1).join(' '),
+    email_id:sg.email||'',mobile_number:(sg.mobile||'').replace(/^\+\d+\s*/,''),
+    aadhaar_number:sg.aadhaar||'',pan_number:sg.pan||'',gst_number:sg.gst||'',
+    business_kyc:sg.entity||'',store_name:d.store,store_category:d.category,store_type:d.band
+  };
+  storeIntakeResult=null;storeIntakeBusy=false;
+  storeIntakeStep=1;storeReviewStage=-1;
+  storeKycProgress=-1;storeKycDone=false;
+  navigatePage('create-store');
+  storeRunKyc();
+}
+// Back to the board with the drawer open on the record you left from, on its Logs tab — the
+// same place the trip started, so a verification reads as a round trip rather than a redirect.
+function soKycReturnToBoard(){
+  const id=soKycRunId;
+  soKycRunId=null;soKycVerified=false;
+  storeIntakeStep=0;storeIntakeDraft={};
+  // Selection set before the render, not after: openSoRunSidebar patches a drawer into a DOM
+  // that does not exist yet at this point, so the state has to be right when the page draws.
+  if(id){soSelectedId=id;soRunTab='logs';}
+  dashboardTab='store-ops';
+  navigatePage('dashboard');
+}
+/* Four columns and the row opener. One fewer than the deal board, because a store opening has
    no second party to name: the merchant IS the customer, so "who this is for" and "who we are
-   waiting on" collapse into one cell. Store ID, Bhaiyaa ref, plan, GST and turnover band are
-   all things you look up about one record, so they live in the drawer. */
+   waiting on" collapse into one cell. Store ID, Bhaiyaa ref, plan, GST and business tier are
+   all things you look up about one record, so they live in the drawer.
+
+   WHAT TO DO NEXT IS GONE, and its removal is the point rather than a saving. Acting on a run
+   now means opening it — reading the evidence, then deciding — and a one-click button in a row
+   is the opposite of that: it completes a step for a record whose details you have not looked
+   at. The action still exists, unchanged, at the top of the drawer's Logs tab, which is the one
+   place that shows you what you are agreeing to before you agree to it. The drawer is the single
+   action surface now; the listing is for finding the row you want. */
 function buildSoListingHTML(){
   const hamburger='<svg width="16" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="2" x2="17" y2="2"/><line x1="1" y1="7" x2="17" y2="7"/><line x1="1" y1="12" x2="17" y2="12"/></svg>';
   const stage=soPipelineStage?soStageById(soPipelineStage):null;
@@ -1080,21 +1135,19 @@ function buildSoListingHTML(){
   const sub=stage?stripEnt(stage.plain)+' &nbsp;·&nbsp; Should take: '+(soStageSla[stage.id]||'&mdash;')
     :'Everything you own, in one list. Click a step above to narrow it down.';
   const compact=!!soSelectedId;
+  // The widths sum to 100 in both states — see the deal board's colgroup note for why that is
+  // generated from one list rather than written twice. The 18% the action column used to hold
+  // goes to Store and Where it is now, which are what you scan by.
   const columns=[
-    {w:'24%',cw:'36%',th:'Store',
+    {w:'31%',cw:'40%',th:'Store',
      cell:function(d){return '<div class="cell-primary am-c-client">'+d.store+'</div><div class="cell-sub">'+d.ref+'</div>';}},
-    {w:'19%',hideWhenCompact:true,th:'Merchant',
+    {w:'24%',hideWhenCompact:true,th:'Merchant',
      cell:function(d){return '<div class="cell-primary am-c-client">'+d.merchant+'</div><div class="cell-sub">'+soRoleLabel(d)+' &middot; '+d.category+'</div>';}},
-    {w:'24%',cw:'32%',th:'Where it is now',cell:soWhereCellHTML},
-    {w:'7%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
+    {w:'29%',cw:'44%',th:'Where it is now',cell:soWhereCellHTML},
+    {w:'8%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
      cell:function(d){return '<span class="am-c-age'+(d.breach?' breach':'')+'">'+d.age+'d</span>'
        +(d.breach?'<div class="cell-sub am-c-late">Too long</div>':'');}},
-    // Wider than the deal board's action column: these labels name the action ("Retry",
-    // "Complete details") rather than saying "Mark done", and a clipped verb is worse than a
-    // generic one. The widths sum to 100 in both states — see the deal board's colgroup note
-    // for why that is generated from one list rather than written twice.
-    {w:'18%',cw:'24%',th:'What to do next',cell:soNextActionCellHTML},
-    {w:'8%',cw:'8%',th:'',
+    {w:'8%',cw:'16%',th:'',
      cell:function(d){return '<button class="lp-action-btn" onclick="event.stopPropagation();openSoRunSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>';}}
   ].filter(function(c){return !(compact&&c.hideWhenCompact);});
   const colgroup='<colgroup>'+columns.map(function(c){return '<col style="width:'+(compact?c.cw:c.w)+'">';}).join('')+'</colgroup>';
@@ -1131,7 +1184,11 @@ function soStampToday(d){
    Clearing a halt step is the same operation, plus dropping the halt: a mismatch that has been
    reviewed or a registration that has been retried is no longer a stopped run, and leaving the
    flag on would keep offering the same button forever. */
-function soAdvanceStep(runId,simulated){
+/* `quiet` suppresses the toast and the re-render, and exists for one caller: soKycMakeLive walks
+   several steps in a row, and a board that repaints four times and stacks four toasts to report
+   one action is reporting the implementation rather than the action. The writing is unchanged —
+   what is suppressed is only the announcement, which that caller makes once at the end. */
+function soAdvanceStep(runId,simulated,quiet){
   const d=soRuns.find(function(x){return x.id===runId;});if(!d)return;
   const steps=soSteps(d,d.stage);
   const idx=soSubIndex(d);
@@ -1165,6 +1222,7 @@ function soAdvanceStep(runId,simulated){
   if(wasHalt)soPushNote(d,cur.label+' cleared','The run was halted here and has been released by '+actorLabel(currentActorId())+'.',at);
   const landed=soCurrentSub(d);
   const autoMsg=autoRan.length?' Automation ran: '+autoRan.join(', ')+'.':'';
+  if(quiet)return;
   if(d.stage!==stageBefore){
     const st=soStageById(d.stage);
     showAiToast('Moved to &ldquo;'+st.short+'&rdquo;',d.ref+' &middot; '+d.store+' is now at &ldquo;'+stripEnt(st.label)+'&rdquo;.'+autoMsg);
@@ -1273,10 +1331,33 @@ function renderSoRunSidebar(){
     const mine=a.kind==='do';
     const isAuto=a.kind==='auto';
     const simLabel=a.step&&a.step.decision?'Simulate: '+own.who+' chooses':'Simulate: '+own.who+' completes this';
+    /* == THE HAND-OFF TO THE JOURNEY =====================================================
+       A step flagged `opensKyc` is not completed from this panel. It is a verification, and a
+       verification you can tick from a drawer without reading the evidence is a rubber stamp
+       with a comment box — so the button leaves, carrying the record id, and lands on the
+       journey's own KYC screen where the details Bhaiyaa returned are on screen and the four
+       checks run in front of you. You come back having seen what you approved.
+
+       This is also the only place the two surfaces meet: the board watches the journey, and
+       this is the door between them. == */
+    const opensKyc=a.step&&a.step.opensKyc&&!isAuto;
     const actionPanel=isAuto
       ?'<div class="lp-logs-form">'
         +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:var(--navy);display:inline-block;flex-shrink:0"></span>Runs automatically</div>'
         +'<p class="lp-logs-form-sub">&ldquo;'+a.step.label+'&rdquo; is performed by the AI Execution Layer'+(a.step.autoNote?' &mdash; '+a.step.autoNote:'')+'. Nothing to do here.</p>'
+        +'</div>'
+      :opensKyc
+      ?'<div class="lp-logs-form">'
+        +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:#f59e0b;display:inline-block;flex-shrink:0"></span>Next: '+a.step.label+'</div>'
+        +'<p class="lp-logs-form-sub">The KYC agent has gathered everything seller.bhaiyaa holds on this owner. '
+          +'Open the verification step to see the details it pulled and run the checks against them.'
+          +' Step '+(idx+1)+' of '+steps.length+' in &ldquo;'+s.short+'&rdquo;'
+          +(a.step.sla?' &middot; should take '+a.step.sla:'')+'.</p>'
+        +soKycPreviewHTML(d)
+        +'<button class="lp-logs-save-btn" onclick="soOpenKycVerification('+d.id+')">'
+          +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" style="vertical-align:-2px;margin-right:6px"><path d="M9 18l6-6-6-6"/></svg>'
+          +(a.step.act||'Verify KYC')+'</button>'
+        +'<div class="lp-logs-form-sub" style="margin:9px 0 0;text-align:center">Opens the KYC step of the Store Creation journey.</div>'
         +'</div>'
       :'<div class="lp-logs-form">'
         +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:#f59e0b;display:inline-block;flex-shrink:0"></span>Next: '+a.step.label+'</div>'
@@ -8827,6 +8908,79 @@ function buildStoreKycHTML(){
     +'<div class="st-kyc-id-name">'+attrSafe(owner)+'</div></div>'
     +(storeKycDone?'<span class="uif-verified-chip lg"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> KYC verified</span>':'')
     +'</div>';
+  /* == VERIFYING AN EXISTING STORE ======================================================
+     Same screen, same four checks, different subject and different exit. A run arriving from
+     the Store Operations board is not creating anything — the signup already happened on
+     Bhaiyaa — so the CTA cannot say "Create the store". What it offers instead is the thing
+     that is actually left: put this store live. == */
+  const run=soKycRunId?soRuns.find(function(x){return x.id===soKycRunId;}):null;
+  if(run){
+    const sg=soSignupFor(run)||{};
+    const runHead='<div class="uif-card-head">'
+      +'<div class="so-kyc-crumb">'
+        +'<button class="so-kyc-back" onclick="soKycReturnToBoard()">'
+        +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="15 18 9 12 15 6"/></svg>'
+        +'Store Operations</button>'
+        +'<span class="so-kyc-crumb-sep">/</span>'
+        +'<span class="so-kyc-crumb-ref">'+attrSafe(run.ref)+' &middot; '+attrSafe(stripEnt(run.store))+'</span>'
+      +'</div>'
+      +'<div class="uif-card-title">Verifying the owner</div>'
+      +'<div class="uif-card-sub">These are the details seller.bhaiyaa holds for this store. The KYC agent checks the Aadhaar with UIDAI and matches it against them &mdash; nothing here was typed by us, and nothing is written back to Bhaiyaa.</div>'
+      +'</div>';
+    // What we are checking, on screen before the result. A verification whose subject you cannot
+    // see is a button that says "trust me".
+    const f=function(k,v,mono){
+      return '<div class="so-kycf"><div class="so-kycf-k">'+k+'</div>'
+        +'<div class="so-kycf-v'+(mono?' mono':'')+'">'+(v?attrSafe(v):'<span class="so-kycf-none">Not given</span>')+'</div></div>';
+    };
+    const fetched='<div class="so-kycbox">'
+      +'<div class="so-kycbox-head">'
+        +'<span class="so-kycbox-title">'
+        +'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><polyline points="21 3 21 9 15 9"/></svg>'
+        +'Fetched from seller.bhaiyaa</span>'
+        +'<span class="so-kycbox-src">Read-only &middot; signed up '+attrSafe(sg.registered||'&mdash;')+'</span>'
+      +'</div>'
+      +'<div class="so-kycgrid">'
+        +f('Owner name',sg.owner)
+        +f('Entity type',sg.entity)
+        +f('Aadhaar',bhaiyaaMaskAadhaar(sg.aadhaar),true)
+        +f('PAN',sg.pan,true)
+        +f('Mobile',sg.mobile,true)
+        +f('Email',sg.email)
+        +f('GST number',sg.gst,true)
+        +f('Store',stripEnt(run.store))
+      +'</div></div>';
+    const runCta=soKycVerified
+      /* The verified state. It says the outcome in a sentence before it offers the next thing,
+         because "what happened" and "what now" are two questions and answering the second first
+         is how a user ends up clicking without reading. */
+      ?'<div class="so-kycdone">'
+        +'<div class="so-kycdone-ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+        +'<div class="so-kycdone-txt">'
+          +'<div class="so-kycdone-title">Details verified &mdash; this store is good to go</div>'
+          +'<div class="so-kycdone-sub">All four checks passed against the details seller.bhaiyaa returned. '
+          +'The owner is KYC-verified and nothing is blocking this store. It has been recorded on the run&rsquo;s log.</div>'
+        +'</div></div>'
+        +'<div class="uif-actions">'
+        +'<div class="uif-hint">Only the last four digits of the Aadhaar are kept on the store record. The full number is not stored.</div>'
+        +'<button class="uif-submit so-golive" onclick="soKycMakeLive()">'
+        +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M5 12.5 10 17.5 19 7"/></svg>'
+        +'Make this store live</button>'
+        +'</div>'
+      :storeKycDone
+        ?'<div class="uif-actions">'
+          +'<div class="uif-hint">The agent has finished. Accepting this records the verification against '+attrSafe(run.ref)+' and releases the store.</div>'
+          +'<button class="uif-submit" onclick="soKycAccept()">Accept the verification'
+          +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>'
+          +'</div>'
+        :'';
+    return storeIntakeShellHTML('<div class="uif-card">'
+      +runHead+fetched+idCard
+      +'<div class="uif-proc" id="st-kyc-list">'+storeKycListHTML()+'</div>'
+      +runCta
+      +'</div>');
+  }
+
   const cta=storeKycDone
     ?'<div class="uif-actions">'
       +'<div class="uif-hint">Only the last four digits are kept on the store record. The full number is not stored.</div>'
@@ -8843,6 +8997,61 @@ function buildStoreKycHTML(){
 // Verified is a gate the merchant passes deliberately, not a screen that slides away on a timer:
 // the result is theirs to read before the store exists.
 function storeKycContinue(){storeCreateRecord();}
+
+/* == ACCEPTING A VERIFICATION ON AN EXISTING RUN ==========================================
+   The board's `Verification pending` step, completed. It advances the run through soAdvanceStep
+   — the same and only writer every other step goes through, so the stage moves as a consequence
+   of the step and the derived log picks it up for free — and then writes the evidence as a note,
+   because "verified" without what was compared is a claim rather than a record.
+
+   soAdvanceStep is called with simulated=true: the comment is supplied here rather than typed
+   into the drawer's box, which is not on screen. == */
+function soKycAccept(){
+  const d=soRuns.find(function(x){return x.id===soKycRunId;});if(!d)return;
+  if(!storeKycDone)return;
+  const sg=soSignupFor(d)||{};
+  /* Records the verification and MOVES NOTHING. Advancing here was wrong: completing the KYC
+     step rolls straight through store-creation's two automated steps and lands the record on
+     store-live, so by the time the screen offered "Make this store live" the board already said
+     Live. The button has to be the thing that does it, or it is a button reporting something
+     that already happened. */
+  soPushNote(d,'KYC verified',
+    'Checked against the details seller.bhaiyaa returned. Aadhaar '+bhaiyaaMaskAadhaar(sg.aadhaar)
+    +' matched UIDAI demographics for '+attrSafe(sg.owner||d.merchant)
+    +'; PAN '+attrSafe(sg.pan||'not given')+'; no adverse match on screening. Accepted by '
+    +actorLabel(currentActorId())+'.',{stage:soStageById(d.stage),subNo:soSubIndex(d)+1});
+  soKycVerified=true;
+  renderADTPage();
+}
+/* == PUTTING THE STORE LIVE ===============================================================
+   Straight to the terminal stage, and it is worth being explicit about why that is not a cheat.
+   Store creation is three steps and all three are automated — registration, provisioning, then
+   the run rolls on — so a person confirming "make it live" is not skipping human work, they are
+   releasing a gate that was holding automated work back. soAdvanceStep still walks it: each
+   call completes one step, soSkipAutoSteps carries the automated ones, and the loop stops the
+   moment the record reaches store-live. The trail therefore records every step it passed
+   through rather than one jump, which is what anyone auditing it will look for. */
+function soKycMakeLive(){
+  const d=soRuns.find(function(x){return x.id===soKycRunId;});if(!d)return;
+  let guard=0;
+  while(guard++<12){
+    // Done when the record is in the terminal stage AND standing on its last step — reaching
+    // store-live is "created", finishing it is "live", and this button promises the second.
+    const steps=soSteps(d,d.stage);
+    if(d.stage==='store-live'&&soSubIndex(d)>=steps.length-1)break;
+    const before=d.stage+'#'+d.sub;
+    soAdvanceStep(d.id,true,true);
+    if(before===d.stage+'#'+d.sub)break;   // nothing moved — do not spin
+  }
+  // Bhaiyaa's own id arrives with registration, so a store that is live has one by definition.
+  if(!d.bhaiyaaRef)d.bhaiyaaRef='BHA-STR-'+String(4000+d.id).padStart(4,'0');
+  soPushNote(d,'Store is live',
+    'Released by '+actorLabel(currentActorId())+' after KYC. Registered on Bhaiyaa as '
+    +d.bhaiyaaRef+' and the storefront is open.',{stage:soStageById('store-live'),subNo:1});
+  showAiToast('&ldquo;'+stripEnt(d.store)+'&rdquo; is live',
+    d.ref+' &middot; Bhaiyaa ref '+d.bhaiyaaRef+'. It is now showing under Live on your board.');
+  soKycReturnToBoard();
+}
 
 // -- The Create Contract entry point. The object to open is found by its intakeFormPage rather
 // than named outright, so declaring an intake form on a different Data Foundation object is all

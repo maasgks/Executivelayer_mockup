@@ -919,9 +919,15 @@ const soSubStatuses={
     {label:'Signup completed',owner:'Merchant',sla:'2 days'},
     {label:'Mobile verified',owner:'Merchant',auto:true,autoNote:'OTP callback'}
   ],
+  /* `Verification pending` is the one manual step in this stage, and it is why a record can rest
+     here at all: the two checks above it are automated, so before it existed soSkipAutoSteps
+     rolled every run straight through KYC into store creation and the stage was never anybody's
+     queue. It is the Ops Manager signing off what the agent found — the agent gathers the
+     evidence, a person accepts it — and it is what the Logs tab links out to the journey for. */
   'kyc':[
     {label:'Aadhaar checked with UIDAI',owner:'KYC Agent',auto:true,autoNote:'name and mobile match'},
     {label:'Watchlist screened',owner:'KYC Agent',auto:true,autoNote:'screening API'},
+    {label:'Verification pending',owner:'Ops Manager',sla:'1 day',act:'Verify KYC',opensKyc:true},
     {label:'Mismatch review',owner:'Compliance',halt:true,act:'Clear review'}
   ],
   'store-creation':[
@@ -941,11 +947,13 @@ const soSubStatuses={
 const soRuns=[
   {id:1, ref:'STR-000112',store:'Sharma Kirana Mart',      merchant:'Ravi Sharma',      role:'seller',category:'Grocery & Kirana',        band:'MSME: Micro, Small, and Medium Enterprises',  city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-details', sub:0},
   {id:2, ref:'STR-000114',store:'Nandini Dairy Point',     merchant:'Meghana Rao',      role:'seller',category:'Dairy & Bakery',          band:'MSME: Micro, Small, and Medium Enterprises',  city:'Bengaluru', updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
-  {id:3, ref:'STR-000108',store:'Green Leaf Vegetables',   merchant:'Imran Qureshi',    role:'seller',category:'Fruits & Vegetables',     band:'MSME: Micro, Small, and Medium Enterprises',  city:'Nagpur',    updated:'30 Jul 2026',age:3, stage:'store-details', sub:0},
+  {id:3, ref:'STR-000108',store:'Green Leaf Vegetables',   merchant:'Imran Qureshi',    role:'seller',category:'Fruits & Vegetables',     band:'MSME: Micro, Small, and Medium Enterprises',  city:'Nagpur',    updated:'30 Jul 2026',age:3, stage:'kyc',           sub:2},
   {id:4, ref:'STR-000109',store:'Vasant Medico',           merchant:'Sneha Kulkarni',   role:'seller',category:'Pharmacy & Wellness',     band:'MSME: Micro, Small, and Medium Enterprises',  city:'Pune',      updated:'27 Jul 2026',age:6, stage:'store-details', sub:0,breach:true},
   {id:5, ref:'STR-000110',store:'Bansal Hardware Depot',   merchant:'Naveen Bansal',    role:'buyer', category:'Hardware & Home Needs',   band:'SMB: Small and Medium-sized Business',  city:'Indore',    updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
-  {id:6, ref:'STR-000111',store:'Anjali Stationers',       merchant:'Anjali Deshmukh',  role:'seller',category:'Stationery & Books',      band:'MSME: Micro, Small, and Medium Enterprises',  city:'Nashik',    updated:'29 Jul 2026',age:4, stage:'store-details', sub:0},
-  {id:7, ref:'STR-000104',store:'Rohit Mobile World',      merchant:'Rohit Kadam',      role:'seller',category:'Electronics & Mobile',    band:'SMB: Small and Medium-sized Business',  city:'Mumbai',    updated:'31 Jul 2026',age:2, stage:'kyc',           sub:2,halted:'kyc',
+  {id:6, ref:'STR-000111',store:'Anjali Stationers',       merchant:'Anjali Deshmukh',  role:'seller',category:'Stationery & Books',      band:'MSME: Micro, Small, and Medium Enterprises',  city:'Nashik',    updated:'29 Jul 2026',age:4, stage:'kyc',           sub:2},
+  {id:7, ref:'STR-000104',store:'Rohit Mobile World',      merchant:'Rohit Kadam',      role:'seller',category:'Electronics & Mobile',    band:'SMB: Small and Medium-sized Business',  city:'Mumbai',    updated:'31 Jul 2026',age:2, stage:'kyc',           sub:3,halted:'kyc',
+   // sub 3, not 2: `Verification pending` was inserted above the halt step, and a halted record
+   // sits on its halt step. The halt is still authored last, so this is the only index that moved.
    haltNote:'UIDAI returned a different name for this Aadhaar. The owner name on the signup does not match the demographics on record.'},
   {id:8, ref:'STR-000106',store:'Sagar Foods &amp; Catering',merchant:'Sagar Pawar',    role:'buyer', category:'Restaurant & Food Service',band:'Corporate: Large businesses or companies',city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-creation',sub:2,halted:'store-creation',
    haltNote:'Bhaiyaa rejected the registration. StoreIntake returned a duplicate GST number against this PAN, so no Bhaiyaa ref was issued.'},
@@ -954,6 +962,30 @@ const soRuns=[
   {id:11,ref:'STR-000088',store:'Deccan Wholesale Buyers', merchant:'Farhan Shaikh',    role:'buyer', category:'Grocery & Kirana',        band:'Corporate: Large businesses or companies',city:'Hyderabad', updated:'21 Jul 2026',age:12,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0062'},
   {id:12,ref:'STR-000091',store:'Sunrise Bakers',          merchant:'Neha Kulkarni',    role:'seller',category:'Dairy & Bakery',          band:'MSME: Micro, Small, and Medium Enterprises',  city:'Thane',     updated:'18 Jul 2026',age:15,stage:'store-live',    sub:1,bhaiyaaRef:'BHA-STR-0065'}
 ];
+/* == WHAT BHAIYAA GAVE US ================================================================
+   The signup fields as they come back from seller.bhaiyaa, keyed by our store ref. A separate
+   table from soRuns above, and deliberately so: soRuns is OUR journey state — which stage, which
+   step, whether it stopped — and none of that exists in Bhaiyaa. This is the other half, the
+   half we only ever read. Keeping them apart is what makes the boundary visible, and it is the
+   shape the real integration wants: this table is the one that gets replaced by an API response.
+
+   These are the values the KYC screen verifies against. They are here rather than on the run
+   because a run that has not reached KYC has no reason to carry an Aadhaar number around. == */
+const soBhaiyaaSignup={
+  'STR-000112':{owner:'Ravi Sharma',      email:'ravi.sharma@greenmart.in',      mobile:'+91 98220 41122',aadhaar:'541288903321',pan:'AKPRS3421L',gst:'27AKPRS3421L1ZP',entity:'Sole Proprietor / Self-employed',registered:'28 Jul 2026'},
+  'STR-000114':{owner:'Meghana Rao',      email:'meghana@nandinidairy.co.in',    mobile:'+91 99012 77340',aadhaar:'773410026645',pan:'BQZPR8812M',gst:'',              entity:'Individual',                      registered:'29 Jul 2026'},
+  'STR-000108':{owner:'Imran Qureshi',    email:'imran.q@greenleaf.in',          mobile:'+91 90283 11907',aadhaar:'640219938852',pan:'CJKPQ1190H',gst:'27CJKPQ1190H1Z4',entity:'Sole Proprietor / Self-employed',registered:'27 Jul 2026'},
+  'STR-000109':{owner:'Sneha Kulkarni',   email:'sneha@vasantmedico.com',        mobile:'+91 97654 20881',aadhaar:'220876541190',pan:'DLMPK7743Q',gst:'27DLMPK7743Q1Z9',entity:'Private/Public Limited',          registered:'25 Jul 2026'},
+  'STR-000110':{owner:'Naveen Bansal',    email:'naveen@bansalhardware.in',      mobile:'+91 93027 66512',aadhaar:'118834470092',pan:'EPQRB2298K',gst:'23EPQRB2298K1Z7',entity:'Partnership',                     registered:'29 Jul 2026'},
+  'STR-000111':{owner:'Anjali Deshmukh',  email:'anjali@anjalistationers.in',    mobile:'+91 91456 30278',aadhaar:'905512330147',pan:'FRTPD6650N',gst:'',              entity:'Individual',                      registered:'26 Jul 2026'},
+  'STR-000104':{owner:'Rohit Kadam',      email:'rohit@rohitmobileworld.in',     mobile:'+91 98765 12009',aadhaar:'330298871264',pan:'GHJPK4417R',gst:'27GHJPK4417R1Z2',entity:'Sole Proprietor / Self-employed',registered:'28 Jul 2026'},
+  'STR-000106':{owner:'Sagar Pawar',      email:'sagar@sagarfoods.co.in',        mobile:'+91 90118 45523',aadhaar:'447790215538',pan:'HKLPS9903T',gst:'27HKLPS9903T1Z6',entity:'Private/Public Limited',          registered:'30 Jul 2026'},
+  'STR-000097':{owner:'Latha Menon',      email:'latha@kaveritextiles.in',       mobile:'+91 94422 80016',aadhaar:'662104459930',pan:'JMNPL5528V',gst:'33JMNPL5528V1Z1',entity:'Partnership',                     registered:'22 Jul 2026'},
+  'STR-000099':{owner:'Prakash Jadhav',   email:'prakash@mahalaxmistore.in',     mobile:'+91 95279 33408',aadhaar:'889903117746',pan:'KPQRJ3364W',gst:'',              entity:'Individual',                      registered:'20 Jul 2026'},
+  'STR-000088':{owner:'Farhan Shaikh',    email:'farhan@deccanwholesale.in',     mobile:'+91 99490 12277',aadhaar:'214467790035',pan:'LRSTF7719X',gst:'36LRSTF7719X1Z8',entity:'Limited Liability Partnership (LLP)',registered:'14 Jul 2026'},
+  'STR-000091':{owner:'Neha Kulkarni',    email:'neha@sunrisebakers.in',         mobile:'+91 98901 64432',aadhaar:'556621009984',pan:'MTUPN2205Y',gst:'27MTUPN2205Y1Z3',entity:'Sole Proprietor / Self-employed',registered:'12 Jul 2026'}
+};
+function soSignupFor(d){return (d&&soBhaiyaaSignup[d.ref])||null;}
 /* The steps that apply to THIS record. A halt step belongs only to the record whose run halted
    in that stage; for everyone else the stage is the two or three automated steps and nothing
    more. Because every halt step is authored last, filtering it out never shifts an index that
@@ -1048,6 +1080,12 @@ function soRunLog(d){
 // Stage-level expectations, in the merchant's terms rather than a duration nobody can act on.
 const soStageSla={'store-details':'2 days, then chase','kyc':'Seconds, unless it halts','store-creation':'Minutes, unless Bhaiyaa refuses','store-live':'1 day to finish the details'};
 let soPipelineStage='';
+/* Set while the journey's KYC screen is verifying an EXISTING board record rather than a signup
+   being filled in right now. It is the whole difference between the two modes: null means the
+   screen belongs to a new store and its CTA creates one, an id means it belongs to this run and
+   its CTA advances that. */
+let soKycRunId=null;
+let soKycVerified=false;
 const SO_PAGE_SIZE=10;
 let soPage=1;
 let soSelectedId=null,soRunTab='basic-details';

@@ -132,12 +132,19 @@ Six columns. One fewer than the deal board, because a store opening has no secon
 
 | # | Header | Width (normal / compact) | Content |
 |---|---|---|---|
-| 1 | STORE | 24% / 36% | `.cell-primary` store name · `.cell-sub` store ref (`STR-000112`) |
-| 2 | MERCHANT | 19% / *hidden* | `.cell-primary` merchant name · `.cell-sub` `Seller` · category — see §13, role is always Seller |
-| 3 | WHERE IT IS NOW | 24% / 32% | see below |
-| 4 | DAYS | 7% / *hidden* | `12d`; `title` on header = "Days sitting on the current step" |
-| 5 | WHAT TO DO NEXT | 18% / 24% | one control per row, see §7 |
-| 6 | *(blank)* | 8% / 8% | hamburger `.lp-action-btn` → opens drawer, `title="Open this record"` |
+| 1 | STORE | 31% / 40% | `.cell-primary` store name · `.cell-sub` store ref (`STR-000112`) |
+| 2 | MERCHANT | 24% / *hidden* | `.cell-primary` merchant name · `.cell-sub` `Seller` · category — see §13, role is always Seller |
+| 3 | WHERE IT IS NOW | 29% / 44% | see below |
+| 4 | DAYS | 8% / *hidden* | `12d`; `title` on header = "Days sitting on the current step" |
+| 5 | *(blank)* | 8% / 16% | hamburger `.lp-action-btn` → opens drawer, `title="Open this record"` |
+
+> **There is no "What to do next" column, and its absence is the design.** Acting on a run means
+> opening it — reading the evidence, then deciding — and a one-click button in a row is the
+> opposite of that: it completes a step for a record whose details you have not looked at. The
+> action still exists, unchanged, at the top of the drawer's Logs tab, which is the one place
+> that shows you what you are agreeing to before you agree to it. **The drawer is the single
+> action surface; the listing is for finding the row you want.** `soNextActionCellHTML` was
+> deleted with the column — do not reintroduce either.
 
 Widths sum to 100 in both states and are emitted from one list, never written twice.
 
@@ -255,7 +262,8 @@ Below it, **"Run by the agents"** (`.am-sb-steps`) lists automation that has **a
 | Signup | 3 | Mobile verified | Merchant | ⚡ | OTP callback |
 | KYC | 1 | Aadhaar checked with UIDAI | KYC Agent | ⚡ | name and mobile match |
 | KYC | 2 | Watchlist screened | KYC Agent | ⚡ | screening API |
-| KYC | 3 | **Mismatch review** | Compliance | — | `halt` · button: **Clear review** |
+| KYC | 3 | **Verification pending** | Ops Manager | — | SLA 1 day · `opensKyc` · button: **Verify KYC** → see §14 |
+| KYC | 4 | **Mismatch review** | Compliance | — | `halt` · button: **Clear review** |
 | Creating | 1 | Registered on Bhaiyaa | Store Agent | ⚡ | StoreIntake |
 | Creating | 2 | Storefront or ledger opened | Store Agent | ⚡ | provisioning |
 | Creating | 3 | **Registration retry** | Ops Manager | — | `halt` · button: **Retry** |
@@ -424,6 +432,69 @@ The board has **not** been brought in line with that yet. Outstanding, all of it
 **Keep the `role` column and its `CHECK (role IN ('seller','buyer'))` constraint** in [backend/schema.sql:183](backend/schema.sql#L183). What was removed is the *question*, not the *column* — the field still reads correctly for anything already created, and dropping a column is the only part of this that is hard to undo. Retaining it costs one enum value and no UI.
 
 Note record 8 (Sagar Foods & Catering) is one of the two **halted** records, so this is not cosmetic — it is a buyer sitting on a halt path that only sellers can reach.
+
+---
+
+## 14. KYC verification — the hand-off to the journey
+
+The one flow that leaves this page. A record sitting on **Verification pending** is not completed
+from the drawer: verification you can tick without reading the evidence is a rubber stamp with a
+comment box. The button leaves for the journey's own KYC screen, where the details Bhaiyaa
+returned are on screen and the four checks run in front of you.
+
+### The loop
+
+```
+Board ─ row ─▶ Drawer ▸ Logs ─ [Verify KYC] ─▶ create-store · stage 2 (KYC)
+                                                        │
+                                    four checks run (~3.6s, storeRunKyc)
+                                                        │
+                                              [Accept the verification]
+                                                        │
+                                    "Details verified — this store is good to go"
+                                                        │
+                                              [Make this store live]
+                                                        │
+Board ◀── drawer reopens on Logs ──────────────── record now Live
+```
+
+### State
+
+| Global | Meaning |
+|---|---|
+| `soKycRunId` | `null` = the KYC screen belongs to a **new signup**, CTA creates a store. An id = it belongs to **that board record**, CTA advances it. This flag is the entire difference between the two modes. |
+| `soKycVerified` | Set by `soKycAccept`, swaps the CTA for the verified panel + go-live button. |
+
+### Functions
+
+| Function | Does |
+|---|---|
+| `soOpenKycVerification(runId)` | Loads `soBhaiyaaSignup[ref]` into `storeIntakeDraft`, sets `storeIntakeStep = 1`, navigates to `create-store`, runs `storeRunKyc()`. Sets `storeIntakeBackPage = 'dashboard'` — **the board is a dashboard tab, not a page**; `navigatePage('store-ops')` would 404 the router. |
+| `soKycAccept()` | Writes the `KYC verified` log note with the evidence. **Moves nothing.** |
+| `soKycMakeLive()` | Walks `soAdvanceStep(id, true, true)` until the record is in `store-live` **and** on its last step, mints a `bhaiyaaRef` if absent, writes `Store is live`, toasts once, returns. |
+| `soKycReturnToBoard()` | Sets `soSelectedId` / `soRunTab='logs'` **before** the render, `dashboardTab='store-ops'`, then `navigatePage('dashboard')`. |
+
+**Why `soKycAccept` must not advance:** completing the KYC step rolls straight through
+store-creation's two automated steps and lands the record on `store-live`. If accept advanced,
+the board would already say **Live** by the time the screen offered "Make this store live" — a
+button reporting something that had already happened. Accept records, go-live moves.
+
+**Why `soAdvanceStep` grew a third `quiet` parameter:** `soKycMakeLive` walks several steps in
+one action. Without it the board repaints four times and stacks four toasts to report one thing.
+`quiet` suppresses only the announcement — the writing is unchanged, and the caller toasts once
+at the end.
+
+### The verification is fictional; the data is real
+
+The four checks (`bhaiyaaKycChecks`) always pass, and the UIDAI narration is invented — there is
+no UIDAI integration. What is **not** invented is the subject: every field on that screen comes
+from `soBhaiyaaSignup`, the table that stands in for the seller.bhaiyaa API response. Keep that
+boundary. `soRuns` is our journey state — stage, step, halts — and none of it exists in Bhaiyaa;
+`soBhaiyaaSignup` is the half we only ever read, and it is the table the real integration
+replaces.
+
+**Internal-only.** A fabricated "UIDAI returned…" is fine as demo narration on an internal board.
+It must never be shown to a merchant or used to justify chasing one.
 
 ---
 
