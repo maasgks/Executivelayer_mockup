@@ -222,6 +222,9 @@ const CCJ_ACT=1150;      // how long one action inside a sub-status is held. Pac
 const CCJ_BEAT=820;      // legacy pacing constant, kept for the settle rhythm
 const CCJ_SETTLE=700;    // the pause after a row completes, before the next one starts
 const CCJ_SEARCH=1700;   // how long the employee lookup appears to take
+const CCJ_CHASE_SEND=2400; // a reminder is visibly SENT before it reads as sent — see ccjClientEvent.
+                           // Long enough to register as dispatch rather than as a flicker, short
+                           // enough that two of them are not a wait in themselves.
 const CCJ_DOC_STEP=620;  // how long one field takes to come out of a document
 const CCJ_SCROLL=560;    // how long the form takes to travel to the field that just landed
 const CCJ_AUTOGAP=2600;  // the pause after the last required field, before the proposal is made
@@ -271,6 +274,9 @@ function ccjNewRun(){
                             // block it has stopped being can be closed without hunting for it
     restAsked:{},           // stageId -> this stage's "carry on" ask is already in the transcript.
                             // A run rests on more than one stage, so it cannot be a single flag
+    railOpen:false,         // the rail is showing all nine rather than a window of four
+    railFrom:undefined,     // the window position the rail was last drawn at, so a stage change can
+                            // be animated from it — see ccjPaintRail
     follow:true,            // does the transcript follow the work — see ccjFollowing. Set false
                             // only by the reader scrolling up, never by anything the run does
     settled:{},             // 'stageId/label' -> {summary}
@@ -1502,10 +1508,27 @@ function ccjPurpose(i,step){
    current, spinning, everything it found on screen — until the run reaches the named screen.
    Held work is the honest rendering of "the machine has done its part and is waiting on the
    rest of the stage"; ticking it green early would report work nobody has done. */
+/* A hold declares `note` (a string, or a function when what it says depends on what is happening)
+   and optionally `rows` — exactly like CCJ_WAITS, and for the same reason. A held step is parked on
+   work happening elsewhere in the product, often for ten seconds or more, and a sentence that never
+   changes is indistinguishable from a run that has stopped. Stage 8 has SIX of them.
+
+   Declared per hold rather than inferred here. ccjHoldNoteHTML used to special-case the document
+   card and the clause audit by reaching into run.doc and run.emp from inside a shared function —
+   the same ambient coupling that put a row about the quote on the agreement's wait, and it does not
+   survive six more holds each with their own progress to report. */
 const CCJ_HOLDS={
   'request-received/New intake':{
     until:'proposal',
-    note:'Completes when the proposal is created.'
+    // A held row is not idle — it is the intake still being captured. When a document is being read
+    // it says so, because that reading IS the capture.
+    note:function(h){
+      const d=ccjRun&&ccjRun.doc;
+      if(d&&!d.done)return 'Reading <b>'+d.name+'</b>.';
+      if(d&&d.done)return 'Read <b>'+d.name+'</b>. '+h.plain;
+      return h.plain;
+    },
+    plain:'Completes when the proposal is created.'
   }
 };
 /* An entry may be a function of run state, for the same reason CCJ_GATES may: a step whose work
@@ -1518,22 +1541,16 @@ function ccjHoldFor(i,step){
   if(typeof h==='function')return h()||null;
   return h||null;
 }
-/* A held row is not idle — it is the intake still being captured. When a document is being read
-   it says so, with the count, because that is the capture actually happening. */
+/* A held row reports the work the SCREEN is doing, not a fixed sentence about waiting — with a
+   count where there is one to give, so a reader can tell a step that is progressing from one that
+   has stopped. Everything shown is read from the store the screen reads, so the block and the card
+   beside it can never disagree about how far along something is. */
 function ccjHoldNoteHTML(hold){
-  const run=ccjRun;
-  // A clause audit running beside the panel is the same case: the held row reports the work the
-  // screen is doing, with the count, rather than a fixed sentence about waiting.
-  if(hold.until==='audit-done'&&run&&run.emp&&run.emp.audit.length){
-    const e=run.emp;
-    return hold.note+' <b>'+Math.min(e.auditAt+(e.auditDone?0:1),e.audit.length)
-      +' of '+e.audit.length+'</b>'
-      +(ccjAuditAdjusted().length?' &middot; '+ccjAuditAdjusted().length+' adjusted':'');
-  }
-  const d=run&&run.doc;
-  if(d&&!d.done)return 'Reading <b>'+d.name+'</b>.';
-  if(d&&d.done)return 'Read <b>'+d.name+'</b>. '+hold.note;
-  return hold.note;
+  const note=typeof hold.note==='function'?hold.note(hold):hold.note;
+  const rows=((typeof hold.rows==='function'?hold.rows():hold.rows)||[])
+    .filter(function(r){return r&&r[1];})       // a row with nothing in it is not yet worth showing
+    .map(function(r){return ccjWaitRow(r[0],r[1]);});
+  return note+(rows.length?'<div class="ccj-hold-rows">'+rows.join('')+'</div>':'');
 }
 
 /* ---- WHERE THE RUN STOPS --------------------------------------------------------------
@@ -1546,6 +1563,9 @@ const CCJ_GATES={
     kind:'decision',
     ask:'Qualify this request before it is priced.',
     why:'Nothing is costed or quoted until this is approved.',
+    // Its own halt sentence, because this one carries a fact — the intake is captured and routed —
+    // that no other decision gate in the journey shares. See ccjOnHalt.
+    halt:'Request logged and routed. Qualify it to continue.',
     options:[
       {id:'qualified',   label:'Qualify',    tone:'go',  done:'Qualified'},
       {id:'disqualified',label:'Disqualify', tone:'stop',done:'Disqualified'}
@@ -1604,6 +1624,10 @@ CCJ_GATES['agreement-signature/Client entity + sanctions check']=function(){
 const CCJ_POST_GATES={
   'agreement-signature/Signed':{
     kind:'approval',
+    // The STEP is owned by the Client, because the client is who signs. The countersignature is
+    // ours, and this is the last point at which we can decline — a block crediting that decision
+    // to the client would name the one party who cannot make it. See ccjGateOwner.
+    owner:'Compliance',
     ask:'Countersign the agreement?',
     why:'The client has signed and returned it. Ours is the second signature, and the agreement is in force from the moment it lands — so this is the last point at which we can decline.',
     options:[
@@ -1784,11 +1808,32 @@ function ccjSettleStep(){
     const gkey=ccjKey(run.stage,step);
     if(goto&&!run.went[gkey]&&ccjClient().state!=='accepted'){
       run.went[gkey]=true;
-      // Back to a row already passed — a re-issued quote has to be read again. The row is
-      // un-settled first, or it would render as done while it is the one being waited on.
+      /* BACK TO A ROW ALREADY PASSED — a re-issued quote has to be read again.
+         ON THE PANEL that meant re-lighting a row further up a fixed list, which was fine: the
+         list did not move. IN A TRANSCRIPT the same jump made the live block travel back UP the
+         conversation, run there, and then walk back down — the reader's eye dragged up and down
+         the page twice for work that all happened after the negotiation. The user named it
+         exactly: *"it going up and then down and then up and then down, i dont want that."*
+
+         Every re-run step is therefore put on a NEW PASS, which is the mechanism already built for
+         stage 2's rework: ccjOpenStepBlock appends a fresh block at the bottom instead of painting
+         into the one the first pass is still sitting in. The first pass stays exactly where it is
+         and keeps what it recorded — they did open v1, we did chase it twice, they did ask for a
+         change — because all of that happened and a transcript keeps what happened.
+
+         NOT folded, unlike a rework. A rework supersedes its attempt: the numbers it produced were
+         rejected and replaced. This does not — the second reading is a second event, not a
+         correction of the first. */
       const steps=ccjSteps(run.stage);
       const idx=steps.findIndex(function(x){return x.label===goto;});
-      if(idx>-1){delete run.settled[ccjKey(run.stage,steps[idx])];run.sub=idx;ccjEnterStep();return;}
+      if(idx>-1){
+        for(let n=idx;n<steps.length;n++){
+          const k=ccjKey(run.stage,steps[n]);
+          delete run.settled[k];
+          run.pass[k]=(run.pass[k]||1)+1;
+        }
+        run.sub=idx;ccjEnterStep();return;
+      }
     }
     run.sub++;ccjEnterStep();
   },CCJ_SETTLE);
@@ -1873,10 +1918,17 @@ function ccjOnHalt(gate,step,post){
      "Signed is yours to complete." on stage 5, a sentence about a step that had already happened.
      Saying that the work is finished and the call is a person's is true of every post gate, and it
      does not repeat the question the block underneath is already asking. */
-  if(post){
+  /* A gate may carry its own sentence. "Request logged and routed. Qualify it to continue." is
+     stage 1's, and it was being said on EVERY arrival decision gate in the journey — including the
+     sanctions adjudication on stage 5 and the shortfall on stage 6, neither of which has a request
+     to log or anything to qualify. It now belongs to the gate that means it, and everything else
+     gets a sentence that is true of any decision. */
+  if(gate.halt&&!post){
+    ccjPush({who:'agent',text:gate.halt});
+  }else if(post){
     ccjPush({who:'agent',text:'Work complete on this step. The decision is yours.'});
   }else if(gate.kind==='decision'){
-    ccjPush({who:'agent',text:'Request logged and routed. Qualify it to continue.'});
+    ccjPush({who:'agent',text:'Paused here &mdash; this one needs a decision from you.'});
   }else if(gate.kind==='external'){
     ccjPush({who:'agent',text:'Holding at <b>'+step.label+'</b>.'});
   }else{
@@ -1969,38 +2021,9 @@ function ccjChooseGate(optId){
     ccjPush({who:'agent',text:'Identity verification rejected. Onboarding cannot continue and the placement is stopped.'});
     return;
   }
-  /* Releasing the first payroll. NOT a settle: the money has not moved yet — approving is what
-     STARTS it moving. So the step goes back to holding, on the second half of its own work, and
-     the hold it re-reads is the one that now points at the disbursement (see CCJ_HOLDS). Settling
-     here would have ticked the row green while the payment file was still being built. */
-  if(optId==='payApprove'){
-    const pr=ccjPayrun(),c=ccjClient();
-    c.mins+=55;
-    // The hold is cleared but `heldBy`/`heldAt` are not: that it was held is part of the record of
-    // this run, and a released run that erased its own hold would be reporting a clean approval.
-    pr.held=false;
-    pr.approvedBy=ccjActor();pr.approvedAt=c.mins;pr.state='approved';
-    ccjPush({who:'user',text:opt.label});
-    run.phase='hold';ccjPaint();ccjPaintScreen();
-    ccjPayrunRelease();
-    return;
-  }
-  /* Held. An exception, recorded as one — who held it and when — and the run stays HALTED on the
-     same row rather than moving on, because nobody has been paid. It stays halted rather than
-     waiting so the decision block stays on screen: a hold is reversible, and the post gate is a
-     function of state, so it comes back asking the opposite question (see CCJ_POST_GATES). The
-     decision is deleted for the same reason — holding did not complete this step. */
-  if(optId==='payHold'){
-    const pr=ccjPayrun(),c=ccjClient();
-    c.mins+=30;
-    pr.held=true;pr.heldBy=ccjActor();pr.heldAt=c.mins;pr.state='held';
-    delete run.decisions[ccjKey(run.stage,step)];
-    ccjPush({who:'user',text:opt.label});
-    ccjPush({who:'agent',text:'First payroll run held by '+pr.heldBy
-      +'. Nothing has been paid and no filing has been made.'});
-    run.phase='halt';ccjPaint();ccjPaintScreen();ccjScrollPanelToCurrent();
-    return;
-  }
+  /* `payApprove` and `payHold` are gone with the payroll run itself. They released and held MONEY,
+     and this journey no longer moves any — the last stage configures payroll and sets the placement
+     live, and the run happens later on its own calendar. See CCJ_PR_PHASES. */
   if(optId==='ecApprove'){
     const e=ccjEmp(),c=ccjClient();
     c.mins+=60;
@@ -2097,15 +2120,17 @@ const CCJ_STAGE_REST={
 
    The ask is the same component a gate uses, deliberately. A rest is an ask with one answer.
 
-   Gated on ccjUsesTranscript because CCJ_STAGE_REST also covers stage 5, which has not been
-   rebuilt: its conversation is the client's thread ALONE, with no marking to tell an internal
-   control apart from a message the client received. Moving it there before that stage is rebuilt
-   would put a button we own inside a customer's correspondence. It moves when stage 5 does.
+   IT IS NO LONGER GATED, and that is the end of a migration rather than a shortcut. While stages
+   were being converted one at a time this checked ccjUsesTranscript, because an un-rebuilt stage's
+   column is the counterparty's thread ALONE and pushing an internal control into it would have put
+   a button we own inside a customer's correspondence. Every stage that rests is now rebuilt, so
+   the other branch became unreachable — five screen buttons that could never render — and dead code
+   nobody can exercise is worse than no code. There is one way a stage asks to be moved on from.
 
-   Keyed per stage rather than a boolean, because a run rests twice — stage 4 and stage 5 — and
-   one flag would have swallowed the second ask. */
+   Keyed per stage rather than a boolean, because a run rests five times and one flag would have
+   swallowed every ask after the first. */
 function ccjRestAsk(rest){
-  const run=ccjRun;if(!run||!ccjUsesTranscript(run.stage))return;
+  const run=ccjRun;if(!run)return;
   const s=ccjStage(run.stage);
   const id=s?s.id:'';
   if(!id||run.restAsked[id])return;
@@ -2119,6 +2144,19 @@ function ccjRestAsk(rest){
      the clutter this rebuild exists to remove, and it is easiest to write by accident when the two
      halves are authored in different files. */
   ccjAsk(rest.next||'',rest.label,'continue');
+}
+/* THE END OF THE JOURNEY, asked for in the same place every other step was. The final screen shows
+   the employment record and the nine-stage trail; going to look at the contract it wrote is an
+   action, and it was the last control anywhere in the journey still living on an artefact.
+
+   Keyed like the rest asks so a repaint cannot push a second one. */
+function ccjDoneAsk(){
+  const run=ccjRun;if(!run||run.restAsked['__done'])return;
+  run.restAsked['__done']=true;
+  const p=ccjParties();
+  ccjAsk('That is the whole journey. '+p.worker.name+' is employed by '+p.adt.name
+    +' and on payroll &mdash; the contract is in your contracts list.',
+    'View contract','record');
 }
 function ccjContinueStage(){
   const run=ccjRun;if(!run||run.phase!=='rest')return;
@@ -2137,7 +2175,7 @@ function ccjStageComplete(){
   // The last stage finishing is a state the SCREEN reports, not only the panel — the placement
   // going live is the outcome of the journey and it is drawn on the work area. Painting the panel
   // alone left the final screen showing the run still in progress after it had finished.
-  if(next>=ccjStages().length){run.phase='done';ccjPaint();ccjPaintScreen();return;}
+  if(next>=ccjStages().length){run.phase='done';ccjPaint();ccjPaintScreen();ccjDoneAsk();return;}
   run.stage=next;run.sub=-1;run.phase='idle';
   run.screen=(ccjScreensFor(next)[0]||{}).id||'';
   page=ccjPageId(next);
@@ -2169,13 +2207,38 @@ function ccjClientEvent(ev,at,kind){
     ccjClientNote('Opened the quote'+(c.version>1?' (v'+c.version+')':''));
     ccjResolveWait();
   }else if(ev==='chase'){
-    if(c.chases>=3)return;
-    c.chases++;
-    c.state='chased';
-    ccjClientLog('chase'+c.chases,'Follow-up '+c.chases+' of 3',
-      c.chases>=3?'Final reminder':'Scheduled reminder');
-    ccjClientPush({who:'us',kind:'chase',n:c.chases,at:c.mins});
-    ccjResolveWait();ccjPaint();
+    /* A REMINDER IS SENT, NOT CONJURED. It used to appear complete in the same frame it was
+       decided on — "Follow-up 1 of 3 sent" arriving instantly, then a second one arriving instantly
+       after it. Nothing in the thread showed the product doing anything, so two reminders read as
+       one event that had happened twice rather than as two things being dispatched.
+
+       So the note lands FIRST as "sending", with a spinner, and becomes the sent record a couple of
+       seconds later. The count and the log are only written at that point, because until the thing
+       has gone out it has not gone out — writing them up front would have the timeline claiming a
+       reminder the thread was still sending. */
+    // `at` is this function's own PARAMETER (the simulated minute), not ccjPayEvent's helper of the
+    // same name — the clock has already been advanced from it at the top.
+    if(c.chases>=3||c.sending)return;              // one in flight at a time
+    const m={who:'us',kind:'chase',n:c.chases+1,at:c.mins,sending:true};
+    c.sending=true;
+    ccjClientPush(m);
+    ccjPaint();
+    const g=ccjGen,r=run;
+    if(c.sendTimer)clearTimeout(c.sendTimer);
+    c.sendTimer=setTimeout(function(){
+      if(ccjGen!==g||ccjRun!==r)return;
+      c.sendTimer=null;c.sending=false;
+      c.chases++;c.state='chased';
+      m.sending=false;
+      // The detail the timeline carries, on the message too — "which reminder is this, and is it
+      // the last one" is the whole of what distinguishes them.
+      m.detail=c.chases>=3?'Final reminder':'Scheduled reminder';
+      ccjClientLog('chase'+c.chases,'Follow-up '+c.chases+' of 3',m.detail);
+      ccjRenderChat();
+      ccjResolveWait();ccjPaint();ccjPaintScreen();
+      ccjClientSchedule();
+    },CCJ_CHASE_SEND);
+    return;                                        // the schedule resumes when it has actually sent
   }else if(ev==='changed'){
     c.state='changed';
     c.unread++;
@@ -2260,6 +2323,7 @@ function ccjClientPush(m){
   const c=ccjClient();
   m._id=ccjNextMsgId();
   m.lane='client';                                 // tagged here, where it is known for certain
+  ccjStampMode(m);
   c.msgs.push(m);
   ccjStreamSync();
 }
@@ -2399,6 +2463,9 @@ function ccjPaintComposer(){
    something to do the moment it appears beside it. */
 function ccjAfterScreen(){
   const run=ccjRun;if(!run)return;
+  // The rail slides to this stage's window. Called here because a stage change is a full page
+  // render, so the track is a NEW element every time and has to be told where it came from.
+  ccjPaintRail();
   if(run.screen==='form')ccjScheduleChat(ccjAskNextField,700);
 }
 
@@ -2406,9 +2473,16 @@ function ccjAfterScreen(){
 function buildCCJStageHTML(i){
   const s=ccjStage(i);
   if(!s)return '<div class="ccj-shell">'+buildCCJPlaceholderHTML('Unknown stage','This stage is not available.')+'</div>';
+  /* WHERE THE RAIL SITS DEPENDS ON ITS STATE — the user's sketch. Collapsed, the window lives at
+     the top of the RIGHT column, above the artefact, and the chat rises past it to the very top of
+     the page. Expanded, the full nine-step rail is a band across the whole page — the one surface
+     kept from the old design — and everything below shortens to make the room. The toggle is a
+     structural change, which is why ccjToggleRail re-renders the page rather than repainting. */
+  const railTop=ccjRailOpen()||!ccjUsesTranscript(i);
+  const railHost='<div class="ccj-rail-host" id="ccj-rail-host">'+buildCCJRailHTML(i)+'</div>';
   return '<div class="ccj-shell">'
     +buildCCJHeadHTML(i)
-    +buildCCJRailHTML(i)
+    +(railTop?railHost:'')
     // `solo` is decided HERE as well as in ccjPaintWork, and it has to be: the first render of a
     // stage does not go through ccjPaintWork, so a class set only there left the opening screen
     // — the one with nothing beside the conversation — holding a column's worth of empty page.
@@ -2421,7 +2495,12 @@ function buildCCJStageHTML(i){
     // it, the conversation is built once per STAGE and never remounted, which is exactly the
     // guarantee the panel used to give and the one the sub-statuses need.
     +(ccjUsesTranscript(i)?'<div class="ccj-chat-col">'+buildCCJChatHTML(false)+'</div>':'')
-    +'<div class="ccj-work" id="ccj-work">'+ccjWorkHTML(i)+'</div>'
+    // The right column: the window rail on top, the artefact under it. The work area keeps its id
+    // and its own node either way, so every surgical paint lands regardless of the rail's state.
+    +(railTop
+      ?'<div class="ccj-work" id="ccj-work">'+ccjWorkHTML(i)+'</div>'
+      :'<div class="ccj-rside">'+railHost
+        +'<div class="ccj-work" id="ccj-work">'+ccjWorkHTML(i)+'</div></div>')
     // A rebuilt stage carries its sub-statuses inside the conversation, so there is no column
     // here at all — the work area takes the rest of the body. Every other stage keeps the panel.
     +(ccjUsesTranscript(i)?'':buildCCJPanelHTML(i))
@@ -2525,6 +2604,95 @@ function ccjExit(){ccjReset();navigatePage('contracts');}
    how far through, while you are in it; that it is behind you, once it is; how much it will
    cost you, while it is still ahead. The header above already carries "Step 4 of 9" for the
    whole run, so repeating a global count here would have been the third place to read it. */
+/* == THE RAIL: FOUR STEPS AT A TIME, NINE ON DEMAND ========================================
+   Nine steps in two labelled phase boxes took a third of the page above a conversation that IS the
+   product. Most of it was inert: seven of the nine steps are not the one you are on, and the boxes
+   restated a grouping the step names already imply.
+
+   So the default is a WINDOW of four, and it slides. The user set the behaviour exactly: start on
+   1-4, hold there for step 2, and from step 3 the leftmost slides out while the next slides in —
+   which keeps one step of context behind the current one and two ahead of it, at every point in the
+   journey. The two phase boxes come back, with all nine, when the expand control is used.
+
+   IT SLIDES RATHER THAN REDRAWS, and that is the whole implementation. All nine steps are always in
+   the DOM; the track is translated. A rail rebuilt per stage would snap between positions however
+   the CSS was written, because a transition needs the same element on both sides of the change —
+   and a stage change here is a full page render, so the element is new every time. The previous
+   position is therefore replayed onto the fresh element and the new one set a layout tick later:
+   see ccjPaintRail. */
+const CCJ_RAIL_WIN=4;      // steps visible in the window
+/* THE LAYOUT, PER THE USER'S SKETCH: the rail no longer spans the page. The chat owns the LEFT
+   column from the very top, and the window — four steps wide, the width the old right-hand phase
+   box had — sits at the top of the RIGHT column, above the artefact. The window walks the whole
+   journey: 1-4 at the start, holding through step 2, sliding one per step from step 3, so one step
+   of context stays behind the current one and the clamp stops it at 6-9. The full nine-step rail
+   with its phase groups comes back full-width when the arrow expands it, and the chat shortens
+   underneath — that state is the one surface the sketch keeps from the old design. */
+function ccjRailFrom(i){
+  const n=ccjStages().length;
+  return Math.max(0,Math.min((i||0)-1,n-CCJ_RAIL_WIN));
+}
+function ccjRailOpen(){return !!(ccjRun&&ccjRun.railOpen);}
+/* Which edges of the window have nothing beyond them. Drives the mask — see .ccj-rail-win — so the
+   fade only ever softens an edge that content is actually passing through, and never eats the
+   first or last step's label for the sake of an effect with nothing to do. */
+function ccjRailEdge(from){
+  const n=ccjStages().length;
+  return (from<=0?' at-start':'')+(from>=n-CCJ_RAIL_WIN?' at-end':'');
+}
+/* A FULL RE-RENDER, deliberately, where this used to repaint the host in place. The toggle is no
+   longer a restyle — it MOVES the rail between two different places in the tree (a band above the
+   body when open, the top of the right column when closed), and a host repaint cannot move its own
+   host. The conversation re-renders at the bottom of its scroll, which is acceptable for a control
+   a person just clicked and is looking at. */
+function ccjToggleRail(){
+  const run=ccjRun;if(!run)return;
+  run.railOpen=!run.railOpen;
+  renderADTPage();
+}
+/* THE MARKUP RENDERS AT THE OLD POSITION AND IS MOVED A TICK LATER. That ordering is the whole
+   trick, and the obvious alternative does not work: setting the old value, forcing a layout read,
+   and setting the new one in the same turn moves nothing, because a forced reflow advances LAYOUT
+   but not TIME. The transition from new→old has made zero progress when the second write lands, so
+   the second write is a no-op and the rail snaps. Measured, not assumed — the first version did
+   exactly this and the browser check caught it by sampling mid-flight and finding the track already
+   at its destination.
+
+   So the element mounts where it was, and one timer tick later it is told where to go. By then the
+   browser has painted the start value and the transition has something to run from.
+
+   A real timer rather than requestAnimationFrame, because the headless harness stubs rAF as a noop
+   — the callback would never fire and the rail would be left permanently at the old position.
+   The fake clock DOES run timers, so the harness reaches the right end state on the next advance.
+   Guarded by ccjGen like every other timer here, so a reset cannot be followed by a stale write. */
+function ccjPaintRail(){
+  const run=ccjRun;if(!run)return;
+  const to=ccjRailFrom(run.stage);
+  const from=(run.railFrom===undefined?to:run.railFrom);
+  run.railFrom=to;
+  const set=function(v){
+    const el=document.getElementById('ccj-rail-track');
+    if(el&&el.style)el.style.transform=ccjRailShift(v);
+    // The mask follows the track: an edge stops fading the moment there is nothing behind it.
+    const win=document.getElementById('ccj-rail-win');
+    if(win&&win.className!==undefined)win.className='ccj-rail-win'+ccjRailEdge(v);
+  };
+  if(from===to){set(to);return;}
+  set(from);                                       // where it was, so there is something to leave
+  if(run.railTimer)clearTimeout(run.railTimer);
+  const g=ccjGen,r=run;
+  run.railTimer=setTimeout(function(){
+    if(ccjGen!==g||ccjRun!==r)return;
+    r.railTimer=null;
+    set(to);
+  },40);
+}
+// A percentage of the TRACK's own width, which is what a percentage transform is measured against.
+// One step is 1/n of the track however wide the window is.
+function ccjRailShift(from){
+  const n=ccjStages().length||1;
+  return 'translateX(-'+(from/n*100)+'%)';
+}
 function buildCCJRailHTML(stage){
   const events=ccjStages();
   const tracks=(typeof amPipelineTracks!=='undefined'?amPipelineTracks:[]);
@@ -2539,9 +2707,46 @@ function buildCCJRailHTML(stage){
     if(connect)h+='<div class="ccj-line'+(i<stage?' filled':'')+'"></div>';
     return h;
   };
+  /* "Just give a small arrow, on the leftmost corner" — the user's words, replacing the labelled
+     pill. Arrow only; the title and aria state carry what it does. It points down to open the full
+     rail and up to put it away, and it is the FIRST thing in the row so it sits leftmost. */
+  const expander=function(open){
+    return '<button type="button" class="ccj-rail-more" onclick="ccjToggleRail()" '
+      +'title="'+(open?'Back to the compact view':'Show the whole journey')+'" '
+      +'aria-expanded="'+(open?'true':'false')+'">'
+      // Left-facing to open — the full rail expands out toward the left, across the page — and
+      // right-facing to put it back in the corner. The user's spec: just the arrow, facing left.
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">'
+      +(open?'<polyline points="9 6 15 12 9 18"/>':'<polyline points="15 6 9 12 15 18"/>')
+      +'</svg></button>';
+  };
+  /* COLLAPSED: the four-step window, arrow leftmost. Every step is rendered — the window is a
+     clip, not a filter — so the track has something to slide when the stage advances. */
+  if(!ccjRailOpen()){
+    const from=ccjRailFrom(stage);
+    // Mounted where the rail WAS, not where it is going — ccjPaintRail moves it a tick later so the
+    // transition has a start value to run from. Without a previous position (a fresh run) the two
+    // are the same and nothing animates, which is right: there is nothing to have moved from.
+    const mount=(ccjRun&&ccjRun.railFrom!==undefined)?ccjRun.railFrom:from;
+    return '<div class="ccj-rail slim" id="ccj-rail">'
+      +expander(false)
+      // Marked from the position it MOUNTS at, not the one it is going to — the mask has to match
+      // where the track actually is while it slides. ccjPaintRail re-marks it on arrival.
+      +'<div class="ccj-rail-win'+ccjRailEdge(mount)+'" id="ccj-rail-win">'
+      +'<div class="ccj-rail-track" id="ccj-rail-track" style="width:'
+        +(events.length/CCJ_RAIL_WIN*100)+'%;transform:'+ccjRailShift(mount)+'">'
+      +events.map(function(e,i){
+        // Outside the window it is still in the DOM and still slides; it is simply not lit.
+        const out=i<from||i>=from+CCJ_RAIL_WIN;
+        return '<div class="ccj-rail-slot'+(out?' out':'')+'">'+dot(e,i,i<events.length-1)+'</div>';
+      }).join('')
+      +'</div></div>'
+      +'</div>';
+  }
   if(ids.length<2){
-    return '<div class="ccj-rail" id="ccj-rail"><div class="ccj-rail-scroll">'
-      +events.map(function(e,i){return dot(e,i,i<events.length-1);}).join('')+'</div></div>';
+    return '<div class="ccj-rail" id="ccj-rail">'+expander(true)+'<div class="ccj-rail-scroll">'
+      +events.map(function(e,i){return dot(e,i,i<events.length-1);}).join('')+'</div>'
+      +'</div>';
   }
   const groups=ids.map(function(tid,gi){
     const idx=[];
@@ -2564,7 +2769,9 @@ function buildCCJRailHTML(stage){
       +idx.map(function(i,n){return dot(events[i],i,n<idx.length-1);}).join('')
       +'</div></div>';
   }).join('');
-  return '<div class="ccj-rail" id="ccj-rail"><div class="ccj-rail-scroll tracked">'+groups+'</div></div>';
+  return '<div class="ccj-rail open" id="ccj-rail">'+expander(true)
+    +'<div class="ccj-rail-scroll tracked">'+groups+'</div>'
+    +'</div>';
 }
 
 /* == WHICH STAGES HAVE BEEN REBUILT AS A TRANSCRIPT ======================================
@@ -2583,7 +2790,8 @@ function buildCCJRailHTML(stage){
 
    Adding a stage here is the whole of turning it on. == */
 const CCJ_TRANSCRIPT_STAGES=['request-received','quote-prep','quote-review','quote-approved',
-                             'agreement-signature'];
+                             'agreement-signature','deposit-due','employment-contract','onboarding',
+                             'active'];
 function ccjUsesTranscript(i){
   const s=ccjStage(i);
   return !!s&&CCJ_TRANSCRIPT_STAGES.indexOf(s.id)>-1;
@@ -3007,7 +3215,21 @@ function ccjOpenStepBlock(){
   ccjPush(m);
 }
 /* Where a person is asked for something. It sits inside the row it belongs to rather than at
-   the bottom of the panel, so the question and the step it answers are never separated. */
+   the bottom of the panel, so the question and the step it answers are never separated.
+
+   == WHO A STEP IS ABOUT IS NOT WHO DECIDES IT ==============================================
+   A sub-status names the party whose action it tracks: "Signed" is owned by the Client because the
+   client is who signs, and "Part-paid" because the client is who underpaid. But the DECISION hung
+   off those steps is ours — whether to countersign, whether to release a placement against a
+   shortfall — and the block was crediting it to the counterparty. It rendered "Client · Client"
+   with an ACTING AS marker over two buttons that decide whether we accept a legal obligation and
+   whether we carry an unfunded payroll.
+
+   That is not cosmetic. This surface's whole job is saying who is authorised to answer, and naming
+   the party who cannot answer it is the one thing it must never do. `gate.owner` overrides the
+   step's for exactly these cases; without one the step's own owner still applies, which is right
+   for every gate that decides the thing its step is named after. == */
+function ccjGateOwner(step,gate){return (gate&&gate.owner)||(step&&step.owner)||'';}
 function ccjGateHTML(i,step,gate){
   const run=ccjRun;
   if(run.stopped){
@@ -3017,21 +3239,22 @@ function ccjGateHTML(i,step,gate){
       +'<div class="ccj-gate-btns"><button class="ccj-gate-btn ghost" onclick="ccjReopen()">Reopen</button></div>'
       +'</div>';
   }
-  const info=typeof amOwnerInfo==='function'?amOwnerInfo(step.owner):{who:step.owner,initials:'?'};
-  // Whether the persona currently signed in is the one who owns this step. It is still tracked
+  const owner=ccjGateOwner(step,gate);
+  const info=typeof amOwnerInfo==='function'?amOwnerInfo(owner):{who:owner,initials:'?'};
+  // Whether the persona currently signed in is the one who owns this DECISION. It is still tracked
   // and still shown — CCJ_ANY_PERSONA only decides whether a non-owner is BLOCKED from clicking,
   // so turning it off restores real role enforcement without touching anything else.
-  const owns=typeof amCanAdvance==='function'?amCanAdvance(step.owner):true;
+  const owns=typeof amCanAdvance==='function'?amCanAdvance(owner):true;
   return '<div class="ccj-gate '+gate.kind+'">'
     +'<div class="ccj-gate-ask">'+gate.ask+'</div>'
     +'<div class="ccj-gate-why">'+gate.why+'</div>'
-    +'<div class="ccj-gate-who"><span class="ccj-gate-av">'+info.initials+'</span>'+step.owner+' &middot; '+info.who
+    +'<div class="ccj-gate-who"><span class="ccj-gate-av">'+info.initials+'</span>'+owner+' &middot; '+info.who
     +(!owns&&CCJ_ANY_PERSONA?'<span class="ccj-gate-behalf">Acting as</span>':'')+'</div>'
     +(owns||CCJ_ANY_PERSONA
       ?'<div class="ccj-gate-btns">'+gate.options.map(function(o){
         return '<button class="ccj-gate-btn '+(o.tone==='stop'?'stop':'go')+'" onclick="ccjChooseGate(\''+o.id+'\')">'+o.label+'</button>';
       }).join('')+'</div>'
-      :'<div class="ccj-gate-locked">Only '+step.owner+' can approve this.</div>')
+      :'<div class="ccj-gate-locked">Only '+owner+' can approve this.</div>')
     +'</div>';
 }
 
@@ -3350,13 +3573,31 @@ function ccjStickBottom(el){
    counterparty's thread alone in a 300px column beside a panel, and pouring the internal stream
    into that column would put internal work in a client conversation with none of the marking
    that makes stage 3 safe to read. == */
+/* ONE RECORD, ALL THE WAY DOWN. A rebuilt stage shows our own work AND BOTH counterparty threads,
+   merged by id. Not just the counterparty of the stage you happen to be on — that was the first
+   version, and it meant arriving at stage 7 silently deleted the client conversation from the
+   scroll: the quote they negotiated, the invoice they paid and the replies to our own chase
+   messages all vanished, leaving stage 6's blocks referring to messages no longer anywhere.
+
+   A transcript that drops half of what it recorded is not a record. The user chose this outright
+   when asked: one continuous record, with a divider where the counterparty changes.
+
+   The three STORES are still three arrays and still never merge — that rule is about the data and
+   is untouched. What is merged is a sorted view, and `_id` is a single run-wide counter, so id
+   order is chronological order across all three without anything having to be timestamped. */
 function ccjStreamState(){
   const run=ccjRun;
   const mode=ccjChatMode();
-  if(mode==='agent')return {mode:'agent',msgs:run.msgs};
-  const other=mode==='worker'?ccjWorker().msgs:ccjClient().msgs;
-  if(!ccjUsesTranscript(run.stage))return {mode:mode,msgs:other};
-  return {mode:mode,msgs:run.msgs.concat(other).sort(function(a,b){return (a._id||0)-(b._id||0);})};
+  if(!ccjUsesTranscript(run.stage)){
+    // An un-rebuilt stage still swaps the column wholesale to one counterparty's thread. It has no
+    // lane marking, so pouring the other two in would be unreadable and unsafe.
+    if(mode==='agent')return {mode:'agent',msgs:run.msgs};
+    return {mode:mode,msgs:mode==='worker'?ccjWorker().msgs:ccjClient().msgs};
+  }
+  const client=(run.client&&run.client.msgs)||[];
+  const worker=(run.worker&&run.worker.msgs)||[];
+  return {mode:mode,
+    msgs:run.msgs.concat(client,worker).sort(function(a,b){return (a._id||0)-(b._id||0);})};
 }
 /* Which renderer a message takes, decided by the MESSAGE rather than by the stage. Both stores
    contain messages with who:'agent', so nothing in the content distinguishes them — the tag is
@@ -3403,8 +3644,30 @@ function ccjUnmarkLast(id){
   const prev=id?ccjLiveNode('ccj-m-'+id):null;
   if(prev&&prev.classList)prev.classList.remove('in');
 }
+/* == THE HANDOVER ==========================================================================
+   One record means the reader scrolls from a conversation with the client straight into one with
+   the worker, and nothing in between says so. The lane headings name each message's recipient, but
+   a heading is read as "this bubble went to X", not as "the counterparty has changed" — and the
+   moment it changes is the single most important thing about stages 6 → 7.
+
+   Drawn from the mode each message was PUSHED under, so it lands where the conversation actually
+   turned over and cannot be placed by hand. Emitted once per change, before the first message of
+   the new conversation. `agent` → `client` fires it too, at stage 3, which is the same event and
+   was never marked before. */
+function ccjHandoverHTML(mode){
+  const p=ccjParties();
+  const who=mode==='worker'?p.worker.name:mode==='client'?p.client.name:'';
+  if(!who)return '';                               // back to our own work — nothing was handed over
+  return '<div class="ccj-hand"><span class="ccj-hand-rule"></span>'
+    +'<span class="ccj-hand-text">now talking to <b>'+who+'</b></span>'
+    +'<span class="ccj-hand-rule"></span></div>';
+}
 function ccjStreamMsgHTML(mode,m,isLast,prev){
-  return ccjMsgLane(m)?ccjClientMsgHTML(m,isLast,prev):ccjMsgHTML(m,isLast);
+  const body=ccjMsgLane(m)?ccjClientMsgHTML(m,isLast,prev):ccjMsgHTML(m,isLast);
+  // `prev` absent means this is the first message in the stream, and an opening conversation has
+  // not been handed over from anything.
+  const was=prev&&prev.mode,now=m&&m.mode;
+  return (prev&&was&&now&&was!==now?ccjHandoverHTML(now):'')+body;
 }
 /* A message whose body is derived from state that is STILL MOVING — the document card counting
    fields in — is repainted in place rather than by rebuilding the stream around it. This is the
@@ -3428,9 +3691,20 @@ function ccjRepaintMsg(m){
   if(box&&ccjFollowing())ccjStickBottom(box);
 }
 function ccjNextMsgId(){const run=ccjRun;run.msgSeq=(run.msgSeq||0)+1;return run.msgSeq;}
+/* WHICH CONVERSATION THIS MESSAGE BELONGED TO, recorded when it is pushed rather than worked out
+   later. It is what the handover divider is drawn from — see ccjHandoverHTML — and it has to be
+   stamped here because it is only knowable at the moment of the push: by the time anything renders,
+   the run has moved on and `ccjChatMode()` answers for the stage being LOOKED at, not the one that
+   said this. The same mistake as deriving a timeline from current state. */
+function ccjStampMode(msg){
+  const run=ccjRun;
+  if(run&&msg&&!msg.mode)msg.mode=typeof ccjChatMode==='function'?ccjChatMode():'agent';
+  return msg;
+}
 function ccjPush(msg){
   const run=ccjRun;if(!run)return;
   msg._id=ccjNextMsgId();
+  ccjStampMode(msg);
   run.msgs.push(msg);
   ccjStreamSync();
 }
@@ -4538,6 +4812,29 @@ function ccjGlide(box,top,lane){
    Assistant") rather than the engagement, and EOR and PEO are initialisms a client cannot decode
    without being told who carries the employment liability. That is the line that earns its
    space; everything else on this screen was commentary and is gone. */
+/* == THE CHOOSER ASKS WHO, NOT WHICH MODEL =================================================
+   "Choose an engagement model" is our word for it, not the word somebody arriving with a person to
+   hire has. They know who they are onboarding; they do not necessarily know that the industry calls
+   the difference an engagement model, and being asked to pick one before being told what the
+   options mean is the classic expert-shaped question. The card copy now names the PERSON — an EOR
+   employee, a direct employee, a contractor — and the model is what that choice implies.
+
+   Overridden HERE rather than edited into AI_CT_TYPE_CARDS, which is shared: js/pages.js reads
+   `modelCard.title` for the original journey's header chip, and that journey is a frozen reference
+   which must keep behaving exactly as it did. Same reason CCJ_MODEL_MEANS already overrides `desc`.
+
+   The ids are untouched — EOR / PEO / CONTRACTOR are what every other surface, the entity token and
+   the whole test suite key on. Only what a person reads changes. */
+const CCJ_MODEL_CARD={
+  EOR:{title:'EOR employee', sub:'We are the legal employer',
+    desc:'A full-time or part-time employee. ADT employs them on your behalf, on our entity.'},
+  PEO:{title:'Direct employee', sub:'You are the legal employer',
+    desc:'Run payroll, manage employee leave, and hold contracts for your own entities.'},
+  CONTRACTOR:{title:'Contractor', sub:'No employment relationship',
+    desc:'Onboard and pay an individual or a company for services provided to your organisation.'}
+};
+/* Kept as the fallback for anything that asks what a model MEANS outside the chooser. The chooser
+   itself reads CCJ_MODEL_CARD above. */
 const CCJ_MODEL_MEANS={
   EOR:'We are the legal employer. Payroll and compliance sit with us.',
   PEO:'You stay the employer. We run payroll, filings and benefits.',
@@ -4551,19 +4848,20 @@ function buildCCJModelHTML(){
     +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<div class="ccj-model-screen">'
     +'<div class="ccj-model-head">'
-    +'<div class="ccj-model-title">Choose an engagement model</div>'
-    +'<div class="ccj-model-sub">This determines the contract and who carries employment liability.</div>'
+    +'<div class="ccj-model-title">Who would you like to onboard?</div>'
+    +'<div class="ccj-model-sub">Hire and onboard employees or contractors.</div>'
     +'</div>'
     +'<div class="ccj-model-grid">'+cards.map(function(t){
       const on=run.model===t.id;
+      const c=CCJ_MODEL_CARD[t.id]||{};
       return '<button type="button" class="ccj-mcard'+(on?' on':'')+'" onclick="ccjChooseModel(\''+t.id+'\')">'
         +'<span class="ccj-mcard-top">'
         +'<span class="ccj-mcard-ico">'+t.ico+'</span>'
         +'<span class="ccj-mcard-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg></span>'
         +'</span>'
-        +'<span class="ccj-mcard-title">'+t.title+'</span>'
-        +'<span class="ccj-mcard-sub">'+t.sub+'</span>'
-        +'<span class="ccj-mcard-desc">'+(CCJ_MODEL_MEANS[t.id]||t.desc)+'</span>'
+        +'<span class="ccj-mcard-title">'+(c.title||t.title)+'</span>'
+        +'<span class="ccj-mcard-sub">'+(c.sub||t.sub)+'</span>'
+        +'<span class="ccj-mcard-desc">'+(c.desc||CCJ_MODEL_MEANS[t.id]||t.desc)+'</span>'
         +'</button>';
     }).join('')+'</div>'
     +'</div></div>';
@@ -4751,9 +5049,6 @@ function buildCCJAccountHTML(){
     +(run.phase==='rest'
       ?'<div class="ccj-acct-foot">'
        +'<div class="ccj-acct-done">Client is live. Nothing else is needed on this step.</div>'
-       +(ccjUsesTranscript(run.stage)?''
-         :'<button class="ccj-primary" onclick="ccjContinueStage()">'
-          +(CCJ_STAGE_REST['quote-approved'].label)+' &rarr;</button>')
        +'</div>'
       :'')
     +'</div>';
@@ -4836,9 +5131,6 @@ function buildCCJMsaHTML(){
     +(run.phase==='rest'
       ?'<div class="ccj-msa-foot">'
        +'<div class="ccj-msa-done">Agreement executed. Both parties have signed.</div>'
-       +(ccjUsesTranscript(run.stage)?''
-         :'<button class="ccj-primary" onclick="ccjContinueStage()">'
-          +CCJ_STAGE_REST['agreement-signature'].label+' &rarr;</button>')
        +'</div>'
       :'')
     +'</div>';
@@ -4855,11 +5147,10 @@ function ccjSigBlockHTML(forWhom,who,role,at,on){
 /* A client who already has an agreement does not sign a second one. The stage says so and shows
    the one that governs, rather than quietly running five steps that produce nothing.
 
-   IT STILL HAS TO OFFER THE WAY ON. Stage 5 rests whichever branch it took, and this branch had
-   no foot — so on a repeat client the run stopped here with no control anywhere on the page and
-   no way forward but a reload. It survived because the harness's driver calls ccjContinueStage()
-   the moment it sees a rest, which walks past the surface a person actually meets. A rest is a
-   stop the reader has to be able to leave, on every screen that can be resting. */
+   IT STILL HAS TO SAY THE STAGE IS OVER. This branch had no foot at all, so on a repeat client the
+   run rested here with nothing on the page saying it had — and before the way on moved into the
+   conversation, with no control anywhere either. It survived because the harness's driver calls
+   ccjContinueStage() the moment it sees a rest, walking past the surface a person actually meets. */
 function buildCCJMsaExistingHTML(p){
   const m=ccjMsa(),run=ccjRun;
   return '<div class="ccj-msa-wrap"><div class="ccj-existing">'
@@ -4872,15 +5163,12 @@ function buildCCJMsaExistingHTML(p){
     +'<div><span>Status</span><b>In force</b></div>'
     +'<div><span>This placement</span><b>Work Order</b></div>'
     +'</div></div>'
-    // A sibling of .ccj-existing inside .ccj-msa-wrap — the same place the drafted branch puts it,
-    // so it inherits the foot styling already there rather than needing a second rule. Gated the
-    // same way too: a rebuilt stage 5 will ask in its conversation, and reading ccjUsesTranscript
-    // rather than naming the stage means that day costs no edit here.
-    +(run&&run.phase==='rest'&&!ccjUsesTranscript(run.stage)
+    // A sibling of .ccj-existing inside .ccj-msa-wrap — the same place the drafted branch puts its
+    // foot, so it inherits the styling already there rather than needing a second rule.
+    +(run&&run.phase==='rest'
       ?'<div class="ccj-msa-foot">'
        +'<div class="ccj-msa-done">Nothing to sign. The agreement already in force governs this placement.</div>'
-       +'<button class="ccj-primary" onclick="ccjContinueStage()">'
-       +CCJ_STAGE_REST['agreement-signature'].label+' &rarr;</button></div>'
+       +'</div>'
       :'')
     +'</div>';
 }
@@ -4963,8 +5251,13 @@ function ccjClientMsgBodyHTML(m,isLast){
     :m.who==='note'?'note':m.who==='agent'?'draft':'us')+(isLast?' in':'');
   if(m.who==='note')return '<div class="ccj-cmsg note"><span>'+m.text+'</span><i>'+ccjStamp(m.at)+'</i></div>';
   if(m.kind==='quote')return '<div class="ccj-cmsg '+cls+'">'+ccjQuoteCardHTML(m)+'<i>'+ccjStamp(m.at)+'</i></div>';
-  if(m.kind==='chase')return '<div class="ccj-cmsg note chase"><span>Follow-up '+m.n
-    +' of 3 sent &mdash; no reply yet</span><i>'+ccjStamp(m.at)+'</i></div>';
+  // Two states: going out, and gone. A reminder that has not left yet must not say "sent", and it
+  // shows the spinner rather than a timestamp — there is no time to stamp until it has happened.
+  if(m.kind==='chase')return m.sending
+    ?'<div class="ccj-cmsg note chase sending"><span class="ccj-spin sm"></span>'
+      +'<span>Sending follow-up '+m.n+' of 3&hellip;</span></div>'
+    :'<div class="ccj-cmsg note chase"><span>Follow-up '+m.n+' of 3 sent'
+      +(m.detail?' &middot; '+m.detail:'')+' &mdash; no reply yet</span><i>'+ccjStamp(m.at)+'</i></div>';
   if(m.kind==='draft')return '<div class="ccj-cmsg '+cls+'">'
     +'<div class="ccj-cbubble draft">'
     +'<div class="ccj-draft-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>Drafted for you &mdash; not sent</div>'
@@ -5494,6 +5787,21 @@ function ccjPaySchedule(){
     ccjPayEvent(next.ev,next.off);
   },next.in);
 }
+/* HOW LATE IT IS, COMPUTED ONCE. The invoice band and the sub-status waiting on the money both
+   have to say this, and two copies of a date calculation is how one surface ends up reading "2 days
+   to go" beside another reading "overdue". Returns the parts rather than a sentence so each caller
+   can phrase it for its own space. */
+function ccjDueState(){
+  const p=ccjPay();
+  if(p.dueAt===null)return {days:0,state:'none',text:'&mdash;'};
+  const days=ccjDayNo(p.dueAt)-ccjDayNo(ccjClient().mins);
+  const n=Math.abs(days);
+  return {days:days,
+    state:days>0?'ahead':days===0?'today':'overdue',
+    text:days>0?days+' day'+(days===1?'':'s')+' to go'
+      :days===0?'due today'
+      :n+' day'+(n===1?'':'s')+' overdue'};
+}
 /* The activity on the invoice, in the order it happened, built from the record rather than from
    the current balance. Stage 3's timeline was rewritten for exactly this reason: a ledger derived
    from state reports events that never occurred. */
@@ -5529,14 +5837,11 @@ function buildCCJInvoiceHTML(){
   const due=ccjAmountDue(),got=ccjReceived(),out=ccjOutstanding();
   const reg=ccjReg(p.adt.country), creg=ccjReg(p.client.country);
   const pct=due?Math.min(100,Math.round(got/due*100)):0;
-  const days=pay.dueAt!==null?ccjDayNo(pay.dueAt)-ccjDayNo(ccjClient().mins):0;
   const when=!raised?'Not raised yet.'
     :cleared?(pay.released
         ?'Gate released against a shortfall of '+ccjMoney(pay.shortfall)+' on '+ccjDate(pay.clearedAt)+'.'
         :'Settled in full on '+ccjDate(pay.receipts[pay.receipts.length-1].at)+'.')
-    :'Due '+ccjDate(pay.dueAt)+' &middot; Net 14 &middot; '
-      +(days>0?days+' day'+(days===1?'':'s')+' to go':days===0?'due today'
-        :Math.abs(days)+' day'+(Math.abs(days)===1?'':'s')+' overdue');
+    :'Due '+ccjDate(pay.dueAt)+' &middot; Net 14 &middot; '+ccjDueState().text;
   const fig=function(k,v,cls){return '<div class="ccj-inv-fig '+(cls||'')+'"><span>'+k+'</span><b>'+v+'</b></div>';};
   const kv=function(k,v){return '<div class="ccj-inv-kv"><span>'+k+'</span><b>'+v+'</b></div>';};
   const party=function(tag,name,addr,vat,reg2){
@@ -5635,14 +5940,19 @@ function buildCCJInvoiceHTML(){
        +'</div></div>'
       :'')
 
+    // The invoice states that it is settled; it does not ask what to do next. On a rebuilt stage
+    // the way on is a block in the conversation — see ccjRestAsk.
     +(run.phase==='rest'
       ?'<div class="ccj-inv-next">'
        +'<div class="ccj-inv-next-t">Deposit cleared. Nothing else is needed on this step.</div>'
-       +'<button class="ccj-primary" onclick="ccjContinueStage()">'
-       +CCJ_STAGE_REST['deposit-due'].label+' &rarr;</button></div>'
+       +'</div>'
       :'')
 
-    +buildCCJPaySimHTML()
+    // Demo scaffolding, and gone from the rebuilt stage for the same reason the client strip is:
+    // CCJ_PAY_SCRIPT already drives the money on its own timing, and five buttons living
+    // permanently on the document cost more attention than they were worth. Un-rebuilt stages
+    // keep it — theirs is the only surface it could sit on.
+    +(ccjUsesTranscript(run.stage)?'':buildCCJPaySimHTML())
     +'</div>';
 }
 /* The bank ledger. Receipts carry an amount column; reminders and chases do not, because they
@@ -5717,15 +6027,42 @@ CCJ_ON_SETTLE['deposit-due/Cleared']=function(run){
 };
 
 /* The deposit arrives when it arrives. `pre` because there is nothing to reconcile until the
-   first transfer lands — matching a receipt you have not received is not work. */
+   first transfer lands — matching a receipt you have not received is not work.
+
+   This is the longest wait in the journey and the one most likely to be read as a hang, so it says
+   three things a person actually needs: how much, how late, and whether anything is chasing it
+   without them. All three are read from ccjPay() — the same store the ledger on the invoice reads —
+   so the sub-status and the document can never disagree about what has arrived. */
 CCJ_WAITS['deposit-due/Awaiting funds']={pre:true,
   met:function(){return ccjPay().receipts.length>0;},
-  note:'Invoice is with the client. Waiting for the deposit to arrive.'};
+  note:'Invoice is with the client. Waiting for the deposit to arrive.',
+  rows:function(){
+    const p=ccjPay(),d=ccjDueState();
+    const sent=p.reminders.length;
+    return [
+      ['Outstanding',ccjMoney(ccjOutstanding())],
+      // The urgency, marked when it has turned. An overdue invoice reading like a future one is
+      // the single most useful thing this row can get wrong.
+      ['Due',ccjDate(p.dueAt)+' &middot; '
+        +(d.state==='overdue'?'<span class="ccj-wait-late">'+d.text+'</span>':d.text)],
+      ['Automatic reminders',sent
+        ?sent+' sent &middot; <span class="ccj-wait-on">Armed</span>'
+        :'<span class="ccj-wait-on">Armed</span>']
+    ];
+  }};
 /* Part-paid parks AFTER its decision rather than before it: the gate asks whether to hold, and
-   holding is what puts the row here. */
+   holding is what puts the row here. So its rows report the consequence of the decision that was
+   just taken — what came in, what has not, and what that costs the placement. */
 CCJ_WAITS['deposit-due/Part-paid']={
   met:function(){return ccjPaidInFull()||ccjPay().released;},
-  note:'Chasing the balance. The placement stays held until the deposit is settled in full.'};
+  note:'Chasing the balance. The placement stays held until the deposit is settled in full.',
+  rows:function(){
+    return [
+      ['Received',ccjMoney(ccjReceived())+' of '+ccjMoney(ccjAmountDue())],
+      ['Still outstanding','<span class="ccj-wait-late">'+ccjMoney(ccjOutstanding())+'</span>'],
+      ['Placement','Held until the deposit settles']
+    ];
+  }};
 
 /* A shortfall is a decision, not a status. The row only carries the gate until it is answered —
    after that the same row is a wait, which is what holding for the balance actually is. */
@@ -5734,6 +6071,10 @@ CCJ_GATES['deposit-due/Part-paid']=function(){
   if(run.decisions['deposit-due/Part-paid'])return null;
   return {
     kind:'decision',
+    // The step is owned by the Client — they are who part-paid — but whether we carry an unfunded
+    // payroll so a placement can start is Finance's call, and the same team raised the invoice and
+    // clears it. Crediting it to the client put our exposure in their name. See ccjGateOwner.
+    owner:'Finance',
     ask:ccjMoney(ccjOutstanding())+' of '+ccjMoney(ccjAmountDue())+' is still outstanding.',
     why:'No placement may start until the deposit is settled. Releasing early accepts the payroll exposure the deposit exists to cover, and is recorded against this run.',
     options:[
@@ -6018,7 +6359,10 @@ function ccjNewWorker(){
     downloaded:false,downloadedAt:0};
 }
 function ccjWorker(){const run=ccjRun;if(!run.worker)run.worker=ccjNewWorker();return run.worker;}
-function ccjWorkerPush(m){m._id=ccjNextMsgId();m.lane='worker';ccjWorker().msgs.push(m);ccjStreamSync();}
+function ccjWorkerPush(m){
+  m._id=ccjNextMsgId();m.lane='worker';ccjStampMode(m);
+  ccjWorker().msgs.push(m);ccjStreamSync();
+}
 function ccjWorkerEvent(ev,off){
   const run=ccjRun;if(!run)return;
   const e=ccjEmp(),w=ccjWorker(),c=ccjClient(),p=ccjParties();
@@ -6246,14 +6590,16 @@ function buildCCJEmpHTML(){
 
     +(e.sentAt?buildCCJEnvelopeHTML():'')
 
+    // The contract states what it is; the conversation asks what to do next.
     +(run.phase==='rest'
       ?'<div class="ccj-ec-next">'
        +'<div class="ccj-ec-next-t">Contract executed. '+p.worker.name.split(' ')[0]
          +' is employed from '+ccjPrettyDate(f.fromDate)+'.</div>'
-       +'<button class="ccj-primary" onclick="ccjContinueStage()">'
-       +CCJ_STAGE_REST['employment-contract'].label+' &rarr;</button></div>'
+       +'</div>'
       :'')
-    +(e.sentAt&&!e.adtSignedAt?buildCCJWorkerSimHTML():'')
+    // Demo scaffolding. CCJ_WORKER_SCRIPT already drives the employee on its own timing, and a row
+    // of buttons living on the contract itself is the last thing the document should carry.
+    +(e.sentAt&&!e.adtSignedAt&&!ccjUsesTranscript(run.stage)?buildCCJWorkerSimHTML():'')
     +'</div>';
 }
 /* The e-signature audit trail. A signature is only worth what the record behind it says — who
@@ -6330,7 +6676,16 @@ CCJ_ON_SETTLE['employment-contract/ADT countersigned']=function(run){
    on the audit finishing, which is the only thing that ends it. */
 CCJ_HOLDS['employment-contract/Clause compliance check']={
   until:'audit-done',
-  note:'Reading the contract clause by clause.'
+  note:'Reading the contract clause by clause.',
+  // The count, read from the audit the screen is drawing, so the block cannot claim a different
+  // position in the document to the one being highlighted beside it.
+  rows:function(){
+    const e=ccjRun&&ccjRun.emp;
+    if(!e||!e.audit||!e.audit.length)return [];
+    const adjusted=ccjAuditAdjusted().length;
+    return [['Clauses',Math.min(e.auditAt+(e.auditDone?0:1),e.audit.length)+' of '+e.audit.length],
+            ['Adjusted',adjusted?adjusted+' rewritten to meet local law':'']];
+  }
 };
 /* The employee signs on their own time, and there is no button here that can do it for them —
    the Worker owner has a null persona precisely so this cannot be ticked on their behalf. */
@@ -6974,12 +7329,12 @@ function buildCCJOnbHTML(){
       +(doneN===6?'ready for payroll':'onboarding steps complete')+'</i></div>'
     +'</div>'
     +CCJ_ONB_CARDS.map(ccjOnbCardHTML).join('')
+    // The file states what it holds; the conversation asks what happens next.
     +(run.phase==='rest'
       ?'<div class="ccj-onb-next">'
        +'<div class="ccj-onb-next-t">Onboarding complete. '+p.worker.name.split(' ')[0]
        +' can be paid from '+start+'.</div>'
-       +'<button class="ccj-primary" onclick="ccjContinueStage()">'
-       +CCJ_STAGE_REST['onboarding'].label+' &rarr;</button></div>'
+       +'</div>'
       :'')
     +'</div>';
 }
@@ -7146,7 +7501,10 @@ function buildCCJKycHTML(){
         ||'Every check cleared. No part of this verification needed a person.')+'</div></div>'
       +'</div>')
 
-    +(k.done&&!k.reviewed&&ccjOnbState('Worker KYC')==='live'
+    // Demo scaffolding, gone from the rebuilt stage like every other simulate control: the CONSIDER
+    // path is reachable on its own, and a verification console is the last surface that should be
+    // carrying a button which changes the provider's answer.
+    +(k.done&&!k.reviewed&&ccjOnbState('Worker KYC')==='live'&&!ccjUsesTranscript(ccjRun.stage)
       ?'<div class="ccj-sim">'
        +'<div class="ccj-sim-head">Simulate provider<span>demo</span></div>'
        +'<div class="ccj-sim-btns">'
@@ -7281,12 +7639,58 @@ CCJ_ON_ENTER['onboarding/Payroll configured']=function(run){
 /* Every stream holds on its own work finishing rather than on a timer. Six holds, six milestones
    — the same mechanism the clause audit uses, because the same thing is true of all of them:
    the panel must not tick green while the card beside it is still filling in. */
-CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',note:'Verification in progress.'};
-CCJ_HOLDS['onboarding/Documents']={until:'docs-done',note:'Collecting and checking documents.'};
-CCJ_HOLDS['onboarding/Tax registration']={until:'tax-done',note:'Filed. Waiting on the authority.'};
-CCJ_HOLDS['onboarding/Social security enrolment']={until:'ss-done',note:'Filed. Waiting on the institution.'};
-CCJ_HOLDS['onboarding/Bank verified']={until:'bank-done',note:'Test credit sent. Waiting on the bank.'};
-CCJ_HOLDS['onboarding/Payroll configured']={until:'payroll-done',note:'Building the first pay period.'};
+/* SIX HOLDS, SIX COUNTERPARTIES, AND A PROGRESS LINE ON EACH. This is the stage with the most
+   parked time in the journey — an identity check, a document round-trip, two authority filings, a
+   bank test credit and a payroll build, none of them ours to hurry. A block that says "Filed.
+   Waiting on the authority." and nothing else for ten seconds is the screen a reader refreshes.
+
+   Every row is read from ccjOnb() — the same store the card beside it is drawn from — so the block
+   and the card can never disagree about how far along something is. A row with no value yet is
+   dropped rather than shown empty (see ccjHoldNoteHTML), so each one appears the moment it becomes
+   true and not before. */
+CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',note:'Verification in progress.',
+  rows:function(){
+    const k=ccjOnb().kyc,n=CCJ_KYC_PHASES.length;
+    return [['Checks',Math.min(k.step+(k.done?0:1),n)+' of '+n],
+            ['Session',k.session],
+            // Only once the provider has actually returned something.
+            ['Outcome',k.done?ccjKycDecision().label:'']];
+  }};
+CCJ_HOLDS['onboarding/Documents']={until:'docs-done',note:'Collecting and checking documents.',
+  rows:function(){
+    const d=ccjOnbDocs();
+    const got=d.filter(function(x){return x.status==='accepted';}).length;
+    const bad=d.filter(function(x){return x.status==='rejected';}).length;
+    return [['Accepted',got+' of '+d.length],
+            ['Rejected',bad?'<span class="ccj-wait-late">'+bad+' sent back</span>':''],
+            ['Outstanding',ccjDocsOutstanding()?ccjDocsOutstanding()+' still to come':'']];
+  }};
+CCJ_HOLDS['onboarding/Tax registration']={until:'tax-done',note:'Filed. Waiting on the authority.',
+  rows:function(){return ccjFilingRows('tax');}};
+CCJ_HOLDS['onboarding/Social security enrolment']={until:'ss-done',note:'Filed. Waiting on the institution.',
+  rows:function(){return ccjFilingRows('ss');}};
+CCJ_HOLDS['onboarding/Bank verified']={until:'bank-done',note:'Test credit sent. Waiting on the bank.',
+  rows:function(){
+    const b=ccjOnb().bank;
+    return [['Account',b.iban],
+            ['Name match',b.score?b.score+'%':''],
+            ['Verified',b.state==='verified'?'<span class="ccj-wait-on">Confirmed</span>':'']];
+  }};
+CCJ_HOLDS['onboarding/Payroll configured']={until:'payroll-done',note:'Building the first pay period.',
+  rows:function(){
+    const p=ccjOnb().payroll;
+    return [['Calendar',p.calendar],['First pay',p.firstPay],
+            ['Prorated',p.days?p.days+' day'+(p.days===1?'':'s')+' worked in the first period':'']];
+  }};
+/* Both filings report the same three things about two different authorities, so they are written
+   once. The institution NAME is what distinguishes them, and it is the thing a person chasing one
+   of these actually needs — see the note on ccjFilingId about why the two references must differ. */
+function ccjFilingRows(kind){
+  const o=ccjOnb(),f=kind==='tax'?o.tax:o.ss,pack=ccjOnbPack();
+  return [['Authority',kind==='tax'?pack.taxAuthority:pack.ssAuthority],
+          ['Reference',f.ref],
+          ['Returned',f.id?'<span class="ccj-wait-on">'+f.id+'</span>':'']];
+}
 
 /* A verification that could not clear itself goes to a person. It is a POST gate: the whole
    check has to have run before there is anything to adjudicate, and the evidence for the
@@ -7398,14 +7802,11 @@ function ccjNewRdy(){return {step:0,done:false,at:0,ref:''};}
 function ccjNewPayrun(){
   return {
     id:'', label:'', from:'', to:'', payDay:'', cutOff:'',
-    step:0, rstep:0, done:false,
-    state:'idle',              // idle → calculating → calculated → approved → paying → paid
-    calcAt:0,
-    approvedBy:'', approvedAt:0,
-    held:false, heldBy:'', heldAt:0,        // kept after a release: it is part of the record
-    fundedAt:0, fileRef:'', paidAt:0, valueAt:0, bankRef:'',
-    taxRef:'', ssRef:'', filedAt:0,
-    payslipId:'', payslipAt:0
+    step:0, done:false,
+    state:'idle',              // idle → configuring → pending → active
+    accessAt:0,                // when the employee could first sign in
+    calcAt:0,                  // when the record was configured and went PENDING
+    activatedAt:0, activatedBy:''   // pending → active, and who did it
   };
 }
 function ccjLive(){
@@ -7671,19 +8072,30 @@ function ccjPayrunCalc(){
 }
 /* Five phases to build the register, five more to release it. Split rather than one list,
    because a person stands between them and the second half must not be reachable without them. */
+/* == THIS JOURNEY DOES NOT RUN PAYROLL ====================================================
+   It used to. This step built a register, asked Finance to RELEASE money, moved it, filed two
+   statutory returns and issued a payslip — and that was wrong about what the journey is for. The
+   user's instruction, 2026-08-03: *"we are giving the access, and then initially the payroll status
+   will be in pending, and at the final step we are making the payroll status pending to active."*
+
+   So the step keeps everything that is PREPARATION — access, the calendar, the period, the inputs,
+   the gross-to-net figure and the pre-payroll controls — and loses everything that is EXECUTION.
+   No money moves, no return is filed, no payslip is issued, and nobody is asked to release
+   anything, because there is nothing to release. It ends with the payroll record created and its
+   status PENDING; the last sub-status flips that to ACTIVE.
+
+   Payroll itself then runs on its own calendar, which is what stage 9's own closing note has said
+   all along: "Active is the end of this journey and the start of a recurring one."
+
+   The gross-to-net figure stays and stays INDICATIVE. It is the most useful thing on the screen —
+   it is what this person will actually receive — and computing it is not the same as paying it. */
 const CCJ_PR_PHASES=[
-  {id:'open',  label:'Run opened',                  sub:'Period, calendar and cut-off fixed'},
-  {id:'inputs',label:'Inputs gathered',             sub:'Contract, calendar and absence data'},
-  {id:'calc',  label:'Gross to net calculated',     sub:'Earnings, deductions and net pay'},
-  {id:'stat',  label:'Statutory amounts determined',sub:'What is owed, and to whom'},
-  {id:'check', label:'Pre-payment controls',        sub:'The last checks before a person is asked'}
-];
-const CCJ_PR_REL=[
-  {id:'fund', label:'Run funded',              sub:'From the deposit held against this placement'},
-  {id:'file', label:'Payment file created',    sub:'One credit, to the verified account'},
-  {id:'pay',  label:'Payment executed',        sub:'Sent to the bank for value on the pay date'},
-  {id:'filed',label:'Statutory returns filed', sub:'Tax and contributions declared'},
-  {id:'slip', label:'Payslip issued',          sub:'Delivered to the employee'}
+  {id:'access',label:'Platform access granted',     sub:'The employee can sign in and see their own record'},
+  {id:'open',  label:'Payroll record opened',       sub:'Period, calendar and cut-off fixed'},
+  {id:'inputs',label:'Inputs bound',                sub:'Contract, calendar and absence data'},
+  {id:'calc',  label:'Gross to net computed',       sub:'Earnings, deductions and net pay — indicative'},
+  {id:'stat',  label:'Statutory amounts determined',sub:'What will be owed, and to whom'},
+  {id:'check', label:'Pre-payroll controls',        sub:'Everything that must hold before a run is possible'}
 ];
 const CCJ_PR_STEP=680;
 function ccjPayrunStart(){
@@ -7693,76 +8105,38 @@ function ccjPayrunStart(){
   pr.id='PR-'+per.y+'-'+String(per.m).padStart(2,'0')+'-'+cc+'-001';
   pr.label=per.label;pr.from=per.from;pr.to=per.to;
   pr.payDay=per.payDay;pr.cutOff=per.cutOff;
-  pr.step=0;pr.rstep=0;pr.state='calculating';pr.done=false;
+  pr.step=0;pr.state='configuring';pr.done=false;
   ccjPaintScreen();
-  // Not immediately, for the reason ccjAuditStart waits: the panel beside this is still connecting
-  // to the payroll engine and pulling the contract down, and the register must OUTLIVE the step's
-  // own beats or the hold is decorative. Four beats at CCJ_ACT is 4.6s; two beats of head start
-  // plus five phases at CCJ_PR_STEP puts the register past it, so the row genuinely parks.
+  // Not immediately, for the reason ccjAuditStart waits: the conversation beside this is still
+  // connecting to the payroll engine and pulling the contract down, and the setup must OUTLIVE the
+  // step's own beats or the hold is decorative. Four beats at CCJ_ACT is 4.6s; two beats of head
+  // start plus six phases at CCJ_PR_STEP puts it past that, so the block genuinely parks.
   ccjScheduleAudit(ccjPayrunTick,CCJ_ACT*2);
 }
 function ccjPayrunTick(){
   const run=ccjRun;if(!run)return;
-  const pr=ccjPayrun();
+  const pr=ccjPayrun(),c=ccjClient();
   if(pr.step<CCJ_PR_PHASES.length){
     pr.step++;
+    const id=CCJ_PR_PHASES[pr.step-1].id;
+    c.mins+=25;
+    // The employee can sign in from here. This is the access the journey grants; everything after
+    // it is configuration they can watch rather than work they have to do.
+    if(id==='access'){
+      pr.accessAt=c.mins;
+      ccjWorkerPush({who:'us',kind:'access',id:ccjParties().worker.empId,at:c.mins});
+    }
     if(pr.step===CCJ_PR_PHASES.length){
-      pr.state='calculated';pr.calcAt=ccjClient().mins;
+      // Configured, and PENDING. Nothing has been paid and nothing has been filed; the placement
+      // is not live until the last sub-status says so.
+      pr.state='pending';pr.calcAt=c.mins;pr.done=true;
     }
     ccjPaintScreen();ccjPaint();
     ccjScheduleAudit(ccjPayrunTick,CCJ_PR_STEP);
     return;
   }
-  // The register is complete. It goes no further on its own — a person releases it.
   ccjPaintScreen();ccjPaint();
-  ccjReachScreen('payrun-calc');
-}
-/* The second half, and it only ever starts from ccjChooseGate('payApprove'). */
-function ccjPayrunRelease(){
-  const run=ccjRun;if(!run)return;
-  const pr=ccjPayrun();
-  pr.state='paying';pr.rstep=0;
-  ccjPaintScreen();
-  ccjScheduleAudit(ccjPayrunReleaseTick,CCJ_PR_STEP);
-}
-function ccjPayrunReleaseTick(){
-  const run=ccjRun;if(!run)return;
-  const pr=ccjPayrun(),c=ccjClient(),per=ccjPayrunPeriod(),pack=ccjPayrunPack();
-  if(pr.rstep>=CCJ_PR_REL.length){
-    pr.state='paid';pr.done=true;
-    ccjPaintScreen();ccjPaint();
-    ccjReachScreen('payrun-done');
-    return;
-  }
-  pr.rstep++;
-  const id=CCJ_PR_REL[pr.rstep-1].id;
-  c.mins+=25;
-  if(id==='fund'){pr.fundedAt=c.mins;}
-  else if(id==='file'){pr.fileRef=pack.file+' &middot; '+String(pr.id).replace(/[^0-9]/g,'').slice(-8);}
-  else if(id==='pay'){
-    pr.paidAt=c.mins;pr.valueAt=c.mins;
-    pr.bankRef=(ccjReg(ccjParties().adt.country).bic||'BANK').slice(0,4).toUpperCase()
-      +String(760400+(run.gen||0)*13);
-  }
-  else if(id==='filed'){
-    pr.filedAt=c.mins;
-    // The acknowledgement each authority gives back for THIS period's return. Not derived from
-    // ccjFilingId: that is the employee's own tax and social security number, and in the
-    // Netherlands both are the same BSN — so building filing references out of it printed one
-    // number twice and called it two submissions to two different institutions.
-    const per2=per.y+String(per.m).padStart(2,'0');
-    pr.taxRef='RET-'+per2+'-'+String(70200+(run.gen||0)*7);
-    pr.ssRef='CON-'+per2+'-'+String(31580+(run.gen||0)*3);
-  }
-  else if(id==='slip'){
-    pr.payslipId='PS-'+per.y+String(per.m).padStart(2,'0')+'-'+String(4100+(run.gen||0));
-    pr.payslipAt=c.mins;
-    // The employee is told, in their own thread, with the figure and where the money went.
-    ccjWorkerPush({who:'us',kind:'payslip',id:pr.payslipId,period:pr.label,
-      net:ccjPayrunCalc().net,acct:ccjOnb().bank.iban,at:c.mins});
-  }
-  ccjPaintScreen();ccjPaint();
-  ccjScheduleAudit(ccjPayrunReleaseTick,CCJ_PR_STEP);
+  ccjReachScreen('payrun-done');
 }
 
 /* ---- THE TRAIL ------------------------------------------------------------------------------
@@ -7792,8 +8166,10 @@ const CCJ_ARTEFACT={
     const req=o.docs.filter(function(d){return d.req;});
     return o.payroll.state==='built'
       ?{label:'Onboarding file',ref:req.length+' documents &middot; KYC '+ccjKycDecision().label}:null;},
+  // The artefact this stage leaves is the live placement, not a payslip — no payslip is issued
+  // here any more, because no run happens here.
   'active':function(){const pr=ccjPayrun();
-    return pr.payslipId?{label:'Payslip',ref:pr.payslipId}:null;}
+    return pr.activatedAt?{label:'Placement live',ref:pr.id+' &middot; payroll active'}:null;}
 };
 function ccjTrail(){
   const run=ccjRun;if(!run)return [];
@@ -7954,7 +8330,6 @@ function buildCCJPayrunHTML(){
   const money=function(v){return ccjMoney(v);};
   const kv=function(k,v){return '<div class="ccj-pr-kv"><span>'+k+'</span><b>'+v+'</b></div>';};
   const at=function(id){return CCJ_PR_PHASES.findIndex(function(x){return x.id===id;})<pr.step;};
-  const relAt=function(id){return CCJ_PR_REL.findIndex(function(x){return x.id===id;})<pr.rstep;};
   const phase=function(p2,i,doneN){
     const isDone=i<doneN,isLive=i===doneN;
     if(!isDone&&!isLive)return '';
@@ -8004,10 +8379,10 @@ function buildCCJPayrunHTML(){
     +'</tbody></table>';
   const stat='<div class="ccj-pr-stat">'
     +'<div class="ccj-pr-stat-r"><div><b>'+pack.ret+'</b><span>'+pack.retTo+'</span></div>'
-    +'<div class="ccj-pr-stat-v">'+money(cal.toTax)+(pr.taxRef?'<i>'+pr.taxRef+'</i>':'')+'</div></div>'
+    +'<div class="ccj-pr-stat-v">'+money(cal.toTax)+'</div></div>'
     +'<div class="ccj-pr-stat-r"><div><b>'+pack.ssRet+'</b><span>'+pack.ssTo
       +' &middot; employee '+money(cal.social)+' + employer '+money(cal.erSocial)+'</span></div>'
-    +'<div class="ccj-pr-stat-v">'+money(cal.toSs)+(pr.ssRef?'<i>'+pr.ssRef+'</i>':'')+'</div></div>'
+    +'<div class="ccj-pr-stat-v">'+money(cal.toSs)+'</div></div>'
     +'</div>';
   // The reconciliation. Onboarding published an indicative net and said it was indicative; this is
   // the binding one. Where they differ, the difference is named rather than quietly absorbed.
@@ -8017,24 +8392,26 @@ function buildCCJPayrunHTML(){
       +(cal.ded?cal.ded.label+' is levied on the run and was not modelled at configuration.'
         :'the run computes against the tax code the authority returned.')+'</div>'
     :'<div class="ccj-pr-rec ok">Matches the indicative net onboarding published ('+money(cal.indicative)+').</div>';
-  const canSee=pr.step>=3;      // the calculation phase has run
+  const canSee=pr.step>=4;      // the gross-to-net phase has run
+  /* THE STATUS IS THE HEADLINE. This screen used to lead with a net figure and "paid" — it is now
+     a setup, so the one thing a reader needs from it is where payroll stands: PENDING until the
+     placement is activated, ACTIVE after. The figure stays beside it and says it is indicative,
+     because it is the most useful number here and computing it is not the same as paying it. */
+  const status=pr.state==='active'?'ACTIVE':pr.state==='pending'?'PENDING':'CONFIGURING';
   return '<div class="ccj-pr-wrap">'
-    +'<div class="ccj-pr-hero'+(pr.state==='paid'?' ok':pr.held?' held':'')+'">'
+    +'<div class="ccj-pr-hero'+(pr.state==='active'?' ok':'')+'">'
     +'<div class="ccj-pr-hero-b">'
-    +'<div class="ccj-pr-hero-t">'+(pr.id||'First payroll run')+'</div>'
+    +'<div class="ccj-pr-hero-t">'+(pr.id||'Payroll setup')+'</div>'
     +'<div class="ccj-pr-hero-s">'+(pr.label||per.label)+' &middot; '+p.worker.name
-      +' &middot; 1 employee in this run</div></div>'
-    +'<div class="ccj-pr-hero-f"><span>'+(canSee?money(cal.net):'&mdash;')+'</span>'
-    +'<i>'+(pr.state==='paid'?'paid '+ccjStamp(pr.paidAt)
-      :pr.state==='approved'||pr.state==='paying'?'released, paying'
-      :pr.held?'held':'net payable')+'</i></div>'
+      +' &middot; first pay '+(pr.payDay||per.payDay)+'</div></div>'
+    +'<div class="ccj-pr-hero-f"><span class="ccj-pr-status '+status.toLowerCase()+'">'+status+'</span>'
+    +'<i>'+(pr.state==='active'?'payroll active from '+ccjStamp(pr.activatedAt)
+      :pr.state==='pending'?'set up, not yet live'
+      :'being configured')+'</i></div>'
     +'</div>'
     +'<div class="ccj-pr-card">'
-    +'<div class="ccj-pr-card-t">Building the register</div>'
+    +'<div class="ccj-pr-card-t">Setting payroll up</div>'
     +CCJ_PR_PHASES.map(function(x,i){return phase(x,i,pr.step);}).join('')
-    +(pr.state==='paying'||pr.state==='paid'
-      ?CCJ_PR_REL.map(function(x,i){return phase(x,i,pr.rstep);}).join('')
-      :'')
     +'</div>'
     +(at('inputs')?'<div class="ccj-pr-card"><div class="ccj-pr-card-t">Inputs</div>'
       +'<div class="ccj-pr-kvs">'
@@ -8048,12 +8425,15 @@ function buildCCJPayrunHTML(){
       +kv('Variable inputs','None &mdash; salaried, no timesheet')
       +kv('Absence','None recorded in the first period')
       +kv('Account',o.bank.iban||'&mdash;')
+      // Which rail this person will be paid on. It used to appear only on the disbursement, which
+      // no longer exists — and it is a configuration fact, so it belongs with the configuration.
+      +kv('Payment rail',pack.rail)
       +'</div></div>':'')
     +(canSee?'<div class="ccj-pr-card"><div class="ccj-pr-card-t">Gross to net</div>'
       +earn+ded+rec+accr+'</div>':'')
-    +(at('stat')?'<div class="ccj-pr-card"><div class="ccj-pr-card-t">What this run owes, and to whom</div>'
+    +(at('stat')?'<div class="ccj-pr-card"><div class="ccj-pr-card-t">What the first run will owe, and to whom</div>'
       +stat
-      +'<div class="ccj-pr-note">'+pack.ret+' is due to '+pack.retTo
+      +'<div class="ccj-pr-note">'+pack.ret+' will be due to '+pack.retTo
       +' for the '+pr.label+' period. Both sides of social security are remitted together on the '
       +pack.ssRet+'.</div></div>':'')
     +(canSee?'<div class="ccj-pr-card"><div class="ccj-pr-card-t">Employer cost</div>'+er+'</div>':'')
@@ -8078,115 +8458,42 @@ function buildCCJPayrunHTML(){
             +'<span class="ccj-pr-ctrl-l">'+r[0]+'</span><b>'+r[1]+'</b></div>';
         }).join('')
       +'</div>'
-      +'<div class="ccj-pr-note">This run moves <b>'+money(cal.cashOut)+'</b> in cash &mdash; '
+      +'<div class="ccj-pr-note">The first run will move <b>'+money(cal.cashOut)+'</b> in cash &mdash; '
       +money(cal.net)+' to '+p.worker.name+' and '+money(cal.toTax+cal.toSs)
-      +' to the authorities. The period costs '+money(cal.cost)
+      +' to the authorities &mdash; on '+(pr.payDay||per.payDay)+'. The period costs '+money(cal.cost)
       +(cal.accrued?'; the difference is the '+money(cal.accrued)+' accrued now and paid later.':'.')
+      +' Nothing is paid and no return is filed by this journey.'
       +'</div></div>':'')
-    +(pr.approvedAt?'<div class="ccj-pr-rel">'
-      +'<div class="ccj-pr-rel-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
-      +'<div><div class="ccj-pr-rel-t">Released by '+pr.approvedBy+'</div>'
-      +'<div class="ccj-pr-rel-s">'+ccjStamp(pr.approvedAt)+'. '
-      +(pr.heldAt?'Held earlier by '+pr.heldBy+' at '+ccjStamp(pr.heldAt)+', then released. ':'')
-      +'No payment instruction existed before this.</div></div></div>':'')
-    +(pr.held?'<div class="ccj-pr-rel held">'
-      +'<div class="ccj-pr-rel-i">!</div>'
-      +'<div><div class="ccj-pr-rel-t">Held by '+pr.heldBy+'</div>'
-      +'<div class="ccj-pr-rel-s">'+ccjStamp(pr.heldAt)
-      +'. Nothing has been paid and no return has been filed. The run stays here until it is released.</div></div></div>':'')
-    +(pr.paidAt?'<div class="ccj-pr-card"><div class="ccj-pr-card-t">Disbursement</div>'
-      +'<div class="ccj-pr-kvs">'
-      /* "Funded from: Deposit held" claimed the deposit paid for this run. It did not, and on the
-         ordinary EOR run it could not: the deposit is one month GROSS and the run costs gross plus
-         employer contributions. We are the employer, so we pay the employee and the authorities out
-         of our own account and recover it on the monthly invoice; the deposit sits behind that as
-         security. Naming the debited entity is both more accurate and more informative. */
-      +kv('Paid by',p.adt.name)
-      +kv('Security held',ccjMoney(ccjReceived())+' &middot; '+ccjInvoice().id)
-      +kv('Rail',pack.rail)
-      +kv('Payment file',pr.fileRef||'&mdash;')
-      +kv('Debited from',ccjReg(p.adt.country).iban)
-      +kv('Credited to',o.bank.iban||'&mdash;')
-      +kv('Bank reference',pr.bankRef||'&mdash;')
-      +kv('Executed',ccjStamp(pr.paidAt))
-      +kv('Value date',pr.payDay)
-      +'</div>'
-      +'<div class="ccj-pr-note">The deposit is security against this placement, not the source of '
-      +'this payment. '+ccjMoney(cal.cashOut)+' left '+p.adt.name+' and is recovered on the monthly '
-      +'invoice to '+p.client.name+'.</div>'
-      +'</div>':'')
-    +(pr.payslipId?buildCCJPayslipHTML():'')
-    +(run.phase==='done'
-      ?'<div class="ccj-pr-next"><div class="ccj-pr-next-t">'
-       +p.worker.name.split(' ')[0]+' has been paid for '+pr.label+'.</div>'
-       +'<button class="ccj-primary" onclick="ccjGoScreen(\'active\')">See the record &rarr;</button></div>'
+    /* WHERE THE STAGE STOPS. Configured, not run. Everything below this used to be the release, the
+       disbursement and the payslip — a payment file, a bank reference, money leaving. None of it
+       happens here any more; payroll runs on its own calendar once the placement is active. */
+    +(pr.state==='pending'||pr.state==='active'
+      ?'<div class="ccj-pr-rel'+(pr.state==='active'?'':' held')+'">'
+       +'<div class="ccj-pr-rel-i">'+(pr.state==='active'
+         ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
+         :'&hellip;')+'</div>'
+       +'<div><div class="ccj-pr-rel-t">Payroll '+(pr.state==='active'?'active':'pending')+'</div>'
+       +'<div class="ccj-pr-rel-s">'+(pr.state==='active'
+         ?'Set live by '+pr.activatedBy+' at '+ccjStamp(pr.activatedAt)+'. '+p.worker.name.split(' ')[0]
+          +' is on the '+(o.payroll.calendar||'monthly')+' calendar and is first paid on '+(pr.payDay||per.payDay)+'.'
+         :'Set up and waiting to be made active. Access has been granted and the first period is '
+          +'configured; no payroll runs until the placement is live.')
+       +'</div></div></div>'
       :'')
     +'</div>';
 }
 /* The payslip, as a document. The employee gets this one — so it names the employer entity, the
-   period, every line, and the account the money went to.
-
-   `ccj-ps-*`, NOT `ccj-slip-*`: stage 8 already owns `.ccj-slip` for the indicative payslip on the
-   onboarding card, and both can be on screen in the same run. One namespace, one owner. */
-function buildCCJPayslipHTML(){
-  const p=ccjParties(),f=(ccjRun&&ccjRun.form)||{},o=ccjOnb();
-  const pr=ccjPayrun(),cal=ccjPayrunCalc(),pack=ccjPayrunPack(),ok=ccjOnbPack();
-  const reg=ccjReg(p.adt.country);
-  const money=function(v){return ccjMoney(v);};
-  const line=function(k,s,v,cls){
-    return '<div class="ccj-ps-l'+(cls?' '+cls:'')+'"><div><b>'+k+'</b>'
-      +(s?'<span>'+s+'</span>':'')+'</div><i>'+v+'</i></div>';
-  };
-  /* In several countries one number is BOTH the tax identifier and the social security one — the
-     Dutch BSN and the UK National Insurance number are the same field twice. Printing it under two
-     headings that happen to read identically looks like a duplication bug on the one document the
-     employee actually keeps, so the two collapse into one row that says it serves both. */
-  const sameId=ok.taxIdLabel===ok.ssIdLabel||(o.tax.id&&o.tax.id===o.ss.id);
-  const ids=sameId
-    ?'<div><span>'+ok.taxIdLabel+'</span><b>'+(o.tax.id||o.ss.id||'&mdash;')+'</b></div>'
-    :'<div><span>'+ok.taxIdLabel+'</span><b>'+(o.tax.id||'&mdash;')+'</b></div>'
-     +'<div><span>'+ok.ssIdLabel+'</span><b>'+(o.ss.id||'&mdash;')+'</b></div>';
-  return '<div class="ccj-ps">'
-    +'<div class="ccj-ps-head">'
-    +'<div><div class="ccj-ps-brand">'+p.adt.name+'</div>'
-    +'<div class="ccj-ps-addr">'+reg.adt.join(', ')+'</div></div>'
-    +'<div class="ccj-ps-ref"><div class="ccj-ps-kind">'+pack.payslip+'</div>'
-    +'<div class="ccj-ps-no">'+pr.payslipId+'</div>'
-    +'<div class="ccj-ps-per">'+pr.label+'</div></div>'
-    +'</div>'
-    +'<div class="ccj-ps-emp">'
-    +'<div><span>Employee</span><b>'+p.worker.name+'</b></div>'
-    +'<div><span>Employee ID</span><b>'+p.worker.empId+'</b></div>'
-    +ids
-    +'<div><span>Role</span><b>'+(f.jobTitle||'&mdash;')+'</b></div>'
-    +'<div><span>Period</span><b>'+pr.from+' &ndash; '+pr.to+'</b></div>'
-    +'</div>'
-    +'<div class="ccj-ps-sec">Earnings</div>'
-    +line('Basic salary',(cal.prorated?cal.days+' of '+cal.inMonth+' days worked':'Full period'),money(cal.basic))
-    +line('Gross pay','',money(cal.gross),'sum')
-    +'<div class="ccj-ps-sec">Deductions</div>'
-    +line(cal.taxLine,cal.taxPct+'% effective','&minus;&nbsp;'+money(cal.tax))
-    +line('Employee social security',ok.ssScheme,'&minus;&nbsp;'+money(cal.social))
-    +(cal.ded?line(cal.ded.label,cal.ded.note,'&minus;&nbsp;'+money(cal.ded.amount)):'')
-    +line('Net pay','Paid to '+(o.bank.iban||'your account'),money(cal.net),'net')
-    +(cal.accruals.length
-      ?'<div class="ccj-ps-sec">Accrued for you this period</div>'
-       +cal.accruals.map(function(a){return line(a.label,a.note,money(a.amount));}).join('')
-      :'')
-    +'<div class="ccj-ps-foot">Paid on '+pr.payDay+' by '+pack.rail
-    +', reference '+(pr.bankRef||'&mdash;')+'. '
-    +pack.taxLine+' has been declared to '+pack.retTo+' on the '+pack.ret
-    +' and contributions to '+pack.ssTo+'. Keep this payslip &mdash; it is your record of what was '
-    +'withheld on your behalf.</div>'
-    +'</div>';
-}
 
 /* ---- SCREEN 3: ACTIVE ------------------------------------------------------------------------ */
 function buildCCJActiveHTML(){
   const run=ccjRun,p=ccjParties(),f=run.form||{};
   const pr=ccjPayrun(),cal=ccjPayrunCalc(),per=ccjPayrunPeriod(),o=ccjOnb(),e=ccjEmp();
   const q=ccjQuote(),trail=ccjTrail();
-  const live=pr.state==='paid';
+  // Live means the placement has been ACTIVATED, not that a payroll has been paid. It read
+  // `state==='paid'`, which no longer occurs — this journey configures payroll and sets it live;
+  // the run happens on the calendar afterwards. Left unfixed, the final screen of a completed
+  // journey would have said "Going live" forever.
+  const live=pr.state==='active';
   const kv=function(k,v){return '<div class="ccj-act-kv"><span>'+k+'</span><b>'+v+'</b></div>';};
   return '<div class="ccj-act-wrap">'
     +'<div class="ccj-act-hero'+(live?' ok':'')+'">'
@@ -8235,7 +8542,9 @@ function buildCCJActiveHTML(){
     +'<div class="ccj-act-kvs">'
     +kv('Next payroll',per.nextLabel+' &middot; on the calendar')
     +kv('Next pay date',per.nextPay)
-    +kv(ccjPayrunPack().ret,'Filed for '+per.label)
+    // "Filed for <period>" claimed a statutory return this journey no longer makes. What is true
+    // is that the return follows the first run, on the calendar.
+    +kv(ccjPayrunPack().ret,'Due with the '+per.label+' run')
     +kv('Compliance','Tracked against '+p.worker.country)
     +'</div>'
     +'<div class="ccj-pr-note">Nothing here needs a journey again. Payroll repeats on the calendar '
@@ -8247,7 +8556,8 @@ function buildCCJActiveHTML(){
        +trail.reduce(function(s,t){return s+t.done;},0)+' sub-statuses, '
        +trail.filter(function(t){return t.human;}).length+' human decisions.</div>'
        +'<div class="ccj-act-done-s">The contract has been written to your contracts list.</div>'
-       +'<button class="ccj-primary" onclick="ccjOpenContractRecord()">View contract</button>'
+       // The last control in the journey, and it moves for the same reason all the others did: the
+       // record SHOWS what was made, and going to look at it is an action. See ccjDoneAsk.
        +'</div>'
       :'')
     +'</div>';
@@ -8255,8 +8565,8 @@ function buildCCJActiveHTML(){
 
 /* ---- WIRING STAGE 9 INTO THE RUNNER ---------------------------------------------------------- */
 CCJ_PURPOSE['active/Ready for payroll']='Re-checks every control this journey passed, and issues the certificate.';
-CCJ_PURPOSE['active/First payroll run']='Calculates the first period, and pays it once Finance releases it.';
-CCJ_PURPOSE['active/Active']='Writes the placement into the record as live.';
+CCJ_PURPOSE['active/First payroll run']='Grants access and configures the first period. Payroll is left PENDING.';
+CCJ_PURPOSE['active/Active']='Sets payroll from pending to active and writes the placement into the record.';
 
 CCJ_ON_ENTER['active/Ready for payroll']=function(run){ccjRdyStart();};
 CCJ_ON_ENTER['active/First payroll run']=function(run){
@@ -8265,54 +8575,42 @@ CCJ_ON_ENTER['active/First payroll run']=function(run){
 };
 CCJ_ON_ENTER['active/Active']=function(run){ccjGoScreen('active');};
 
-CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',note:'Re-deriving every control.'};
-/* One step, two milestones, a person between them — the reason ccjHoldFor accepts a function.
-   Before the release it parks on the register being complete; after it, on the money having
-   actually moved. A single `until:'payrun-done'` would have let the approval settle the row while
-   the payment file was still being written. */
-CCJ_HOLDS['active/First payroll run']=function(){
-  const pr=ccjPayrun();
-  return pr.approvedAt
-    ?{until:'payrun-done',note:'Released. Paying and filing.'}
-    :{until:'payrun-calc',note:'Calculating the first period.'};
-};
+CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',note:'Re-deriving every control.',
+  rows:function(){
+    const l=ccjRdyChecks(),done=ccjRdy().step;
+    return [['Controls',Math.min(done+(ccjRdy().done?0:1),l.length)+' of '+l.length],
+            ['Failed',ccjRdyFailed().length
+              ?'<span class="ccj-wait-late">'+ccjRdyFailed().length+' cannot be proved</span>':'']];
+  }};
+/* ONE milestone now, not two. It used to be a function returning a different `until` before and
+   after a person released the money — one step, two halves, an approval between them. There is no
+   approval any more because there is no payment: the step configures payroll and stops. */
+CCJ_HOLDS['active/First payroll run']={until:'payrun-done',
+  note:'Granting access and configuring the first period.',
+  rows:function(){
+    const pr=ccjPayrun(),n=CCJ_PR_PHASES.length;
+    return [['Setup',Math.min(pr.step+(pr.done?0:1),n)+' of '+n],
+            ['Access',pr.accessAt?'<span class="ccj-wait-on">Granted</span>':''],
+            ['Payroll status',pr.state==='pending'?'Pending':''],
+            ['First pay',pr.step>=2?pr.payDay:'']];
+  }};
 
-/* The one human decision on the last stage, and the only point in the whole journey at which
-   money leaves us for a person. A POST gate: the register has to exist before anyone can approve
-   it, and the register is the evidence sitting on the screen beside the question. */
-CCJ_POST_GATES['active/First payroll run']=function(){
-  const pr=ccjPayrun();
-  if(pr.approvedAt)return null;                       // already released
-  if(pr.held)return {
-    kind:'decision',
-    ask:'This run is held.',
-    why:'Held by '+pr.heldBy+' at '+ccjStamp(pr.heldAt)
-      +'. Nothing has been paid and no statutory return has been filed. It stays here until somebody releases it.',
-    options:[{id:'payApprove',label:'Release the run',tone:'go',done:'Released after a hold'}]
-  };
-  if(pr.state!=='calculated')return null;             // the register is not finished
-  const cal=ccjPayrunCalc(),pack=ccjPayrunPack();
-  return {
-    kind:'approval',
-    ask:'Release the first payroll run?',
-    why:'The register is complete: '+ccjMoney(cal.net)+' net to '+ccjParties().worker.name
-      +', '+ccjMoney(cal.toTax)+' to '+pack.retTo+' and '+ccjMoney(cal.toSs)+' to '+pack.ssTo
-      +'. No payment instruction exists until this is approved.',
-    options:[
-      {id:'payApprove',label:'Approve and release',tone:'go',  done:'Released'},
-      {id:'payHold',   label:'Hold this run',      tone:'stop',done:'Held'}
-    ]
-  };
-};
+/* NO GATE HERE ANY MORE. There used to be one: the only point in the journey at which money left
+   us for a person, so a person had to release it. Nothing is paid on this stage now, and a gate
+   asking somebody to approve a payment that does not happen would be theatre. */
 
-/* The placement is live, so the product should hold a contract for it. Written on settle rather
-   than on the button, so the record exists the moment the journey says it does — a user who never
+/* THE LAST STEP IS THE ACTIVATION. Payroll has been configured and sitting at PENDING since the
+   step before; this is where it becomes ACTIVE and the placement goes live. Done on settle rather
+   than on a button, so the record exists the moment the journey says it does — a user who never
    clicks through still has the contract in their list. */
 CCJ_ON_SETTLE['active/Active']=function(run){
+  const pr=ccjPayrun(),c=ccjClient(),p=ccjParties();
+  c.mins+=20;
+  pr.state='active';pr.activatedAt=c.mins;pr.activatedBy=ccjActor();
   ccjWriteContractRecord();
-  const p=ccjParties();
   ccjWorkerPush({who:'note',text:'Employment active &middot; '+p.worker.empId
-    +' &middot; paid monthly by '+p.adt.name,at:ccjClient().mins});
+    +' &middot; payroll active, first pay '+(pr.payDay||ccjOnb().payroll.firstPay||'&mdash;'),
+    at:c.mins});
 };
 
 CCJ_EVIDENCE['active/Ready for payroll']={
@@ -8347,45 +8645,49 @@ CCJ_EVIDENCE['active/Ready for payroll']={
 };
 CCJ_EVIDENCE['active/First payroll run']={
   system:'Payroll engine', ref:'first period',
-  call:function(c){return 'run(period="'+ccjPayrunPeriod().label+'", employees=1, contract="'
-    +ccjEmp().id+'")';},
+  call:function(c){return 'configure(period="'+ccjPayrunPeriod().label+'", worker="'
+    +ccjParties().worker.empId+'", contract="'+ccjEmp().id+'", status="pending")';},
   latency:'1.9s',
-  fetched:function(c){const cal=ccjPayrunCalc(),pr=ccjPayrun();return [
+  fetched:function(c){const cal=ccjPayrunCalc(),pr=ccjPayrun(),o=ccjOnb();return [
+    {k:'Platform access',sub:'The employee can sign in',
+     v:pr.accessAt?'granted '+ccjStamp(pr.accessAt):'not yet',
+     state:pr.accessAt?'active':'inactive'},
     {k:'Gross',sub:cal.prorated?cal.days+' of '+cal.inMonth+' days':'Full period',
      v:ccjMoney(cal.gross),state:'active'},
-    {k:'Deductions',sub:cal.taxLine+' + social security',
-     v:ccjMoney(cal.tax+cal.social+(cal.ded?cal.ded.amount:0)),state:'active'},
-    {k:'Net pay',sub:'To the verified account',v:ccjMoney(cal.net),state:'active'},
-    {k:'Employer cost',sub:'What this placement costs us',v:ccjMoney(cal.cost),state:'active'},
-    {k:'Paid',sub:'Bank reference',v:pr.bankRef||'not yet released',
-     state:pr.paidAt?'active':'inactive'}
+    {k:'Net pay',sub:'Indicative &mdash; nothing is paid by this journey',
+     v:ccjMoney(cal.net),state:'active'},
+    {k:'Destination',sub:'Verified account',v:o.bank.iban||'&mdash;',state:'active'},
+    {k:'Payroll status',sub:'Until the placement goes live',
+     v:pr.state==='pending'||pr.state==='active'?'Pending':'&mdash;',
+     state:pr.state==='idle'?'inactive':'active'}
   ];},
   checks:function(c){const cal=ccjPayrunCalc(),pr=ccjPayrun(),o=ccjOnb();return [
+    {rule:'The employee has access before they are expected to have any',
+     expected:'sign-in granted at setup',
+     actual:pr.accessAt?'granted':'not granted',
+     verdict:pr.accessAt?'pass':'fail'},
     {rule:'The first period is prorated to the day they actually start',
      expected:'proration where the start is mid-month',
-     actual:cal.prorated?cal.days+' of '+cal.inMonth+' days paid':'full month — starts on the 1st',
+     actual:cal.prorated?cal.days+' of '+cal.inMonth+' days':'full month — starts on the 1st',
      verdict:'pass'},
-    {rule:'No payment leaves without a named person releasing it',
-     expected:'a human approval on the register',
-     actual:pr.approvedBy?'released by '+pr.approvedBy:'not released',
-     verdict:pr.approvedBy?'pass':'na'},
-    {rule:'Money only ever goes to the account the penny-drop verified',
+    {rule:'Pay is configured against the account the penny-drop verified',
      expected:o.bank.iban||'a verified account',
-     actual:pr.paidAt?'credited '+o.bank.iban:'nothing sent yet',
-     verdict:pr.paidAt?'pass':'na'},
-    {rule:'What was withheld is declared to the authority it belongs to',
-     expected:ccjPayrunPack().ret+' and '+ccjPayrunPack().ssRet,
-     actual:pr.filedAt?pr.taxRef+' and '+pr.ssRef:'not filed yet',
-     verdict:pr.filedAt?'pass':'na'}
+     actual:o.bank.state==='verified'?o.bank.iban:'not verified',
+     verdict:o.bank.state==='verified'?'pass':'fail'},
+    /* Stated as a check rather than left implicit, because it is the thing about this stage most
+       likely to be misread: the figures on screen are a configuration, not a disbursement. */
+    {rule:'No money moves and no return is filed by this journey',
+     expected:'configuration only',
+     actual:'payroll left pending; the run happens on the calendar',
+     verdict:'pass'}
   ];},
-  captured:function(c){const pr=ccjPayrun(),cal=ccjPayrunCalc();return [
-    {k:'Payroll run',v:pr.id||'&mdash;'},
-    {k:'Net paid',v:pr.paidAt?ccjMoney(cal.net):'not paid'},
-    {k:'Payslip',v:pr.payslipId||'&mdash;'}];},
-  summary:function(c){const pr=ccjPayrun(),cal=ccjPayrunCalc();
-    return pr.paidAt?ccjMoney(cal.net)+' paid &middot; '+pr.label
-      :pr.held?'Held by '+pr.heldBy:'Register built &middot; '+ccjMoney(cal.net)+' net';},
-  note:'The register is calculated in full before anyone is asked anything, because an approval without the numbers in front of it is a rubber stamp. Everything after the approval — the funding, the payment file, the returns, the payslip — happens only once it is given.'
+  captured:function(c){const pr=ccjPayrun();return [
+    {k:'Payroll record',v:pr.id||'&mdash;'},
+    {k:'Access granted',v:pr.accessAt?ccjStamp(pr.accessAt):'&mdash;'},
+    {k:'Payroll status',v:pr.state==='idle'?'&mdash;':'Pending'}];},
+  summary:function(c){const cal=ccjPayrunCalc();
+    return 'Access granted &middot; payroll pending &middot; '+ccjMoney(cal.net)+' indicative';},
+  note:'This journey sets payroll up; it does not run it. Access, the calendar, the first period and the gross-to-net are all settled here and the record is left PENDING — the placement going live is what makes it active, and the run itself happens on the payroll calendar afterwards.'
 };
 CCJ_EVIDENCE['active/Active']={
   system:'Employee record', ref:'placement status',
@@ -8399,16 +8701,28 @@ CCJ_EVIDENCE['active/Active']={
     {k:'Next payroll',sub:'On the calendar',v:per.nextPay,state:'active'}
   ];},
   checks:function(c){const pr=ccjPayrun(),run=ccjRun;return [
-    {rule:'A placement only goes active once a payroll run has actually cleared',
-     expected:'first run paid',actual:pr.paidAt?pr.id+' paid':'no run has cleared',
-     verdict:pr.paidAt?'pass':'fail'},
+    /* This used to read "a placement only goes active once a payroll run has actually cleared",
+       which is no longer what happens and was the wrong precondition anyway: a person is employed
+       and payable from their start date, not from the first time they are paid. What must hold is
+       that everything needed to pay them is in place — which is the readiness certificate. */
+    {rule:'Nothing goes live until every payroll control is satisfied',
+     expected:'readiness certificate issued with no failures',
+     actual:ccjRdy().done&&!ccjRdyFailed().length
+       ?ccjRdy().ref+' issued clean':(ccjRdyFailed().length+' control(s) unproved'),
+     verdict:ccjRdy().done&&!ccjRdyFailed().length?'pass':'fail'},
+    {rule:'Payroll moves from pending to active exactly once, and by a named person',
+     expected:'pending → active',
+     actual:pr.activatedAt?'set active by '+pr.activatedBy+' at '+ccjStamp(pr.activatedAt)
+       :'still pending',
+     verdict:pr.activatedAt?'pass':'fail'},
     {rule:'The contract record carries the same figures the journey produced',
-     expected:'written from the run',
+     expected:'written from the placement',
      actual:run.contractRowId?'contract record #'+run.contractRowId:'not written',
      verdict:run.contractRowId?'pass':'na'}
   ];},
-  captured:function(c){const run=ccjRun;return [
+  captured:function(c){const run=ccjRun,pr=ccjPayrun();return [
     {k:'Placement',v:'Active'},
+    {k:'Payroll status',v:pr.state==='active'?'Active':'Pending'},
     {k:'Contract record',v:run.contractRowId?'#'+run.contractRowId:'&mdash;'}];},
   summary:function(c){return 'Active &middot; next pay '+ccjPayrunPeriod().nextPay;},
   note:'Active is the end of this journey and the start of a recurring one. Nothing here needs a journey again — payroll runs on the calendar, and the compliance renewals are tracked against the country rather than against this placement.'
@@ -8471,7 +8785,9 @@ function ccjAskHTML(m){
 const CCJ_ASKS={
   'form':function(){ccjGoScreen('form');},
   // A stage that has finished and is waiting to be walked on from — see ccjRestAsk.
-  'continue':function(){ccjContinueStage();}
+  'continue':function(){ccjContinueStage();},
+  // The end of the journey: go and look at the contract it wrote — see ccjDoneAsk.
+  'record':function(){ccjOpenContractRecord();}
 };
 /* Answered by id rather than by "the last ask", because the transcript keeps every ask it ever
    made and a reader can scroll back to an old one. Answering a spent ask does nothing. */

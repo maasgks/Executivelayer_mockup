@@ -193,19 +193,17 @@ collect('readiness mid-check', "(function(){var r=ccjRdy(),wasS=r.step,wasD=r.do
 collect('readiness blocked', "(function(){var b=ccjOnb().bank,was=b.state;b.state='penny';"
   + 'var h=buildCCJRdyHTML();b.state=was;return h;})()');
 collect('payroll register', 'buildCCJPayrunHTML()');
-// Awaiting the release, and held: the two states the finished run no longer holds, and the ones
-// that carry the decision.
-collect('payroll register awaiting release', "(function(){var pr=ccjPayrun();"
-  + "var w={state:pr.state,a:pr.approvedAt,p:pr.paidAt,r:pr.rstep,h:pr.held};"
-  + "pr.state='calculated';pr.approvedAt=0;pr.paidAt=0;pr.rstep=0;pr.held=false;"
+/* The two states the payroll SETUP passes through. It used to be three — awaiting release, held,
+   and paid — and none of those exist now: this journey configures payroll and leaves it PENDING,
+   and the last sub-status sets it ACTIVE. No money moves, so there is no payslip surface either. */
+collect('payroll setup pending', "(function(){var pr=ccjPayrun();var w=pr.state;"
+  + "pr.state='pending';var out=buildCCJPayrunHTML();pr.state=w;return out;})()");
+collect('payroll setup active', "(function(){var pr=ccjPayrun();"
+  + 'var w={s:pr.state,a:pr.activatedAt,b:pr.activatedBy};'
+  + "pr.state='active';pr.activatedAt=pr.activatedAt||900;"
+  + "pr.activatedBy=pr.activatedBy||'Priyanka Bhatt';"
   + 'var out=buildCCJPayrunHTML();'
-  + "pr.state=w.state;pr.approvedAt=w.a;pr.paidAt=w.p;pr.rstep=w.r;pr.held=w.h;return out;})()");
-collect('payroll register held', "(function(){var pr=ccjPayrun();"
-  + "var w={state:pr.state,a:pr.approvedAt,h:pr.held,hb:pr.heldBy,ha:pr.heldAt};"
-  + "pr.state='held';pr.approvedAt=0;pr.held=true;pr.heldBy='Meera Iyer';pr.heldAt=100;"
-  + 'var out=buildCCJPayrunHTML();'
-  + 'pr.state=w.state;pr.approvedAt=w.a;pr.held=w.h;pr.heldBy=w.hb;pr.heldAt=w.ha;return out;})()');
-collect('payslip', 'buildCCJPayslipHTML()');
+  + 'pr.state=w.s;pr.activatedAt=w.a;pr.activatedBy=w.b;return out;})()');
 collect('active record', 'buildCCJActiveHTML()');
 collect('employee created', 'buildCCJEmployeeCreatedHTML()');
 collect('proposal created', 'buildCCJProposalHTML()');
@@ -250,14 +248,8 @@ const forceGate = (stageId, label, setup, restore) =>
   + "var st=ccjSteps(i).find(function(s){return s.label==='" + label + "';});"
   + "var g=ccjPostGateFor(i,st);var h=g?ccjGateHTML(i,st,g):'';"
   + restore + 'return h;})()';
-collect('payroll release gate', forceGate('active', 'First payroll run',
-  "var pr=ccjPayrun(),w={s:pr.state,a:pr.approvedAt,h:pr.held};"
-  + "pr.state='calculated';pr.approvedAt=0;pr.held=false;",
-  'pr.state=w.s;pr.approvedAt=w.a;pr.held=w.h;'));
-collect('payroll held gate', forceGate('active', 'First payroll run',
-  "var pr=ccjPayrun(),w={s:pr.state,a:pr.approvedAt,h:pr.held,b:pr.heldBy,t:pr.heldAt};"
-  + "pr.state='held';pr.approvedAt=0;pr.held=true;pr.heldBy='Meera Iyer';pr.heldAt=100;",
-  'pr.state=w.s;pr.approvedAt=w.a;pr.held=w.h;pr.heldBy=w.b;pr.heldAt=w.t;'));
+// The payroll release and hold gates are gone with the payroll run itself: nothing is paid on this
+// stage, so there is no payment to release and nobody to ask about one.
 collect('kyc consider gate', forceGate('onboarding', 'Worker KYC',
   "var k=ccjOnb().kyc,w={r:k.reviewed,f:k.forceConsider,d:k.done};"
   + 'k.reviewed=\'\';k.forceConsider=true;k.done=true;',

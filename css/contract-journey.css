@@ -38,7 +38,13 @@
 
 /* ---- SHELL ---------------------------------------------------------------------------- */
 .page-content.ccj-host{padding:18px 22px;display:flex;flex-direction:column;overflow:hidden}
-.ccj-shell{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;max-width:1560px;width:100%;margin:0 auto}
+/* The side gutter. `box-sizing` is explicit because this file has no global border-box rule — with
+   `width:100%` and content-box, the padding would push the shell past its container instead of
+   insetting it. Clamped rather than fixed so a narrow window gives the gutter back to the content
+   rather than squeezing the conversation. */
+.ccj-shell{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;
+  max-width:1560px;width:100%;margin:0 auto;box-sizing:border-box;
+  padding-left:clamp(14px,2.4vw,46px);padding-right:clamp(14px,2.4vw,46px)}
 
 /* ---- HEADER — one 34px row ------------------------------------------------------------- */
 .ccj-head{display:flex;align-items:center;gap:10px;height:34px;flex-shrink:0;margin-bottom:12px}
@@ -65,7 +71,59 @@
    ahead loses colour entirely. Nothing on the rail is the same weight as the stage you are
    standing on, which is the one thing the old version got wrong at every level at once. */
 .ccj-rail{flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px;margin-bottom:12px;overflow:hidden}
-.ccj-rail-scroll{display:flex;align-items:flex-end;overflow-x:auto;scrollbar-width:none;padding:4px 10px 5px}
+
+/* Holds the rail's place in the shell's flex column so expanding repaints only the rail. */
+.ccj-rail-host{flex-shrink:0;margin-bottom:12px}
+.ccj-rail-host .ccj-rail{margin-bottom:0}
+
+/* ---- THE COLLAPSED RAIL: FOUR STEPS, SLIDING -------------------------------------------------
+   Every step is in the DOM; the window is a clip and the track is translated. A rail that rendered
+   only the visible four would have nothing to slide, and a rail rebuilt per stage would snap —
+   a transition needs the same element on both sides of the change. See ccjPaintRail. */
+.ccj-rail.slim{display:flex;align-items:center;gap:6px;padding:5px 10px 5px 6px}
+/* THE RIGHT COLUMN, per the sketch: the window rail on top, the artefact under it, and the chat
+   rising past both to the very top of the page. The rail-host inside loses its band margin — the
+   column's own gap is the spacing. */
+/* flex-basis 0, NOT auto. Auto resolves to the column's max-content, and the rail's track — nine
+   slots wide by design — makes that enormous; both columns then shrink from their bases and the
+   chat lands at ~51% instead of the 60% it was given. Basis 0 means "exactly the leftover". */
+.ccj-rside{flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px}
+.ccj-rside .ccj-rail-host{margin-bottom:0}
+.ccj-rside .ccj-work{flex:1 1 auto;min-height:0}
+/* The artefact gone (a conversation-led screen) leaves the rail alone up top — exactly what the
+   sketch draws — rather than collapsing the column and dragging the rail across the page. */
+.ccj-rside .ccj-work:empty{display:none}
+/* THE FADE ONLY APPLIES WHERE SOMETHING IS ACTUALLY HIDDEN. It used to soften both edges at 26px
+   unconditionally, which was wrong at the ends of the track: with the window at 1-4 there is
+   nothing to the left of step 1, so the fade had nothing to soften and simply ate the "New request"
+   label — the first thing a reader looks at. Each side is now driven by its own variable and
+   switched off when the track is against that end, and 14px is enough to read as a soft edge. */
+.ccj-rail-win{flex:1;min-width:0;overflow:hidden;--fade-l:14px;--fade-r:14px;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%)}
+.ccj-rail-win.at-start{--fade-l:0px}
+.ccj-rail-win.at-end{--fade-r:0px}
+.ccj-rail-track{display:flex;align-items:flex-start;padding:4px 0 5px;
+  transition:transform .58s cubic-bezier(.32,.72,0,1)}
+.ccj-rail-slot{flex:1 0 0;min-width:0;display:flex;align-items:flex-start;
+  transition:opacity .45s ease,filter .45s ease}
+/* Outside the window. Not hidden — it is sliding through, and something that vanished would read
+   as removed rather than as passed. */
+.ccj-rail-slot.out{opacity:.32;filter:saturate(.4)}
+.ccj-rail-slot .ccj-step{flex:1;min-width:0}
+/* Just the arrow — no border, no fill, no box. It stays a <button> for the keyboard and the
+   screen reader; only the chrome is gone. The hit area survives the stripping via padding. */
+.ccj-rail-more{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
+  padding:5px;border:none;background:none;cursor:pointer;color:#a3aebc;transition:color .18s}
+.ccj-rail-more:hover{color:var(--navy)}
+.ccj-rail-more svg{width:13px;height:13px;flex-shrink:0}
+.ccj-rail.open{padding:6px 6px 6px 6px}
+.ccj-rail.open .ccj-rail-scroll{flex:1;min-width:0}
+.ccj-rail.open{display:flex;align-items:center;gap:8px}
+/* flex-START, not flex-end: the connector line carries margin-top of half the dot's height, so it
+   runs through the CENTRE of the circles. Bottom-aligned, that margin is ignored and the line sat
+   at the label baseline — visibly below the circles it claims to join. */
+.ccj-rail-scroll{display:flex;align-items:flex-start;overflow-x:auto;scrollbar-width:none;padding:4px 10px 5px}
 .ccj-rail-scroll::-webkit-scrollbar{display:none}
 .ccj-rail-scroll.tracked{align-items:stretch;gap:7px;padding:0}
 
@@ -148,23 +206,29 @@
    them. The panel's 25% is free, so the conversation takes most of it back. It is a proportion
    with a floor rather than a fixed width: on a wide screen the block should use the space, and
    on a narrow one it must not eat the form beside it. */
-.ccj-body.no-panel .ccj-chat-col{flex:0 1 clamp(360px,34%,520px)}
+/* The chat is the product on these stages, and the user set its share outright: 60% of the page,
+   with the rail and the artefact living in the 40% beside it. The 6px inset keeps the card's own
+   border and shadow off the shell's edge — at flush the left border read as a seam against the
+   page rather than as the side of a card. */
+.ccj-body.no-panel{padding-left:6px}
+.ccj-body.no-panel .ccj-chat-col{flex:0 1 60%;min-width:420px}
 /* A conversation-led screen leaves the work area with nothing in it. It collapses rather than
    holding a share of the row, and the conversation takes the width — the same thing `chat:'full'`
    meant before, arrived at by the column disappearing instead of by a different layout. */
 .ccj-body.no-panel .ccj-work:empty{display:none}
-/* THE SURFACE FILLS, THE CONTENT DOES NOT. With nothing beside it the conversation takes the
-   whole body — no dead page on the right waiting for something that is not coming. But a line of
-   prose set across 1500px is unreadable, so the content inside is capped and centred instead.
-   That is the difference between a column with empty space next to it and a page: the card runs
-   edge to edge, and the reading measure stays where the eye can follow it. The cap lifts when
-   there IS something beside the conversation, because then the column is narrow already. */
-.ccj-body.no-panel.solo .ccj-chat-col{flex:1 1 auto}
-.ccj-body.no-panel.solo .ccj-stream>*,
-.ccj-body.no-panel.solo .ccj-composer>*{width:100%;max-width:860px;margin-left:auto;margin-right:auto}
-.ccj-body.no-panel.solo .ccj-chat-head{max-width:860px;width:100%;margin:0 auto;padding-left:0;padding-right:0}
-@media(max-width:1380px){.ccj-body.no-panel .ccj-chat-col{flex:0 1 clamp(330px,36%,430px)}}
-@media(max-width:1160px){.ccj-body.no-panel .ccj-chat-col{flex:0 1 clamp(300px,38%,380px)}}
+/* `solo` USED TO RE-CENTRE THE CONVERSATION'S CONTENTS, and it no longer has anything to do.
+   It existed for the layout where a screenless stage handed the chat the WHOLE body: a card
+   running edge to edge across 1500px needed its prose capped to a readable measure, its header
+   aligned to that cap, and therefore its own horizontal padding stripped so the two lined up.
+
+   None of that is true now. The chat is a bounded 60% column on every stage — the column IS the
+   measure — so the cap capped nothing while the padding strip was still firing, which is what
+   pushed the "Create a contract" header hard against the left edge of the card.
+
+   The class is still set (see ccjPaintWork) because "there is no artefact beside the chat" remains
+   a real state worth marking; nothing styles it today. */
+@media(max-width:1380px){.ccj-body.no-panel .ccj-chat-col{flex:0 1 60%;min-width:380px}}
+@media(max-width:1160px){.ccj-body.no-panel .ccj-chat-col{flex:0 1 58%;min-width:340px}}
 .ccj-screen{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 .ccj-panel{flex:0 0 25%;min-width:300px;max-width:420px;min-height:0;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 /* Targeted by class, not by `.ccj-panel>div` — the progress bar is the panel's other child and
@@ -179,9 +243,24 @@
 .ccj-chat-headtext{min-width:0;flex:1}
 .ccj-chat-title{font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ccj-chat-sub{font-size:10.5px;color:var(--gray);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ccj-stream{position:relative;flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.08) transparent}
-.ccj-stream::-webkit-scrollbar{width:4px}
-.ccj-stream::-webkit-scrollbar-thumb{background:rgba(0,0,0,.10);border-radius:99px}
+/* THE CONVERSATION CANVAS IS TINTED, THE CONTENT ON IT IS WHITE. A lighter tone of #eef1f5, on the
+   scrolling area only — the header and the composer stay white, so the chrome reads as the frame
+   and the messages as the thing inside it.
+
+   Tinting this forced three components to invert: the agent bubble, the counterparty bubble and the
+   example chips all sat on `--light` (#f8f9fb), which is within four values of this canvas. They
+   would not have vanished — each has a border — but an outlined shape the same tone as the surface
+   under it is worse than either a card or a plain line. They are white now; see each one's own
+   rule, edited in place rather than overridden, because ccj-handlers enforces one declaration per
+   class root. */
+.ccj-stream{position:relative;flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;background:#f4f6fa;scrollbar-width:thin;scrollbar-color:#d3dae4 transparent}
+/* A light GREY thumb, not black at 10%. Translucent black picks up whatever is behind it, so on
+   the tinted canvas it read as a dark smear down the edge of the conversation; a stated grey stays
+   the same colour wherever it lands, and it darkens on hover so it is still findable when wanted. */
+.ccj-stream::-webkit-scrollbar{width:6px}
+.ccj-stream::-webkit-scrollbar-track{background:transparent}
+.ccj-stream::-webkit-scrollbar-thumb{background:#d3dae4;border-radius:99px}
+.ccj-stream:hover::-webkit-scrollbar-thumb{background:#c2cbd8}
 .ccj-chat.full .ccj-stream{padding:20px 26px;gap:14px}
 
 .ccj-empty{margin:auto;text-align:center;max-width:440px;padding:20px 0}
@@ -195,9 +274,18 @@
 }
 .ccj-empty-title{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:7px}
 .ccj-empty-text{font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:18px}
-.ccj-empty-chips{display:flex;flex-direction:column;gap:7px}
-.ccj-chip{padding:9px 13px;border:1px solid var(--border);border-radius:10px;background:var(--light);font-size:12px;font-weight:500;color:var(--navy);font-family:inherit;cursor:pointer;text-align:left;transition:.15s}
-.ccj-chip:hover{border-color:var(--navy);background:var(--card)}
+/* EACH BUBBLE HUGS ITS OWN TEXT. A column flex container stretches its children by default, so all
+   three chips took the full 860px whatever they said — a 52-character example wearing the same box
+   as a 92-character one, which reads as three empty fields rather than three things to click.
+   Centred, because the whole invitation above them is centred on the same axis. */
+.ccj-empty-chips{display:flex;flex-direction:column;align-items:center;gap:7px}
+/* `max-width` so an example longer than the column wraps inside its own bubble rather than pushing
+   the stack wider than the conversation. Declared HERE rather than in a second .ccj-chip rule —
+   ccj-handlers enforces one definition per class root, and it caught the split. */
+.ccj-chip{padding:9px 13px;max-width:100%;border:1px solid var(--border);border-radius:10px;background:var(--card);font-size:12px;font-weight:500;color:var(--navy);font-family:inherit;cursor:pointer;text-align:left;transition:.15s}
+/* Hover DEEPENS now. It used to go white, which was the lift when the chip sat on white — with a
+   white chip on a tinted canvas the same move is invisible, so it darkens instead. */
+.ccj-chip:hover{border-color:var(--navy);background:var(--light)}
 
 /* Only `.in` — the newest message — animates. ccjStreamSync strips the class from the message
    that WAS newest before appending the one that now is, so exactly one carries it at any moment
@@ -211,7 +299,9 @@
 @keyframes ccjIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .ccj-av{width:22px;height:22px;flex-shrink:0;border-radius:7px;background:var(--ol);display:flex;align-items:center;justify-content:center;color:var(--navy);margin-top:2px}
 .ccj-av svg{width:11px;height:11px}
-.ccj-bubble{max-width:86%;padding:10px 12px;border-radius:12px;background:var(--light);border:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--navy);min-width:0;word-wrap:break-word}
+/* White, not `--light`: it now sits on the tinted stream, and `--light` is within four values of
+   that canvas — the bubble would have read as an outline rather than as a thing said. */
+.ccj-bubble{max-width:86%;padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--navy);min-width:0;word-wrap:break-word}
 .ccj-msg.user .ccj-bubble{background:var(--navy);border-color:var(--navy);color:#fff;max-width:82%}
 .ccj-chat.full .ccj-bubble{font-size:12.5px;max-width:78%}
 
@@ -433,6 +523,9 @@
 .ccj-wait-k{color:#a16207}
 .ccj-wait-v{color:#92400e;font-weight:600;text-align:right}
 .ccj-wait-on{color:#15803d;font-weight:700}
+/* The counterpart to .ccj-wait-on. A wait note is already amber, so "overdue" and a shortfall need
+   to read as worse than the surface they sit on rather than the same as it. */
+.ccj-wait-late{color:#b91c1c;font-weight:700}
 @media(prefers-reduced-motion:reduce){.ccj-wait-pulse{animation:none;opacity:1}}
 
 /* Who the composer is addressing. Sits directly above the input rather than in the header,
@@ -464,6 +557,17 @@
 .ccj-lane.in .ccj-lane-head{color:#b45309}
 /* The bubbles inside keep their own alignment — the lane groups them, it does not restyle them. */
 .ccj-lane .ccj-cmsg{margin:0}
+
+/* ---- THE HANDOVER --------------------------------------------------------------------------
+   Where the conversation changes counterparty. Deliberately quiet — a rule and a line of text, no
+   colour of its own: it is a marker in a record, not an event, and anything louder would compete
+   with the blocks and bubbles it is separating. Full-bleed across the column so it reads as a
+   division of the scroll rather than as another message in it. */
+.ccj-hand{display:flex;align-items:center;gap:10px;margin:14px 0 10px}
+.ccj-hand-rule{flex:1;height:1px;background:var(--border)}
+.ccj-hand-text{font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--gray);white-space:nowrap}
+.ccj-hand-text b{font-weight:800;color:var(--navy)}
 
 /* ---- A SUPERSEDED ATTEMPT ------------------------------------------------------------------
    The work behind a rejected quote, folded. Muted rather than removed: it happened, and the
@@ -560,6 +664,9 @@
 /* ---- HELD — done its part, waiting on the rest of the stage --------------------------------- */
 .ccj-hold{position:relative;margin-top:8px;padding:8px 10px 8px 12px;border-radius:7px;background:#fffbeb;border:1px solid #fde68a;font-size:10.5px;line-height:1.55;color:#78350f;overflow:hidden}
 .ccj-hold-bar{position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#f59e0b,#fbbf24);animation:ccjHoldPulse 1.8s ease-in-out infinite}
+/* Progress under the sentence, in the same shape a wait uses — a held step and a waiting one are
+   the same thing to a reader (parked on somebody else) and should not need two layouts learnt. */
+.ccj-hold-rows{margin-top:6px;padding-top:6px;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:3px}
 @keyframes ccjHoldPulse{0%,100%{opacity:.35}50%{opacity:1}}
 
 /* ---- THE GATE — where a person is asked ------------------------------------------------------ */
@@ -714,13 +821,18 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-cmsg.in{animation:ccjIn .26s ease both}
 .ccj-cmsg.us{align-items:flex-end}
 .ccj-cmsg>i{font-size:9.5px;font-style:normal;color:#94a3b8;padding:0 2px}
-.ccj-cbubble{max-width:100%;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.6;background:var(--light);border:1px solid var(--border);color:var(--navy);word-wrap:break-word}
+/* White for the same reason as .ccj-bubble — it shares the tinted canvas. */
+.ccj-cbubble{max-width:100%;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.6;background:var(--card);border:1px solid var(--border);color:var(--navy);word-wrap:break-word}
 .ccj-cmsg.us .ccj-cbubble{background:var(--navy);border-color:var(--navy);color:#fff}
 .ccj-cbubble.accept{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
 .ccj-cmsg.us .ccj-cbubble.accept{background:#f0fdf4;color:#15803d}
 .ccj-cmsg.note{align-items:center;flex-direction:row;justify-content:center;gap:7px;padding:2px 0}
 .ccj-cmsg.note span{font-size:10px;color:#94a3b8}
 .ccj-cmsg.note.chase span{color:#b45309;font-weight:600}
+/* A reminder on its way out. Quieter than the sent record — it is not a fact yet — and the spinner
+   sits on the same baseline as the text rather than above it. */
+.ccj-cmsg.note.chase.sending span{color:#94a3b8;font-weight:500}
+.ccj-cmsg.note.chase.sending .ccj-spin{flex:0 0 auto}
 .ccj-cmsg.note i{font-size:9.5px;color:#cbd5e1}
 
 .ccj-cbubble.draft{background:#faf5ff;border:1px dashed #d8b4fe;color:var(--navy);max-width:100%}

@@ -1254,12 +1254,16 @@ const supportPageMeta={
 
 // -- Rebuilt contract-creation journey: one page per client-facing stage, titled from the
 // stage itself so adding a stage needs no entry here. --
+/* ONE TITLE FOR THE WHOLE JOURNEY. It used to echo the current stage — "Client signing", "Deposit
+   due" — which the page's own header already says, in larger type, two lines below it, next to the
+   step counter. Two places naming the same thing means the topbar tells you nothing you did not
+   already know and changes under you nine times; naming the TASK instead gives it a job the stage
+   header cannot do. */
 function ccjPageMeta(pg){
-  if(pg==='ccj-start'||pg==='ccj-model')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};
+  if(typeof isCCJPage==='function'&&!isCCJPage(pg))return null;
   const i=typeof ccjStageOf==='function'?ccjStageOf(pg):-1;
-  if(i<0)return null;
-  const s=amPipelineStages[i]||{};
-  return{title:s.short||'Contract Creation',context:'Contracts',filters:[],columns:[],rows:[]};
+  if(pg!=='ccj-start'&&pg!=='ccj-model'&&i<0)return null;
+  return{title:'Create Contract',context:'Contracts',filters:[],columns:[],rows:[]};
 }
 // -- The same, for the frozen V1 snapshot (js/contract-journey-v1.js). A copy rather than one
 // function taught to answer for both prefixes: the snapshot is meant to be deletable in one
