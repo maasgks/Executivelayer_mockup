@@ -875,14 +875,13 @@ function amDealsForStage(id){return id?amDeals.filter(function(d){return d.stage
    The store journey is short and mostly automated; a board that split it into forty operations
    would be describing a process that does not exist. == */
 const soPipelineStages=[
-  {id:'store-role',    n:1,track:'merchant',tone:'blue', label:'Store role',      short:'Store role',   plain:'The merchant is choosing whether this store sells to customers or buys from sellers.',  internal:'Signup issued, waiting on the role choice',        waitingOn:'Merchant',merchantAction:true},
-  {id:'store-details', n:2,track:'merchant',tone:'amber',label:'Store details',   short:'Signup',       plain:'The merchant is filling in Bhaiyaa&rsquo;s signup &mdash; contact, store name, category and turnover band.',internal:'Signup in progress on the merchant&rsquo;s side',  waitingOn:'Merchant',merchantAction:true},
+  {id:'store-details', n:1,track:'merchant',tone:'amber',label:'Store details',   short:'Signup',       plain:'The merchant is filling in Bhaiyaa&rsquo;s signup &mdash; contact, store name, category and turnover band.',internal:'Signup in progress on the merchant&rsquo;s side',  waitingOn:'Merchant',merchantAction:true},
   /* A gate in the same sense as the deal board's deposit stage: nothing downstream exists until
      it clears. The journey is explicit that a failed match halts the run BEFORE a store is
      created, which is the whole reason KYC sits here rather than after provisioning. */
-  {id:'kyc',           n:3,track:'ours',    tone:'red',  label:'KYC verification',short:'KYC',          plain:'We are checking the owner&rsquo;s Aadhaar with UIDAI before any store is opened.',      internal:'UIDAI demographic match and watchlist screen',     waitingOn:'KYC Agent',gate:true},
-  {id:'store-creation',n:4,track:'ours',    tone:'blue', label:'Store creation',  short:'Creating',     plain:'We are registering the store on Bhaiyaa and switching on the storefront or the ledger.',internal:'StoreIntake registration, then provisioning',      waitingOn:'Store Agent'},
-  {id:'store-live',    n:5,track:'ours',    tone:'green',label:'Store created',   short:'Live',         plain:'The store exists in both systems. It stays Pending until its address, GST number and bank details are added.',internal:'Live in both systems, pending the remaining details',waitingOn:'Ops Manager',terminal:true}
+  {id:'kyc',           n:2,track:'ours',    tone:'red',  label:'KYC verification',short:'KYC',          plain:'We are checking the owner&rsquo;s Aadhaar with UIDAI before any store is opened.',      internal:'UIDAI demographic match and watchlist screen',     waitingOn:'KYC Agent',gate:true},
+  {id:'store-creation',n:3,track:'ours',    tone:'blue', label:'Store creation',  short:'Creating',     plain:'We are registering the store on Bhaiyaa and switching on the storefront or the ledger.',internal:'StoreIntake registration, then provisioning',      waitingOn:'Store Agent'},
+  {id:'store-live',    n:4,track:'ours',    tone:'green',label:'Store created',   short:'Live',         plain:'The store exists in both systems. It stays Pending until its address, GST number and bank details are added.',internal:'Live in both systems, pending the remaining details',waitingOn:'Ops Manager',terminal:true}
 ];
 /* Two tracks, and the divider between them is the honest summary of this journey: the first
    half is not ours to do, the second half is not ours to touch unless it breaks. */
@@ -906,11 +905,12 @@ const soPipelineTracks=[
    for one you clear, and the listing's action column is the place a user reads fastest — so
    these are kept to two words, which is what the column can hold without truncating. == */
 const soSubStatuses={
-  'store-role':[
-    {label:'Signup issued',owner:'Ops Manager',auto:true,autoNote:'link sent to the merchant'},
-    {label:'Seller or Buyer chosen',owner:'Merchant',decision:true}
-  ],
+  /* "Signup issued" moved here from the stage that used to sit in front of this one. The role
+     question it shared that stage with is gone, but issuing the link is still a real event with
+     a real timestamp, and dropping it would have left the trail starting mid-conversation — the
+     first thing in the log would be the merchant replying to something nobody sent. */
   'store-details':[
+    {label:'Signup issued',owner:'Ops Manager',auto:true,autoNote:'link sent to the merchant'},
     {label:'Signup completed',owner:'Merchant',sla:'2 days'},
     {label:'Mobile verified',owner:'Merchant',auto:true,autoNote:'OTP callback'}
   ],
@@ -934,8 +934,8 @@ const soSubStatuses={
    back from the system that refused, which is the only thing that tells the reader what to do.
    `age` is days on the current step, same as the deal board. */
 const soRuns=[
-  {id:1, ref:'STR-000112',store:'Sharma Kirana Mart',      merchant:'Ravi Sharma',      role:'seller',category:'Grocery & Kirana',        band:'Micro — ₹20 lakh to ₹1 crore',  city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-role',    sub:1},
-  {id:2, ref:'STR-000114',store:'Nandini Dairy Point',     merchant:'Meghana Rao',      role:'seller',category:'Dairy & Bakery',          band:'Nano — under ₹20 lakh a year',  city:'Bengaluru', updated:'31 Jul 2026',age:2, stage:'store-role',    sub:1},
+  {id:1, ref:'STR-000112',store:'Sharma Kirana Mart',      merchant:'Ravi Sharma',      role:'seller',category:'Grocery & Kirana',        band:'Micro — ₹20 lakh to ₹1 crore',  city:'Pune',      updated:'01 Aug 2026',age:1, stage:'store-details', sub:0},
+  {id:2, ref:'STR-000114',store:'Nandini Dairy Point',     merchant:'Meghana Rao',      role:'seller',category:'Dairy & Bakery',          band:'Nano — under ₹20 lakh a year',  city:'Bengaluru', updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
   {id:3, ref:'STR-000108',store:'Green Leaf Vegetables',   merchant:'Imran Qureshi',    role:'seller',category:'Fruits & Vegetables',     band:'Nano — under ₹20 lakh a year',  city:'Nagpur',    updated:'30 Jul 2026',age:3, stage:'store-details', sub:0},
   {id:4, ref:'STR-000109',store:'Vasant Medico',           merchant:'Sneha Kulkarni',   role:'seller',category:'Pharmacy & Wellness',     band:'Micro — ₹20 lakh to ₹1 crore',  city:'Pune',      updated:'27 Jul 2026',age:6, stage:'store-details', sub:0,breach:true},
   {id:5, ref:'STR-000110',store:'Bansal Hardware Depot',   merchant:'Naveen Bansal',    role:'buyer', category:'Hardware & Home Needs',   band:'Small — ₹1 crore to ₹5 crore',  city:'Indore',    updated:'31 Jul 2026',age:2, stage:'store-details', sub:0},
@@ -1041,7 +1041,7 @@ function soRunLog(d){
   return (soExtraLog[d.id]||[]).concat(entries);
 }
 // Stage-level expectations, in the merchant's terms rather than a duration nobody can act on.
-const soStageSla={'store-role':'Same day','store-details':'2 days, then chase','kyc':'Seconds, unless it halts','store-creation':'Minutes, unless Bhaiyaa refuses','store-live':'1 day to finish the details'};
+const soStageSla={'store-details':'2 days, then chase','kyc':'Seconds, unless it halts','store-creation':'Minutes, unless Bhaiyaa refuses','store-live':'1 day to finish the details'};
 let soPipelineStage='';
 const SO_PAGE_SIZE=10;
 let soPage=1;
@@ -2535,16 +2535,15 @@ const aiJourneys=[
   {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'},
   // -- Two human stages (the role choice and the signup) and three the agents run: KYC, the
   // creation itself, and the confirmation. Coverage is the honest fraction of that. --
-  {id:'bhaiyaa-store-creation',name:'Bhaiyaa Store Creation Journey',category:'O2C',desc:'Opens a Bhaiyaa store end to end — seller or buyer, the merchant signup, Aadhaar KYC run by the agent, then registration on Bhaiyaa and provisioning.',modules:['Stores','Bhaiyaa','Compliance Hub'],coverage:60,humanSteps:2,aiSteps:3,status:'Active',risk:'Low',updated:'31 Jul 2026, 12:10 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/></svg>'}
+  {id:'bhaiyaa-store-creation',name:'Bhaiyaa Store Creation Journey',category:'O2C',desc:'Opens a Bhaiyaa store end to end — the merchant signup, Aadhaar KYC run by the agent, then registration on Bhaiyaa and provisioning.',modules:['Stores','Bhaiyaa','Compliance Hub'],coverage:75,humanSteps:1,aiSteps:3,status:'Active',risk:'Low',updated:'31 Jul 2026, 12:10 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/></svg>'}
 ];
 
 const aiJourneyEvents={
   /* == BHAIYAA STORE CREATION ============================================================
-     Five stages, and the split between them is the design: each one is a different KIND of
+     Four stages, and the split between them is the design: each one is a different KIND of
      work, so each earns its own screen rather than being a line in one long feed.
 
-       Store Role      a decision, and the only one that changes what the rest means
-       Store Details   data entry
+       Store Details   data entry — the merchant's own signup
        KYC             an identity check the agent performs against UIDAI — not data entry,
                        not provisioning, and the one stage that can genuinely fail, so it is
                        shown on its own rather than buried mid-run where a failure would
@@ -2552,16 +2551,17 @@ const aiJourneyEvents={
        Store Creation  the automation: fetch, derive, mint, register, provision
        Store Created   the record
 
-     The rail carries all five from the first screen, so a merchant on step 1 can already see
+     The rail carries all four from the first screen, so a merchant on step 1 can already see
      that an Aadhaar check is coming — which is the difference between asking for an Aadhaar
-     number and springing it on them. == */
+     number and springing it on them.
+
+     WHAT WAS REMOVED. A fifth stage used to open this journey, asking whether the store sells
+     to customers or buys from sellers. It is gone: the signup this mirrors is seller.bhaiyaa.com,
+     which signs up sellers and nothing else, so it was a screen with one real answer standing
+     between a merchant and the form they came to fill. The `role` field survives on the store
+     record — anything already created, and anything arriving from Bhaiyaa carrying a buyer role,
+     still reads correctly everywhere. What went is the question, not the column. == */
   'bhaiyaa-store-creation':[
-    {name:'Store Role',chips:['Human Required','Bhaiyaa'],source:'Merchant',waitingOn:'Merchant',
-     desc:'The merchant chooses whether the store sells to customers or buys from sellers. Everything after this branches on it — the category question, what is provisioned, and the credit terms.',
-     validation:'A role must be chosen; it cannot be changed later without opening a second store.',
-     human:'Required — the merchant picks Seller or Buyer.',
-     failure:'No failure mode: the screen cannot be passed without a choice.',
-     next:'Store Details',fields:['Store Role']},
     {name:'Store Details',chips:['Human Required','Bhaiyaa'],source:'Merchant',waitingOn:'Merchant',
      desc:'Bhaiyaa’s own signup — contact details, store name, category and the turnover band — captured inside the Executive Layer rather than on Bhaiyaa’s site.',
      validation:'Email, first name, store type, Aadhaar and both consents are mandatory. A mobile number, if given, must be OTP-verified.',
@@ -3762,8 +3762,10 @@ const bhaiyaaKycChecks=[
   {id:'name',label:'Matching the name',running:'Comparing the name on record with UIDAI…',done:'Name matches'},
   {id:'screen',label:'Screening the merchant',running:'Checking sanctions and watchlists…',done:'No adverse match'}
 ];
+// Four stages — see the note on aiJourneyEvents['bhaiyaa-store-creation'] for why the role
+// picker is gone. The rail and the journey definition are read from the same place, so they
+// cannot disagree about how many steps there are.
 const bhaiyaaStoreStages=[
-  {label:'Store Role',sub:'Seller or buyer'},
   {label:'Store Details',sub:'Fill in the signup'},
   {label:'KYC',sub:'Aadhaar verified'},
   {label:'Creating',sub:'Writing to Bhaiyaa'},
