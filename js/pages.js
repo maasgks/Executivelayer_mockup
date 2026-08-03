@@ -9452,11 +9452,14 @@ function buildCfgModelDetailHTML(){
       }).join('')
       +'<button type="button" class="btn btn-secondary btn-sm" style="margin-top:14px;border:1px dashed #f1c27a;color:var(--orange);background:transparent" onclick="addCfgEnrichRow()">+ Add enrichment field</button>'
       +'</div>'
-    // Enrichment appears only while editing, on the same basis as Rules below: the fields are
-    // still held on the model and still added, renamed and removed here — they are simply not
-    // restated on the read-only view. Emptied rather than deleted, because this editor is the
-    // only place enrichment fields can be maintained.
-    :'';
+    // -- Enrichment is restated on the read-only view, not just in the editor. It is half of what
+    // the object holds, and a page that shows only the mapped half reads as though the source
+    // system supplied every field — which is the one thing this page exists to disprove. Rules
+    // below stays edit-only because a rule is a setting, not part of the record's shape. --
+    :'<div class="ep-form-card" style="margin-bottom:18px;border-color:#f1c27a">'
+      +'<div class="ep-form-title" style="color:var(--orange);border-bottom-color:rgba(26,26,26,.25)">Enrichment &middot; extra fields held in Data Foundation</div>'
+      +(m.enrichment.length?m.enrichment.map(function(e){return cfgEnrichRow(e);}).join(''):'<div style="padding:12px 0;font-size:12.5px;color:var(--gray)">No enrichment fields yet.</div>')
+      +'</div>';
   // Rules appear only while editing. The read-only view no longer carries a Rules card — the
   // maker-checker setting and the validation rule are still stored on the model and still
   // editable here, they are simply not restated on the view.

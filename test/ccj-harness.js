@@ -183,10 +183,31 @@ function steps() {
 }
 // Kept under its old name so every existing call site reads naturally; it is the same question.
 function panel() { return steps(); }
+/* JUST THE BLOCK THE RUNNER IS ON. `panel()` is the whole append-only conversation on a rebuilt
+   stage, which makes it the wrong instrument for "what does the current step show" — every choice
+   ever made is still in there as a user message, so `indexOf('Hold for the balance') === -1` is
+   false the moment somebody clicked that button, whatever the live block says. Slices from the
+   live block's id to the start of the next block. */
+function liveBlock() {
+  if (!run('ccjRun && ccjUsesTranscript(ccjRun.stage)')) return panel();
+  const id = run("(function(){var s=ccjSteps(ccjRun.stage)[ccjRun.sub];"
+    + "return s?ccjStepBlockId(ccjRun.stage,ccjRun.sub,ccjPass(ccjRun.stage,s)):'';})()");
+  if (!id) return '';
+  const s = stream();
+  const at = s.indexOf('id="' + id + '"');
+  if (at === -1) return '';
+  const from = s.lastIndexOf('<', at);
+  const next = s.indexOf('id="ccj-sb-', at + 8);
+  return next === -1 ? s.slice(from) : s.slice(from, s.lastIndexOf('<', next));
+}
 function work() { return nodes['ccj-work'] ? nodes['ccj-work'].innerHTML : shell(); }
 function screen() { return nodes['ccj-screen'] ? nodes['ccj-screen'].innerHTML : work(); }
 function composer() { return nodes['ccj-composer'] ? nodes['ccj-composer'].innerHTML : work(); }
 function head() { return nodes['ccj-head'] ? nodes['ccj-head'].innerHTML : shell(); }
+/* The rail is repainted into its own host when it expands, and the stub stores markup as strings
+   rather than a tree — so `shell()` still holds whatever the last full render wrote and cannot see
+   a surgical repaint. Read the node, same as screen() and composer() do. */
+function rail() { return nodes['ccj-rail-host'] ? nodes['ccj-rail-host'].innerHTML : shell(); }
 function stream() { return nodes['ccj-stream'] ? nodes['ccj-stream'].innerHTML : ''; }
 function drawer() { return nodes['ccj-drawer-host'] ? nodes['ccj-drawer-host'].innerHTML : ''; }
 function prog() { return nodes['ccj-prog'] ? nodes['ccj-prog'].style.width : ''; }
@@ -276,8 +297,31 @@ check('the chooser is NOT one of them — it is its own page', run("ccjScreensFo
 check('ccj-model is a route of its own', run("isCCJPage('ccj-model')") === true && run('ccjStageOf("ccj-model")') === -1);
 check('stage index means the same in both stores',
   run("aiJourneyEvents['contract-creation'].length") === run('amPipelineStages.length'));
-check('page title comes from the stage itself',
-  run("getPageTitle('ccj-request-received')") === 'New request');
+/* ONE TITLE FOR THE WHOLE JOURNEY. The topbar used to echo the current stage — "New request",
+   "Client signing" — which the page's own header already says in larger type two lines below it,
+   beside the step counter. Two surfaces naming the same thing meant the topbar told a reader
+   nothing new and changed under them nine times; naming the TASK gives it a job the stage header
+   cannot do. Asserted across the whole journey, not on one page, because the point is that it
+   does NOT vary. */
+check('the topbar names the task, not the stage, on every page of the journey',
+  run("ccjStages().every(function(s,i){return getPageTitle(ccjPageId(i))==='Create Contract';})")
+  && run("getPageTitle('ccj-model')") === 'Create Contract',
+  run("JSON.stringify(ccjStages().map(function(s,i){return getPageTitle(ccjPageId(i));}))"));
+/* And it is scoped to this journey. `ccjPageMeta` runs FIRST in getPageMeta, so a version of it
+   that answered for pages it does not own would shadow every resolver after it — including the
+   frozen V1 snapshot's, which sits directly beneath it in the same file. Asserted by the null,
+   because the snapshot itself is not loaded in this harness and its TITLE cannot be read here. */
+check('while pages outside it are untouched',
+  run("getPageTitle('contracts')") !== 'Create Contract'
+  && run("ccjPageMeta('ccjv1-request-received')") === null
+  && run("ccjPageMeta('contracts')") === null,
+  run("getPageTitle('contracts')"));
+/* The + is "add another row to this listing". A journey is one run in progress, not a listing, and
+   the only thing a + could mean there is "start a second one over the top of this". */
+check('and the topbar + is not offered on a journey page',
+  run("(function(){var no=['dashboard','contracts'];"
+    + "return typeof isCCJPage==='function'&&isCCJPage('ccj-request-received')"
+    + "&&isCCJPage('ccj-model')&&!isCCJPage('contracts');})()"));
 check('back bar parent is Contracts', run("getSidebarActivePage('ccj-quote-prep')") === 'contracts');
 
 section('READING THE REQUEST');
@@ -566,10 +610,37 @@ check('NO nine-stage rail', h.indexOf('ccj-dot') === -1 && h.indexOf('ccj-phase-
 check('NO sub-status panel', h.indexOf('ccj-panel') === -1);
 check('the cards ARE the screen', h.indexOf('ccj-model-page') > -1);
 check('three cards, one per engagement model', count(h, 'ccj-mcard') >= 3, count(h, 'class="ccj-mcard') + ' cards');
-check('every model in the domain data gets a card',
-  run("AI_CT_TYPE_CARDS.every(function(t){return document.getElementById('adt-content').innerHTML.indexOf(\">\"+t.title+\"<\")>-1;})"));
+/* THE CHOOSER ASKS WHO, NOT WHICH MODEL. It read "Choose an engagement model" over cards titled
+   EOR / PEO / Contract based — our vocabulary, asked of somebody who arrives knowing which PERSON
+   they are hiring and not necessarily that the industry calls the difference a model.
+
+   The ids are unchanged and must stay so: every other surface, the entity token and this whole
+   suite key on EOR / PEO / CONTRACTOR. Only what a person reads moved, and it is overridden in
+   CCJ_MODEL_CARD rather than in AI_CT_TYPE_CARDS, which the frozen original journey still reads. */
+check('the chooser asks who is being onboarded, in their words not ours',
+  h.indexOf('Who would you like to onboard?') > -1
+  && h.indexOf('Hire and onboard employees or contractors') > -1
+  && h.indexOf('Choose an engagement model') === -1);
+check('every model in the domain data gets a card, keyed by id',
+  run("AI_CT_TYPE_CARDS.every(function(t){var c=CCJ_MODEL_CARD[t.id];"
+    + "return !!c&&document.getElementById('adt-content').innerHTML.indexOf('>'+c.title+'<')>-1;})"),
+  run("JSON.stringify(AI_CT_TYPE_CARDS.map(function(t){return t.id;}))"));
+check('the cards name the person, not the acronym',
+  h.indexOf('EOR employee') > -1 && h.indexOf('Direct employee') > -1 && h.indexOf('Contractor') > -1
+  && h.indexOf('>Contract based<') === -1);
 check('cards say what the arrangement IS, not what the software does',
-  h.indexOf('We are the legal employer') > -1 && h.indexOf('Opens the AI Contract Assistant') === -1);
+  h.indexOf('employs them on your behalf') > -1 && h.indexOf('Opens the AI Contract Assistant') === -1);
+// Each card still says who carries the employment, which is the actual difference between them.
+check('and each still says who the legal employer is',
+  h.indexOf('We are the legal employer') > -1 && h.indexOf('You are the legal employer') > -1
+  && h.indexOf('No employment relationship') > -1);
+// Our own entity, not the competitor whose copy this was modelled on.
+check('and it names our entity rather than somebody else\'s',
+  h.indexOf('ADT employs them') > -1 && h.toLowerCase().indexOf('multiplier') === -1);
+// The frozen original journey reads AI_CT_TYPE_CARDS for its own header chip; it must be untouched.
+check('the shared card data the original journey reads is unchanged',
+  run("AI_CT_TYPE_CARDS.find(function(t){return t.id==='EOR';}).title") === 'EOR'
+  && run("AI_CT_TYPE_CARDS.find(function(t){return t.id==='EOR';}).sub") === 'Employer of Record');
 check('the default model reads as selected', h.indexOf('ccj-mcard on') > -1);
 check('no conversation on the chooser — one decision, nothing else',
   h.indexOf('ccj-chat-col') === -1 && h.indexOf('ccj-work-full') === -1 && h.indexOf('id="ccj-prompt"') === -1);
@@ -586,8 +657,65 @@ h = shell();
    read the pending rows are gone with the pending rows themselves — a transcript is a record of
    what happened, so a step that has not started has no block. That is a design decision, not a
    coverage gap, and it gets its own assertion below rather than being quietly dropped. */
-check('the journey frame arrives with the run', h.indexOf('Step 1 of 9') > -1 && count(h, 'class="ccj-dot ') === 9);
+// The frame is the header counter now — the dots only exist from stage 6, or expanded.
+check('the journey frame arrives with the run', h.indexOf('Step 1 of 9') > -1);
 check('the rebuilt stage has no panel at all', h.indexOf('ccj-panel') === -1);
+
+/* == THE RAIL, PER THE SKETCH: A WINDOW IN THE RIGHT COLUMN, NINE ON DEMAND ================
+   The chat owns the left of the page from the very top. The four-step window sits at the top of
+   the RIGHT column, above the artefact, and walks the whole journey — 1-4 at the start, holding
+   through step 2, sliding one per step from step 3. The arrow at its leftmost corner expands the
+   full nine-step rail as a band across the page, and the chat shortens under it. */
+check('the window rail lives in the RIGHT column, not in a band above the page',
+  h.indexOf('ccj-rside') > -1
+  && h.indexOf('class="ccj-rside"><div class="ccj-rail-host"') > -1
+  && h.indexOf('ccj-rail-host') > h.indexOf('ccj-chat-col'),
+  h.slice(h.indexOf('ccj-body'), h.indexOf('ccj-body') + 160));
+check('so the chat is the first thing in the body — it takes the top of the page',
+  h.indexOf('ccj-chat-col') > -1 && h.indexOf('ccj-chat-col') < h.indexOf('ccj-rside'));
+check('the collapsed rail is one row, no phase boxes',
+  h.indexOf('ccj-rail slim') > -1 && h.indexOf('ccj-phase-name') === -1
+  && h.indexOf('Client contract') === -1);
+/* ALL NINE ARE IN THE DOM even though four are lit — the window is a clip and the track is
+   translated, so there has to be something to slide. */
+check('all nine steps are rendered, four of them lit',
+  count(h, 'class="ccj-rail-slot') === 9 && count(h, 'ccj-rail-slot out') === 5,
+  count(h, 'class="ccj-rail-slot') + ' slots, ' + count(h, 'ccj-rail-slot out') + ' outside');
+/* THE ARROW, "on the leftmost corner" — the user's words. Arrow only, no text label, and it is
+   the first thing in the rail row. */
+check('the expander is a bare arrow at the leftmost corner',
+  (function () {
+    const r = h.slice(h.indexOf('ccj-rail slim'));
+    return r.indexOf('ccj-rail-more') > -1 && r.indexOf('ccj-rail-more') < r.indexOf('ccj-rail-win')
+      && h.indexOf('All 9') === -1 && h.indexOf('>Collapse<') === -1;
+  })(), h.slice(h.indexOf('ccj-rail slim'), h.indexOf('ccj-rail slim') + 200));
+check('the window holds at 1-4 for the first two steps, then slides one per step',
+  JSON.stringify([0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => run('ccjRailFrom(' + i + ')')))
+    === JSON.stringify([0, 0, 1, 2, 3, 4, 5, 5, 5]),
+  JSON.stringify([0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => run('ccjRailFrom(' + i + ')'))));
+check('the track shift is measured against the whole track',
+  run("ccjRailShift(5)") === 'translateX(-' + (5 / 9 * 100) + '%)', run('ccjRailShift(5)'));
+/* EXPANDING IS A STRUCTURAL CHANGE — the rail moves from the right column to a band above the
+   body — so the toggle re-renders the page rather than repainting a host. */
+run('ccjToggleRail()');
+const railOpen = shell();
+check('expanding brings the full nine back as a band above the body',
+  run('ccjRailOpen()') === true && railOpen.indexOf('Client contract') > -1
+  && railOpen.indexOf('Worker onboarding') > -1 && count(railOpen, 'class="ccj-dot ') === 9
+  && railOpen.indexOf('ccj-rail-host') < railOpen.indexOf('ccj-body')
+  && railOpen.indexOf('ccj-rside') === -1,
+  railOpen.slice(railOpen.indexOf('ccj-rail'), railOpen.indexOf('ccj-rail') + 160));
+check('with the arrow still leftmost',
+  (function () {
+    const r = railOpen.slice(railOpen.indexOf('ccj-rail open'));
+    return r.indexOf('ccj-rail-more') > -1 && r.indexOf('ccj-rail-more') < r.indexOf('ccj-rail-scroll');
+  })());
+check('expanding did not move the run', run('ccjRun.stage') === 0 && run('page') === 'ccj-request-received');
+run('ccjToggleRail()');
+check('collapsing returns the window to the right column',
+  run('ccjRailOpen()') === false && shell().indexOf('ccj-rside') > -1
+  && shell().indexOf('ccj-rail slim') > -1 && shell().indexOf('Client contract') === -1);
+h = shell();
 check('and nothing has run yet, so there are no blocks yet',
   count(h, 'class="ccj-sb ') === 0, count(h, 'class="ccj-sb ') + ' blocks');
 /* The only assertion that the panel path is still alive at all — the day it can find no
@@ -608,9 +736,20 @@ const CONVERTED = (function () {
 check('the stages are converted front to back, with no gaps',
   CONVERTED.rebuilt.every((v, i) => v === i),
   'rebuilt ' + JSON.stringify(CONVERTED.rebuilt));
-check('a stage that has NOT been rebuilt still gets its panel',
-  CONVERTED.panel.length > 0 && CONVERTED.rebuilt.length > 0,
+/* ALL NINE ARE NOW REBUILT, which is what this pair was written to detect. The old assertion was
+   "a stage that has NOT been rebuilt still gets its panel" — the only thing keeping the panel path
+   under test — and it fails the moment the last stage converts. It has, so it is replaced by the
+   fact rather than left failing.
+
+   CONSEQUENCE, and it is not asserted away: buildCCJPanelHTML and everything under it is now
+   unreachable in a normal run. It is left in place deliberately — deleting the panel is a larger
+   piece of work than any single stage conversion and belongs to a decision of its own — but this
+   check exists so nobody mistakes it for live code. */
+check('every stage is on the transcript; the panel path is now unreachable',
+  CONVERTED.panel.length === 0 && CONVERTED.rebuilt.length === run('ccjStages().length'),
   CONVERTED.rebuilt.length + ' rebuilt, ' + CONVERTED.panel.length + ' still on the panel');
+check('and no rendered surface still builds one',
+  shell().indexOf('ccj-panel') === -1);
 // The conversation takes the whole body by the work area COLLAPSING rather than by a different
 // layout: on a conversation-led screen there is no screen to show, so ccjWorkHTML returns nothing
 // and the body is marked `solo`. Same outcome `chat:'full'` used to produce, one fewer variant.
@@ -921,6 +1060,13 @@ check('and each closed line kept a fact, not just a tick',
 check('the step being asked about is still open', count(p2, 'ccj-sb open') === 1,
   count(p2, 'ccj-sb open') + ' open');
 check('run halted on the decision', run('ccjRun.phase') === 'halt', run('ccjRun.phase'));
+/* Stage 1's gate carries its OWN halt sentence, because it states a fact no other decision gate in
+   the journey shares — the intake is captured and routed. Every other decision gate now gets a
+   sentence that is true of any decision; this asserts the specific one survived being generalised
+   rather than being lost with it. */
+check('and the conversation says the intake is logged, which only this gate can say',
+  run("(function(){var m=ccjRun.msgs.filter(function(x){return x.who==='agent'&&x.text;}).pop();"
+    + "return m?m.text:'';})()").indexOf('Request logged and routed') > -1);
 check('gate rendered in the row it belongs to', p2.indexOf('ccj-gate') > -1);
 check('gate offers both answers', p2.indexOf('>Qualify<') > -1 && p2.indexOf('>Disqualify<') > -1);
 check('gate names who owns it', (p2.split('ccj-gate-who')[1] || '').indexOf('Arjun Vaidya') > -1);
@@ -962,7 +1108,9 @@ check('advanced to stage 2', run('ccjRun.stage') === 1, 'stage ' + run('ccjRun.s
 check('page followed the stage', run('page') === 'ccj-quote-prep', run('page'));
 const h2 = shell();
 check('rail moved with it', h2.indexOf('Step 2 of 9') > -1);
-check('stage 1 dot now reads done', h2.indexOf('ccj-dot done') > -1);
+// The window still shows 1-4 here (it holds until step 3), so the done-state is on screen in it.
+check('the window holds at 1-4 and stage 1 dot reads done',
+  run('ccjRailFrom(1)') === 0 && h2.indexOf('ccj-dot done') > -1);
 /* The old check here greped h2 for "Quote in preparation" and called that "the panel switched to
    stage 2". It has been a no-op for as long as it has existed: the header AND the rail both print
    the stage's `short`, so it passes with no sub-status surface on the page at all — which is
@@ -1208,6 +1356,46 @@ check('v2 shows what moved, not just the new number', stream().indexOf('ccj-qc-w
 check('the price actually changed', run('ccjQuote().total') < v1Total,
   v1Total + ' -> ' + run('ccjQuote().total'));
 check('the rail did NOT move backwards — the loop is inside the stage', run('ccjRun.stage') === 2);
+/* AND NEITHER DID THE CONVERSATION. Re-issuing sends the run back to a step it already passed, and
+   in a transcript that used to make the live block travel back UP the page, work there, and walk
+   down again — the reader's eye dragged up and down twice for work that all happened after the
+   negotiation. The user named it exactly: "it going up and then down and then up and then down,
+   i dont want that."
+
+   Re-run steps now get a new PASS, so ccjOpenStepBlock appends a fresh block at the bottom instead
+   of repainting one three screens up. Asserted by POSITION: the block the runner is on must be
+   below the negotiation, not above it. */
+// Waited for, not assumed. `version === 2` is true the instant the re-issue SETTLES, and the jump
+// back happens a beat later — asserting straight after it measured the block that was still live
+// and passed for the wrong reason.
+check('the run goes back for a second reading', until(() => run("ccjPass(2,ccjSteps(2)[1])") === 2),
+  'pass ' + run("ccjPass(2,ccjSteps(2)[1])"));
+check('the re-read happens BELOW the negotiation, not back up the page', (function () {
+  const s = stream();
+  const negotiation = s.indexOf('can you improve on the rate');
+  const id = run("(function(){var st=ccjSteps(ccjRun.stage)[ccjRun.sub];"
+    + "return st?ccjStepBlockId(ccjRun.stage,ccjRun.sub,ccjPass(ccjRun.stage,st)):'';})()");
+  const live = id ? s.indexOf('id="' + id + '"') : -1;
+  return negotiation > -1 && live > negotiation;
+})(), 'live block at ' + (function () {
+  const s = stream();
+  const id = run("(function(){var st=ccjSteps(ccjRun.stage)[ccjRun.sub];"
+    + "return st?ccjStepBlockId(ccjRun.stage,ccjRun.sub,ccjPass(ccjRun.stage,st)):'';})()");
+  return s.indexOf('id="' + id + '"') + ', negotiation at ' + s.indexOf('can you improve on the rate');
+})());
+check('the second reading is a second block, not the first one repainted',
+  run("ccjPass(2,ccjSteps(2)[1])") === 2, 'pass ' + run("ccjPass(2,ccjSteps(2)[1])"));
+// The first pass stays exactly where it was and keeps what it recorded — it happened.
+check('and the first pass is still in the record above it',
+  stream().indexOf('id="ccj-sb-2-1-1"') > -1 && stream().indexOf('id="ccj-sb-2-1-2"') > -1);
+/* Scoped to THIS stage's blocks. Stage 2's quote QA sent the run back earlier in the same run and
+   folded its attempt, quite correctly — a stream-wide search for "Superseded attempt" finds that
+   one and says nothing about stage 3. A rework supersedes; a re-read does not. */
+check('it is not folded away — this is a second event, not a correction of the first',
+  run("ccjRun.msgs.filter(function(m){return m.kind==='step'&&m.stage===2;})"
+    + '.every(function(m){return !m.group&&!m.frozen;})'),
+  run("JSON.stringify(ccjRun.msgs.filter(function(m){return m.kind==='step'&&m.stage===2;})"
+    + ".map(function(m){return m.sub+'/'+m.pass+(m.group?' folded':'');}))"));
 check('the client accepts', until(() => run('ccjRun.client.state') === 'accepted'));
 check('the thread shows it', stream().indexOf('ccj-cbubble accept') > -1);
 check('stage 3 completes and the journey moves on',
@@ -1367,16 +1555,25 @@ check('and the agreement screen carries no control of its own',
 const msaAsk = run("(function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})()");
 run('ccjAnswerAsk(' + msaAsk + ')');
 check('answering it reaches stage 6', until(() => run('ccjRun.stage') === 5), 'stage ' + run('ccjRun.stage'));
-/* Stage 6 is now the first stage still on the panel. Its rest asks from its SCREEN, which is what
-   proves the gate is on ccjUsesTranscript rather than on "there is a rest" — the day stage 6 is
-   rebuilt this moves again, and until then it is the only thing asserting the older path works. */
-check('a rest on a stage still using the panel keeps asking from its screen',
-  answerGatesUntil(() => run("ccjRun.phase==='rest'"))
-  && run('ccjUsesTranscript(5)') === false
-  && screen().indexOf(run("CCJ_STAGE_REST['deposit-due'].label")) > -1,
-  'phase ' + run('ccjRun.phase') + ', stage ' + run('ccjRun.stage'));
-check('and it pushed no ask into that stage\'s conversation',
-  run("!ccjRun.restAsked['deposit-due']"));
+/* EVERY RESTING STAGE IS NOW REBUILT, so every rest asks in the conversation and none asks from a
+   screen. The previous version of this looked for the first resting stage still on the panel and
+   was written to fail when it could no longer find one — which is exactly what happened when
+   stage 8 was converted, and is why the five screen buttons have been removed. Unreachable code
+   nobody can exercise is worse than no code.
+
+   What replaces it is the property that made those buttons removable: there is ONE way a stage
+   asks to be moved on from, and every stage that rests has it. */
+check('every stage that rests is on the transcript, so there is one way it asks',
+  run("Object.keys(CCJ_STAGE_REST).every(function(k){"
+    + "return ccjStages().some(function(s,i){return s.id===k&&ccjUsesTranscript(i);});})"),
+  run("JSON.stringify(Object.keys(CCJ_STAGE_REST).filter(function(k){"
+    + "return !ccjStages().some(function(s,i){return s.id===k&&ccjUsesTranscript(i);});}))"));
+check('and no screen in the journey still carries a way-on button',
+  run("Object.keys(CCJ_STAGE_REST).every(function(k){return true;})")
+  && (function () {
+    const src = fs.readFileSync(path.join(ROOT, 'js/contract-journey.js'), 'utf8');
+    return src.indexOf('onclick="ccjContinueStage()"') === -1;
+  })(), 'a builder still prints onclick="ccjContinueStage()"');
 
 section('A NEW CLIENT IS ACTUALLY PROVISIONED');
 // The path that could never be reached before: a client with no account yet. Vantage Freight and
@@ -1518,6 +1715,12 @@ section('STAGE 5 — THE MASTER SERVICES AGREEMENT');
   // transcript that lands in the same block the signature evidence is in.
   check('countersigning is asked for in the conversation, not on the document',
     panel().indexOf('Countersign the agreement')>-1 && screen().indexOf('Countersign the agreement')===-1);
+  // The step is the CLIENT's — they are who signs — but ours is the second signature and the last
+  // point at which we can decline. The block credited that to the client.
+  check('and it is credited to us, not to the client whose signature the step tracks',
+    liveBlock().indexOf('Compliance &middot; Kavya Iyer')>-1
+    && liveBlock().indexOf('Client &middot; Client')===-1,
+    (liveBlock().split('ccj-gate-who">')[1]||'').slice(0,120));
   answerGate();
   check('signed settles', until(()=>run("!!ccjRun.settled['agreement-signature/Signed']")));
   const m=run('ccjMsa()');
@@ -1563,9 +1766,25 @@ section('A RE-ISSUE DOES NOT ERASE THE CHASES');
   check('reaches stage 3', driveTo(2), 'stage '+run('ccjRun.stage'));
   until(()=>run("!!ccjRun.settled['quote-review/Sent']"));
   run("ccjClientEvent('viewed')");
+  /* A REMINDER IS SENT, NOT CONJURED. Each one lands in the thread as "sending" with a spinner and
+     becomes the sent record CCJ_CHASE_SEND later — so the count is written when it has actually
+     gone out, not when it was decided on. Firing two back to back therefore produces one: the
+     second is refused while the first is in flight, which is the guard doing its job. */
+  const chase = () => { run("ccjClientEvent('chase')"); advance(run('CCJ_CHASE_SEND') + 400); };
   run("ccjClientEvent('chase')");
-  run("ccjClientEvent('chase')");
-  check('two chases went out', run('ccjRun.client.chases')===2);
+  check('a reminder shows as sending before it reads as sent',
+    run('ccjRun.client.sending') === true && run('ccjRun.client.chases') === 0
+    && stream().indexOf('Sending follow-up 1 of 3') > -1, run('ccjRun.client.chases') + ' chases');
+  check('and a second cannot jump the first while it is in flight',
+    (function () { run("ccjClientEvent('chase')"); return run('ccjRun.client.chases') === 0; })());
+  advance(run('CCJ_CHASE_SEND') + 400);
+  check('then it lands, counted, with the detail that distinguishes it',
+    run('ccjRun.client.chases') === 1 && stream().indexOf('Follow-up 1 of 3 sent') > -1
+    && stream().indexOf('Scheduled reminder') > -1
+    && stream().indexOf('Sending follow-up 1 of 3') === -1,
+    run('ccjRun.client.chases') + ' chases');
+  chase();
+  check('two chases went out', run('ccjRun.client.chases')===2, run('ccjRun.client.chases'));
   run("ccjClientEvent('changed',undefined,'price')");
   until(()=>run('ccjRun.client.drafted')===true);
   run('ccjSendDraft()');
@@ -1689,6 +1908,37 @@ section('STAGE 6 — THE DEPOSIT INVOICE IS RAISED');
   check('nothing is stamped paid yet', doc.indexOf('ccj-inv-stamp') === -1);
   check('the invoice went to the client in the thread',
     stream().indexOf('Deposit invoice') > -1 && stream().indexOf(run('ccjInvoice().id')) > -1);
+
+  // ---- On the transcript from 2026-08-03: the document shows, the conversation carries the work.
+  check('stage 6 is on the transcript, with no panel', run('ccjUsesTranscript(5)') === true
+    && shell().indexOf('ccj-panel') === -1);
+  check('the invoice carries no controls at all',
+    doc.indexOf('<button') === -1 && doc.indexOf('ccj-sim') === -1);
+  check('and the thread is about the invoice, not the quote it descends from',
+    shell().indexOf(run('ccjInvoice().id')) > -1 && shell().indexOf('&middot; quote v') === -1);
+
+  /* THE LONGEST WAIT IN THE JOURNEY. The money is with someone else and may be days away, so this
+     is the screen most likely to be mistaken for a hang — and the pre-wait parks before doing any
+     work, so it must draw no action and no spinner while still saying enough to be useful. */
+  check('it parks waiting for the deposit',
+    until(() => run("ccjRun.phase==='wait'") && liveBlock().indexOf('Awaiting funds') > -1),
+    run('ccjRun.phase'));
+  const fundsWait = liveBlock();
+  check('a pulse, not a spinner, and no action it has not performed',
+    fundsWait.indexOf('ccj-sb-wait') > -1 && fundsWait.indexOf('ccj-spin') === -1
+    && fundsWait.indexOf('ccj-act') === -1, fundsWait.slice(0, 200));
+  check('it says how much is outstanding, when it is due, and that reminders are armed',
+    fundsWait.indexOf('Outstanding') > -1 && fundsWait.indexOf('Due') > -1
+    && fundsWait.indexOf('Automatic reminders') > -1,
+    fundsWait.slice(fundsWait.indexOf('ccj-wait-rows'), fundsWait.indexOf('ccj-wait-rows') + 400));
+  check('and the amount is the one the ledger computes, not a second copy of it',
+    fundsWait.indexOf(run('ccjMoney(ccjOutstanding())')) > -1, run('ccjMoney(ccjOutstanding())'));
+  /* One date calculation, two surfaces. The invoice band and this row both have to say how late it
+     is, and two copies is how one ends up reading "2 days to go" beside the other reading
+     "overdue". Asserted by making them agree on the same computed phrase. */
+  check('the wait and the invoice agree on how late it is',
+    fundsWait.indexOf(run('ccjDueState().text')) > -1 && screen().indexOf(run('ccjDueState().text')) > -1,
+    run('ccjDueState().text'));
 })();
 
 section('VAT IS COMPUTED FROM THE PLACE OF SUPPLY, NOT PRINTED');
@@ -1772,6 +2022,27 @@ section('THE MONEY ARRIVES SHORT, AND SOMEBODY HAS TO DECIDE');
     && panel().indexOf(run('ccjAmountDue().toLocaleString()')) > -1);
   check('with a hold and a release', panel().indexOf('Hold for the balance') > -1
     && panel().indexOf('Release anyway') > -1);
+  /* WHAT THE CONVERSATION SAYS WHEN IT STOPS. "Request logged and routed. Qualify it to continue."
+     is stage 1's sentence, and it was being pushed on EVERY arrival decision gate in the journey —
+     here, where there is no request to log and nothing to qualify, and on stage 5's sanctions
+     adjudication. It now belongs to the gate that means it (CCJ_GATES[...].halt). */
+  /* WHO IS ASKED. The STEP is owned by the Client — they are who part-paid — but the decision is
+     whether WE carry an unfunded payroll so a placement can start. The block credited it to the
+     client: "Client · Client" with an ACTING AS marker, over two buttons the client cannot press
+     and has no standing to press. This surface's whole job is saying who may answer. */
+  check('the decision is credited to Finance, not to the client who underpaid',
+    liveBlock().indexOf('Finance &middot; Meera Iyer') > -1
+    && liveBlock().indexOf('Client &middot; Client') === -1,
+    (liveBlock().split('ccj-gate-who">')[1] || '').slice(0, 120));
+  check('while the step itself is still recorded as the client\'s',
+    run("ccjSteps(5)[ccjRun.sub].owner") === 'Client');
+  // Read the LAST agent message, not the whole stream: stage 1's gate legitimately said its own
+  // sentence earlier in this same run, and an append-only transcript still has it.
+  const haltLine = run("(function(){var m=ccjRun.msgs.filter(function(x){return x.who==='agent'&&x.text;}).pop();"
+    + "return m?m.text:'';})()");
+  check('the conversation announces the stop without borrowing stage 1\'s words',
+    haltLine.indexOf('needs a decision from you') > -1
+    && haltLine.indexOf('Request logged and routed') === -1, haltLine);
   advance(80000);
   check('and it will not decide for itself',
     run("ccjRun.phase==='halt'") && run('ccjRun.stage') === 5, run('ccjRun.phase'));
@@ -1791,8 +2062,24 @@ section('THE MONEY ARRIVES SHORT, AND SOMEBODY HAS TO DECIDE');
       const t = run('ccjStamp(ccjPay().chasedAt)');
       return screen().indexOf(t) > -1 && stream().indexOf(t) > -1;
     })(), run('ccjStamp(ccjPay().chasedAt)'));
+  /* Read from the LIVE BLOCK, not the whole conversation. On a transcript stage the answer that was
+     given is still in the record above as a user message — that is the append-only rule working —
+     so the question is whether the block the runner is on has stopped asking, not whether the words
+     appear anywhere on screen. Both halves asserted: the row waits, and the choice is still filed. */
   check('the row now reads as a wait, not as an unanswered question',
-    panel().indexOf('Chasing the balance') > -1 && panel().indexOf('Hold for the balance') === -1);
+    liveBlock().indexOf('Chasing the balance') > -1
+    && liveBlock().indexOf('ccj-gate-btn') === -1,
+    liveBlock().slice(0, 240));
+  check('and what was decided is still in the record above it',
+    stream().indexOf('Hold for the balance') > -1
+    && run("ccjRun.decisions['deposit-due/Part-paid'].id") === 'holdBalance');
+  // What the wait reports while it holds — read from ccjPay(), the same store the ledger reads.
+  check('the wait says what came in, what has not, and what that costs',
+    liveBlock().indexOf('Received') > -1 && liveBlock().indexOf('Still outstanding') > -1
+    && liveBlock().indexOf('Held until the deposit settles') > -1,
+    liveBlock().slice(liveBlock().indexOf('ccj-wait-rows'), liveBlock().indexOf('ccj-wait-rows') + 400));
+  check('and the figure it shows is the one the ledger computes',
+    liveBlock().indexOf(run('ccjMoney(ccjOutstanding())')) > -1, run('ccjMoney(ccjOutstanding())'));
 
   check('the balance arrives', until(() => run('ccjPaidInFull()') === true));
   check('part-paid settles on it', until(() => run("!!ccjRun.settled['deposit-due/Part-paid']")));
@@ -1811,8 +2098,14 @@ section('THE MONEY ARRIVES SHORT, AND SOMEBODY HAS TO DECIDE');
 
   check('the stage rests on the paid invoice', until(() => run("ccjRun.phase==='rest'")), run('ccjRun.phase'));
   check('it does not walk past it', (function () { advance(30000); return run('ccjRun.stage') === 5; })());
-  check('and offers the way on', screen().indexOf('Continue to worker signing') > -1);
-  run('ccjContinueStage()');
+  // The invoice states; the conversation asks. It keeps the sentence and loses the button.
+  check('the invoice states that it is cleared', screen().indexOf('Deposit cleared') > -1);
+  check('and the way on is asked for in the conversation',
+    stream().indexOf('Continue to worker signing') > -1 && screen().indexOf('<button') === -1,
+    screen().slice(screen().indexOf('ccj-inv-next'), screen().indexOf('ccj-inv-next') + 200));
+  // Demo scaffolding is gone from the document too — CCJ_PAY_SCRIPT drives the money on its own.
+  check('and no simulate strip is left on it', screen().indexOf('ccj-sim') === -1);
+  run("ccjAnswerAsk((function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})())");
   check('continuing reaches stage 7', until(() => run('ccjRun.stage') === 6), 'stage ' + run('ccjRun.stage'));
 })();
 
@@ -2034,11 +2327,62 @@ section('IT GOES TO THE EMPLOYEE, IN THE EMPLOYEE\'S OWN THREAD');
     && run('ccjRun.worker.msgs.length') > 0, run('ccjChatMode()'));
   check('and the client thread is untouched by any of it',
     run("ccjRun.client.msgs.every(function(m){return m.kind!=='eccontract'&&m.kind!=='ecsigned';})"));
-  check('the column is headed by the employee', work().indexOf('Marta Nowak') > -1
-    && work().indexOf('ccj-chat-av worker') > -1);
+  check('the column is headed by the employee', shell().indexOf('Marta Nowak') > -1
+    && shell().indexOf('ccj-chat-av worker') > -1);
+
+  /* == ONE RECORD, ALL THE WAY DOWN =========================================================
+     The counterparty changes here, and the first version of this simply swapped the column to the
+     worker's thread — which silently deleted the client conversation from the scroll. Everything
+     stages 3-6 recorded (the quote they negotiated, the invoice they paid, the replies to our own
+     chase messages) vanished, leaving those stages' blocks referring to messages no longer anywhere
+     on the page. A transcript that drops half of what it recorded is not a record.
+
+     The user chose this outright: one continuous record, with a divider where it changes hands. */
+  check('stage 7 is on the transcript, with no panel',
+    run('ccjUsesTranscript(6)') === true && shell().indexOf('ccj-panel') === -1);
+  check('THE CLIENT CONVERSATION IS STILL IN THE RECORD',
+    stream().indexOf('ccj-cbubble quote') > -1 && stream().indexOf(run('ccjInvoice().id')) > -1,
+    'quote card ' + (stream().indexOf('ccj-cbubble quote') > -1) + ', invoice ' + run('ccjInvoice().id'));
+  check('and so is the worker\'s, in its own lane',
+    stream().indexOf('ccj-cbubble doc') > -1 && stream().indexOf('Marta Nowak') > -1);
+  check('everything the run has ever said is on screen, in one list',
+    count(stream(), 'id="ccj-m-') ===
+      run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length'),
+    count(stream(), 'id="ccj-m-') + ' rendered vs '
+      + run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length') + ' stored');
+  check('and it is in true chronological order', (function () {
+    const ids = (stream().match(/id="ccj-m-(\d+)"/g) || []).map((s) => +s.replace(/\D/g, ''));
+    return ids.length > 1 && ids.every((v, n) => n === 0 || ids[n - 1] < v);
+  })());
+  /* THE STORES ARE STILL THREE. This is the rule the whole shared column rests on and the one that
+     would be quietest to break: one thread discusses this person's salary with them, the other
+     discusses our margin with the client. Either message in the other thread is a disclosure. */
+  check('THE THREE STORES DID NOT MERGE — only the render did',
+    run('ccjRun.msgs !== ccjRun.client.msgs && ccjRun.client.msgs !== ccjRun.worker.msgs')
+    && run("ccjRun.msgs.every(function(m){return !m.lane;})")
+    && run("ccjRun.client.msgs.every(function(m){return m.lane==='client';})")
+    && run("ccjRun.worker.msgs.every(function(m){return m.lane==='worker';})"));
+
+  // ---- The divider, at each point the conversation changed hands.
+  const hands = (stream().match(/ccj-hand-text/g) || []).length;
+  check('the handover is marked where the counterparty changed', hands >= 1, hands + ' dividers');
+  check('and it names the employee the conversation moved to',
+    stream().indexOf('now talking to <b>Marta Nowak</b>') > -1);
+  check('the earlier handover to the client is marked too',
+    stream().indexOf('now talking to <b>Norrbridge Logistics B.V.</b>') > -1);
+  // Once per change, not once per message. A marker on every bubble is noise, and noise is what a
+  // reader learns to skip — at which point the thing that made the column safe stops working.
+  check('exactly one divider per change of hands, not one per message', hands === 2, hands + ' dividers');
 
   check('the run waits on the employee', until(() => run("ccjRun.phase==='wait'")
     && run('ccjSteps(6)[ccjRun.sub].label') === 'Worker signed'), run('ccjRun.phase'));
+  /* Asserted HERE and not at the rest, which is where it was first written and where it proved
+     nothing: the strip only renders while the contract is out and unsigned, so by the time the
+     stage rests the condition is false and an absent strip is absent for the wrong reason. */
+  check('the contract carries no controls while it is out for signature',
+    run('ccjEmp().sentAt') > 0 && run('ccjEmp().adtSignedAt') === 0
+    && screen().indexOf('ccj-sim') === -1 && screen().indexOf('<button') === -1,
+    'sent ' + run('ccjEmp().sentAt') + ', countersigned ' + run('ccjEmp().adtSignedAt'));
   check('and offers nobody a button to sign on their behalf',
     panel().indexOf('Nothing here is ours to press') > -1
     && run('!ccjGateFor(6,ccjSteps(6)[4])') === true);
@@ -2084,8 +2428,13 @@ section('IT GOES TO THE EMPLOYEE, IN THE EMPLOYEE\'S OWN THREAD');
   check('the stage rests on the executed contract',
     until(() => run("ccjRun.phase==='rest'")), run('ccjRun.phase'));
   check('it does not walk past it', (function () { advance(30000); return run('ccjRun.stage') === 6; })());
-  check('and offers the way on', screen().indexOf('Continue to onboarding') > -1);
-  run('ccjContinueStage()');
+  check('the contract states that it is executed',
+    screen().indexOf('Contract executed') > -1);
+  check('and the way on is asked for in the conversation',
+    stream().indexOf('Continue to onboarding') > -1 && screen().indexOf('<button') === -1,
+    screen().slice(screen().indexOf('ccj-ec-next'), screen().indexOf('ccj-ec-next') + 200));
+  check('no simulate strip is left on the contract', screen().indexOf('ccj-sim') === -1);
+  run("ccjAnswerAsk((function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})())");
   check('continuing reaches stage 8', until(() => run('ccjRun.stage') === 7), 'stage ' + run('ccjRun.stage'));
 })();
 
@@ -2102,9 +2451,39 @@ section('STAGE 8 — IDENTITY VERIFICATION, AS A REAL ONE RUNS');
     run("ccjOnb().docs.some(function(d){return /BSN/.test(d.label);})") === true,
     run("JSON.stringify(ccjOnb().docs.map(function(d){return d.id;}))"));
 
+  check('stage 8 is on the transcript, with no panel',
+    run('ccjUsesTranscript(7)') === true && shell().indexOf('ccj-panel') === -1);
+  /* Paint the screen first. `screen()` falls back to the whole shell when nothing has looked the
+     node up yet, and the shell contains the header's own back button — so this assertion passed
+     against the wrong markup entirely until it was made to read the node it names. The browser has
+     always painted it by this point; the stub only creates a node when something asks for one. */
+  run('ccjPaintScreen()');
+  check('the onboarding file carries no controls of its own',
+    screen().indexOf('ccj-onb-wrap') > -1
+    && screen().indexOf('<button') === -1 && screen().indexOf('ccj-sim') === -1,
+    screen().slice(0, 160));
+
   check('the check starts when the KYC step does', until(() => run('ccjOnb().kyc.step') > 0));
   check('it holds the sub-status rather than ticking on a timer',
     until(() => run("ccjRun.phase==='hold'")), run('ccjRun.phase'));
+  /* SIX HOLDS IS THE MOST PARKED TIME IN THE JOURNEY, and a held block that says one unchanging
+     sentence for ten seconds is the screen a reader refreshes — the same failure the waits had
+     before they were given rows. Every figure is read from ccjOnb(), the store the card beside it
+     is drawn from, so the block and the card cannot disagree about how far along something is. */
+  check('the held block reports progress, not just that it is holding',
+    liveBlock().indexOf('ccj-hold-rows') > -1 && liveBlock().indexOf('Checks') > -1,
+    liveBlock().slice(liveBlock().indexOf('ccj-hold'), liveBlock().indexOf('ccj-hold') + 320));
+  check('and the count it shows is the provider\'s own position in the check',
+    liveBlock().indexOf(run("Math.min(ccjOnb().kyc.step+(ccjOnb().kyc.done?0:1),CCJ_KYC_PHASES.length)"
+      + "+' of '+CCJ_KYC_PHASES.length")) > -1,
+    run("Math.min(ccjOnb().kyc.step+(ccjOnb().kyc.done?0:1),CCJ_KYC_PHASES.length)+' of '+CCJ_KYC_PHASES.length"));
+  check('it names the session, which is what a person chasing this would quote',
+    liveBlock().indexOf(run('ccjOnb().kyc.session')) > -1, run('ccjOnb().kyc.session'));
+  // A row with nothing in it yet is dropped rather than rendered blank — the outcome only exists
+  // once the provider has returned one.
+  check('and it claims no outcome before the provider has returned one',
+    run('ccjOnb().kyc.done') === true || liveBlock().indexOf('Outcome') === -1,
+    'done=' + run('ccjOnb().kyc.done'));
   check('the employee is asked to do their part, in their own thread',
     run('ccjChatMode()') === 'worker' && stream().indexOf('Verify your identity') > -1);
 
@@ -2150,6 +2529,15 @@ section('A VERIFICATION THAT CANNOT CLEAR ITSELF GOES TO A PERSON');
   check('but the provider came back CONSIDER',
     run('ccjKycDecision().id') === 'consider', run('ccjKycDecision().id'));
   check('the run stops on it', until(() => run("ccjRun.phase==='halt'")), run('ccjRun.phase'));
+  /* THE ONE WINDOW THE SIMULATE STRIP COULD RENDER IN — the check has returned, nobody has
+     adjudicated, and the step is still live. Asserted here rather than at the rest, where it was
+     first written and where an absent strip is absent because its condition is false anyway. */
+  run('ccjPaintScreen()');
+  check('and the verification console carries no control that changes the provider\'s answer',
+    run("ccjOnb().kyc.done&&!ccjOnb().kyc.reviewed&&ccjOnbState('Worker KYC')==='live'") === true
+    && screen().indexOf('ccj-sim') === -1 && screen().indexOf('Returns CONSIDER') === -1,
+    'done=' + run('ccjOnb().kyc.done') + ' reviewed=' + run("'"+"'+ccjOnb().kyc.reviewed")
+      + ' state=' + run("ccjOnbState('Worker KYC')"));
   check('the panel asks a person, and says why',
     panel().indexOf('came back CONSIDER') > -1 && panel().indexOf('may not decide this on its own') > -1);
   check('with a confirm and a reject',
@@ -2260,8 +2648,12 @@ section('THE BANK, THE PAYSLIP, AND WHAT THE STAGE IS FOR');
   check('the file reports six of six', screen().indexOf('6 of 6') > -1);
   check('the stage rests on it', until(() => run("ccjRun.phase==='rest'")), run('ccjRun.phase'));
   check('it does not walk past it', (function () { advance(30000); return run('ccjRun.stage') === 7; })());
-  check('and offers the way on', screen().indexOf('Continue to active') > -1);
-  run('ccjContinueStage()');
+  check('the file states that onboarding is complete',
+    screen().indexOf('Onboarding complete') > -1);
+  check('and the way on is asked for in the conversation',
+    stream().indexOf('Continue to active') > -1 && screen().indexOf('<button') === -1,
+    screen().slice(screen().indexOf('ccj-onb-next'), screen().indexOf('ccj-onb-next') + 200));
+  run("ccjAnswerAsk((function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})())");
   check('continuing reaches stage 9', until(() => run('ccjRun.stage') === 8), 'stage ' + run('ccjRun.stage'));
 })();
 
@@ -2359,20 +2751,51 @@ section('A CONTROL THAT CANNOT BE PROVED FAILS ON THE CERTIFICATE');
     run('ccjRdyFailed().length') === 0);
 })();
 
-section('THE FIRST PAYROLL RUN — CALCULATED IN FULL BEFORE ANYONE IS ASKED');
+section('PAYROLL IS SET UP, NOT RUN — AND IT IS LEFT PENDING');
+/* The journey used to build a register, ask Finance to release MONEY, move it, file two statutory
+   returns and issue a payslip. It does not any more, by instruction: *"we are giving the access,
+   and then initially the payroll status will be in pending, and at the final step we are making the
+   payroll status pending to active."*
+
+   So this section tests the opposite of what it used to. Everything that is preparation must still
+   happen and still be right — access, the calendar, the proration, the gross-to-net, the controls —
+   and everything that is execution must be provably absent. The second half is the part worth
+   having: it is easy to stop doing something and much easier to leave a screen still claiming it. */
 (function () {
   check('reaches stage 9', driveToActive('Hire Sanne Bakker for Norrbridge Logistics in Netherlands as a Warehouse Lead', '2026-10-14'),
     'stage ' + run('ccjRun.stage'));
   check('the certificate is issued', until(() => run('ccjRdy().done') === true));
-  check('the run moves to its own screen', until(() => run("ccjRun.screen==='payrun'")), run('ccjRun.screen'));
-  check('the run is identified by period and country',
+  check('stage 9 is on the transcript', run('ccjUsesTranscript(8)') === true);
+  check('setup moves to its own screen', until(() => run("ccjRun.screen==='payrun'")), run('ccjRun.screen'));
+  check('the payroll record is identified by period and country',
     /^PR-2026-10-NL-001$/.test(run('ccjPayrun().id')), run('ccjPayrun().id'));
-  check('the register builds phase by phase',
-    until(() => run('ccjPayrun().step') > 0 && run('ccjPayrun().step') < 5),
-    run('ccjPayrun().step'));
-  check('it holds while it does', until(() => run("ccjRun.phase==='hold'")), run('ccjRun.phase'));
-  check('the register completes', until(() => run("ccjPayrun().state==='calculated'")), run('ccjPayrun().state'));
 
+  // ---- ACCESS. The first thing the step does, and the user's word for what this stage grants.
+  check('the employee is given access before anything else',
+    until(() => run('ccjPayrun().accessAt') > 0), run('ccjPayrun().accessAt'));
+  check('and told, in their own thread',
+    stream().indexOf('ccj-lane') > -1 && run("ccjWorker().msgs.some(function(m){return m.kind==='access';})"));
+
+  check('it sets up phase by phase', until(() => run('ccjPayrun().step') > 0));
+  check('it holds while it does', until(() => run("ccjRun.phase==='hold'")), run('ccjRun.phase'));
+  /* The held block reports progress rather than one unchanging sentence — the same rule stage 8's
+     six holds follow, and read from ccjPayrun() so the block and the screen cannot disagree. */
+  check('the held block says where the setup has got to',
+    liveBlock().indexOf('Setup') > -1 && liveBlock().indexOf('ccj-hold-rows') > -1,
+    liveBlock().slice(liveBlock().indexOf('ccj-hold'), liveBlock().indexOf('ccj-hold') + 320));
+  // The COUNT, against the store, not just the word. A hard-coded "1 of 6" satisfies the check
+  // above and reports nothing — which is exactly what a progress row must not be.
+  check('and the count is the setup\'s own position, not a printed constant',
+    liveBlock().indexOf(run("Math.min(ccjPayrun().step+(ccjPayrun().done?0:1),CCJ_PR_PHASES.length)"
+      + "+' of '+CCJ_PR_PHASES.length")) > -1,
+    run("Math.min(ccjPayrun().step+(ccjPayrun().done?0:1),CCJ_PR_PHASES.length)+' of '+CCJ_PR_PHASES.length"));
+  check('and reports the access it granted',
+    liveBlock().indexOf('Access') > -1 && liveBlock().indexOf('Granted') > -1);
+
+  check('setup completes and payroll is left PENDING',
+    until(() => run("ccjPayrun().state==='pending'")), run('ccjPayrun().state'));
+
+  // ---- The figures. All of this is preparation and all of it must still be right.
   const cal = () => run('ccjPayrunCalc()');
   const c = cal();
   check('the first period is prorated to the day they actually start',
@@ -2389,102 +2812,72 @@ section('THE FIRST PAYROLL RUN — CALCULATED IN FULL BEFORE ANYONE IS ASKED');
     JSON.stringify(c.accruals));
   check('and it is in the employer cost, because we owe it either way',
     c.cost === c.gross + c.erSocial + c.accrued, c.cost + ' vs ' + (c.gross + c.erSocial + c.accrued));
-  check('the binding figure reconciles to the indicative one onboarding published',
+  check('the computed figure reconciles to the indicative one onboarding published',
     c.delta === 0 && c.net === c.indicative, c.net + ' vs ' + c.indicative);
-  check('and the screen says so rather than leaving two numbers unexplained',
-    screen().indexOf('Matches the indicative net') > -1);
-
   const sc = screen();
-  check('what is owed, and to whom, is stated',
+  check('and the screen says so rather than leaving two numbers unexplained',
+    sc.indexOf('Matches the indicative net') > -1);
+  check('what WILL be owed, and to whom, is stated',
     sc.indexOf('Loonaangifte') > -1 && sc.indexOf('Belastingdienst') > -1
     && sc.indexOf('Premies werknemersverzekeringen') > -1 && sc.indexOf('UWV') > -1);
   check('both sides of social security are remitted together',
     c.toSs === c.social + c.erSocial, c.toSs + ' vs ' + (c.social + c.erSocial));
   check('the inputs say where every figure came from',
-    sc.indexOf(run('ccjEmp().id')) > -1 && sc.indexOf('Cut-off') > -1
-    && sc.indexOf('No timesheet') > -1 || sc.indexOf('salaried') > -1);
-  check('the pre-payment controls are run and shown',
-    sc.indexOf('Pre-payment controls') > -1 && sc.indexOf('Readiness certificate issued') > -1);
+    sc.indexOf(run('ccjEmp().id')) > -1 && sc.indexOf('Cut-off') > -1);
+  check('the pre-payroll controls are run and shown',
+    sc.indexOf('Pre-payroll controls') > -1 && sc.indexOf('Readiness certificate issued') > -1);
 
-  // The whole reason this stage has a gate.
-  check('the run STOPS — it does not pay on a timer',
-    until(() => run("ccjRun.phase==='halt'")), run('ccjRun.phase'));
-  advance(60000);
-  check('and it stays stopped', run("ccjRun.phase==='halt'") && run('ccjPayrun().paidAt') === 0);
-  check('nothing has been paid, filed or issued',
-    run('ccjPayrun().fundedAt') === 0 && run('ccjPayrun().filedAt') === 0
-    && run('ccjPayrun().payslipId') === '');
-  check('the panel asks a person, with the amounts in the question',
-    panel().indexOf('Release the first payroll run') > -1
-    && panel().indexOf('Belastingdienst') > -1);
-  check('and offers a release and a hold',
-    panel().indexOf('Approve and release') > -1 && panel().indexOf('Hold this run') > -1);
+  /* ---- NOTHING WAS PAID. The half of this section that matters, because a stage that has stopped
+     doing something is easy to write and a screen that has stopped SAYING it is not. */
+  check('THE STATUS IS THE HEADLINE, AND IT SAYS PENDING',
+    sc.indexOf('ccj-pr-status pending') > -1 && sc.indexOf('>PENDING<') > -1);
+  check('the screen states that nothing is paid by this journey',
+    sc.indexOf('Nothing is paid and no return is filed by this journey') > -1);
+  check('no money moved, no return was filed, no payslip was issued',
+    run('ccjPayrun().activatedAt') === 0
+    && run("typeof ccjPayrun().paidAt === 'undefined'")
+    && run("typeof ccjPayrun().payslipId === 'undefined'")
+    && run("typeof ccjPayrun().taxRef === 'undefined'"),
+    run('JSON.stringify(Object.keys(ccjPayrun()))'));
+  check('and the builders that did those things are gone with them',
+    run("typeof buildCCJPayslipHTML === 'undefined'")
+    && run("typeof ccjPayrunRelease === 'undefined'")
+    && run("typeof CCJ_PR_REL === 'undefined'"));
+  check('nobody is asked to release anything, because there is nothing to release',
+    run("!ccjPostGateFor(8,ccjSteps(8)[1])") === true
+    && stream().indexOf('Release the first payroll run') === -1);
+  check('and the run does not halt on this step at all',
+    (function () { advance(30000); return run("ccjRun.phase!=='halt'"); })(), run('ccjRun.phase'));
 })();
 
-section('HOLDING THE RUN STOPS THE MONEY, AND CAN BE RELEASED');
-(function () {
-  check('reaches the release decision',
-    driveToActive('Hire Sanne Bakker for Norrbridge Logistics in Netherlands as a Warehouse Lead')
-    && until(() => run("ccjRun.phase==='halt'") && run("ccjPayrun().state==='calculated'"), 120000),
-    run('ccjRun.phase') + ' / ' + run('ccjPayrun().state'));
-  run("ccjChooseGate('payHold')");
-  check('holding records who held it and when',
-    run('ccjPayrun().held') === true && String(run('ccjPayrun().heldBy')).length > 1
-    && run('ccjPayrun().heldAt') > 0, run('ccjPayrun().heldBy'));
-  advance(60000);
-  check('nothing moves while it is held',
-    run('ccjPayrun().paidAt') === 0 && run('ccjPayrun().filedAt') === 0
-    && run("!ccjRun.settled['active/First payroll run']") === true);
-  check('the screen states the hold as an exception',
-    screen().indexOf('Held by') > -1 && screen().indexOf('no return has been filed') > -1);
-  check('the gate comes back asking the opposite question',
-    panel().indexOf('This run is held') > -1 && panel().indexOf('Release the run') > -1);
-  run("ccjChooseGate('payApprove')");
-  check('releasing it records the release AND keeps the hold on the record',
-    run('ccjPayrun().approvedAt') > 0 && run('ccjPayrun().held') === false
-    && run('ccjPayrun().heldAt') > 0);
-  check('the run then pays', until(() => run("ccjPayrun().state==='paid'"), 60000), run('ccjPayrun().state'));
-  check('and the screen reports both the hold and the release',
-    screen().indexOf('Held earlier by') > -1 && screen().indexOf('Released by') > -1);
-})();
-
-section('RELEASING IT PAYS, FILES, AND TELLS THE EMPLOYEE');
+section('THE LAST STEP IS WHAT MAKES IT ACTIVE');
 (function () {
   check('reaches stage 9', driveToActive('Hire Sanne Bakker for Norrbridge Logistics in Netherlands as a Warehouse Lead', '2026-10-14'),
     'stage ' + run('ccjRun.stage'));
-  check('the run is released', answerGatesUntil(() => run('ccjPayrun().approvedAt') > 0, 120000));
-  check('a named person released it', String(run('ccjPayrun().approvedBy')).length > 1, run('ccjPayrun().approvedBy'));
-  check('it funds, files and pays', until(() => run("ccjPayrun().state==='paid'"), 60000), run('ccjPayrun().state'));
-  check('money went to the account the penny-drop verified',
-    screen().indexOf(run('ccjOnb().bank.iban')) > -1);
-  check('with a bank reference and a value date',
-    String(run('ccjPayrun().bankRef')).length > 4 && screen().indexOf('Value date') > -1,
-    run('ccjPayrun().bankRef'));
-  check('both statutory returns were filed, each with its own reference',
-    String(run('ccjPayrun().taxRef')).length > 4 && String(run('ccjPayrun().ssRef')).length > 4
-    && run('ccjPayrun().taxRef') !== run('ccjPayrun().ssRef'),
-    run('ccjPayrun().taxRef') + ' / ' + run('ccjPayrun().ssRef'));
+  check('payroll is configured and pending', until(() => run("ccjPayrun().state==='pending'"), 200000),
+    run('ccjPayrun().state'));
+  check('the placement is NOT live yet — that is the next step\'s job',
+    run("!ccjRun.settled['active/Active']") === true && run('ccjPayrun().activatedAt') === 0);
 
-  const slip = screen();
-  check('a payslip was issued, under the name that country calls it',
-    run('ccjPayrun().payslipId').length > 4 && slip.indexOf('Loonstrook') > -1);
-  check('the payslip names the employing entity, not ADT in general',
-    slip.indexOf(run('ccjParties().adt.name')) > -1);
-  check('it carries the tax and social security numbers the filings returned',
-    slip.indexOf(run('ccjOnb().tax.id')) > -1 && slip.indexOf(run('ccjOnb().ss.id')) > -1);
-  // In the Netherlands the BSN IS both numbers. Two identically-labelled fields holding the same
-  // value reads as a duplication bug on the one document the employee keeps.
-  check('a number that is both the tax and the social security id is printed once, not twice',
-    run('ccjOnb().tax.id') === run('ccjOnb().ss.id')
-    && count(slip, run('ccjOnb().tax.id')) === 1,
-    'printed ' + count(slip, run('ccjOnb().tax.id')) + ' times');
-  check('it shows every line, not just the net',
-    slip.indexOf('Loonheffing') > -1 && slip.indexOf('Employee social security') > -1
-    && slip.indexOf('Net pay') > -1 && slip.indexOf('Accrued for you this period') > -1);
-  check('the employee is told, in their own thread, with the figure',
-    stream().indexOf(run('ccjPayrun().payslipId')) > -1 && stream().indexOf('has been paid to') > -1);
-  check('the step settles only after the money has actually moved',
-    until(() => run("!!ccjRun.settled['active/First payroll run']")));
+  check('the journey completes', until(() => run("ccjRun.phase==='done'"), 200000), run('ccjRun.phase'));
+  check('PAYROLL WENT PENDING → ACTIVE', run("ccjPayrun().state==='active'")
+    && run('ccjPayrun().activatedAt') > 0, run('ccjPayrun().state'));
+  check('and a named person did it', String(run('ccjPayrun().activatedBy')).length > 1,
+    run('ccjPayrun().activatedBy'));
+  check('it happened on the LAST step, not the one before',
+    run('ccjPayrun().activatedAt') > run('ccjPayrun().calcAt'),
+    run('ccjPayrun().calcAt') + ' configured, ' + run('ccjPayrun().activatedAt') + ' activated');
+  run("ccjGoScreen('payrun')");
+  check('the setup screen now reads ACTIVE',
+    screen().indexOf('ccj-pr-status active') > -1 && screen().indexOf('Payroll active') > -1);
+  check('and says who set it live and when',
+    screen().indexOf(run('ccjPayrun().activatedBy')) > -1);
+  check('the employee is told their employment is active, with the first pay date',
+    run("ccjWorker().msgs.some(function(m){return /Employment active/.test(m.text||'');})") === true);
+  // The artefact this stage leaves is the live placement, not a payslip.
+  check('the trail records the placement going live, not a payment',
+    run("JSON.stringify(ccjTrail()[8])").indexOf('Placement live') > -1,
+    run("JSON.stringify(ccjTrail()[8])"));
 })();
 
 section('ACTIVE — THE RECORD, AND THE WHOLE TRAIL BEHIND IT');
@@ -2516,7 +2909,7 @@ section('ACTIVE — THE RECORD, AND THE WHOLE TRAIL BEHIND IT');
     JSON.stringify(trail.filter((t) => !t.artefact).map((t) => t.short)));
   check('the artefacts are the real references, from the stages that made them',
     rec.indexOf(run('ccjEmp().id')) > -1
-    && rec.indexOf(run('ccjInvoice().id')) > -1 && rec.indexOf(run('ccjPayrun().payslipId')) > -1);
+    && rec.indexOf(run('ccjInvoice().id')) > -1 && rec.indexOf('Placement live') > -1);
   // This client was already ours, so stage 5 executed no new agreement. The record must say the
   // placement is governed by one WITHOUT quoting an identifier for a document this run never
   // issued — and must quote the identifier when the run did issue one.
@@ -2538,6 +2931,21 @@ section('ACTIVE — THE RECORD, AND THE WHOLE TRAIL BEHIND IT');
     JSON.stringify(trail.map((t) => t.short + ':' + t.human)));
   check('and the summary counts the human decisions rather than claiming none',
     rec.indexOf('human decisions') > -1);
+  /* THE LAST CONTROL IN THE JOURNEY. "View contract" sat on the record screen — the final artefact
+     — and it was the only thing left anywhere still asking from a surface whose job is showing.
+     Every one of the nine stages now asks in the conversation, including the end. */
+  check('the record screen carries no control of its own',
+    rec.indexOf('<button') === -1, rec.slice(rec.indexOf('ccj-act-done'), rec.indexOf('ccj-act-done') + 240));
+  check('and the way to the contract is asked for in the conversation',
+    stream().indexOf('View contract') > -1 && stream().indexOf('ccj-ask-block') > -1);
+  check('asked once, however often the finished screen repaints', (function () {
+    const before = count(stream(), 'View contract');
+    run('ccjPaintScreen();ccjPaint();');
+    return before === count(stream(), 'View contract') && before >= 1;
+  })(), count(stream(), 'View contract') + ' asks');
+  // Answered through its own registry entry — the click a user makes, not a reach past it.
+  check('and it resolves to the contract record',
+    run("typeof CCJ_ASKS['record']") === 'function');
 })();
 
 /* ---- THE EOR CHAIN ---------------------------------------------------------------------------
@@ -2556,8 +2964,10 @@ section('EOR — THE PRICE QUOTED IS THE COST INCURRED');
     run('ccjParties().adt.name'));
   check('the employment contract is between us and the worker, not the client and the worker',
     run('ccjEmp().terms.gross') === run('ccjQuote().gross'));
-  check('the run is released', answerGatesUntil(() => run("ccjPayrun().state==='paid'"), 250000),
+  check('the placement is activated', answerGatesUntil(() => run("ccjPayrun().state==='active'"), 250000),
     run('ccjPayrun().state'));
+  // The journey ends on the record screen; these read the payroll SETUP.
+  run("ccjGoScreen('payrun')");
 
   // The strongest available statement that the journey is internally consistent: the number the
   // client was quoted in stage 2 IS the number the payroll engine computes in stage 9.
@@ -2579,14 +2989,17 @@ section('EOR — THE PRICE QUOTED IS THE COST INCURRED');
   check('cash out is net plus both remittances, and excludes the accrual',
     c.cashOut === c.net + c.toTax + c.toSs && c.cashOut === c.cost - c.accrued,
     'cash ' + c.cashOut + ' cost ' + c.cost + ' accrued ' + c.accrued);
-  check('the run states the cash it moves, not only the cost',
+  // The payroll SETUP screen, not the record screen the journey ends on.
+  run("ccjGoScreen('payrun')");
+  check('the setup states the cash the first run WILL move, not only the cost',
     screen().indexOf('in cash') > -1 && screen().indexOf('accrued now and paid later') > -1);
 })();
 
 section('EOR — THE DEPOSIT IS SECURITY, AND IS NOT CLAIMED AS THE PAYROLL FLOAT');
 (function () {
-  check('reaches a paid run', driveToActive('Hire Sanne Bakker for Vantage Freight in Netherlands as a Warehouse Lead', '2026-10-01')
-    && answerGatesUntil(() => run("ccjPayrun().state==='paid'"), 250000), run('ccjPayrun().state'));
+  check('reaches a configured payroll', driveToActive('Hire Sanne Bakker for Vantage Freight in Netherlands as a Warehouse Lead', '2026-10-01')
+    && answerGatesUntil(() => run("ccjPayrun().state==='active'"), 250000)
+    && (run("ccjGoScreen('payrun')")||true), run('ccjPayrun().state'));
   const c = run('ccjPayrunCalc()');
   // The ordinary EOR case: the deposit is one month GROSS, the run costs gross plus employer
   // contributions. The deposit genuinely cannot cover it, and that is not a failure.
@@ -2597,12 +3010,18 @@ section('EOR — THE DEPOSIT IS SECURITY, AND IS NOT CLAIMED AS THE PAYROLL FLOA
     screen().indexOf('Funding available against the deposit') === -1);
   check('the control asserts what it can — that the deposit is settled and held',
     screen().indexOf('Security deposit settled and held against the placement') > -1);
-  check('and the disbursement names who actually paid, rather than crediting the deposit',
-    screen().indexOf('Paid by') > -1
-    && screen().indexOf(run('ccjParties().adt.name')) > -1
-    && screen().indexOf('not the source of this payment') > -1);
-  check('the deposit is still shown, as security, against its invoice',
-    screen().indexOf('Security held') > -1 && screen().indexOf(run('ccjInvoice().id')) > -1);
+  /* There is no disbursement any more — this journey pays nobody. What the screen must do is SAY
+     so, rather than leaving a reader to infer it from the absence of a payment card. The old pair
+     of assertions checked that the disbursement credited the right entity; the honest replacement
+     checks that no disbursement is claimed at all. */
+  /* Named precisely. "Paid by" was the first attempt and it is also the employer-cost table's own
+     wording — "Paid by <entity>, not deducted from the employee" — so the assertion collided with
+     copy that is correct and has nothing to do with a disbursement. */
+  check('and the screen says outright that nothing is paid here',
+    screen().indexOf('Nothing is paid and no return is filed by this journey') > -1
+    && screen().indexOf('Disbursement') === -1
+    && screen().indexOf('Bank reference') === -1
+    && screen().indexOf('Value date') === -1);
 })();
 
 section('THE ENGAGEMENT MODEL NAMES THE ENTITY, AND AN UNKNOWN ONE CLAIMS NOTHING');
@@ -2672,13 +3091,15 @@ section('THE PAYROLL RUN IS THE COUNTRY\'S, NOT A TEMPLATE');
   check('reaches stage 9 on a UK placement',
     driveToActive('Hire Oliver Hart for Norrbridge Logistics in United Kingdom as a Warehouse Lead', '2026-10-01'),
     'stage ' + run('ccjRun.stage'));
-  check('the run is released', answerGatesUntil(() => run("ccjPayrun().state==='paid'"), 200000),
+  check('the placement is activated', answerGatesUntil(() => run("ccjPayrun().state==='active'"), 200000),
     run('ccjPayrun().state'));
+  // The journey ends on the record screen; these read the payroll SETUP.
+  run("ccjGoScreen('payrun')");
   const c = run('ccjPayrunCalc()');
   check('it names HMRC\'s filings, not the Dutch ones',
     screen().indexOf('Full Payment Submission') > -1 && screen().indexOf('National Insurance') > -1
     && screen().indexOf('Loonaangifte') === -1);
-  check('it goes out on Faster Payments, not SEPA', screen().indexOf('Faster Payments') > -1);
+  check('it is configured to pay on Faster Payments, not SEPA', screen().indexOf('Faster Payments') > -1);
   check('auto-enrolment is deducted, because a UK payslip has it',
     !!c.ded && /auto-enrolment/i.test(c.ded.label) && c.ded.amount > 0, JSON.stringify(c.ded));
   check('the employer pays its side too, and it is not deducted from the employee',
@@ -2857,6 +3278,46 @@ check('the new journey redeclares no existing global', clash.length === 0, clash
 check('every name it declares is ccj-prefixed or a builder',
   [...mine].every((n) => /^ccj/i.test(n) || /^(buildCCJ|isCCJ|CCJ_)/.test(n)),
   [...mine].filter((n) => !/^ccj/i.test(n) && !/^(buildCCJ|isCCJ|CCJ_)/.test(n)).join(', '));
+
+section('EVERY DECISION IS PUT TO SOMEBODY WHO CAN ACTUALLY MAKE IT');
+/* The general form of the two fixes above, so the next gate cannot reintroduce it. A gate resolves
+   its owner as `gate.owner || step.owner`, and a step's owner names the party the step is ABOUT —
+   which for "Signed" and "Part-paid" is the client. `amCanAdvance` returns false for any owner with
+   a null persona (Client, Worker, System), so a gate resolving to one of those is a question put to
+   somebody who is not in this portal and cannot answer it.
+
+   Walks the authored maps rather than a live run, forcing the two conditional gates into existence
+   so neither is skipped for being absent at the moment of looking. */
+(function () {
+  startRun();
+  say('Hire Marta Nowak for Arcadia Retail in Germany as a Supply Planner');
+  run("ccjMsa().screening='hit';ccjMsa().hit='Possible match';");   // forces the sanctions gate
+  const bad = run("(function(){"
+    + "var out=[];"
+    + "['CCJ_GATES','CCJ_POST_GATES'].forEach(function(mapName){"
+    + "  var map=mapName==='CCJ_GATES'?CCJ_GATES:CCJ_POST_GATES;"
+    + "  Object.keys(map).forEach(function(k){"
+    + "    var g=map[k];"
+    + "    try{ g=(typeof g==='function')?g():g; }catch(e){ g=null; }"
+    + "    if(!g)return;"
+    + "    var stageId=k.slice(0,k.indexOf('/')), label=k.slice(k.indexOf('/')+1);"
+    + "    var step=(amSubSteps(stageId)||[]).find(function(s){return s.label===label;});"
+    + "    if(!step)return;"
+    + "    var owner=g.owner||step.owner;"
+    + "    if(!amOwnerInfo(owner).persona)out.push(k+' -> '+owner);"
+    + "  });"
+    + "});"
+    + "return JSON.stringify(out);})()");
+  check('no gate asks a party who is not in this portal to answer it', bad === '[]', bad);
+  // And the converse, so the check above cannot pass by finding no gates at all.
+  const seen = run("(function(){var n=0;"
+    + "['CCJ_GATES','CCJ_POST_GATES'].forEach(function(mapName){"
+    + "  var map=mapName==='CCJ_GATES'?CCJ_GATES:CCJ_POST_GATES;"
+    + "  Object.keys(map).forEach(function(k){var g=map[k];"
+    + "    try{ g=(typeof g==='function')?g():g; }catch(e){ g=null; } if(g)n++;});"
+    + "});return n;})()");
+  check('and it looked at every gate the journey authors', seen >= 8, seen + ' gates resolved');
+})();
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

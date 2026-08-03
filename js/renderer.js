@@ -164,7 +164,12 @@ function renderADTPage(){
   const addBtn=document.getElementById('tb-page-add-btn');
   if(addBtn){
     const noAddPages=['dashboard','cost-calculator','leave-policy-add','leave-policy-edit','team-add','leave-add','contract-type-select','contract-eor','contract-peo','timesheet','settings','my-profile','support-tickets','chats','switch-entity','ai-executive','my-tasks','my-runs','ai-journey-detail','ai-automate-form','ai-active-automation','ai-run-detail','ai-journey-run','ai-contract-assistant','ai-proposal-created','ai-proposal-waiting-approval','ai-employee-created','ai-contract-document','ai-contract-waiting-approval','ai-onboarding-run','ai-journey-complete','cfg-overview','cfg-systems','cfg-system-detail','cfg-system-add','cfg-user-intake','create-store','stores','cfg-data-foundation','cfg-model-detail','cfg-model-add','cfg-context-journey','cfg-journey-detail','cfg-agents','ai-analytics','journey-simulation','manual-journey-run','master-data'];
-    const show=!noAddPages.includes(page);
+    /* The + is "add another row to this listing". The contract journey is not a listing — it is one
+       run in progress, and the only thing a + could mean there is "start a second one over the top
+       of this", which is not an action this page offers. Excluded by predicate rather than by adding
+       nine ids to the list above, because the journey's page ids are derived from the stage list. */
+    const show=!noAddPages.includes(page)
+      && !(typeof isCCJPage==='function'&&isCCJPage(page));
     addBtn.style.display=show?'':'none';
     if(show){
       const specialHandlers={'leave-policies':()=>{selectedEmps=new Set();apFilterType='';apFilterValue='';page='leave-policy-add';renderADTPage();}};
