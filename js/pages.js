@@ -10049,12 +10049,28 @@ function enableAgentToggleHTML(journeyId,small){
   const on=isJourneyAgentEnabled(journeyId);
   return '<button class="agent-toggle '+(on?'on':'')+(small?' small':'')+'" onclick="event.stopPropagation();toggleJourneyAgent(\''+journeyId+'\')" title="'+(on?'Disable agent mode':'Enable agent mode')+'"><span class="agent-toggle-track"><span class="agent-toggle-label off-label">Disable</span><span class="agent-toggle-knob"></span><span class="agent-toggle-label on-label">Enable</span></span></button>';
 }
+/* One padlock, two callers. It is emitted for a roadmap journey and for one this entity has not
+   had switched on, and those are the same fact to a reader — you cannot use this yet — so they
+   must not drift into two slightly different badges. */
+function journeyLockBadgeHTML(){
+  return '<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>';
+}
 function journeyActivationBadgeHTML(journeyId,locked,isRoadmap){
-  if(locked)return '<span class="ai-journey-lock-badge"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Locked</span>';
+  if(locked)return journeyLockBadgeHTML();
   if(isRoadmap)return '<span class="status-pill draft">Not Configured</span>';
   if(entityJourneyActivation[journeyId])return '<span class="status-pill active">Available</span>';
   const state=journeyRequestState(journeyId);
   if(state==='awaiting-admin')return '<span class="status-pill pending">Requested</span>';
+  /* Not activated for this entity, and the viewer is inside one: locked. This is the same test
+     the AI Executive cards apply — isRoadmap ? true : (not super-admin && not activated) — and
+     the two surfaces disagreeing is what this restores. Payroll Creation and Hire to Retire are
+     deliberately absent from entityJourneyActivation so the request -> approve -> unlock flow has
+     something real to demo; AI Executive padlocked them and Context & Journey called them
+     Available, which is the same journey reported as both locked and open on adjacent pages.
+
+     Super Admin is not scoped to an entity, so entity activation does not gate them and the
+     Available fallback below is still theirs. */
+  if(portalRole!=='super-admin')return journeyLockBadgeHTML();
   return '<span class="status-pill active">Available</span>';
 }
 function cfgSetJourneyCategoryFilter(cat){
