@@ -881,6 +881,12 @@ check('progress bar has not moved', prog() === '0%' || prog() === '', prog());
 check('the panel says why it is held', panel().indexOf('ccj-hold') > -1 && panel().indexOf('Completes when the proposal is created') > -1);
 check('it is still visibly working', panel().indexOf('ccj-spin') > -1);
 check('all four actions completed while held', count(panel(), 'ccj-sl act') === 4, count(panel(), 'ccj-sl act') + ' done');
+/* A hold names its own verb. "Working" was the generic word here and the user called it out as
+   depicting the wrong thing — the intake hold is waiting for the hire's details, so it gathers. */
+check('the held verb says what the hold is doing, not the generic word',
+  liveBlock().indexOf('ccj-sb-verb">Gathering&hellip;') > -1
+  && liveBlock().indexOf('ccj-sb-verb">Working&hellip;') === -1,
+  liveBlock().slice(0, 240));
 advance(Math.round(60000*PACE));
 check('sixty seconds of waiting does not advance it',
   run('ccjRun.phase') === 'hold' && run('ccjRun.sub') === 0 && run('ccjRun.stage') === 0);
@@ -945,13 +951,20 @@ advance(Math.round(4000*PACE));
 check('a new hire lands on the employee screen', run('ccjRun.screen') === 'employee', run('ccjRun.screen'));
 run("ccjGoScreen('form')");
 check('on the form, ready for a document', run('ccjRun.screen') === 'form', run('ccjRun.screen'));
-check('upload sits in the composer, above the chat bar', (function () {
+/* The user replaced the labelled dashed bar with a link icon IN the input row — attach is a
+   composer act now, like Claude's own. Inside the row, before the textarea, and the sample
+   download rides beside it so no capability was lost with the label. */
+check('attach is a link icon inside the input row', (function () {
   const c = composer();
-  return c.indexOf('ccj-upload') > -1 && c.indexOf('ccj-upload') < c.indexOf('ccj-input-row');
-})(), composer().indexOf('ccj-upload') + ' vs ' + composer().indexOf('ccj-input-row'));
-check('upload is not offered where there are no fields to fill', (function () {
+  // 'ccj-prompt', not 'ccj-input' — the row's own class contains that as a prefix and would
+  // anchor the comparison on itself.
+  return c.indexOf('ccj-attach') > -1 && c.indexOf('ccj-input-row') < c.indexOf('ccj-attach')
+    && c.indexOf('ccj-attach') < c.indexOf('ccj-prompt') && c.indexOf('ccj-upload-row') === -1;
+})(), composer().indexOf('ccj-input-row') + ' vs ' + composer().indexOf('ccj-attach'));
+check('the sample form is still offered beside it', composer().indexOf('ccj-attach dl') > -1);
+check('attach is not offered where there are no fields to fill', (function () {
   run('ccjStartNewRun()');
-  const before = composer().indexOf('ccj-upload');
+  const before = composer().indexOf('ccj-attach');
   return before === -1;
 })());
 startRun();
@@ -967,6 +980,10 @@ check('it never overwrites a value the user typed',
   run("ccjRun.doc.fields.every(function(x){return x.k!=='email';})") === true);
 check('the held row reports the read, not the generic note',
   panel().indexOf('Reading <b>Rohan_Verma_Contract_Data.pdf</b>') > -1);
+// Anchored on the verb SPAN, not the word — the document card in the same slice says
+// "Reading …" too, and matching the bare word passed while the verb still said "Working".
+check('and the verb beside the spark reads with it',
+  liveBlock().indexOf('ccj-sb-verb">Reading&hellip;') > -1, liveBlock().slice(0, 240));
 advance(Math.round(900*PACE));
 check('fields land one at a time', run('ccjRun.doc.at') >= 1 && run('ccjRun.doc.at') < run('ccjRun.doc.fields.length'),
   run('ccjRun.doc.at') + ' of ' + run('ccjRun.doc.fields.length'));

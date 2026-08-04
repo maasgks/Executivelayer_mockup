@@ -390,14 +390,15 @@
    when it decides how to reply. Dashed, because it is a drop target in spirit. */
 /* Upload is the action; the sample is the thing it acts on. So they share a row, and the sample
    is deliberately the quieter of the two — it is a way of getting unstuck, not the main path. */
-.ccj-upload-row{display:flex;align-items:stretch;gap:6px;margin-bottom:8px}
-.ccj-upload{display:flex;align-items:center;justify-content:center;gap:7px;flex:1;min-width:0;padding:8px 12px;border:1px dashed #cbd5e1;border-radius:9px;background:var(--light);color:var(--gray);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
-.ccj-upload svg{width:13px;height:13px;flex-shrink:0}
-.ccj-upload:hover{border-color:var(--navy);color:var(--navy);background:var(--card)}
-.ccj-upload:active{transform:scale(.995)}
-.ccj-sample-dl{display:flex;align-items:center;gap:5px;flex-shrink:0;padding:8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--gray);font-size:11px;font-weight:600;text-decoration:none;transition:.15s}
-.ccj-sample-dl svg{width:13px;height:13px;flex-shrink:0}
-.ccj-sample-dl:hover{border-color:var(--navy);color:var(--navy);background:var(--light)}
+/* The attach controls live IN the composer row — a link icon and a quiet sample download,
+   sized to the send button so the row reads as one instrument. The old dashed full-width
+   upload bar is gone; the tooltips now carry what its label used to say. */
+.ccj-attach{width:34px;height:34px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  border:1.5px solid var(--border);border-radius:10px;background:var(--card);color:var(--gray);
+  cursor:pointer;text-decoration:none;transition:.15s;padding:0}
+.ccj-attach svg{width:14px;height:14px}
+.ccj-attach:hover{border-color:var(--navy);color:var(--navy);background:var(--light)}
+.ccj-attach:active{transform:scale(.96)}
 .ccj-models{display:flex;align-items:center;gap:6px;margin-bottom:9px;flex-wrap:wrap}
 .ccj-models-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-right:2px}
 .ccj-model{padding:4px 11px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:11px;font-weight:600;color:var(--gray);font-family:inherit;cursor:pointer;transition:.15s}
@@ -526,7 +527,11 @@
    through a window a few lines tall, oldest sliding out of the top. Coral is Claude's colour
    and appears nowhere else in the journey, which is exactly why it is right here: it marks
    "the agent is doing this now", a state nothing else on screen is allowed to claim. */
-.ccj-sb-live{margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:6px;color:#d97757}
+/* Beside the NAME, not parked at the card's far edge — the user moved it: the claim of activity
+   reads as part of the step's own line, the way Claude Code's spinner sits against its label.
+   The owner chip keeps the right corner so the head still has a far anchor. */
+.ccj-sb-live{flex-shrink:0;display:flex;align-items:center;gap:6px;color:#d97757}
+.ccj-sb-head .ccj-row-owner{margin-left:auto}
 .ccj-spark{width:13px;height:13px;flex-shrink:0;animation:ccjSparkTurn 2.6s linear infinite}
 @keyframes ccjSparkTurn{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(180deg) scale(.8)}
   100%{transform:rotate(360deg) scale(1)}}

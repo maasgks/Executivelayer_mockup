@@ -1552,6 +1552,10 @@ function ccjPurpose(i,step){
 const CCJ_HOLDS={
   'request-received/New intake':{
     until:'proposal',
+    // The word beside the spark while held. NOT "Working" — a hold is a specific activity, and
+    // the generic word depicts the wrong thing (the user's own words). Reading a document IS the
+    // capture, so the verb follows the note's own distinction.
+    verb:function(){const d=ccjRun&&ccjRun.doc;return d&&!d.done?'Reading':'Gathering';},
     // A held row is not idle — it is the intake still being captured. When a document is being read
     // it says so, because that reading IS the capture.
     note:function(h){
@@ -3070,15 +3074,21 @@ function ccjActChecksHTML(checks){
    honesty with less noise — the window shows only work that has actually finished, and the
    verb names only the action actually underway.
 
-   THE VERB IS DERIVED, NOT AUTHORED. Every action ccjActsFor builds carries an id, and the id
-   names the kind of work; a step whose evidence has no shape says "Working" and nothing more.
-   During a hold the machine may still be busy (the intake parses a document there) but which
-   action the verb would name is over, so it says "Working" rather than re-claiming the last
-   verb for work that already finished. */
+   THE VERB IS DERIVED, NOT AUTHORED — except on a hold. Every action ccjActsFor builds carries
+   an id, and the id names the kind of work; a step whose evidence has no shape says "Working"
+   and nothing more. A HOLD names its own verb (`CCJ_HOLDS[...].verb`, value or function):
+   the beats it ran are over, so the last action's verb would be a re-claim of finished work,
+   and the generic "Working" depicts the wrong thing — the user's words — on a step that is
+   specifically gathering, reading, filing or checking. The fallback stays "Working" only for
+   a hold that declares nothing. */
 const CCJ_VERB={connect:'Connecting',fetch:'Fetching',verify:'Validating',save:'Writing',work:'Working'};
 function ccjVerbFor(i,step){
   const run=ccjRun;
-  if(run&&run.phase==='hold')return 'Working';
+  if(run&&run.phase==='hold'){
+    const h=ccjHoldFor(i,step);
+    const v=h&&(typeof h.verb==='function'?h.verb():h.verb);
+    return v||'Working';
+  }
   const acts=ccjActsFor(i,step);
   const a=acts[Math.max(0,Math.min((run&&run.act)||0,acts.length-1))];
   if(!a)return 'Working';
@@ -3658,26 +3668,10 @@ function ccjComposerInnerHTML(){
   // and its own chip in the header, and a third control for the same decision — sitting under
   // the thing it does not govern — was the duplicate.
   return ''
-    // Only beside the form: a document fills FIELDS, and on the screens without any there is
-    // nothing for it to land in.
-    /* Upload sits beside the form because a document fills FIELDS, and the screens without any
-       have nothing for it to land in. The download beside it closes the loop: the thing you are
-       asked to upload is the thing we send a candidate, so the demo should be able to hand you a
-       copy rather than expecting you to have gone and found one. */
-    +(run.screen==='form'?'<div class="ccj-upload-row">'
-      +'<button class="ccj-upload" onclick="ccjUpload()" title="Upload a completed employee information form to fill these details in">'
-      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-      +'<span>Upload document to auto-fill</span></button>'
-      /* `download` AND `target="_blank"`, which is not belt-and-braces — they cover different
-         cases. Served over http the download attribute saves the file straight to disk and the
-         target is ignored. Opened from the filesystem, which is how this mockup is usually run,
-         Chrome refuses to honour `download` for a local file and would otherwise do nothing at
-         all; the target then opens it in the PDF viewer, which has its own save button. */
-      +'<a class="ccj-sample-dl" href="'+attrSafe(CCJ_SAMPLE_PDF)+'" download target="_blank" rel="noopener" '
-      +'title="Open the sample employee information form &mdash; the completed sheet a candidate returns. Save it, then upload it here.">'
-      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
-      +'<span>Sample form</span></a>'
-      +'</div>':'')
+    /* No labelled upload bar any more — the user replaced it: attaching the document is a
+       composer act, so it lives IN the composer as a link icon (see the input row below), the
+       way Claude's own attach does. Form screen only, because a document fills FIELDS and the
+       screens without any have nothing for it to land in. */
     /* WHO YOU ARE TYPING TO. While the counterparty's thread had the column to itself, the stage
        said it for you. In one shared stream it no longer does — and the failure mode is someone
        sending an internal note to a customer, which is not a mistake this product gets to make
@@ -3696,6 +3690,21 @@ function ccjComposerInnerHTML(){
         +(mode==='worker'?p.worker.name:p.client.name)+'</b><span class="ccj-to-note">they will see this</span></div>';
     })()
     +'<div class="ccj-input-row">'
+    /* The link icon attaches the completed form; the quiet download beside it hands you the
+       sample — the thing you are asked to attach is the thing we send a candidate, so the
+       product should still offer a copy. The tooltips carry what the old labels used to say.
+       `download` AND `target="_blank"` on the sample cover different cases: over http the
+       download attribute saves to disk and target is ignored; from the filesystem Chrome
+       refuses `download` for a local file, and the target then opens the PDF viewer, which
+       has its own save button. */
+    +(run.screen==='form'?''
+      +'<button class="ccj-attach" onclick="ccjUpload()" title="Attach a completed employee information form &mdash; the details are read into the form for you">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'
+      +'</button>'
+      +'<a class="ccj-attach dl" href="'+attrSafe(CCJ_SAMPLE_PDF)+'" download target="_blank" rel="noopener" '
+      +'title="Open the sample employee information form &mdash; the completed sheet a candidate returns. Save it, then attach it here.">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+      +'</a>':'')
     // A run opened from a deal arrives with its request already written — the words are still
     // yours to change, and nothing is sent until you send it. Cleared once the run has started so
     // the composer goes back to being a composer.
@@ -7052,6 +7061,7 @@ CCJ_ON_SETTLE['employment-contract/ADT countersigned']=function(run){
    on the audit finishing, which is the only thing that ends it. */
 CCJ_HOLDS['employment-contract/Clause compliance check']={
   until:'audit-done',
+  verb:'Reviewing',
   note:'Reading the contract clause by clause.',
   // The count, read from the audit the screen is drawing, so the block cannot claim a different
   // position in the document to the one being highlighted beside it.
@@ -8037,7 +8047,7 @@ CCJ_ON_ENTER['onboarding/Payroll configured']=function(run){
    and the card can never disagree about how far along something is. A row with no value yet is
    dropped rather than shown empty (see ccjHoldNoteHTML), so each one appears the moment it becomes
    true and not before. */
-CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',note:'Verification in progress.',
+CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',verb:'Verifying',note:'Verification in progress.',
   rows:function(){
     const k=ccjOnb().kyc,n=CCJ_KYC_PHASES.length;
     return [['Checks',Math.min(k.step+(k.done?0:1),n)+' of '+n],
@@ -8045,7 +8055,7 @@ CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',note:'Verification in progr
             // Only once the provider has actually returned something.
             ['Outcome',k.done?ccjKycDecision().label:'']];
   }};
-CCJ_HOLDS['onboarding/Documents']={until:'docs-done',note:'Collecting and checking documents.',
+CCJ_HOLDS['onboarding/Documents']={until:'docs-done',verb:'Collecting',note:'Collecting and checking documents.',
   rows:function(){
     const d=ccjOnbDocs();
     const got=d.filter(function(x){return x.status==='accepted';}).length;
@@ -8054,18 +8064,18 @@ CCJ_HOLDS['onboarding/Documents']={until:'docs-done',note:'Collecting and checki
             ['Rejected',bad?'<span class="ccj-wait-late">'+bad+' sent back</span>':''],
             ['Outstanding',ccjDocsOutstanding()?ccjDocsOutstanding()+' still to come':'']];
   }};
-CCJ_HOLDS['onboarding/Tax registration']={until:'tax-done',note:'Filed. Waiting on the authority.',
+CCJ_HOLDS['onboarding/Tax registration']={until:'tax-done',verb:'Fetching',note:'Filed. Waiting on the authority.',
   rows:function(){return ccjFilingRows('tax');}};
-CCJ_HOLDS['onboarding/Social security enrolment']={until:'ss-done',note:'Filed. Waiting on the institution.',
+CCJ_HOLDS['onboarding/Social security enrolment']={until:'ss-done',verb:'Fetching',note:'Filed. Waiting on the institution.',
   rows:function(){return ccjFilingRows('ss');}};
-CCJ_HOLDS['onboarding/Bank verified']={until:'bank-done',note:'Test credit sent. Waiting on the bank.',
+CCJ_HOLDS['onboarding/Bank verified']={until:'bank-done',verb:'Verifying',note:'Test credit sent. Waiting on the bank.',
   rows:function(){
     const b=ccjOnb().bank;
     return [['Account',b.iban],
             ['Name match',b.score?b.score+'%':''],
             ['Verified',b.state==='verified'?'<span class="ccj-wait-on">Confirmed</span>':'']];
   }};
-CCJ_HOLDS['onboarding/Payroll configured']={until:'payroll-done',note:'Building the first pay period.',
+CCJ_HOLDS['onboarding/Payroll configured']={until:'payroll-done',verb:'Building',note:'Building the first pay period.',
   rows:function(){
     const p=ccjOnb().payroll;
     return [['Calendar',p.calendar],['First pay',p.firstPay],
@@ -8964,7 +8974,7 @@ CCJ_ON_ENTER['active/First payroll run']=function(run){
 };
 CCJ_ON_ENTER['active/Active']=function(run){ccjGoScreen('active');};
 
-CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',note:'Re-deriving every control.',
+CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',verb:'Checking',note:'Re-deriving every control.',
   rows:function(){
     const l=ccjRdyChecks(),done=ccjRdy().step;
     return [['Controls',Math.min(done+(ccjRdy().done?0:1),l.length)+' of '+l.length],
@@ -8975,6 +8985,7 @@ CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',note:'Re-deriving 
    after a person released the money — one step, two halves, an approval between them. There is no
    approval any more because there is no payment: the step configures payroll and stops. */
 CCJ_HOLDS['active/First payroll run']={until:'payrun-done',
+  verb:'Configuring',
   note:'Granting access and configuring the first period.',
   rows:function(){
     const pr=ccjPayrun(),n=CCJ_PR_PHASES.length;
