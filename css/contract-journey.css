@@ -502,8 +502,20 @@
 .ccj-sb-body{padding:0 11px 10px 36px}
 .ccj-sb-why{font-size:11px;color:var(--gray);line-height:1.5}
 /* The gate keeps its own amber block, and keeps sitting inside the step it belongs to — the
-   question and the step it answers are never separated. */
-.ccj-sb .ccj-gate{margin:0 11px 11px 36px}
+   question and the step it answers are never separated. It fills that block symmetrically; it is
+   the BLOCK that moves to your side, not the gate within it (see .ccj-sb.asking below).
+
+   Right-aligning the gate alone was tried and looked worse: the step block stayed full width, so
+   a wide amber panel sat there mostly empty with a card floating in its corner. The unit a reader
+   sees is the whole block — header, question and buttons — so the whole block is what moves.
+
+   This rule is where the gate's margin actually comes from — it outranks the one on .ccj-gate
+   itself, which is why setting it there alone moved nothing. */
+.ccj-sb .ccj-gate{margin:0 11px 11px 11px;max-width:none}
+/* WAITING ON YOU ⇒ YOUR SIDE. `asking` is set on the step block whenever it carries a gate or has
+   stopped — precisely "this one is yours" — so it is the correct hook, and it means the stopped
+   card travels with it rather than needing its own rule. */
+.ccj-sb.asking{max-width:var(--ccj-act-w);margin-left:auto}
 .ccj-sb .ccj-hold{margin-top:8px}
 .ccj-sb .ccj-ev-more{margin-top:8px}
 
@@ -594,15 +606,23 @@
 .ccj-msg.step:empty{display:none}
 
 /* ---- AN ASK IN THE CONVERSATION ----------------------------------------------------------
-   The one-answer sibling of the gate. Same placement, same weight, same rule: if the journey
-   wants something from you it is here, in the column you are already reading, never on the right.
+   The one-answer sibling of the gate, and it follows the same side rule (see --ccj-act-w).
+
+   This previously read "never on the right", on the reasoning that a request should sit in the
+   column already being read. That was wrong about the medium. This is a chat, and every chat a
+   person has ever used puts their own side on the right — so an action button on the left reads
+   as something the other party is doing, not something waiting on you.
 
    Not mono. This is the product speaking to a person, so it keeps Inter — the mono register is
    for the machine reporting its own working. */
-.ccj-ask-block{width:100%;border:1px solid var(--border);border-radius:12px;background:var(--card);
+.ccj-ask-block{max-width:var(--ccj-act-w);margin-left:auto;border:1px solid var(--border);border-radius:12px;background:var(--card);
   padding:12px 13px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
 .ccj-ask-copy{font-size:12px;line-height:1.55;color:var(--navy)}
-.ccj-ask-btn{padding:9px 16px;border:none;border-radius:9px;background:var(--navy);color:#fff;
+/* The action sits at the trailing edge of its own card, under copy that stays left. Reading order
+   is text then action, and in every interface that pairs the two — a dialog, a form, a chat
+   composer — the action is the thing furthest along that order. `align-self`, not a change to the
+   card's align-items, so the sentence above is unaffected. */
+.ccj-ask-btn{align-self:flex-end;padding:9px 16px;border:none;border-radius:9px;background:var(--navy);color:#fff;
   font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
 .ccj-ask-btn:hover{background:#1e293b;transform:translateY(-1px);box-shadow:0 4px 14px rgba(15,23,42,.18)}
 /* ANSWERED. It stays where it was said rather than vanishing — a control that disappears leaves
@@ -669,15 +689,51 @@
 .ccj-hold-rows{margin-top:6px;padding-top:6px;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:3px}
 @keyframes ccjHoldPulse{0%,100%{opacity:.35}50%{opacity:1}}
 
-/* ---- THE GATE — where a person is asked ------------------------------------------------------ */
+/* ---- THE GATE — where a person is asked ------------------------------------------------------
+   YOUR SIDE IS THE RIGHT SIDE. The ordinary rule of every chat interface, and the one thing this
+   transcript was not doing: what the journey reports stays left, what is waiting on YOU sits right,
+   at the width of your own messages.
+
+   Width is half of it and the half that was hiding the problem. The gate measured 748px of an
+   825px stream — 91% — which is the shape of the machine's own step blocks, so right-aligning it
+   alone would have looked identical to left-aligning it. It has to narrow before a side can read
+   as a side.
+
+   One variable for both this and .ccj-ask-block, because they are the same thing to a reader —
+   something to act on — and two numbers that drifted apart would put them on visibly different
+   margins in the same column. */
+:root{--ccj-act-w:62%}
 .ccj-gate{margin:7px 0 0 28px;padding:11px 12px;border-radius:9px;border:1px solid #fde68a;background:#fffbeb}
 .ccj-gate.external{border-color:#bfdbfe;background:#eff6ff}
 .ccj-gate.stopped{border-color:#fecaca;background:#fef2f2}
 .ccj-gate-ask{font-size:12px;font-weight:700;color:var(--navy);line-height:1.45;margin-bottom:5px}
 .ccj-gate-why{font-size:10.5px;color:var(--gray);line-height:1.55;margin-bottom:9px}
 .ccj-gate-who{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--gray);margin-bottom:10px}
+/* A gate with no `why` puts the owner row directly under the question, and the 5px the question
+   carries is separation between a bold line and a grey one, not between two blocks — measured, it
+   collapses a 30px gap to 5px and the two read as one smudged line. 11px restores the card's own
+   rhythm: question-to-owner just above the 10px owner-to-buttons below it.
+
+   The value is the WHOLE gap, not an addition to it: adjacent siblings collapse their vertical
+   margins to the larger of the two, so this competes with the question's 5px rather than stacking
+   on it. Written as 6px first, which measured 6px, not 11px.
+
+   Adjacent-sibling rather than a modifier class, so the spacing follows the markup and no caller
+   has to remember to pass a flag. */
+.ccj-gate-ask+.ccj-gate-who{margin-top:11px}
 .ccj-gate-behalf{margin-left:auto;flex-shrink:0;padding:2px 6px;border-radius:5px;background:var(--card);border:1px solid var(--border);font-size:8.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray)}
 .ccj-gate-av{width:19px;height:19px;flex-shrink:0;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;color:var(--navy)}
+/* The reason a negative decision was taken. Reads as evidence rather than as more of the card's
+   own voice: left rule, quieter text, and the actor's name in front of it on the stopped card. */
+.ccj-gate-reason{margin-top:8px;padding:7px 10px;border-left:2px solid #d4a373;border-radius:0 6px 6px 0;background:rgba(255,255,255,.72);font-size:10.5px;line-height:1.55;color:var(--navy);white-space:pre-wrap;word-wrap:break-word}
+.ccj-gate-reason b{font-weight:700;color:var(--gray);font-weight:600}
+/* Asking for it. Same card, same footprint — only the buttons are swapped for the question, so
+   the transcript does not jump while the user is deciding. */
+.ccj-gate.reason-ask{border-color:#fca5a5;background:#fff7f7}
+.ccj-gate-input{width:100%;box-sizing:border-box;margin-bottom:8px;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--card);font-family:inherit;font-size:11.5px;line-height:1.5;color:var(--navy);resize:vertical}
+.ccj-gate-input:focus{outline:none;border-color:var(--navy)}
+.ccj-gate-err{font-size:10.5px;color:#dc2626;margin-bottom:8px;min-height:0}
+.ccj-gate-err:empty{display:none}
 .ccj-gate-btns{display:flex;gap:7px}
 .ccj-gate-btn{flex:1;padding:8px 10px;border-radius:8px;border:1px solid transparent;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
 .ccj-gate-btn.go{background:var(--navy);color:#fff}

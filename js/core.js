@@ -180,14 +180,14 @@ const amPipelineTracks=[
    `auto` marks a step the AI Execution Layer performs itself — `autoNote` says by what. The
    dividing line: lookups, generation from templates/data, dispatch, and webhook-confirmed
    facts automate; judgment, liability and signatures do not. So "CSM assigned" automates (a
-   country-to-CSM routing table needs no human), but "Qualified / Disqualified" never does —
+   country-to-CSM routing table needs no human), but "Qualified / Rejected" never does —
    that is the one decision stage 1 exists to make. `owner` stays on auto steps on purpose:
    automation changes who does the work, not who answers for it. == */
 const amSubStatuses={
   'request-received':[
     {label:'New intake',owner:'Account Manager',auto:true,autoNote:'logged from intake form'},
     {label:'CSM assigned',owner:'Account Manager',sla:'1h',auto:true,autoNote:'by client country'},
-    {label:'Qualified / Disqualified',owner:'Account Manager',decision:true}
+    {label:'Qualified / Rejected',owner:'Account Manager',decision:true}
   ],
   'quote-prep':[
     {label:'Country data check',owner:'EOR Ops',auto:true,autoNote:'Compliance Hub lookup'},
@@ -306,7 +306,7 @@ const aicjEvidence={
     ];},
     captured:function(c){return [{k:'CSM',v:amCsmFor({country:c.country})},{k:'Owner',v:'Arjun Vaidya'}];},
     summary:function(c){return amCsmFor({country:c.country})+' assigned';},
-    note:'A country-to-CSM table needs no judgement, which is exactly why this automates while <b>Qualified / Disqualified</b> one row down never will &mdash; that is the one decision this stage exists to make.'
+    note:'A country-to-CSM table needs no judgement, which is exactly why this automates while <b>Qualified / Rejected</b> one row down never will &mdash; that is the one decision this stage exists to make.'
   },
 
   /* ---- 2 · Quote in preparation -------------------------------------------------------- */
@@ -3150,7 +3150,24 @@ function persistAppState(){
       directEmpData:directEmpData,notifData:notifData,
       entityRequests:entityRequests,entityRequestSeq:entityRequestSeq,
       notifiedRunIds:Array.from(notifiedRunIds),notifiedRunOwners:notifiedRunOwners,
-      manualRunSeq:manualRunSeq,liveRunSeq:liveRunSeq
+      manualRunSeq:manualRunSeq,liveRunSeq:liveRunSeq,
+      // -- The Account Manager's own book of work. Two stores, and both are needed: amDeals is
+      // where each engagement has reached, amExtraLog is what was typed and sent while getting it
+      // there. Saving only the first would move a record to step 4 and lose the note that
+      // justified it, which reads as data loss rather than a reset.
+      //
+      // (Not covered by the exclusion documented above masterData: that one is a cache of server
+      // state, and a cached copy outliving the server's copy is worse than no cache. These two
+      // have no server behind them, so nothing can go stale underneath them.)
+      amDeals:amDeals,amExtraLog:amExtraLog,
+      // Where the user was, not just what they had done. Coming back to a filtered list with the
+      // right record open is what a person expects of a tool they work in daily.
+      amPipelineStage:amPipelineStage,amSelectedDealId:amSelectedDealId,
+      amDealTab:amDealTab,amPage:amPage,
+      // -- Each deal's own run of the Hire and Onboard journey. The journey owns what can and
+      // cannot be written down (a live DOM node and a page's timer ids cannot), so it does its own
+      // stripping in ccjSaveRuns rather than this function guessing at the shape of a run. --
+      ccjRuns:(typeof ccjSaveRuns==='function'?ccjSaveRuns():null)
     }));
   }catch(e){}
 }
@@ -3174,6 +3191,30 @@ function loadAppState(){
     if(typeof s.entityRequestSeq==='number')entityRequestSeq=s.entityRequestSeq;
     if(typeof s.manualRunSeq==='number')manualRunSeq=s.manualRunSeq;
     if(typeof s.liveRunSeq==='number')liveRunSeq=s.liveRunSeq;
+    replaceArray(amDeals,s.amDeals);
+    replaceObject(amExtraLog,s.amExtraLog);
+    /* -- Restoring where the user was, which is the half that has to be defended.
+       Saved data describes the session it was written in; the code, the seed records and the
+       stage list all move underneath it between releases. So each of these is checked against
+       what exists NOW rather than trusted, and a value that no longer resolves is dropped in
+       favour of the default. The failure it prevents is not a crash — it is a screen that opens
+       filtered to nothing, or with a drawer over a record that is gone, and gives the user no way
+       to tell that from having lost their work. -- */
+    if(typeof s.amPipelineStage==='string'
+       &&(s.amPipelineStage===''||amStageById(s.amPipelineStage)))amPipelineStage=s.amPipelineStage;
+    // A selection is only restorable while the record it names is still there.
+    if(s.amSelectedDealId!=null
+       &&amDeals.some(function(d){return d.id===s.amSelectedDealId;}))amSelectedDealId=s.amSelectedDealId;
+    if(['basic-details','logs','workflow','client-view'].indexOf(s.amDealTab)>-1)amDealTab=s.amDealTab;
+    // Clamped, not trusted: the filter above decides how many pages there are, and a stored page
+    // beyond the end would open an empty table on a list that is not empty.
+    if(typeof s.amPage==='number'&&isFinite(s.amPage)){
+      const pages=Math.max(1,Math.ceil(amFilteredDeals().length/AM_PAGE_SIZE));
+      amPage=Math.min(Math.max(1,Math.floor(s.amPage)),pages);
+    }
+    // Restored into the store, not made active: a reload lands on a page, not inside a run, and
+    // ccjRun stays null until a deal is actually opened.
+    if(typeof ccjLoadRuns==='function')ccjLoadRuns(s.ccjRuns);
     // -- Demo reset: contracts created via "Simulate: New/Existing Employee" (tagged record.simulated, or legacy runs from before that tag existed) are scratch data for re-running the walkthrough, so purge them on every load instead of letting them pile up as duplicates. --
     const legacySimulatedNames=['Rohan Verma','New Employee','Verma'];
     for(let i=contractsData.length-1;i>=0;i--){

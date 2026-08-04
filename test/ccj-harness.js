@@ -243,9 +243,13 @@ function answerGatesUntil(pred, cap) {
   }
   return pred();
 }
+// A reason is passed on every answer. Positive options ignore it; negative ones require it, and
+// without one they open the reason prompt instead of deciding — which is the behaviour, not a
+// quirk to work around. Driving with it here keeps these flow checks about the flow; the prompt
+// itself is asserted on separately.
 function answerGate(id) {
   const opt = id || run("(function(){var s=ccjSteps(ccjRun.stage)[ccjRun.sub];var g=s&&(ccjGateFor(ccjRun.stage,s)||ccjPostGateFor(ccjRun.stage,s));return g&&g.options?g.options[0].id:'';})()");
-  if (opt) run("ccjChooseGate('" + opt + "')");
+  if (opt) run("ccjChooseGate('" + opt + "','driven by the harness')");
   return opt;
 }
 function driveTo(stageIdx, cap) {
@@ -1068,7 +1072,12 @@ check('and the conversation says the intake is logged, which only this gate can 
   run("(function(){var m=ccjRun.msgs.filter(function(x){return x.who==='agent'&&x.text;}).pop();"
     + "return m?m.text:'';})()").indexOf('Request logged and routed') > -1);
 check('gate rendered in the row it belongs to', p2.indexOf('ccj-gate') > -1);
-check('gate offers both answers', p2.indexOf('>Qualify<') > -1 && p2.indexOf('>Disqualify<') > -1);
+check('gate offers both answers', p2.indexOf('>Qualify<') > -1 && p2.indexOf('>Reject<') > -1);
+// The whole point of the rename was that one decision stopped being called two things. Asserted
+// as an absence, because a half-finished rename shows up as the old word surviving somewhere
+// rather than as anything failing.
+check('and the retired word survives nowhere on the card',
+  p2.indexOf('Disqualif') === -1, p2.slice(p2.indexOf('Disqualif') - 60, p2.indexOf('Disqualif') + 60));
 check('gate names who owns it', (p2.split('ccj-gate-who')[1] || '').indexOf('Arjun Vaidya') > -1);
 check('nothing is still spinning', p2.indexOf('ccj-spin') === -1);
 check('the conversation asked for the decision', stream().toLowerCase().indexOf('qualify') > -1);
@@ -1089,8 +1098,8 @@ check('drawer carries the authored explanation', dw.indexOf('ccj-dw-note') > -1)
 run('ccjCloseDrawer()');
 check('drawer closes', drawer() === '');
 
-section('DISQUALIFY — THE TERMINAL BRANCH');
-run("ccjChooseGate('disqualified')");
+section('REJECT — THE TERMINAL BRANCH');
+run("ccjChooseGate('rejected','Headcount pulled for this quarter.')");
 check('run stops', run('ccjRun.stopped') === true);
 check('stage does not advance', run('ccjRun.stage') === 0);
 check('panel says so and offers a way back', panel().indexOf('ccj-gate stopped') > -1 && panel().indexOf('Reopen') > -1);
@@ -1226,7 +1235,7 @@ advance(Math.round(30000*PACE));
 check('it does not approve itself', run('ccjRun.phase') === 'halt' && run('ccjRun.stage') === 1);
 
 section('SENDING A QUOTE BACK IS A LOOP, NOT A STOP');
-run("ccjChooseGate('rework')");
+run("ccjChooseGate('rework','Margin is below the standard band.')");
 check('it returns to the cost build, not to the top of the stage',
   run('ccjRun.sub') === 2, 'sub ' + run('ccjRun.sub'));
 check('the work being redone is un-ticked',
@@ -1853,7 +1862,7 @@ section('THE AGREEMENT COMES BACK AND WAITS FOR APPROVAL');
   advance(60000);
   check('and it will not countersign itself', run('ccjMsa().adtSignedAt')===0 && run('ccjRun.stage')===4);
   // Declining is terminal — an agreement nobody countersigned is not in force.
-  run("ccjChooseGate('declineMsa')");
+  run("ccjChooseGate('declineMsa','Liability cap not agreed.')");
   check('declining stops the run', run('ccjRun.stopped')===true && run('ccjMsa().adtSignedAt')===0);
   run('ccjReopen()');
   run("ccjChooseGate('countersign')");
@@ -2117,7 +2126,7 @@ section('RELEASING AGAINST A SHORTFALL IS AN EXCEPTION, AND IS RECORDED AS ONE')
   check('the run stops on a shortfall', until(() => run("ccjRun.phase==='halt'")
     && run('ccjSteps(5)[ccjRun.sub].label') === 'Part-paid'), run('ccjRun.phase'));
   const short = run('ccjOutstanding()');
-  run("ccjChooseGate('releaseShort')");
+  run("ccjChooseGate('releaseShort','Client is good for the balance; start date cannot slip.')");
   check('the shortfall is recorded, not forgotten',
     run('ccjPay().released') === true && run('ccjPay().shortfall') === short,
     run('ccjPay().shortfall') + ' vs ' + short);
@@ -2285,16 +2294,28 @@ section('THE HUMAN APPROVAL, AND SENDING IT BACK');
     until(() => run("ccjRun.phase==='halt'")
       && run('ccjSteps(6)[ccjRun.sub].label') === 'Internal approval'), run('ccjRun.phase'));
   check('the ask names the contract', panel().indexOf(run('ccjEmp().id')) > -1);
-  check('and the reason names what was rewritten and why it matters',
-    panel().indexOf('rewritten to meet local law') > -1
-    && panel().indexOf('probationary period') > -1
-    && panel().indexOf('we carry the employment liability') > -1);
+  check('and the reason names which clauses the statutory check moved',
+    panel().indexOf('changed to meet local law') > -1
+    && panel().indexOf('probationary period') > -1);
+  // It reports the finding and stops there. "The employee signs whatever this says, and we carry
+  // the employment liability" is true, but it argues for the control instead of describing this
+  // contract — the register that made the card read as a walkthrough of itself. Pinned so it
+  // cannot drift back in.
+  check('without also arguing for why the approval exists',
+    panel().indexOf('we carry the employment liability') === -1);
+  // It read "1 clause were rewritten": the noun pluralised, the verb did not, so the COMMON case —
+  // a single adjusted clause — printed a grammatical error. Asserted against whichever branch this
+  // run actually takes rather than a fixed count.
+  check('and the count agrees with its verb', (function () {
+    const m = panel().match(/(\d+) clauses? (was|were) changed/);
+    return !!m && ((m[1] === '1') === (m[2] === 'was'));
+  })(), (panel().match(/\d+ clauses? (?:was|were) changed/) || ['no match'])[0]);
   advance(80000);
   check('it will not approve itself',
     run("ccjRun.phase==='halt'") && run('ccjEmp().sentAt') === 0);
 
   const v = run('ccjEmp().version');
-  run("ccjChooseGate('ecRedraft')");
+  run("ccjChooseGate('ecRedraft','Notice period does not match the offer.')");
   check('sending it back returns to the draft, it does not stop the run',
     run('ccjRun.stopped') === false
     && run('ccjSteps(6)[ccjRun.sub].label') === 'Draft generated', run('ccjSteps(6)[ccjRun.sub].label'));
@@ -2411,7 +2432,7 @@ section('IT GOES TO THE EMPLOYEE, IN THE EMPLOYEE\'S OWN THREAD');
     panel().indexOf('Approve and countersign') > -1 && panel().indexOf('>Decline<') > -1);
   advance(60000);
   check('and it will not countersign itself', run('ccjEmp().adtSignedAt') === 0);
-  run("ccjChooseGate('ecDecline')");
+  run("ccjChooseGate('ecDecline','Right-to-work evidence has expired.')");
   check('declining is terminal — nothing is in force',
     run('ccjRun.stopped') === true && run('ccjEmp().adtSignedAt') === 0);
   run('ccjReopen()');
@@ -2544,7 +2565,7 @@ section('A VERIFICATION THAT CANNOT CLEAR ITSELF GOES TO A PERSON');
     panel().indexOf('Confirm identity') > -1 && panel().indexOf('>Reject<') > -1);
   advance(60000);
   check('and it will not decide for itself', run("ccjRun.phase==='halt'"));
-  run("ccjChooseGate('kycReject')");
+  run("ccjChooseGate('kycReject','Document is illegible.')");
   check('rejecting stops the placement outright', run('ccjRun.stopped') === true);
   run('ccjReopen()');
   // Reopening re-runs the verification and asks again. It must not carry the rejection forward:
