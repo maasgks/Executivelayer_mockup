@@ -490,9 +490,13 @@ function ccjActsFor(i,step){
   // system a step reaches is a function of the run, and a raw function here would render as
   // its own source code.
   const system=ccjVal(d.system,c),ref=ccjVal(d.ref,c),latency=ccjVal(d.latency,c);
+  // The done line NAMES the system. While the log grew in place the in-flight line carried the
+  // name and "Connected · 12ms" could lean on it; in the stream window the in-flight action is
+  // one word in the head, so the finished line is the only durable place the name can live —
+  // and the reopened record is better for it too.
   if(system)acts.push({id:'connect',
     doing:'Connecting to '+system,
-    done:'Connected'+(latency&&latency!=='—'?' &middot; '+latency:'')});
+    done:'Connected to '+system+(latency&&latency!=='—'?' &middot; '+latency:'')});
   if(fetched.length)acts.push({id:'fetch',
     doing:'Fetching '+(ref?String(ref).replace(/&amp;/g,'&'):'records'),
     done:fetched.length+' record'+(fetched.length===1?'':'s')+' returned',
@@ -3056,6 +3060,108 @@ function ccjActChecksHTML(checks){
         +'<span><b>'+c.rule+'</b><i>'+c.actual+'</i></span></span>';
     }).join('')+'</span>';
 }
+/* == THE LIVE BLOCK IS A WINDOW, NOT A LEDGER ============================================
+   While a step works, its block does not grow a line per action until it towers over the
+   conversation — it holds still. The head says what kind of work is happening RIGHT NOW (a
+   spark and one word: "Fetching…", "Validating…"), and under a single rule the record of what
+   has been done so far scrolls through a few-lines-tall window, oldest sliding out the top as
+   the newest arrives. The full ledger has not gone anywhere: the settled block reopens with
+   the complete action log, and the drawer keeps the whole evidence set. This is the same
+   honesty with less noise — the window shows only work that has actually finished, and the
+   verb names only the action actually underway.
+
+   THE VERB IS DERIVED, NOT AUTHORED. Every action ccjActsFor builds carries an id, and the id
+   names the kind of work; a step whose evidence has no shape says "Working" and nothing more.
+   During a hold the machine may still be busy (the intake parses a document there) but which
+   action the verb would name is over, so it says "Working" rather than re-claiming the last
+   verb for work that already finished. */
+const CCJ_VERB={connect:'Connecting',fetch:'Fetching',verify:'Validating',save:'Writing',work:'Working'};
+function ccjVerbFor(i,step){
+  const run=ccjRun;
+  if(run&&run.phase==='hold')return 'Working';
+  const acts=ccjActsFor(i,step);
+  const a=acts[Math.max(0,Math.min((run&&run.act)||0,acts.length-1))];
+  if(!a)return 'Working';
+  return CCJ_VERB[a.id]||String(a.doing||'Working').split(' ')[0];
+}
+/* The eight-ray spark, drawn inline so it can inherit the coral and animate. */
+function ccjSparkHTML(){
+  return '<svg class="ccj-spark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+    +'<path d="M12 2 13.38 8.67 19.07 4.93 15.33 10.62 22 12 15.33 13.38 19.07 19.07 13.38 15.33 '
+    +'12 22 10.62 15.33 4.93 19.07 8.67 13.38 2 12 8.67 10.62 4.93 4.93 10.62 8.67 Z"/></svg>';
+}
+function ccjLiveStatusHTML(i,step){
+  return '<span class="ccj-sb-live">'+ccjSparkHTML()
+    +'<span class="ccj-sb-verb">'+ccjVerbFor(i,step)+'&hellip;</span></span>';
+}
+/* The window's lines: one per finished action, then one per record and one per check under it.
+   Flat on purpose — a card cannot scroll through a four-line window, a line can. Only lines
+   born on the latest beat carry `new`; the rest were already read and must not re-animate on
+   the rebuild (the ccjIn-restarts-forever trap). Nothing in flight is drawn here — the head's
+   verb is the in-flight action, and drawing it twice would put a claim of work in two places. */
+function ccjStreamLinesHTML(i,step,state){
+  const run=ccjRun;
+  const acts=ccjActsFor(i,step);
+  const at=state==='done'?acts.length:state==='pending'?-1:((run&&run.act)||0);
+  const tick='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>';
+  const out=[];
+  acts.forEach(function(a,n){
+    if(n>=at)return;                                   // not finished — the head's verb owns it
+    const nw=state!=='done'&&n===at-1?' new':'';
+    out.push('<div class="ccj-sl act'+nw+(a.ok?' ok':'')+'">'
+      +'<span class="ccj-sl-t">'+tick+'</span><span class="ccj-sl-x">'+a.done+'</span></div>');
+    (a.rows||[]).forEach(function(r){
+      out.push('<div class="ccj-sl row'+nw+(r.state==='inactive'?' off':'')+'">'
+        +'<b>'+r.k+'</b><i>'+r.v+'</i></div>');
+    });
+    (a.checks||[]).forEach(function(c){
+      const v=c.verdict||'';
+      out.push('<div class="ccj-sl chk '+v+nw+'">'
+        +'<span class="ccj-sl-vd">'+(v==='pass'?'&#10003;':v==='fail'?'&#10007;':'&ndash;')+'</span>'
+        +'<b>'+c.rule+'</b><i>'+c.actual+'</i></div>');
+    });
+  });
+  return out.join('');
+}
+/* Must match .ccj-sb-stream max-height in the CSS — the glide measures the overflow against it. */
+const CCJ_STREAM_H=78;
+function ccjStreamHTML(i,n,pass,state){
+  const step=ccjSteps(i)[n];
+  const lines=ccjStreamLinesHTML(i,step,state);
+  if(!lines)return '';                                 // nothing finished yet — no rule over nothing
+  const run=ccjRun;
+  const y=(run&&run.streamY&&run.streamY[ccjKey(i,step)+'#'+pass])||0;
+  return '<div class="ccj-sb-streambox"><div class="ccj-sb-stream'+(y>0?' deep':'')+'">'
+    +'<div class="ccj-sb-roll" style="transform:translateY('+(-y)+'px)">'+lines+'</div>'
+    +'</div></div>';
+}
+/* The scroll itself. The roll is mounted at the offset it HAD (ccjStreamHTML writes the stored
+   one inline), and one 40ms tick later it is told where to go — same trick as the rail, and for
+   the same reason: a forced reflow advances layout, not time, so two writes in one frame
+   teleport instead of gliding. Idempotent; safe to call after any paint of the live block. */
+function ccjStreamGlide(i,n,pass){
+  const run=ccjRun;if(!run)return;
+  const step=ccjSteps(i)[n];if(!step)return;
+  const el=ccjLiveNode(ccjEvLinesId(i,n,pass));
+  if(!el||typeof el.querySelector!=='function')return;
+  const roll=el.querySelector('.ccj-sb-roll'),win=el.querySelector('.ccj-sb-stream');
+  if(!roll||!win||!roll.offsetHeight)return;           // headless — nothing has a height there
+  const key=ccjKey(i,step)+'#'+pass;
+  run.streamY=run.streamY||{};
+  const target=Math.max(0,roll.offsetHeight-CCJ_STREAM_H);
+  if(target>0&&win.classList&&win.classList.add)win.classList.add('deep');
+  if((run.streamY[key]||0)===target)return;
+  run.streamY[key]=target;
+  if(run.streamTimer)clearTimeout(run.streamTimer);
+  const g=ccjGen,r=run;
+  run.streamTimer=setTimeout(function(){
+    if(ccjGen!==g||ccjRun!==r)return;
+    r.streamTimer=null;
+    const el2=ccjLiveNode(ccjEvLinesId(i,n,pass));
+    const roll2=el2&&typeof el2.querySelector==='function'?el2.querySelector('.ccj-sb-roll'):null;
+    if(roll2)roll2.style.transform='translateY('+(-target)+'px)';
+  },40);
+}
 /* == A SUB-STATUS AS A BLOCK IN THE TRANSCRIPT ===========================================
    The same content the panel row carried, in the conversation instead of beside it, and showing
    one thing at a time rather than all of them at once.
@@ -3144,6 +3250,9 @@ function ccjStepBlockHTML(i,n,p){
     +'<span class="ccj-sb-mark">'+mark+'</span>'
     +'<span class="ccj-sb-label">'+step.label
     +(step.cond?'<span class="ccj-sb-cond">'+step.cond+'</span>':'')+'</span>'
+    // The spark and its verb are the working block's one claim of activity — they sit where the
+    // settled fact will land, so the head trades "what I am doing" for "what I found" in place.
+    +(working?ccjLiveStatusHTML(i,step):'')
     +(settled?'<span class="ccj-sb-fact">'+ccjStepFactHTML(settled)+'</span>':'')
     +ccjOwnerChipHTML(step)
     +'</div>';
@@ -3241,25 +3350,27 @@ function ccjStepBodyHTML(i,step,n,current,gate,settled,pass){
   const d=ccjEvidence(i,step);
   const hold=current&&run.phase==='hold'?ccjHoldFor(i,step):null;
   const wait=current&&run.phase==='wait'?ccjWaitFor(i,step):null;
-  /* A WAIT KEEPS ITS EVIDENCE. This branch used to return the note ALONE, which threw away
-     everything the step had already found the moment it started waiting — the reminders it had
-     sent, the systems it had reached — and left a block that had visibly done work claiming only
-     that it was idle. A wait is not the absence of work; it is work that has been handed to
-     someone outside this product, and the record of our half stays on screen. */
-  if(wait)return '<div class="ccj-sb-body">'
-    /* Never 'current'. A post-wait renders 'done' — our half of this step has finished, which is
-       precisely why it is now waiting on somebody else, so the last action must not sit there
-       spinning. A PRE-wait renders 'pending': it parked before doing anything, so there is no
-       action to show at all, and the first one shown as underway would be a spinner on work that
-       has not begun. Either way a block whose mark says "parked" cannot have a body saying
-       "working" — that is the two halves of one block disagreeing about whether anything is
-       happening, and it is why a reader eventually stops believing the spinner anywhere.
-
-       The node itself stays even when it renders empty: the wait releases into ccjRunAct, and
-       ccjPaintBeat writes the first real action into exactly this id. */
-    +'<div id="'+ccjEvLinesId(i,n,pass)+'">'+ccjActLogHTML(i,step,wait.pre?'pending':'done')+'</div>'
-    +ccjWaitNoteHTML(wait,i,step)
-    +'</div>';
+  /* THE BLOCK THE RUNNER IS ON shows the window, whatever its phase — see the essay above
+     ccjVerbFor. The state the lines render at keeps every honesty rule this file already paid
+     for: a post-wait is 'done' (our half finished — that is WHY it waits), a pre-wait is
+     'pending' (nothing ran, so nothing is claimed), a settled step still holding its moment is
+     'done' with the window frozen on its tail, and only a step actually inside its beats is
+     'current'. A WAIT KEEPS ITS EVIDENCE — the tail of it stays visible in the window, and the
+     drawer keeps the whole of it. The ev node wraps the window because the wait releases into
+     ccjRunAct, and ccjPaintBeat writes the next beat into exactly this id. */
+  if(current){
+    const state=wait?(wait.pre?'pending':'done'):settled?'done':'current';
+    return '<div class="ccj-sb-body live">'
+      +'<div id="'+ccjEvLinesId(i,n,pass)+'">'+ccjStreamHTML(i,n,pass,state)+'</div>'
+      +(wait?ccjWaitNoteHTML(wait,i,step):'')
+      +(hold?'<div class="ccj-hold"><span class="ccj-hold-bar"></span>'+ccjHoldNoteHTML(hold)+'</div>':'')
+      +(!wait&&d?'<button class="ccj-ev-more" onclick="ccjInspect(\''+attrSafe(ccjKey(i,step))+'\')">'
+        +'View evidence'
+        +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>':'')
+      +'</div>';
+  }
+  /* A REOPENED BLOCK IS THE RECORD, not the broadcast — the reader asked for this one, so it
+     gets the full action log with every payload and verdict, exactly as it always did. */
   const state=settled?'done':'current';
   return '<div class="ccj-sb-body">'
     +'<div id="'+ccjEvLinesId(i,n,pass)+'">'+ccjActLogHTML(i,step,state)+'</div>'
@@ -9141,6 +9252,9 @@ function ccjPaintBlocks(){
   if(run.liveKey&&run.liveKey!==liveKey&&run.stepMsgs[run.liveKey])ccjRepaintMsg(run.stepMsgs[run.liveKey]);
   if(liveKey&&run.stepMsgs[liveKey])ccjRepaintMsg(run.stepMsgs[liveKey]);
   run.liveKey=liveKey;
+  // A phase change rebuilds the live block wholesale, roll mounted at its stored offset — if the
+  // content changed size under it (a wait released, a hold let go), the glide settles the window.
+  if(step)ccjStreamGlide(run.stage,run.sub,ccjPass(run.stage,step));
 }
 /* One beat inside a step. Touches the evidence lines and nothing else, so the spinner keeps
    spinning and the rows around it hold still. */
@@ -9149,8 +9263,20 @@ function ccjPaintBeat(){
   const step=ccjSteps(run.stage)[run.sub];
   if(!step)return;
   if(ccjUsesTranscript(run.stage)){
-    const lines=ccjLiveNode(ccjEvLinesId(run.stage,run.sub,ccjPass(run.stage,step)));
-    if(lines){lines.innerHTML=ccjActLogHTML(run.stage,step,'current');return;}
+    const pass=ccjPass(run.stage,step);
+    const lines=ccjLiveNode(ccjEvLinesId(run.stage,run.sub,pass));
+    if(lines){
+      // The beat rewrites the WINDOW, not the ledger — the roll mounts at the offset it had and
+      // ccjStreamGlide slides it a tick later, so the new lines push the old ones out the top.
+      lines.innerHTML=ccjStreamHTML(run.stage,run.sub,pass,'current');
+      ccjStreamGlide(run.stage,run.sub,pass);
+      // The verb lives in the head, which this paint deliberately does not rebuild — rewriting
+      // the whole head would restart the spark mid-turn. The one word is retargeted by itself.
+      const blk=ccjLiveNode(ccjStepBlockId(run.stage,run.sub,pass));
+      const vb=blk&&typeof blk.querySelector==='function'?blk.querySelector('.ccj-sb-verb'):null;
+      if(vb)vb.innerHTML=ccjVerbFor(run.stage,step)+'&hellip;';
+      return;
+    }
     // No live node — the headless harness, which fabricates one for any id asked for. Repainting
     // the block instead makes the beat show up where the tests actually read, rather than
     // disappearing into an element that is on no page.

@@ -519,6 +519,64 @@
 .ccj-sb .ccj-hold{margin-top:8px}
 .ccj-sb .ccj-ev-more{margin-top:8px}
 
+/* ---- THE LIVE BLOCK: SPARK, VERB AND THE SCROLLING WINDOW -----------------------------------
+   While the runner is on a step the block holds still instead of growing a line per action.
+   The head carries the claim of activity — an eight-ray coral spark and one shimmering word
+   naming the action actually underway — and under a single rule, the finished work scrolls
+   through a window a few lines tall, oldest sliding out of the top. Coral is Claude's colour
+   and appears nowhere else in the journey, which is exactly why it is right here: it marks
+   "the agent is doing this now", a state nothing else on screen is allowed to claim. */
+.ccj-sb-live{margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:6px;color:#d97757}
+.ccj-spark{width:13px;height:13px;flex-shrink:0;animation:ccjSparkTurn 2.6s linear infinite}
+@keyframes ccjSparkTurn{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(180deg) scale(.8)}
+  100%{transform:rotate(360deg) scale(1)}}
+/* The word shimmers the way Claude's own status line does — a light band sweeping through the
+   coral. Background-clip text, so the sweep is IN the letters rather than behind them. */
+.ccj-sb-verb{font-size:11px;font-weight:600;white-space:nowrap;color:transparent;
+  background:linear-gradient(90deg,#c2410c 0%,#d97757 38%,#f7cdb5 50%,#d97757 62%,#c2410c 100%);
+  background-size:220% 100%;-webkit-background-clip:text;background-clip:text;
+  animation:ccjVerbSheen 1.7s linear infinite}
+@keyframes ccjVerbSheen{from{background-position:120% 0}to{background-position:-120% 0}}
+/* The window. One hairline rule under the head (the user's line), then a clip CCJ_STREAM_H tall —
+   keep max-height in step with that constant, the glide measures overflow against it. The roll
+   inside is what moves: mounted at its old offset, sent to the new one a tick later, so each
+   beat's lines push the previous ones out through the top of the clip. */
+.ccj-sb-streambox{border-top:1px solid var(--border);padding-top:8px;margin-top:2px}
+.ccj-sb-stream{max-height:78px;overflow:hidden}
+/* Only a window that is actually overflowing fades its top edge — a short one would be fading
+   its own first line for no reason. */
+.ccj-sb-stream.deep{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 24px);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 24px)}
+.ccj-sb-roll{display:flex;flex-direction:column;gap:3px;
+  transition:transform .55s cubic-bezier(.3,.6,.25,1)}
+/* The lines themselves: flat, one thing each, truncating rather than wrapping — a line that
+   wrapped would make the window's height mean nothing. */
+.ccj-sl{display:flex;align-items:baseline;gap:7px;font-size:11px;line-height:1.5;min-width:0;
+  color:var(--gray)}
+.ccj-sl.new{animation:ccjEvIn .3s cubic-bezier(.4,0,.2,1) both}
+.ccj-sl.act{color:var(--navy);font-weight:500}
+.ccj-sl.act.ok .ccj-sl-x{color:#15803d}
+.ccj-sl-t{flex-shrink:0;align-self:center;width:11px;height:11px;display:flex;color:#15803d}
+.ccj-sl-t svg{width:11px;height:11px}
+.ccj-sl-x{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ccj-sl.row,.ccj-sl.chk{padding-left:18px}
+.ccj-sl.row b{flex-shrink:0;font-weight:500;font-size:10.5px;color:var(--gray)}
+.ccj-sl.row i,.ccj-sl.chk i{font-style:normal;color:var(--navy);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.ccj-sl.row.off i{color:var(--gray)}
+.ccj-sl-vd{flex-shrink:0;font-weight:700}
+.ccj-sl.chk.pass .ccj-sl-vd{color:#15803d}
+.ccj-sl.chk.fail .ccj-sl-vd{color:#b91c1c}
+.ccj-sl.chk.na .ccj-sl-vd{color:var(--gray)}
+.ccj-sl.chk b{flex-shrink:0;font-weight:500;font-size:10.5px;color:var(--gray)}
+.ccj-sl.chk i{color:var(--navy)}
+@media(prefers-reduced-motion:reduce){
+  .ccj-spark{animation:none}
+  .ccj-sb-verb{animation:none;background:none;color:#d97757}
+  .ccj-sb-roll{transition:none}
+  .ccj-sl.new{animation:none}
+}
+
 /* ---- WAITING ON A PERSON --------------------------------------------------------------------
    The state a reader spends the most time looking at on this stage, and the one most likely to be
    mistaken for a hang. A slow pulse rather than a spinner: a spinner claims the machine is
