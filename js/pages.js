@@ -10114,7 +10114,10 @@ function buildCfgModelDetailHTML(){
       +'<div class="ep-form-title">Identity &middot; the ids this object carries</div>'
       +m.identity.map(cfgIdentityRow).join('')
       +'<div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin-top:12px">'
-      +'Two ids, because two systems each name this client in their own store &mdash; so they never match, and neither can be derived from the other. Holding both is what lets a record here be traced back to the submission it came from.'
+      // "this client" was hardcoded here from when Client was the only object with identity.
+      // Store carries two ids for exactly the same reason, and the sentence has to name the
+      // object it is under or it describes the wrong record on every page but one.
+      +'Two ids, because two systems each name this '+(m.name||'record').toLowerCase()+' in their own store &mdash; so they never match, and neither can be derived from the other. Holding both is what lets a record here be traced back to the submission it came from.'
       +'</div>'
       +'</div>'
     :'';
@@ -10596,7 +10599,12 @@ const agentIconPaths={
   'AI Payroll Archive':'<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="13" x2="14" y2="13"/>',
   'AI Compliance Hub Sync':'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   'AI Leave Policy Engine':'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-  'AI Offboarding Engine':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
+  'AI Offboarding Engine':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  // The two Bhaiyaa agents. A person against a verified badge, and a storefront — the same two
+  // objects their journey is about, so neither falls through to the generic sparkle every
+  // uncatalogued agent used to wear.
+  'KYC Agent':'<circle cx="10" cy="8" r="3.6"/><path d="M3.5 20a6.5 6.5 0 0 1 10-5.5"/><circle cx="17.5" cy="16.5" r="4.5"/><path d="m15.6 16.6 1.4 1.4 2.6-2.7"/>',
+  'Store Agent':'<path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/>'
 };
 function agentIconSvg(name){
   const path=agentIconPaths[name]||'<path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/>';
@@ -10607,28 +10615,110 @@ function agentIconSvg(name){
    its description, guardrail, model and every journey it appears in — so three agents filled
    the screen and finding one meant scrolling past the detail of the others. Cards now carry
    only what you scan by; the rest moves into a modal opened by the card you cared about. == */
-function agentJourneyCount(a){return a.usedIn.split(', ').filter(Boolean).length;}
+/* == WHICH JOURNEYS AN AGENT IS ACTUALLY IN ===============================================
+   Read off the journey STEPS, not off the agent's own `usedIn` sentence. Those two disagree
+   today and there is no way to tell from the sentence: the prompt parser says "H2R Lifecycle"
+   where the journey is named "Hire to Retire (H2R) Journey", and "Contract Creation" where the
+   journey is "Contract Creation Journey". Grouping a catalogue by prose files agents under
+   journeys that do not exist and leaves real ones looking empty.
+
+   The step's `source` is the wiring — it is what the journey actually runs, what the run
+   surfaces name, and what Analytics already counts. `usedIn` is documentation, and it stays on
+   the detail modal where a sentence belongs. == */
+function agentJourneyIds(a){
+  const out=[];
+  Object.keys((typeof aiJourneyEvents!=='undefined'&&aiJourneyEvents)||{}).forEach(function(jid){
+    if((aiJourneyEvents[jid]||[]).some(function(e){return e.source===a.name;}))out.push(jid);
+  });
+  return out;
+}
+function agentJourneyCount(a){return agentJourneyIds(a).length;}
+function setCfgAgentJourney(id){cfgAgentJourneyFilter=id===cfgAgentJourneyFilter?'':id;renderADTPage();}
+function cfgAgentTileHTML(a,i){
+  const n=agentJourneyCount(a);
+  const shared=n>1;
+  return '<button type="button" class="agent-tile" onclick="openCfgAgentDetail('+i+')">'
+    +'<div class="agent-tile-top">'
+    +'<span class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</span>'
+    // A guardrail is the fact that decides whether this agent may act alone. The tile said
+    // "Active" on all fourteen — a pill whose every value is identical is a pill nobody reads.
+    +'<span class="status-pill '+(a.guardrail==='Fully automated'?'active':'draft')+'"'
+      +' style="min-width:0;height:auto;padding:1.5px 8px;font-size:9.5px"'
+      +' title="'+attrSafe('Guardrail — '+a.guardrail)+'">'
+      +(a.guardrail==='Fully automated'?'Unattended':'Human in loop')+'</span>'
+    +'</div>'
+    +'<div class="agent-tile-name">'+a.name+'</div>'
+    +'<div class="agent-tile-type">'+a.type+'</div>'
+    // -- The one figure worth keeping on the face of the card: "how much depends on this
+    // agent" is the question being asked while scanning the list. --
+    +'<div class="agent-tile-foot"><span'+(shared?' class="agent-tile-shared"':'')+'>'
+      +(n?n+' journey'+(n===1?'':'s'):'Not wired in')+'</span>'
+    +'<span class="agent-tile-open">View details'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
+    +'</span></div>'
+    +'</button>';
+}
+/* == THE CATALOGUE, BY WHAT USES IT =======================================================
+   Fourteen tiles in one undifferentiated grid answered "what agents exist" and nothing else.
+   The question actually being asked here is "what runs the journey I am working on", and the
+   flat grid made a reader open tiles one at a time to find out.
+
+   SHARED AGENTS COME FIRST, in their own group, because an agent three journeys depend on is a
+   different kind of object from one that serves a single step — it is the one whose guardrail
+   change reaches furthest, and the catalogue should say so before it says anything else. Every
+   other agent then sits under the single journey that uses it, so nothing is listed twice.
+
+   The journey being built leads the rest. One filter row above everything, and selecting a
+   journey flattens the page to that journey's agents — shared ones included, since they run in
+   it too. == */
 function buildCfgAgentsHTML(){
-  const cards=cfgAgents.map(function(a,i){
-    const n=agentJourneyCount(a);
-    return '<button type="button" class="agent-tile" onclick="openCfgAgentDetail('+i+')">'
-      +'<div class="agent-tile-top">'
-      +'<span class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</span>'
-      +'<span class="status-pill active" style="min-width:0;height:auto;padding:1.5px 8px;font-size:9.5px">Active</span>'
-      +'</div>'
-      +'<div class="agent-tile-name">'+a.name+'</div>'
-      +'<div class="agent-tile-type">'+a.type+'</div>'
-      // -- The one figure worth keeping on the face of the card: "how much depends on this
-      // agent" is the question being asked while scanning the list. --
-      +'<div class="agent-tile-foot"><span>'+n+' journey'+(n===1?'':'s')+'</span>'
-      +'<span class="agent-tile-open">View details'
-      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
-      +'</span></div>'
-      +'</button>';
-  }).join('');
+  const agents=cfgAgents.map(function(a,i){return {a:a,i:i,jids:agentJourneyIds(a)};});
+  const journeys=(typeof aiJourneys!=='undefined'?aiJourneys:[]).slice()
+    // The journey this layer is being built around goes first; the rest keep catalogue order.
+    .sort(function(x,y){return (x.id==='contract-creation'?0:1)-(y.id==='contract-creation'?0:1);});
+  const filter=cfgAgentJourneyFilter;
+  const chip=function(id,label,n){
+    return '<button type="button" class="cfg-agf'+(filter===id?' on':'')+'" onclick="setCfgAgentJourney(\''+id+'\')">'
+      +label+'<b>'+n+'</b></button>';
+  };
+  const bar='<div class="cfg-agf-row">'
+    +'<button type="button" class="cfg-agf'+(filter?'':' on')+'" onclick="setCfgAgentJourney(\'\')">All journeys<b>'+agents.length+'</b></button>'
+    +journeys.map(function(j){
+      return chip(j.id,String(j.name).replace(/\s*Journey$/,''),
+        agents.filter(function(x){return x.jids.indexOf(j.id)>-1;}).length);
+    }).join('')
+    +'</div>';
+  const grid=function(list){return '<div class="agent-grid">'+list.map(function(x){return cfgAgentTileHTML(x.a,x.i);}).join('')+'</div>';};
+  const group=function(title,note,list){
+    if(!list.length)return '';
+    return '<div class="cfg-aggrp">'
+      +'<div class="cfg-aggrp-head"><span>'+title+'</span><i>'+list.length+'</i>'
+      +(note?'<em>'+note+'</em>':'')+'</div>'+grid(list)+'</div>';
+  };
+  let body;
+  if(filter){
+    const j=journeys.find(function(x){return x.id===filter;});
+    const list=agents.filter(function(x){return x.jids.indexOf(filter)>-1;});
+    body=list.length
+      ?group(String((j||{}).name||'Journey').replace(/\s*Journey$/,''),
+             'every agent this journey runs, shared ones included',list)
+      :'<div class="ep-form-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">'
+        +'No agent is wired into this journey &mdash; every step of it is performed by a person.</div>';
+  }else{
+    const shared=agents.filter(function(x){return x.jids.length>1;});
+    const idle=agents.filter(function(x){return !x.jids.length;});
+    body=group('Shared across journeys','a guardrail change here reaches every one of them',shared)
+      +journeys.map(function(j){
+        return group(String(j.name).replace(/\s*Journey$/,''),'',
+          agents.filter(function(x){return x.jids.length===1&&x.jids[0]===j.id;}));
+      }).join('')
+      // Dead config, and named as such. An agent nobody wired in is the one thing this page can
+      // report that no other surface can.
+      +group('Not wired into any journey','configured, but nothing runs it',idle);
+  }
   return '<div class="ai-exec-page">'
     +cfgPageHead('Agents','The agents that read, draft and act — always inside your rules.')
-    +'<div class="agent-grid">'+cards+'</div>'
+    +bar+body
     +'</div>';
 }
 /* -- Detail modal. Shares the one overlay with the skill.md view, so opening skill.md from here

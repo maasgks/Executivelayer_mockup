@@ -3591,6 +3591,119 @@ check('a run started from the board’s own New request button comes back to the
   run('ccjExitTarget().page') === 'dashboard', run('JSON.stringify(ccjExitTarget())'));
 check('and it has no row to reopen, so it asks for none', run('ccjExitTarget().dealId') === null);
 
+/* == THE CATALOGUE: SYSTEMS, OBJECTS, JOURNEYS, AGENTS ====================================
+   Four registers that describe the estate to itself, and every one of them fails silently when
+   it drifts: a system whose endpoint still names a host nobody uses, an object the layer owns
+   with no entry, a journey filed under the wrong process, an agent doing real work that the
+   governance page cannot see. None of it throws. == */
+section('THE CATALOGUE');
+run("portalRole='super-admin';");
+check('no endpoint still points at the old host',
+  run("JSON.stringify(cfgSystems.map(function(s){return s.endpoint;}))").indexOf('vyoma') === -1,
+  run("JSON.stringify(cfgSystems.map(function(s){return s.endpoint;}))"));
+check('the platform system is ADT SaaS, by name and by type',
+  run("(function(){var s=cfgSystems.find(function(x){return x.id==='nfadmin';});return s.name+'|'+s.type;})()") === 'ADT SaaS|ADT SaaS');
+// The id stays 'nfadmin' on purpose: four evidence descriptors resolve a system by it, and
+// runner-harness asserts every systemId matches a real record. A rename is not a re-key.
+check('and its id is unchanged, so every evidence descriptor still resolves',
+  run("!!cfgSystems.find(function(x){return x.id==='nfadmin';})") === true
+  && run("JSON.stringify(Object.keys(aicjEvidence).filter(function(k){var d=aicjEvidence[k];return d.systemId&&!cfgSystems.find(function(s){return s.id===d.systemId;});}))") === '[]');
+check('nothing still shows the old system name to a reader',
+  run("JSON.stringify(Object.keys(aicjEvidence).map(function(k){return aicjEvidence[k].system||'';}))").indexOf('NFAdmin') === -1);
+// Three endpoints was not a description of the product every module in the nav belongs to.
+check('it describes what it actually holds rather than three endpoints',
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") >= 12,
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") + ' apis listed');
+
+check('Data Foundation carries the Store object',
+  run("!!cfgModels.find(function(m){return m.id==='store';})") === true);
+// The stores table is the source of truth; a field named here that has no column is fiction.
+check('and every mapped field names a real stores column',
+  run(`(function(){var cols=['source_record_id','store_name','role','category','store_type',
+        'first_name','last_name','email','mobile','mobile_verified','aadhaar_masked','kyc_status',
+        'kyc_verified_by','kyc_verified_at','raw_signup','mirror_state','store_code','plan',
+        'gst_position','credit_line','payment_terms'];
+      var m=cfgModels.find(function(x){return x.id==='store';});
+      var bad=m.mapped.filter(function(r){return cols.indexOf(r[1])===-1;}).map(function(r){return r[1];});
+      return JSON.stringify(bad);})()`) === '[]',
+  run(`(function(){var m=cfgModels.find(function(x){return x.id==='store';});
+       return JSON.stringify(m.mapped.map(function(r){return r[1];}));})()`));
+check('it carries both ids, ours and Bhaiyaa’s',
+  run("cfgModels.find(function(m){return m.id==='store';}).identity.length") === 2
+  && run("JSON.stringify(cfgModels.find(function(m){return m.id==='store';}).identity.map(function(i){return i.mintedBy;}))")
+     === '["Executive Layer","Bhaiyaa"]');
+// The schema is explicit that no column holds the real number. An object description that
+// listed one would be describing a field the database refuses to accept.
+check('and never claims to hold a full Aadhaar number',
+  run(`(function(){var m=cfgModels.find(function(x){return x.id==='store';});
+       return m.mapped.some(function(r){return r[1]==='aadhaar_masked';})
+         && !m.mapped.some(function(r){return r[1]==='aadhaar_number'||r[0]==='Aadhaar';});})()`) === true);
+check('the identity note names the object it sits under, not always “client”',
+  run("(function(){selectedCfgModelId='store';var h=buildCfgModelDetailHTML();selectedCfgModelId='user';return h;})()")
+    .indexOf('each name this store in their own store') > -1);
+
+// It hires a named person and puts them on payroll — the first half of Hire to Retire's own
+// sentence. Order to Cash is opening an account, which is what the other two O2C journeys do.
+check('Contract Creation is filed under Hire to Retire, in both journey registers',
+  run("aiJourneys.find(function(j){return j.id==='contract-creation';}).category") === 'H2R'
+  && run("cfgJourneys.find(function(j){return j.id==='contract-creation';}).category") === 'H2R');
+check('and its category is one the catalogue actually declares',
+  run(`(function(){var bad=aiJourneys.filter(function(j){
+        return !cfgJourneyCategories.some(function(c){return c.id===j.category;});});
+      return JSON.stringify(bad.map(function(j){return j.name+':'+j.category;}));})()`) === '[]');
+check('the two H2R journeys stay distinct records',
+  run("aiJourneys.filter(function(j){return j.category==='H2R';}).length") === 3
+  && run("new Set(aiJourneys.map(function(j){return j.name;})).size") === run('aiJourneys.length'));
+
+/* An agent performing steps that the governance page cannot see is the opposite failure to a
+   dead agent nobody wired up, and the more dangerous of the two. */
+check('every agent a journey step names exists in the catalogue',
+  run(`(function(){var names={};cfgAgents.forEach(function(a){names[a.name]=1;});
+      var missing={};Object.keys(aiJourneyEvents).forEach(function(jid){
+        (aiJourneyEvents[jid]||[]).forEach(function(e){
+          if(e.source&&/agent|ai /i.test(e.source)&&!names[e.source])missing[e.source]=1;});});
+      return JSON.stringify(Object.keys(missing));})()`) === '[]',
+  'uncatalogued: ' + run(`(function(){var names={};cfgAgents.forEach(function(a){names[a.name]=1;});
+      var missing={};Object.keys(aiJourneyEvents).forEach(function(jid){
+        (aiJourneyEvents[jid]||[]).forEach(function(e){
+          if(e.source&&/agent|ai /i.test(e.source)&&!names[e.source])missing[e.source]=1;});});
+      return JSON.stringify(Object.keys(missing));})()`));
+check('the store journey’s two agents are among them',
+  run("!!cfgAgents.find(function(a){return a.name==='KYC Agent';})") === true
+  && run("!!cfgAgents.find(function(a){return a.name==='Store Agent';})") === true);
+// The KYC gate halts on a failed match rather than deciding — the journey is explicit that a
+// mismatch stops the run before a store exists, so "Fully automated" would misreport it.
+check('and the KYC gate is not described as unattended',
+  run("cfgAgents.find(function(a){return a.name==='KYC Agent';}).guardrail") !== 'Fully automated',
+  run("cfgAgents.find(function(a){return a.name==='KYC Agent';}).guardrail"));
+check('every agent gets its own icon rather than the fallback sparkle',
+  run("cfgAgents.every(function(a){return !!agentIconPaths[a.name];})") === true,
+  run("JSON.stringify(cfgAgents.filter(function(a){return !agentIconPaths[a.name];}).map(function(a){return a.name;}))"));
+// usedIn is prose and disagrees with the wiring; the count on the tile must come from the steps.
+check('the journey count on a tile is derived from the wiring, not from the usedIn sentence',
+  run("agentJourneyCount(cfgAgents.find(function(a){return a.name==='AI Prompt Parser';}))") === 3
+  && run("agentJourneyIds(cfgAgents.find(function(a){return a.name==='Store Agent';})).join(',')") === 'bhaiyaa-store-creation');
+
+const agHtml = run("(function(){cfgAgentJourneyFilter='';return buildCfgAgentsHTML();})()");
+// Read the GROUP HEADINGS, not the raw string — every journey name also appears above as a
+// filter chip, so a plain indexOf finds the bar and reports the groups in the wrong order.
+const agGroups = (agHtml.match(/cfg-aggrp-head"><span>([^<]+)</g) || []).map((s) => s.slice(22, -1));
+check('the catalogue groups by journey with the built one leading',
+  agGroups[0] === 'Shared across journeys' && agGroups[1] === 'Contract Creation'
+  && agGroups.indexOf('Payroll Creation') > 1, agGroups.join(' | '));
+check('no agent is listed twice',
+  run(`(function(){cfgAgentJourneyFilter='';var h=buildCfgAgentsHTML();
+      return cfgAgents.every(function(a){
+        return h.split('>'+a.name+'<').length===2;});})()`) === true);
+check('filtering to a journey shows its agents, shared ones included',
+  run(`(function(){cfgAgentJourneyFilter='contract-creation';var h=buildCfgAgentsHTML();
+      cfgAgentJourneyFilter='';
+      return h.indexOf('AI Prompt Parser')>-1&&h.indexOf('AI Contract Assistant')>-1
+        &&h.indexOf('AI Payroll Engine')===-1;})()`) === true);
+check('a journey no agent runs says so rather than rendering an empty grid',
+  run(`(function(){cfgAgentJourneyFilter='user-master-data';var h=buildCfgAgentsHTML();
+      cfgAgentJourneyFilter='';return h.indexOf('performed by a person')>-1;})()`) === true);
+
 /* == THE ANALYTICS CHARTS =================================================================
    Two charts drawn as positioned HTML, which means their geometry is arithmetic and arithmetic
    can be wrong silently: a bar whose segments sum to 103%, a dot plotted past the end of its

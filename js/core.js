@@ -434,7 +434,7 @@ const aicjEvidence={
 
   /* ---- 4 · Quote accepted -------------------------------------------------------------- */
   'quote-approved/Client tenant provisioned':{
-    system:'NFAdmin', systemId:'nfadmin', ref:'EntityRegistry',
+    system:'ADT SaaS', systemId:'nfadmin', ref:'EntityRegistry',
     call:function(c){return 'POST /tenants {client:"'+c.client+'", country:"'+c.country+'"}';},
     latency:'640ms',
     fetched:function(c){return [
@@ -455,7 +455,7 @@ const aicjEvidence={
 
   /* ---- 5 · Client signing --------------------------------------------------------------- */
   'agreement-signature/Client entity + sanctions check':{
-    system:'NFAdmin', systemId:'nfadmin', ref:'EntityRegistry + ComplianceFiling',
+    system:'ADT SaaS', systemId:'nfadmin', ref:'EntityRegistry + ComplianceFiling',
     call:function(c){return 'POST /screening {entity:"'+c.client+'", country:"'+c.country+'"}';},
     latency:'820ms',
     fetched:function(c){return [
@@ -2795,7 +2795,7 @@ const aiJourneys=[
   // matcher, a compliance sync and a publisher — none of which exist anywhere in the build. The
   // one journey wired to a real backend is the one that should not be describing imaginary work. --
   {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',modules:['Client','Master Data','NewForce Solutions'],coverage:0,humanSteps:3,aiSteps:0,status:'Active',risk:'Low',updated:'29 Jul 2026, 9:45 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3"/><path d="M20 5.5v6"/><path d="M4 12c0 1.7 3.6 3 8 3"/><path d="M18 15v6M15 18h6"/></svg>'},
-  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
+  {id:'contract-creation',name:'Contract Creation Journey',category:'H2R',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
   {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'},
   // -- Two human stages (the role choice and the signup) and three the agents run: KYC, the
@@ -2926,7 +2926,7 @@ let aiClientJourneySeq=6;
 // -- "Store Management" is Bhaiyaa's category, not a rename of Order to Cash everywhere. The
 // list is shared across systems but a system only ever shows the categories its own APIs are
 // tagged with (see buildCfgSystemDetailHTML, which groups off apiList), so adding one here costs
-// nothing to SAP/Infor/NFAdmin and keeps Bhaiyaa's grouping true to what Bhaiyaa is: a storefront
+// nothing to SAP/Infor/ADT SaaS and keeps Bhaiyaa's grouping true to what Bhaiyaa is: a storefront
 // platform whose objects are stores, not sales orders against a staffing contract. --
 const cfgApiCategories=['Procure to Pay','Order to Cash','Store Management','Finance & Payroll Postings','Others'];
 const cfgApiSubcats={
@@ -2938,7 +2938,7 @@ const cfgApiSubcats={
 };
 const cfgApiTypes=['Transactional','Transformational'];
 const cfgSystems=[
-  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.adt.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'API_BUSINESS_PARTNER · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'API_PRODUCT_SRV · Service Item Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
@@ -2948,7 +2948,7 @@ const cfgSystems=[
       {name:'API_COSTCENTER · Cost Center Master',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
       {name:'API_GLACCOUNTLINEITEM · GL Posting',dir:'r',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
-  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:true,
+  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.adt.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'SupplierMaster · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'PurchaseOrder · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
@@ -2987,7 +2987,7 @@ const cfgSystems=[
   // gives us hangs off one. StoreIntake is the write side of that — the API behind Create Store
   // (buildCreateStoreHTML, js/pages.js) — and it is `rw` for the same reason ADT's EmployeeIntake
   // is: we post a signup to it and read the store back with the id Bhaiyaa minted. --
-  {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.vyoma.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+  {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.adt.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'StoreIntake · Store Signup',dir:'rw',cat:'Store Management',sub:'Store Onboarding',type:'Transactional'},
       {name:'StoreRegistry · Store Master',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'},
@@ -2995,11 +2995,37 @@ const cfgSystems=[
       {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Store Management',sub:'Time & Attendance',type:'Transactional'},
       {name:'PayoutBatch · Contractor Payouts',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
-  {id:'nfadmin',name:'NFAdmin',type:'NFAdmin',method:'REST / SOAP',endpoint:'https://nfadmin.vyoma.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+  /* == ADT SaaS ============================================================================
+     The product this Execution Layer is built on top of — the one whose modules the sidebar
+     below the divider mirrors, and the system every journey ultimately writes its outcome into.
+     It was called NFAdmin, which named an admin console rather than the platform, and left the
+     biggest system in the estate looking like a back-office tool with three endpoints.
+
+     THE API LIST IS THE POINT. Three entries against an `apis: 24` count said almost nothing
+     about what this system holds, on the one system a reader of this page already knows: every
+     object listed here has a module in the nav. They are grouped the way the rest of the estate
+     is — by the process the call belongs to, not by the screen it is reached from. == */
+  {id:'nfadmin',name:'ADT SaaS',type:'ADT SaaS',method:'REST / SOAP',endpoint:'https://saas.adt.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
+      // Who the entity is, and who may act inside it.
       {name:'EntityRegistry · Legal Entity Master',dir:'r',cat:'Others',sub:'General',type:'Transformational'},
+      {name:'UserDirectory · Admin Users',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      // The commercial chain: a client, the contract raised against it, the paper behind it.
+      {name:'ClientMaster · Client Records',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      {name:'ContractRegistry · Contracts',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'},
+      {name:'ContractTemplate · Document Templates',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      // The workforce the contracts produce.
+      {name:'EmployeeMaster · Workforce Records',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      {name:'TeamStructure · Teams & Reporting',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      // Time in, money out.
+      {name:'TimesheetFeed · Attendance & Hours',dir:'rw',cat:'Order to Cash',sub:'Time & Attendance',type:'Transactional'},
+      {name:'LeaveLedger · Balances & Requests',dir:'rw',cat:'Order to Cash',sub:'Time & Attendance',type:'Transactional'},
+      {name:'PayrollRun · Salary Calculation',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'},
+      {name:'PayheadMaster · Earnings & Deductions',dir:'r',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transformational'},
+      {name:'PaymentLedger · Client Billing',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'},
+      // What keeps all of the above legal.
       {name:'ComplianceFiling · Statutory Filings',dir:'rw',cat:'Others',sub:'General',type:'Transactional'},
-      {name:'UserDirectory · Admin Users',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'}
+      {name:'RatesAndRules · Country Rule Set',dir:'r',cat:'Others',sub:'Compliance & Documentation',type:'Transformational'}
     ]}
 ];
 
@@ -3084,7 +3110,62 @@ const cfgModels=[
       {name:'Billing Currency',type:'string'}
     ],
     rules:{makerChecker:true,validation:'Full name and work email are required. Client ID is minted here and unique; Source Record ID must be unique too — a repeat resolves to the existing client instead of creating a second one. Record enters as Pending until enrichment fields are supplied'},
-    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Client Tier','Mid-market'],['Lead Stage','Qualified'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contract Start Date','2026-09-01'],['Billing Currency','EUR']]}
+    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Client Tier','Mid-market'],['Lead Stage','Qualified'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contract Start Date','2026-09-01'],['Billing Currency','EUR']]},
+  /* == STORE ===============================================================================
+     The second live object, and the one Data Foundation was missing entirely: Bhaiyaa's store
+     signup lands in a real `stores` table (sql/schema_direct_employees.sql), the Store
+     Operations board works those records every day, and the object describing them existed
+     nowhere. A page whose job is "here is every object the layer owns" was omitting one of the
+     two it actually owns.
+
+     EVERY FIELD BELOW IS A COLUMN. Mapped fields are the `stores` columns Bhaiyaa's signup
+     fills; the enrichment set is the three the schema comments call out as arriving empty —
+     which is exactly why a created store sits in Pending until an Ops Manager supplies them,
+     the same contract the Client object has with its own intake form.
+
+     TWO IDS, SAME SPLIT AS CLIENT, and for the same reason: we mint one, Bhaiyaa minted the
+     other, and `uq_stores_source_record` deduplicates on theirs. There is deliberately NO
+     column for a full Aadhaar number anywhere in this object — the schema stores the masked
+     form only, and an object description that listed the real one would be describing a field
+     the database refuses to hold. == */
+  {id:'store',name:'Store',source:'Bhaiyaa',
+    desc:'Store opened on Bhaiyaa, mirrored into the Executive Layer store as the record the Store Operations board works.',
+    identity:[
+      {name:'Store Code',column:'store_code',mintedBy:'Executive Layer',example:'STR-000112',
+       note:'Issued by us the moment the store is mirrored in. Unique across the whole Executive Layer — minted inside the insert, not per browser.'},
+      {name:'Source Record ID',column:'source_record_id',mintedBy:'Bhaiyaa',example:'BHA-STR-0001',
+       note:'Bhaiyaa’s own reference for the same store. Recorded as received, never rewritten, and unique per source so two platforms may legitimately mint the same string.'}
+    ],
+    mapped:[
+      ['Source Record ID','source_record_id','string'],
+      ['Store Name','store_name','string'],
+      ['Role','role','string'],
+      ['Category','category','string'],
+      ['Business Tier','store_type','string'],
+      ['Owner First Name','first_name','string'],
+      ['Owner Last Name','last_name','string'],
+      ['Email','email','string'],
+      ['Mobile','mobile','string'],
+      ['Mobile Verified','mobile_verified','boolean'],
+      // Masked on arrival and stored masked. The full number never crosses into this store.
+      ['Aadhaar (masked)','aadhaar_masked','string'],
+      ['KYC Status','kyc_status','string'],
+      ['KYC Verified By','kyc_verified_by','string'],
+      ['KYC Verified At','kyc_verified_at','date'],
+      // The whole submission, verbatim, so nothing the merchant entered is lost while dedicated
+      // columns are still being added — bank, address, GST, PAN, MSME and the document list all
+      // live in here today.
+      ['Full Signup','raw_signup','object'],
+      ['Mirror State','mirror_state','string']
+    ],
+    enrichment:[
+      {name:'Plan',type:'string'},
+      {name:'GST Position',type:'string'},
+      {name:'Credit Line',type:'string'},
+      {name:'Payment Terms',type:'string'}
+    ],
+    rules:{makerChecker:true,validation:'Store name, owner name and email are required. Store Code is minted here and unique; Source Record ID must be unique per source — a repeat resolves to the existing store instead of opening a second one. KYC must read Verified before the store leaves Pending, and the full Aadhaar number is never stored.'},
+    sample:[['Store Code','STR-000112'],['Source Record ID','BHA-STR-0001'],['Store Name','Sharma Kirana Mart'],['Role','seller'],['Category','Grocery & Kirana'],['Business Tier','MSME: Micro, Small, and Medium Enterprises'],['Owner First Name','Ravi'],['Owner Last Name','Sharma'],['Email','ravi@sharmakirana.in'],['Mobile','+91 98220 41176'],['Mobile Verified','true'],['Aadhaar (masked)','XXXX XXXX 9012'],['KYC Status','Verified'],['KYC Verified By','KYC Agent'],['KYC Verified At','01 Aug 2026, 11:20'],['Full Signup','{ bank, address, GST, PAN, documents… }'],['Mirror State','mirrored'],['Plan','Standard'],['GST Position','Registered — Regular'],['Credit Line','₹50,000'],['Payment Terms','Net 15']]}
 ];
 let cfgModelTested={};
 let cfgModelEditing=false;
@@ -3098,6 +3179,10 @@ let cfgModelDraft=null;
 const cfgJourneyCategories=[
   {id:'O2C',name:'Order to Cash',short:'Order to fulfilment, invoice, payment',desc:"From customer order through fulfillment, invoicing, and payment collection."},
   {id:'P2P',name:'Procure to Pay',short:'Requisition to PO, receipt, payment',desc:'From requisitioning through purchase order, receipt, and invoice payment.'},
+  /* Contract Creation lives here, not under Order to Cash. It was filed as O2C because it ends
+     in a signed contract, but what it actually does is hire a named person and put them on
+     payroll — the first half of this category's own sentence. Order to Cash is the client
+     record and the store signup: opening an account. This is hiring into one. */
   {id:'H2R',name:'Hire to Retire',short:'Hiring to payroll, leave, offboarding',desc:'Full employee lifecycle: hiring, payroll, benefits, leave, offboarding.'},
   {id:'F2A',name:'Finance to Accounting',short:'Ledger to reconciliation, close, reporting',desc:'Financial transactions into the ledger — reconciliation, close, reporting.'}
 ];
@@ -3237,7 +3322,7 @@ const cfgJourneys=[
       {name:'Submission & Ingestion',src:'Account Manager',type:'rule'},
       {name:'Client Record Created',src:'Account Manager',type:'rule'}
     ]},
-  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['8 steps','Deal Desk, Contracts'],
+  {id:'contract-creation',name:'Contract Creation Journey',category:'H2R',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['8 steps','Deal Desk, Contracts'],
     steps:[
       {name:'Create Deal & Employee Record',src:'AI Prompt Parser',type:'src'},
       {name:'Send Proposal',src:'AI Contract Assistant',type:'src'},
@@ -3979,10 +4064,79 @@ All offboarding checklist items are marked complete.
 A pending final settlement raises an exception for finance.
 
 ## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  /* == THE TWO THAT DO THE WORK AND WERE NEVER LISTED =======================================
+     The Bhaiyaa Store Creation Journey runs three automated steps, and until now not one of
+     them had an agent record. Its steps name 'KYC Agent' and 'Store Agent' as their source,
+     amOwnerDirectory routes both to the Ops Manager persona, the store board reports what they
+     did — and the Agents catalogue, the page whose entire job is "what can this layer run",
+     showed neither. That is the opposite failure to a dead agent nobody wired up: work being
+     performed by something the governance surface cannot see.
+
+     GUARDRAILS ARE NOT COSMETIC HERE. The KYC agent halts the run on a failed match rather than
+     deciding — the journey is explicit that a mismatch stops before a store is created, which
+     is a human-adjudicated outcome and is why this one is not "Fully automated". == */
+  {name:'KYC Agent',type:'Verification agent',desc:'Matches the owner’s Aadhaar against UIDAI demographics and screens the result before any store is opened.',model:'Bharat GPT',usedIn:'Bhaiyaa Store Creation Journey',guardrail:'Human approves on deviation',
+    skillMd:`# KYC Agent — skill.md
+
+Model: Bharat GPT
+Type: Verification agent
+Used in: Bhaiyaa Store Creation Journey
+Guardrail: Human approves on deviation
+
+## Role
+Verifies the store owner's identity with UIDAI before a store exists. This runs as a gate, not
+as a formality: the journey halts here on a failed match rather than opening a store and
+correcting it later.
+
+## Step
+KYC Verification
+
+## Fields read
+Owner Name, Aadhaar Number, PAN Number, Business KYC Entity
+
+## Validation
+UIDAI demographic match returns a score above threshold and the owner clears the watchlist screen.
+
+## On failure
+The run halts before store creation and the record is routed to the Ops Manager for adjudication.
+No store is registered on Bhaiyaa and nothing downstream is provisioned.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.
+The full Aadhaar number is never written to the store record — only the masked form is kept.`},
+  {name:'Store Agent',type:'Transaction agent',desc:'Registers the store on Bhaiyaa once KYC clears, then provisions the storefront or the ledger and mirrors the record back.',model:'Bharat GPT',usedIn:'Bhaiyaa Store Creation Journey',guardrail:'Fully automated',
+    skillMd:`# Store Agent — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Bhaiyaa Store Creation Journey
+Guardrail: Fully automated
+
+## Role
+Registers the store on Bhaiyaa through StoreIntake, provisions it, and mirrors the created record
+back into the Executive Layer store with the reference Bhaiyaa minted.
+
+## Step
+Store Creation, Store Created
+
+## Fields read
+Store Name, Category, Business Tier, Owner Contact, Bank Details, Address
+
+## Validation
+Bhaiyaa returns a store reference and the mirrored record carries both identifiers.
+
+## On failure
+The mirror is marked failed and retried; the store exists on Bhaiyaa either way, so the run never
+re-registers it.
+
+## Audit
 Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`}
 ];
 const cfgAgentsOriginalSkill=cfgAgents.map(function(a){return a.skillMd;});
 let cfgAgentSkillModalIdx=-1;
+// '' = every journey. Which journey's agents the catalogue is scoped to — see buildCfgAgentsHTML.
+let cfgAgentJourneyFilter='';
 let cfgAgentSkillEditing=false;
 // -- Which agent's detail modal is open. Doubles as "did skill.md get opened from a detail
 // modal", which is what decides whether skill.md offers Back or only Close. --
