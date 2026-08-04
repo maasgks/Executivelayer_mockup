@@ -179,8 +179,10 @@ function ccjClient(){
    events, which is the only thing these numbers have to protect. */
 const CCJ_CLIENT_SCRIPT=[
   {ev:'viewed',   in:1800, at:128,  when:function(c){return c.state==='sent';}},
-  {ev:'chase',    in:1600, at:4320, when:function(c){return c.state==='viewed'&&c.chases===0;}},
-  {ev:'chase',    in:1600, at:7200, when:function(c){return c.state==='chased'&&c.chases===1;}},
+  // 2000, the user's number: each gap is filled by the "Waiting for confirmation" beat, and two
+  // seconds is long enough to read the word and see the spark move before the reminder lands.
+  {ev:'chase',    in:2000, at:4320, when:function(c){return c.state==='viewed'&&c.chases===0;}},
+  {ev:'chase',    in:2000, at:7200, when:function(c){return c.state==='chased'&&c.chases===1;}},
   {ev:'changed',  in:2000, at:7620, kind:'price', when:function(c){return c.state==='chased'&&c.chases>=2;}},
   {ev:'agreed',   in:4200, at:7900, when:function(c){return c.state==='negotiating';}},
   {ev:'viewed2',  in:2600, at:9020, when:function(c){return c.state==='reissued';}},
@@ -1554,6 +1556,16 @@ function ccjPurpose(i,step){
 const CCJ_HOLDS={
   'request-received/New intake':{
     until:'proposal',
+    // The word beside the spark while held. NOT "Working" — a hold is a specific activity, and
+    // the generic word depicts the wrong thing (the user's own words). Reading a document IS the
+    // capture, so the verb follows the note's own distinction — and the gist names the document.
+    verb:function(){const d=ccjRun&&ccjRun.doc;return d&&!d.done?'Reading':'Gathering';},
+    gist:function(){
+      const d=ccjRun&&ccjRun.doc;
+      if(d&&!d.done)return d.name;
+      const f=ccjRun&&ccjRun.doc&&ccjRun.doc.done?ccjRun.doc.fields.length+' fields read':'';
+      return f;
+    },
     // A held row is not idle — it is the intake still being captured. When a document is being read
     // it says so, because that reading IS the capture.
     note:function(h){
@@ -1564,6 +1576,30 @@ const CCJ_HOLDS={
     },
     plain:'Completes when the proposal is created.'
   }
+};
+/* THE RE-ISSUE CANNOT PRECEDE THE REPLY. "Change requested" used to settle off its beats alone,
+   so "Re-issued v2" opened — parked, but visibly THERE — while the drafted answer still sat
+   unsent in the thread below it. A step named after sending the client a revised quote must not
+   appear before our half of the negotiation has left the building (the user's words: "it should
+   show after we send the message"). So the step holds until the reply is sent — ccjSendDraft and
+   ccjSendToClient reach the 'draft-sent' milestone — and it is a FUNCTION because the hold only
+   exists while a change is actually unanswered (`state==='changed'`): on the re-run pass after
+   the client has accepted there is no reply to send, and an unconditional hold would park the
+   pass-2 walk forever on a milestone nobody can reach. */
+CCJ_HOLDS['quote-review/Change requested']=function(){
+  const c=ccjRun&&ccjRun.client;
+  // 'negotiating' too, and it is load-bearing: ccjSendDraft moves the state there BEFORE it
+  // reaches the milestone, and ccjReachScreen re-asks this function on release — a hold that
+  // has vanished by then cannot be released, and the runner parks forever on a step whose
+  // condition was already satisfied.
+  if(!c||(c.state!=='changed'&&c.state!=='negotiating'))return null;
+  return {until:'draft-sent',
+    verb:function(){return ccjClient().drafted?'Waiting':'Drafting';},
+    // The one-line block's gist; the drafted card in the thread carries the Send control itself.
+    gist:function(){return ccjClient().drafted?'Reply drafted for you':'Drafting a reply';},
+    note:function(){return ccjClient().drafted
+      ?'A reply is drafted for you below. The re-issue follows once you send it.'
+      :'Drafting a reply for you.';}};
 };
 /* An entry may be a function of run state, for the same reason CCJ_GATES may: a step whose work
    happens in two halves either side of a human decision holds on a DIFFERENT milestone before and
@@ -2343,17 +2379,47 @@ function ccjStageOpener(i){
   return s.short+'. Starting with <b>'+(first?first.label:'the first step')+'</b>.';
 }
 
+/* == THE GAP BETWEEN CLIENT EVENTS IS A STATE, AND IT NOW SAYS SO ========================
+   Between the quote being opened and the first reminder — and between each reminder and the
+   next thing the client does — the thread used to sit silent, indistinguishable from a thread
+   that had finished. A "Waiting for confirmation" line with the Claude spark now occupies that
+   gap. It is TRANSIENT, not a record: the moment the next event lands the line is done and
+   renders nothing, because "we were waiting" is not information once the thing waited for has
+   happened — the timeline and the log carry the durable facts. It is a NOTE, not a lane
+   message: the client never received our waiting, so it must not sit under a "To" rail. */
+function ccjAwaitStart(label){
+  const c=ccjClient();
+  if(c.awaitMsg&&!c.awaitMsg.done)return;
+  const m={who:'note',kind:'await',label:label||'Waiting for confirmation',at:c.mins};
+  c.awaitMsg=m;
+  ccjClientPush(m);
+}
+function ccjAwaitEnd(){
+  const c=ccjClient();
+  const m=c.awaitMsg;
+  if(!m||m.done)return;
+  m.done=true;
+  c.awaitMsg=null;
+  // A mutated message is invisible to the append-only sync — same reason the chase's own
+  // send-complete rebuilds. The next event's pushes then append as normal.
+  ccjRenderChat();
+}
 /* Every client event lands here — scripted or clicked, the same path, so the override strip
    cannot produce a state the auto-run could not reach. */
 function ccjClientEvent(ev,at,kind){
   const run=ccjRun;if(!run)return;
   const c=ccjClient();
   if(at!==undefined)c.mins=Math.max(c.mins,at);
+  // Whatever arrives, the wait for it is over. Each branch below re-arms it if a new wait begins.
+  ccjAwaitEnd();
   if(ev==='viewed'||ev==='viewed2'){
     c.state=ev==='viewed'?'viewed':'viewed2';
     if(c.openedAt===null)c.openedAt=c.mins;
     ccjClientLog(ev==='viewed'?'opened':'opened2',ev==='viewed'?'Opened':'Opened v2','Tracked on open');
     ccjClientNote('Opened the quote'+(c.version>1?' (v'+c.version+')':''));
+    // Opened is not answered. The gap between this and whatever they do next is a wait, and it
+    // shows itself as one — the user's spec: viewed, then ~2s of waiting, then the follow-up.
+    ccjAwaitStart();
     ccjResolveWait();
   }else if(ev==='chase'){
     /* A REMINDER IS SENT, NOT CONJURED. It used to appear complete in the same frame it was
@@ -2384,6 +2450,9 @@ function ccjClientEvent(ev,at,kind){
       m.detail=c.chases>=3?'Final reminder':'Scheduled reminder';
       ccjClientLog('chase'+c.chases,'Follow-up '+c.chases+' of 3',m.detail);
       ccjRenderChat();
+      // Sent, and now we are waiting again — for a reply, or for the next reminder to become
+      // due. The loader re-arms the moment the reminder has actually gone out, never before.
+      ccjAwaitStart();
       ccjResolveWait();ccjPaint();ccjPaintScreen();
       ccjClientSchedule();
     },CCJ_CHASE_SEND);
@@ -2437,6 +2506,7 @@ function ccjClientEvent(ev,at,kind){
     ccjResolveWait();
   }else if(ev==='quiet'){
     c.state='viewed';                              // back to waiting; the chases resume
+    ccjAwaitStart();
   }
   ccjPaintWork();
   ccjClientSchedule();
@@ -3164,15 +3234,21 @@ function ccjActChecksHTML(checks){
    honesty with less noise — the window shows only work that has actually finished, and the
    verb names only the action actually underway.
 
-   THE VERB IS DERIVED, NOT AUTHORED. Every action ccjActsFor builds carries an id, and the id
-   names the kind of work; a step whose evidence has no shape says "Working" and nothing more.
-   During a hold the machine may still be busy (the intake parses a document there) but which
-   action the verb would name is over, so it says "Working" rather than re-claiming the last
-   verb for work that already finished. */
+   THE VERB IS DERIVED, NOT AUTHORED — except on a hold. Every action ccjActsFor builds carries
+   an id, and the id names the kind of work; a step whose evidence has no shape says "Working"
+   and nothing more. A HOLD names its own verb (`CCJ_HOLDS[...].verb`, value or function):
+   the beats it ran are over, so the last action's verb would be a re-claim of finished work,
+   and the generic "Working" depicts the wrong thing — the user's words — on a step that is
+   specifically gathering, reading, filing or checking. The fallback stays "Working" only for
+   a hold that declares nothing. */
 const CCJ_VERB={connect:'Connecting',fetch:'Fetching',verify:'Validating',save:'Writing',work:'Working'};
 function ccjVerbFor(i,step){
   const run=ccjRun;
-  if(run&&run.phase==='hold')return 'Working';
+  if(run&&run.phase==='hold'){
+    const h=ccjHoldFor(i,step);
+    const v=h&&(typeof h.verb==='function'?h.verb():h.verb);
+    return v||'Working';
+  }
   const acts=ccjActsFor(i,step);
   const a=acts[Math.max(0,Math.min((run&&run.act)||0,acts.length-1))];
   if(!a)return 'Working';
@@ -3188,73 +3264,39 @@ function ccjLiveStatusHTML(i,step){
   return '<span class="ccj-sb-live">'+ccjSparkHTML()
     +'<span class="ccj-sb-verb">'+ccjVerbFor(i,step)+'&hellip;</span></span>';
 }
-/* The window's lines: one per finished action, then one per record and one per check under it.
-   Flat on purpose — a card cannot scroll through a four-line window, a line can. Only lines
-   born on the latest beat carry `new`; the rest were already read and must not re-animate on
-   the rebuild (the ccjIn-restarts-forever trap). Nothing in flight is drawn here — the head's
-   verb is the in-flight action, and drawing it twice would put a claim of work in two places. */
-function ccjStreamLinesHTML(i,step,state){
+/* THE GIST: two or three words of what is actually moving, trailing off in dots — the user's
+   spec, and Claude Code's own shape ("Read package.json…"). It is DATA, not narration: the last
+   finished action's result ("14 records returned", "Connected to NewForce") or, before anything
+   has finished, the object of the action underway with its verb removed — the verb already
+   shimmers beside the spark, and saying it twice would put one claim of work in two places. */
+function ccjGistFor(i,step){
   const run=ccjRun;
-  const acts=ccjActsFor(i,step);
-  const at=state==='done'?acts.length:state==='pending'?-1:((run&&run.act)||0);
-  const tick='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>';
-  const out=[];
-  acts.forEach(function(a,n){
-    if(n>=at)return;                                   // not finished — the head's verb owns it
-    const nw=state!=='done'&&n===at-1?' new':'';
-    out.push('<div class="ccj-sl act'+nw+(a.ok?' ok':'')+'">'
-      +'<span class="ccj-sl-t">'+tick+'</span><span class="ccj-sl-x">'+a.done+'</span></div>');
-    (a.rows||[]).forEach(function(r){
-      out.push('<div class="ccj-sl row'+nw+(r.state==='inactive'?' off':'')+'">'
-        +'<b>'+r.k+'</b><i>'+r.v+'</i></div>');
-    });
-    (a.checks||[]).forEach(function(c){
-      const v=c.verdict||'';
-      out.push('<div class="ccj-sl chk '+v+nw+'">'
-        +'<span class="ccj-sl-vd">'+(v==='pass'?'&#10003;':v==='fail'?'&#10007;':'&ndash;')+'</span>'
-        +'<b>'+c.rule+'</b><i>'+c.actual+'</i></div>');
-    });
-  });
-  return out.join('');
-}
-/* Must match .ccj-sb-stream max-height in the CSS — the glide measures the overflow against it. */
-const CCJ_STREAM_H=78;
-function ccjStreamHTML(i,n,pass,state){
-  const step=ccjSteps(i)[n];
-  const lines=ccjStreamLinesHTML(i,step,state);
-  if(!lines)return '';                                 // nothing finished yet — no rule over nothing
-  const run=ccjRun;
-  const y=(run&&run.streamY&&run.streamY[ccjKey(i,step)+'#'+pass])||0;
-  return '<div class="ccj-sb-streambox"><div class="ccj-sb-stream'+(y>0?' deep':'')+'">'
-    +'<div class="ccj-sb-roll" style="transform:translateY('+(-y)+'px)">'+lines+'</div>'
-    +'</div></div>';
-}
-/* The scroll itself. The roll is mounted at the offset it HAD (ccjStreamHTML writes the stored
-   one inline), and one 40ms tick later it is told where to go — same trick as the rail, and for
-   the same reason: a forced reflow advances layout, not time, so two writes in one frame
-   teleport instead of gliding. Idempotent; safe to call after any paint of the live block. */
-function ccjStreamGlide(i,n,pass){
-  const run=ccjRun;if(!run)return;
-  const step=ccjSteps(i)[n];if(!step)return;
-  const el=ccjLiveNode(ccjEvLinesId(i,n,pass));
-  if(!el||typeof el.querySelector!=='function')return;
-  const roll=el.querySelector('.ccj-sb-roll'),win=el.querySelector('.ccj-sb-stream');
-  if(!roll||!win||!roll.offsetHeight)return;           // headless — nothing has a height there
-  const key=ccjKey(i,step)+'#'+pass;
-  run.streamY=run.streamY||{};
-  const target=Math.max(0,roll.offsetHeight-CCJ_STREAM_H);
-  if(target>0&&win.classList&&win.classList.add)win.classList.add('deep');
-  if((run.streamY[key]||0)===target)return;
-  run.streamY[key]=target;
-  if(run.streamTimer)clearTimeout(run.streamTimer);
-  const g=ccjGen,r=run;
-  run.streamTimer=setTimeout(function(){
-    if(ccjGen!==g||ccjRun!==r)return;
-    r.streamTimer=null;
-    const el2=ccjLiveNode(ccjEvLinesId(i,n,pass));
-    const roll2=el2&&typeof el2.querySelector==='function'?el2.querySelector('.ccj-sb-roll'):null;
-    if(roll2)roll2.style.transform='translateY('+(-target)+'px)';
-  },40);
+  let text='';
+  /* A HELD step's gist is the hold's own live position — the same numbers the old rows carried
+     ("3 of 12", "Rohan_Verma_Contract_Data.pdf"), because a parked run whose one line never
+     moves is indistinguishable from a hung one. A hold may author its own (`gist`), otherwise
+     the first row with a value speaks for it. */
+  if(run&&run.phase==='hold'){
+    const h=ccjHoldFor(i,step);
+    if(h){
+      const g=typeof h.gist==='function'?h.gist():h.gist;
+      if(g)text=String(g);
+      else{
+        const rows=(typeof h.rows==='function'?h.rows():h.rows)||[];
+        const r=rows.find(function(x){return x&&x[1];});
+        if(r)text=String(r[0])+' '+String(r[1]);
+      }
+    }
+  }
+  if(!text){
+    const acts=ccjActsFor(i,step);
+    const at=Math.min((run&&run.act)||0,acts.length);
+    if(at>0)text=String(acts[at-1].done||'');
+    else if(acts[0])text=String(acts[0].doing||'').split(' ').slice(1).join(' ');
+  }
+  text=text.replace(/<[^>]*>/g,'').replace(/&middot;.*$/,'').replace(/&[a-z]+;/g,' ').trim();
+  if(!text)return '';
+  return text.split(/\s+/).slice(0,4).join(' ');
 }
 /* == A SUB-STATUS AS A BLOCK IN THE TRANSCRIPT ===========================================
    The same content the panel row carried, in the conversation instead of beside it, and showing
@@ -3344,9 +3386,11 @@ function ccjStepBlockHTML(i,n,p){
     +'<span class="ccj-sb-mark">'+mark+'</span>'
     +'<span class="ccj-sb-label">'+step.label
     +(step.cond?'<span class="ccj-sb-cond">'+step.cond+'</span>':'')+'</span>'
-    // The spark and its verb are the working block's one claim of activity — they sit where the
-    // settled fact will land, so the head trades "what I am doing" for "what I found" in place.
-    +(working?ccjLiveStatusHTML(i,step):'')
+    /* The whole of what a working block says, on one line: the gist — two or three words of the
+       data actually moving, trailing off — and the spark with its changing verb. The head trades
+       "what I am doing" for "what I found" in place when the step settles. */
+    +(working?'<span class="ccj-sb-gist">'+ccjGistFor(i,step)+'<span class="ccj-sb-dots">&hellip;</span></span>'
+      +ccjLiveStatusHTML(i,step):'')
     +(settled?'<span class="ccj-sb-fact">'+ccjStepFactHTML(settled)+'</span>':'')
     +ccjOwnerChipHTML(step)
     +'</div>';
@@ -3444,24 +3488,15 @@ function ccjStepBodyHTML(i,step,n,current,gate,settled,pass){
   const d=ccjEvidence(i,step);
   const hold=current&&run.phase==='hold'?ccjHoldFor(i,step):null;
   const wait=current&&run.phase==='wait'?ccjWaitFor(i,step):null;
-  /* THE BLOCK THE RUNNER IS ON shows the window, whatever its phase — see the essay above
-     ccjVerbFor. The state the lines render at keeps every honesty rule this file already paid
-     for: a post-wait is 'done' (our half finished — that is WHY it waits), a pre-wait is
-     'pending' (nothing ran, so nothing is claimed), a settled step still holding its moment is
-     'done' with the window frozen on its tail, and only a step actually inside its beats is
-     'current'. A WAIT KEEPS ITS EVIDENCE — the tail of it stays visible in the window, and the
-     drawer keeps the whole of it. The ev node wraps the window because the wait releases into
-     ccjRunAct, and ccjPaintBeat writes the next beat into exactly this id. */
+  /* THE BLOCK THE RUNNER IS ON IS ONE LINE — the user removed the live details outright: the
+     head carries everything (name, gist, spark, verb) and the body renders NOTHING while the
+     machine works or holds. The record lost nothing: the settled block's click reopens the full
+     action log below, and the drawer keeps the whole evidence set. The one live state that
+     keeps a body is a WAIT — a step parked on a person must say who is holding it and what has
+     been armed, or a parked run is indistinguishable from a hung one. */
   if(current){
-    const state=wait?(wait.pre?'pending':'done'):settled?'done':'current';
-    return '<div class="ccj-sb-body live">'
-      +'<div id="'+ccjEvLinesId(i,n,pass)+'">'+ccjStreamHTML(i,n,pass,state)+'</div>'
-      +(wait?ccjWaitNoteHTML(wait,i,step):'')
-      +(hold?'<div class="ccj-hold"><span class="ccj-hold-bar"></span>'+ccjHoldNoteHTML(hold)+'</div>':'')
-      +(!wait&&d?'<button class="ccj-ev-more" onclick="ccjInspect(\''+attrSafe(ccjKey(i,step))+'\')">'
-        +'View evidence'
-        +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>':'')
-      +'</div>';
+    if(wait)return '<div class="ccj-sb-body live">'+ccjWaitNoteHTML(wait,i,step)+'</div>';
+    return '';
   }
   /* A REOPENED BLOCK IS THE RECORD, not the broadcast — the reader asked for this one, so it
      gets the full action log with every payload and verdict, exactly as it always did. */
@@ -3752,26 +3787,10 @@ function ccjComposerInnerHTML(){
   // and its own chip in the header, and a third control for the same decision — sitting under
   // the thing it does not govern — was the duplicate.
   return ''
-    // Only beside the form: a document fills FIELDS, and on the screens without any there is
-    // nothing for it to land in.
-    /* Upload sits beside the form because a document fills FIELDS, and the screens without any
-       have nothing for it to land in. The download beside it closes the loop: the thing you are
-       asked to upload is the thing we send a candidate, so the demo should be able to hand you a
-       copy rather than expecting you to have gone and found one. */
-    +(run.screen==='form'?'<div class="ccj-upload-row">'
-      +'<button class="ccj-upload" onclick="ccjUpload()" title="Upload a completed employee information form to fill these details in">'
-      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-      +'<span>Upload document to auto-fill</span></button>'
-      /* `download` AND `target="_blank"`, which is not belt-and-braces — they cover different
-         cases. Served over http the download attribute saves the file straight to disk and the
-         target is ignored. Opened from the filesystem, which is how this mockup is usually run,
-         Chrome refuses to honour `download` for a local file and would otherwise do nothing at
-         all; the target then opens it in the PDF viewer, which has its own save button. */
-      +'<a class="ccj-sample-dl" href="'+attrSafe(CCJ_SAMPLE_PDF)+'" download target="_blank" rel="noopener" '
-      +'title="Open the sample employee information form &mdash; the completed sheet a candidate returns. Save it, then upload it here.">'
-      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
-      +'<span>Sample form</span></a>'
-      +'</div>':'')
+    /* No labelled upload bar any more — the user replaced it: attaching the document is a
+       composer act, so it lives IN the composer as a link icon (see the input row below), the
+       way Claude's own attach does. Form screen only, because a document fills FIELDS and the
+       screens without any have nothing for it to land in. */
     /* WHO YOU ARE TYPING TO. While the counterparty's thread had the column to itself, the stage
        said it for you. In one shared stream it no longer does — and the failure mode is someone
        sending an internal note to a customer, which is not a mistake this product gets to make
@@ -3790,6 +3809,21 @@ function ccjComposerInnerHTML(){
         +(mode==='worker'?p.worker.name:p.client.name)+'</b><span class="ccj-to-note">they will see this</span></div>';
     })()
     +'<div class="ccj-input-row">'
+    /* The link icon attaches the completed form; the quiet download beside it hands you the
+       sample — the thing you are asked to attach is the thing we send a candidate, so the
+       product should still offer a copy. The tooltips carry what the old labels used to say.
+       `download` AND `target="_blank"` on the sample cover different cases: over http the
+       download attribute saves to disk and target is ignored; from the filesystem Chrome
+       refuses `download` for a local file, and the target then opens the PDF viewer, which
+       has its own save button. */
+    +(run.screen==='form'?''
+      +'<button class="ccj-attach" onclick="ccjUpload()" title="Attach a completed employee information form &mdash; the details are read into the form for you">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'
+      +'</button>'
+      +'<a class="ccj-attach dl" href="'+attrSafe(CCJ_SAMPLE_PDF)+'" download target="_blank" rel="noopener" '
+      +'title="Open the sample employee information form &mdash; the completed sheet a candidate returns. Save it, then attach it here.">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+      +'</a>':'')
     // A run opened from a deal arrives with its request already written — the words are still
     // yours to change, and nothing is sent until you send it. Cleared once the run has started so
     // the composer goes back to being a composer.
@@ -3990,7 +4024,7 @@ function ccjStreamSync(){
   ccjUnmarkLast(p.lastId);                             // only the newest message animates in
   let html='';
   for(let i=p.n;i<st.msgs.length;i++){
-    html+=ccjStreamMsgHTML(st.mode,st.msgs[i],i===st.msgs.length-1,st.msgs[i-1]);
+    html+=ccjStreamMsgHTML(st.mode,st.msgs[i],i===st.msgs.length-1,ccjPrevMsg(st.msgs,i));
   }
   // insertAdjacentHTML, not innerHTML+= : the second re-parses every node already on screen,
   // which restarts each animation and destroys anything mid-flight above the new message.
@@ -4115,6 +4149,15 @@ function ccjHandoverHTML(mode){
     +'<span class="ccj-hand-text">now talking to <b>'+who+'</b></span>'
     +'<span class="ccj-hand-rule"></span></div>';
 }
+/* The message the head/handover decisions compare against. An await between two lane messages
+   must not break the To/From grouping: it renders outside the lane (or as nothing at all once
+   done), so the neighbour that matters is the last REAL message. Without this, two follow-ups
+   with a waiting beat between them re-announce "To <client>" over each one — the noise the
+   lane rule exists to prevent. */
+function ccjPrevMsg(list,n){
+  for(let k=n-1;k>=0;k--){if(list[k].kind!=='await')return list[k];}
+  return undefined;
+}
 function ccjStreamMsgHTML(mode,m,isLast,prev){
   const body=ccjMsgLane(m)?ccjClientMsgHTML(m,isLast,prev):ccjMsgHTML(m,isLast);
   // `prev` absent means this is the first message in the stream, and an opening conversation has
@@ -4187,7 +4230,7 @@ function ccjRenderChat(){
   const mode=st.mode;
   if(mode==='client'||mode==='worker'){
     el.innerHTML=st.msgs.length
-      ?st.msgs.map(function(m,n){return ccjStreamMsgHTML(mode,m,n===st.msgs.length-1,st.msgs[n-1]);}).join('')
+      ?st.msgs.map(function(m,n){return ccjStreamMsgHTML(mode,m,n===st.msgs.length-1,ccjPrevMsg(st.msgs,n));}).join('')
       :'<div class="ccj-empty"><div class="ccj-empty-text">'
        +(mode==='worker'?'Nothing has gone to the employee yet.':'The quote has not gone out yet.')
        +'</div></div>';
@@ -4904,22 +4947,41 @@ function ccjDocHTML(){
       +'<span class="ccj-doc-cfact">'+ccjDocFact(d)+'</span>'
       +chev+'</button>';
   }
-  // OPEN. The head folds it again once it has finished; while it is still reading it is not a
-  // control, because there is nothing settled to fold away yet.
+  /* STILL READING: ONE LINE, exactly like a live sub-status — the user applied the same rule
+     here. The field it is on is the gist, the spark and its verb carry the activity, and the
+     nineteen rows do not exist yet. They appear when the read finishes and the card can be
+     folded, which is where the reader actually wants to check the citations. */
+  if(!d.done){
+    return '<div class="ccj-bubble ccj-doc live">'
+      +'<div class="ccj-doc-head">'
+      +'<span class="ccj-doc-ico">'+ico+'</span>'
+      +'<span class="ccj-doc-name">'+d.name+'</span>'
+      +'<span class="ccj-sb-gist">'+ccjDocGist(d)+'<span class="ccj-sb-dots">&hellip;</span></span>'
+      +'<span class="ccj-sb-live">'+ccjSparkHTML()
+      +'<span class="ccj-sb-verb">Reading&hellip;</span></span>'
+      +'</div></div>';
+  }
+  // DONE AND OPEN. The head folds it again, and the rows are the record of what was read.
   return '<div class="ccj-bubble ccj-doc">'
-    +'<div class="ccj-doc-head'+(d.done?' foldable':'')+'"'
-    +(d.done?' onclick="ccjToggleDoc()" title="Hide this again"':'')+'>'
+    +'<div class="ccj-doc-head foldable" onclick="ccjToggleDoc()" title="Hide this again">'
     +'<span class="ccj-doc-ico">'+ico+'</span>'
     +'<div><div class="ccj-doc-name">'+d.name+'</div>'
-    +'<div class="ccj-doc-stat">'+(d.done
-      ?ccjDocFact(d)
-      :'Reading&hellip; '+d.at+' of '+d.fields.length+' fields')+'</div></div>'
-    +(d.done?chev:'<span class="ccj-spin"></span>')
+    +'<div class="ccj-doc-stat">'+ccjDocFact(d)+'</div></div>'
+    +chev
     +'</div>'
     +(rows?'<div class="ccj-doc-rows">'+rows+'</div>':'')
-    +(d.done&&absent.length?'<div class="ccj-doc-absent"><b>Not in the document</b>'
+    +(absent.length?'<div class="ccj-doc-absent"><b>Not in the document</b>'
       +absent.map(function(f){return f.label;}).join(', ')+'</div>':'')
     +'</div>';
+}
+/* What the read is on right now: the field that just landed, and the count. Two or three words
+   plus a position, so a reader can tell a read that is progressing from one that has stopped —
+   the same thing the sub-status gist does, from the same store the card is drawn from. */
+function ccjDocGist(d){
+  const at=Math.max(0,Math.min(d.at,d.fields.length));
+  const last=at>0?d.fields[at-1]:null;
+  const f=last?(ccjAllFields().find(function(y){return y.k===last.k;})||{label:last.k}):null;
+  return (f?f.label+' &middot; ':'')+at+' of '+d.fields.length;
 }
 function ccjFileSize(b){
   if(!b)return '';
@@ -5655,6 +5717,10 @@ function ccjSendToClient(text){
   ccjPaintComposer();
   // Replying is what a negotiation needs to move; the client answers on the script's clock.
   if(c.state==='changed'){c.state='negotiating';ccjClientSchedule();}
+  // Our half of the negotiation has left the building: the step holding for it can move, and
+  // the thread is back to waiting on them — which it now says.
+  ccjReachScreen('draft-sent');
+  ccjAwaitStart();
 }
 function ccjSendDraft(){
   const c=ccjClient();
@@ -5663,6 +5729,8 @@ function ccjSendDraft(){
   draft.kind='';draft.who='us';draft.sent=true;
   c.drafted=false;
   if(c.state==='changed'){c.state='negotiating';ccjClientSchedule();}
+  ccjReachScreen('draft-sent');
+  ccjAwaitStart();
   ccjRenderChat();ccjPaintComposer();
 }
 /* The id goes on whatever element the body already opens with, rather than on a wrapper of our
@@ -5714,6 +5782,13 @@ function ccjClientMsgBodyHTML(m,isLast){
   // side of the thread. The STORE is separate; only the rendering is shared.
   const cls=(m.who==='client'||m.who==='worker'?'client'
     :m.who==='note'?'note':m.who==='agent'?'draft':'us')+(isLast?' in':'');
+  /* The waiting beat. Done, it renders NOTHING — it was a state, not an event, and a transcript
+     keeps events. Live, it is the same spark-and-shimmer the blocks use, so "the agent is on
+     this" reads identically everywhere. No timestamp: there is no moment to stamp until the
+     thing being waited for happens, and that moment belongs to the message that ends this one. */
+  if(m.kind==='await')return m.done?''
+    :'<div class="ccj-cmsg note await">'+ccjSparkHTML()
+    +'<span class="ccj-sb-verb">'+(m.label||'Waiting for confirmation')+'&hellip;</span></div>';
   if(m.who==='note')return '<div class="ccj-cmsg note"><span>'+m.text+'</span><i>'+ccjStamp(m.at)+'</i></div>';
   if(m.kind==='quote')return '<div class="ccj-cmsg '+cls+'">'+ccjQuoteCardHTML(m)+'<i>'+ccjStamp(m.at)+'</i></div>';
   // Two states: going out, and gone. A reminder that has not left yet must not say "sent", and it
@@ -7150,6 +7225,7 @@ CCJ_ON_SETTLE['employment-contract/ADT countersigned']=function(run){
    on the audit finishing, which is the only thing that ends it. */
 CCJ_HOLDS['employment-contract/Clause compliance check']={
   until:'audit-done',
+  verb:'Reviewing',
   note:'Reading the contract clause by clause.',
   // The count, read from the audit the screen is drawing, so the block cannot claim a different
   // position in the document to the one being highlighted beside it.
@@ -8144,7 +8220,7 @@ CCJ_ON_ENTER['onboarding/Payroll configured']=function(run){
    and the card can never disagree about how far along something is. A row with no value yet is
    dropped rather than shown empty (see ccjHoldNoteHTML), so each one appears the moment it becomes
    true and not before. */
-CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',note:'Verification in progress.',
+CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',verb:'Verifying',note:'Verification in progress.',
   rows:function(){
     const k=ccjOnb().kyc,n=CCJ_KYC_PHASES.length;
     return [['Checks',Math.min(k.step+(k.done?0:1),n)+' of '+n],
@@ -8152,7 +8228,7 @@ CCJ_HOLDS['onboarding/Worker KYC']={until:'kyc-done',note:'Verification in progr
             // Only once the provider has actually returned something.
             ['Outcome',k.done?ccjKycDecision().label:'']];
   }};
-CCJ_HOLDS['onboarding/Documents']={until:'docs-done',note:'Collecting and checking documents.',
+CCJ_HOLDS['onboarding/Documents']={until:'docs-done',verb:'Collecting',note:'Collecting and checking documents.',
   rows:function(){
     const d=ccjOnbDocs();
     const got=d.filter(function(x){return x.status==='accepted';}).length;
@@ -8161,18 +8237,18 @@ CCJ_HOLDS['onboarding/Documents']={until:'docs-done',note:'Collecting and checki
             ['Rejected',bad?'<span class="ccj-wait-late">'+bad+' sent back</span>':''],
             ['Outstanding',ccjDocsOutstanding()?ccjDocsOutstanding()+' still to come':'']];
   }};
-CCJ_HOLDS['onboarding/Tax registration']={until:'tax-done',note:'Filed. Waiting on the authority.',
+CCJ_HOLDS['onboarding/Tax registration']={until:'tax-done',verb:'Fetching',note:'Filed. Waiting on the authority.',
   rows:function(){return ccjFilingRows('tax');}};
-CCJ_HOLDS['onboarding/Social security enrolment']={until:'ss-done',note:'Filed. Waiting on the institution.',
+CCJ_HOLDS['onboarding/Social security enrolment']={until:'ss-done',verb:'Fetching',note:'Filed. Waiting on the institution.',
   rows:function(){return ccjFilingRows('ss');}};
-CCJ_HOLDS['onboarding/Bank verified']={until:'bank-done',note:'Test credit sent. Waiting on the bank.',
+CCJ_HOLDS['onboarding/Bank verified']={until:'bank-done',verb:'Verifying',note:'Test credit sent. Waiting on the bank.',
   rows:function(){
     const b=ccjOnb().bank;
     return [['Account',b.iban],
             ['Name match',b.score?b.score+'%':''],
             ['Verified',b.state==='verified'?'<span class="ccj-wait-on">Confirmed</span>':'']];
   }};
-CCJ_HOLDS['onboarding/Payroll configured']={until:'payroll-done',note:'Building the first pay period.',
+CCJ_HOLDS['onboarding/Payroll configured']={until:'payroll-done',verb:'Building',note:'Building the first pay period.',
   rows:function(){
     const p=ccjOnb().payroll;
     return [['Calendar',p.calendar],['First pay',p.firstPay],
@@ -9077,7 +9153,7 @@ CCJ_ON_ENTER['active/First payroll run']=function(run){
 };
 CCJ_ON_ENTER['active/Active']=function(run){ccjGoScreen('active');};
 
-CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',note:'Re-deriving every control.',
+CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',verb:'Checking',note:'Re-deriving every control.',
   rows:function(){
     const l=ccjRdyChecks(),done=ccjRdy().step;
     return [['Controls',Math.min(done+(ccjRdy().done?0:1),l.length)+' of '+l.length],
@@ -9088,6 +9164,7 @@ CCJ_HOLDS['active/Ready for payroll']={until:'readiness-done',note:'Re-deriving 
    after a person released the money — one step, two halves, an approval between them. There is no
    approval any more because there is no payment: the step configures payroll and stops. */
 CCJ_HOLDS['active/First payroll run']={until:'payrun-done',
+  verb:'Configuring',
   note:'Granting access and configuring the first period.',
   rows:function(){
     const pr=ccjPayrun(),n=CCJ_PR_PHASES.length;
@@ -9365,9 +9442,6 @@ function ccjPaintBlocks(){
   if(run.liveKey&&run.liveKey!==liveKey&&run.stepMsgs[run.liveKey])ccjRepaintMsg(run.stepMsgs[run.liveKey]);
   if(liveKey&&run.stepMsgs[liveKey])ccjRepaintMsg(run.stepMsgs[liveKey]);
   run.liveKey=liveKey;
-  // A phase change rebuilds the live block wholesale, roll mounted at its stored offset — if the
-  // content changed size under it (a wait released, a hold let go), the glide settles the window.
-  if(step)ccjStreamGlide(run.stage,run.sub,ccjPass(run.stage,step));
 }
 /* One beat inside a step. Touches the evidence lines and nothing else, so the spinner keeps
    spinning and the rows around it hold still. */
@@ -9377,16 +9451,14 @@ function ccjPaintBeat(){
   if(!step)return;
   if(ccjUsesTranscript(run.stage)){
     const pass=ccjPass(run.stage,step);
-    const lines=ccjLiveNode(ccjEvLinesId(run.stage,run.sub,pass));
-    if(lines){
-      // The beat rewrites the WINDOW, not the ledger — the roll mounts at the offset it had and
-      // ccjStreamGlide slides it a tick later, so the new lines push the old ones out the top.
-      lines.innerHTML=ccjStreamHTML(run.stage,run.sub,pass,'current');
-      ccjStreamGlide(run.stage,run.sub,pass);
-      // The verb lives in the head, which this paint deliberately does not rebuild — rewriting
-      // the whole head would restart the spark mid-turn. The one word is retargeted by itself.
-      const blk=ccjLiveNode(ccjStepBlockId(run.stage,run.sub,pass));
-      const vb=blk&&typeof blk.querySelector==='function'?blk.querySelector('.ccj-sb-verb'):null;
+    // A beat retargets TWO SPANS and nothing else — the gist and the verb. Rewriting the whole
+    // head every 1.15s would restart the spark mid-turn, and there is no body to write into:
+    // the live block is one line by design.
+    const blk=ccjLiveNode(ccjStepBlockId(run.stage,run.sub,pass));
+    const gist=blk&&typeof blk.querySelector==='function'?blk.querySelector('.ccj-sb-gist'):null;
+    if(gist){
+      gist.innerHTML=ccjGistFor(run.stage,step)+'<span class="ccj-sb-dots">&hellip;</span>';
+      const vb=blk.querySelector('.ccj-sb-verb');
       if(vb)vb.innerHTML=ccjVerbFor(run.stage,step)+'&hellip;';
       return;
     }

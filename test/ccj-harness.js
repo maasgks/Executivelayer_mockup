@@ -832,35 +832,30 @@ check('and per attempt, so a re-run cannot paint into the block it replaced',
   run('ccjEvLinesId(0,1,1)') !== run('ccjEvLinesId(0,1,2)')
   && run('ccjStepBlockId(0,1,1)') !== run('ccjStepBlockId(0,1,2)'),
   run('ccjEvLinesId(0,1,1)') + ' vs ' + run('ccjEvLinesId(0,1,2)'));
-check('a beat repaints the log alone, never the whole conversation',
-  nodes[run('ccjEvLinesId(0,0,1)')] !== undefined,
-  'looked for ' + run('ccjEvLinesId(0,0,1)') + ', saw '
-  + Object.keys(nodes).filter((k) => k.indexOf('ccj-ev') === 0).join(','));
+/* THE LIVE BLOCK IS ONE LINE — the user removed the live details outright. A beat retargets the
+   gist and the verb in the head; there is no body to write into, and headless the fallback is
+   ccjPaintBlocks, which touches at most two blocks — never the whole conversation. */
+run('ccjPaintBeat()');
+check('a beat lands in the live block\'s own line',
+  liveBlock().indexOf('ccj-sb-gist') > -1, liveBlock().slice(0, 240));
+check('and the live block carries no detail body',
+  liveBlock().indexOf('ccj-sl') === -1 && liveBlock().indexOf('ccj-act') === -1
+  && liveBlock().indexOf('ccj-ev-more') === -1, liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
-check('the connect completes into the window, naming the system',
-  evl().indexOf('ccj-sl act') > -1 && evl().indexOf('Connected to NewForce Solutions') > -1,
-  evl().slice(0, 240));
+check('the connect completes into the gist, naming the system',
+  liveBlock().indexOf('Connected to NewForce Solutions') > -1, liveBlock().slice(0, 240));
 check('and the verb moves on to the fetch', liveBlock().indexOf('Fetching&hellip;') > -1,
   liveBlock().slice(0, 240));
-/* Only the latest beat's lines animate in — the rest were already read, and re-running their
-   entry on every rebuild is the flicker the `new` class exists to prevent. */
-check('only the newest lines animate', count(evl(), 'ccj-sl act new') === 1
-  && count(evl(), 'ccj-act doing') === 0, count(evl(), 'ccj-sl act new') + ' animating');
 clearEv(); advance(ACT);
-check('the fetch reports how many records came back', evl().indexOf('records returned') > -1);
-check('and shows them, not just the count', count(evl(), 'ccj-sl row') >= 3, count(evl(), 'ccj-sl row') + ' rows shown');
-/* Two actions are done now, so this is the first moment "only the newest animates" can be told
-   apart from "everything animates" — the beat-one version of this check passes either way. */
-check('the lines already read do not animate again', count(evl(), 'ccj-sl act') === 2
-  && count(evl(), 'ccj-sl act new') === 1,
-  count(evl(), 'ccj-sl act new') + ' of ' + count(evl(), 'ccj-sl act') + ' animating');
+check('the fetch reports how many records came back', liveBlock().indexOf('records returned') > -1,
+  liveBlock().slice(0, 240));
 check('the verify is now running, as the one word in the head',
   liveBlock().indexOf('Validating&hellip;') > -1, liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
-check('the verify reports its verdicts', evl().indexOf('checks passed') > -1);
-check('and shows each rule with its result', count(evl(), 'ccj-sl chk pass') === 2, count(evl(), 'ccj-sl chk pass') + ' passes');
+check('the verify reports its verdict in the gist', liveBlock().indexOf('checks passed') > -1,
+  liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
-check('the save completes the step', evl().indexOf('saved') > -1);
+check('the save completes the step', liveBlock().indexOf('saved') > -1, liveBlock().slice(0, 240));
 
 section('THE LOOKUP LANDS, AND THE SCREEN MOVES');
 advance(Math.round(1200*PACE));
@@ -878,9 +873,19 @@ check('new intake is held, not settled', run('ccjRun.phase') === 'hold', run('cc
 check('it is still the current sub-status', run('ccjRun.sub') === 0);
 check('nothing has settled yet', run('Object.keys(ccjRun.settled).length') === 0);
 check('progress bar has not moved', prog() === '0%' || prog() === '', prog());
-check('the panel says why it is held', panel().indexOf('ccj-hold') > -1 && panel().indexOf('Completes when the proposal is created') > -1);
+/* One line, even held: no note box, no log — the gist and the verb carry the state. */
+check('the held block is one line — no note box, no log',
+  liveBlock().indexOf('ccj-hold') === -1 && liveBlock().indexOf('ccj-sl') === -1
+  && liveBlock().indexOf('ccj-sb-gist') > -1, liveBlock().slice(0, 240));
 check('it is still visibly working', panel().indexOf('ccj-spin') > -1);
-check('all four actions completed while held', count(panel(), 'ccj-sl act') === 4, count(panel(), 'ccj-sl act') + ' done');
+check('the held gist keeps the last thing it did',
+  liveBlock().indexOf('details saved') > -1, liveBlock().slice(0, 240));
+/* A hold names its own verb. "Working" was the generic word here and the user called it out as
+   depicting the wrong thing — the intake hold is waiting for the hire's details, so it gathers. */
+check('the held verb says what the hold is doing, not the generic word',
+  liveBlock().indexOf('ccj-sb-verb">Gathering&hellip;') > -1
+  && liveBlock().indexOf('ccj-sb-verb">Working&hellip;') === -1,
+  liveBlock().slice(0, 240));
 advance(Math.round(60000*PACE));
 check('sixty seconds of waiting does not advance it',
   run('ccjRun.phase') === 'hold' && run('ccjRun.sub') === 0 && run('ccjRun.stage') === 0);
@@ -945,13 +950,20 @@ advance(Math.round(4000*PACE));
 check('a new hire lands on the employee screen', run('ccjRun.screen') === 'employee', run('ccjRun.screen'));
 run("ccjGoScreen('form')");
 check('on the form, ready for a document', run('ccjRun.screen') === 'form', run('ccjRun.screen'));
-check('upload sits in the composer, above the chat bar', (function () {
+/* The user replaced the labelled dashed bar with a link icon IN the input row — attach is a
+   composer act now, like Claude's own. Inside the row, before the textarea, and the sample
+   download rides beside it so no capability was lost with the label. */
+check('attach is a link icon inside the input row', (function () {
   const c = composer();
-  return c.indexOf('ccj-upload') > -1 && c.indexOf('ccj-upload') < c.indexOf('ccj-input-row');
-})(), composer().indexOf('ccj-upload') + ' vs ' + composer().indexOf('ccj-input-row'));
-check('upload is not offered where there are no fields to fill', (function () {
+  // 'ccj-prompt', not 'ccj-input' — the row's own class contains that as a prefix and would
+  // anchor the comparison on itself.
+  return c.indexOf('ccj-attach') > -1 && c.indexOf('ccj-input-row') < c.indexOf('ccj-attach')
+    && c.indexOf('ccj-attach') < c.indexOf('ccj-prompt') && c.indexOf('ccj-upload-row') === -1;
+})(), composer().indexOf('ccj-input-row') + ' vs ' + composer().indexOf('ccj-attach'));
+check('the sample form is still offered beside it', composer().indexOf('ccj-attach dl') > -1);
+check('attach is not offered where there are no fields to fill', (function () {
   run('ccjStartNewRun()');
-  const before = composer().indexOf('ccj-upload');
+  const before = composer().indexOf('ccj-attach');
   return before === -1;
 })());
 startRun();
@@ -965,17 +977,36 @@ check('the file appears as a message, not a page block', stream().indexOf('ccj-f
 check('an extraction card opened', stream().indexOf('ccj-doc') > -1);
 check('it never overwrites a value the user typed',
   run("ccjRun.doc.fields.every(function(x){return x.k!=='email';})") === true);
-check('the held row reports the read, not the generic note',
-  panel().indexOf('Reading <b>Rohan_Verma_Contract_Data.pdf</b>') > -1);
+check('the held gist names the document being read',
+  liveBlock().indexOf('Rohan_Verma_Contract_Data.pdf') > -1, liveBlock().slice(0, 240));
+// Anchored on the verb SPAN, not the word — the document card in the same slice says
+// "Reading …" too, and matching the bare word passed while the verb still said "Working".
+check('and the verb beside the spark reads with it',
+  liveBlock().indexOf('ccj-sb-verb">Reading&hellip;') > -1, liveBlock().slice(0, 240));
 advance(Math.round(900*PACE));
 check('fields land one at a time', run('ccjRun.doc.at') >= 1 && run('ccjRun.doc.at') < run('ccjRun.doc.fields.length'),
   run('ccjRun.doc.at') + ' of ' + run('ccjRun.doc.fields.length'));
 check('the form flashes the field that just landed', screen().indexOf('ccj-fgroup') > -1 && run('ccjRun.justFilled') !== null);
-check('the card cites where each value came from', stream().indexOf('ccj-doc-k') > -1);
-check('every row cites where in the document it came from',
-  count(stream(), 'ccj-doc-src') >= 1, count(stream(), 'ccj-doc-src') + ' citations');
+/* WHILE READING IT IS ONE LINE — the user applied the sub-status rule to this card too. The
+   field it is on and the count are the gist; the rows do not exist yet. */
+check('the reading card is one line, not nineteen rows',
+  stream().indexOf('ccj-doc live') > -1 && stream().indexOf('ccj-doc-row') === -1,
+  stream().indexOf('ccj-doc-row') + ' row position');
+check('and its gist says which field it is on, and how far in',
+  stream().indexOf('ccj-sb-gist') > -1
+  && stream().indexOf(run("ccjRun.doc.at+' of '+ccjRun.doc.fields.length")) > -1,
+  run("ccjRun.doc.at+' of '+ccjRun.doc.fields.length"));
 advance(Math.round(9000*PACE));
 check('extraction completes', run('ccjRun.doc.done') === true);
+/* AND THE CITATIONS COME BACK WHEN IT DOES. The record is not lost — it arrives when there is
+   something settled to read, which is where a reviewer actually checks it. */
+const openedDoc = run("(function(){var was=ccjRun.doc.open;ccjRun.doc.open=true;"
+  + "ccjRenderChat();return was;})()");
+check('the finished card cites where each value came from', stream().indexOf('ccj-doc-k') > -1);
+check('every row cites where in the document it came from',
+  count(stream(), 'ccj-doc-src') >= 1, count(stream(), 'ccj-doc-src') + ' citations');
+// Put it back exactly as it was — the fold behaviour is asserted below and reads this flag.
+run('ccjRun.doc.open=' + (openedDoc ? 'true' : 'false') + ';ccjRenderChat()');
 check('every extracted field is in the form',
   run("ccjRun.doc.fields.every(function(x){return String(ccjRun.form[x.k]||'')===String(x.v);})") === true);
 check('the typed email survived the document', run('ccjRun.form.email') === typedEmail, run('ccjRun.form.email'));
@@ -1178,13 +1209,23 @@ check('the quote is not shown complete before the work is done',
 // -- 1. Country data check: connect, fetch, verify, save --
 check('the verb says it is connecting', liveBlock().indexOf('Connecting&hellip;') > -1, liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
-check('it connected to the Compliance Hub', evl().indexOf('Connected to Compliance Hub') > -1, evl().slice(0, 240));
+check('it connected to the Compliance Hub', liveBlock().indexOf('Connected to Compliance Hub') > -1,
+  liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
-check('the country rules come back and are shown', count(evl(), 'ccj-sl row') >= 1);
+check('the country rules come back into the gist', liveBlock().indexOf('returned') > -1,
+  liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
-check('the rules are verified with verdicts', count(evl(), 'ccj-sl chk') >= 2, count(evl(), 'ccj-sl chk') + ' checks');
+check('the rules are verified, in the gist', liveBlock().indexOf('checks passed') > -1,
+  liveBlock().slice(0, 240));
 advance(Math.round(2000*PACE));
 check('country data check settles', run("!!ccjRun.settled['quote-prep/Country data check']") === true);
+/* THE RECORD LOST NOTHING. The live view is one line, but a settled block clicked open is still
+   the full ledger — payloads, verdicts and the way into the evidence drawer. */
+run('ccjToggleStep(1,0,ccjPass(1,ccjSteps(1)[0]))');
+check('a reopened block is still the full record — payloads, verdicts, evidence',
+  stream().indexOf('ccj-act-row') > -1 && stream().indexOf('ccj-act-check') > -1
+  && stream().indexOf('ccj-ev-more') > -1);
+run('ccjToggleStep(1,0,ccjPass(1,ccjSteps(1)[0]))');
 check('the quote picks up the country rules',
   screen().indexOf('Netherlands statutory set resolved') > -1, screen().slice(0, 0));
 
@@ -1350,9 +1391,17 @@ section('THEY OPEN IT, THEN GO QUIET');
 check('Viewed resolves on the open',
   until(() => run("!!ccjRun.settled['quote-review/Viewed']")));
 check('the timeline records it', screen().indexOf('Opened') > -1);
+/* THE GAP BETWEEN EVENTS SAYS IT IS WAITING. After the open, before the first reminder, the
+   thread carries a spark-and-shimmer "Waiting for confirmation" beat — the user's spec. It is
+   transient: each one renders nothing once the thing it waited for happens. */
+check('the gap after the open is a visible waiting beat',
+  stream().indexOf('ccj-cmsg note await') > -1
+  && run('!!(ccjRun.client.awaitMsg&&!ccjRun.client.awaitMsg.done)') === true);
 check('a follow-up goes out when they do not reply',
   until(() => run('ccjRun.client.chases') >= 1), run('ccjRun.client.chases') + ' chases');
 check('it appears in the thread as a chase', stream().indexOf('ccj-cmsg note chase') > -1);
+check('one waiting beat at a time — the answered one renders nothing',
+  count(stream(), 'ccj-cmsg note await') === 1, count(stream(), 'ccj-cmsg note await') + ' visible');
 check('a second follow-up follows', until(() => run('ccjRun.client.chases') >= 2));
 /* The point stands, the surface moved: three follow-ups are ONE sub-status that counts them, not
    three sub-statuses. Counted by this stage's own block ids — stage index 2 — because the
@@ -1371,12 +1420,24 @@ check('the client asks for a change',
 check('quoting the real total, not an invented one',
   stream().indexOf(v1Total.toLocaleString()) > -1, v1Total.toLocaleString());
 check('the chases stop the moment they reply', run('ccjRun.client.chases') === 2);
+check('their reply ends the waiting beat', count(stream(), 'ccj-cmsg note await') === 0,
+  count(stream(), 'ccj-cmsg note await') + ' visible');
 check('the agent drafts a reply but does not send it',
   until(() => run('ccjRun.client.drafted') === true) && stream().indexOf('ccj-cbubble draft') > -1);
 check('and it is visibly unsent', stream().indexOf('not sent') > -1);
+/* THE RE-ISSUE CANNOT PRECEDE THE REPLY. The step holds — verb saying it is waiting on you —
+   and "Re-issued v2" has no block anywhere until the draft is actually sent. */
+check('Change requested holds for our reply',
+  until(() => run("ccjRun.phase") === 'hold'), run('ccjRun.phase'));
+check('the hold names the drafted reply and waits on you',
+  liveBlock().indexOf('Reply drafted for you') > -1
+  && liveBlock().indexOf('ccj-sb-verb">Waiting&hellip;') > -1, liveBlock().slice(0, 240));
+check('and the re-issue step has no block yet', stream().indexOf('Re-issued v2') === -1);
 run('ccjSendDraft()');
 check('sending it turns the draft into a sent message',
   run('ccjRun.client.drafted') === false && stream().indexOf('ccj-cbubble draft') === -1);
+check('and the thread goes back to visibly waiting on them',
+  count(stream(), 'ccj-cmsg note await') === 1, count(stream(), 'ccj-cmsg note await') + ' visible');
 check('the client agrees', until(() => run('ccjRun.client.state') === 'agreed'));
 check('and the agreed margin lands on the run', run('ccjRun.margin') === 17, run('ccjRun.margin'));
 
@@ -2249,8 +2310,9 @@ section('THE COMPLIANCE CHECK WALKS THE DOCUMENT AND REWRITES IT');
   check('the check starts when the check step does', until(() => run('ccjEmp().audit.length') > 0));
   check('it holds the sub-status rather than ticking on a timer',
     until(() => run("ccjRun.phase==='hold'")), run('ccjRun.phase'));
-  check('the panel reports the clause count while it holds',
-    panel().indexOf('Reading the contract clause by clause') > -1 && panel().indexOf(' of ') > -1);
+  check('the gist reports the clause count while it holds',
+    liveBlock().indexOf('Clauses') > -1 && liveBlock().indexOf(' of ') > -1,
+    liveBlock().slice(0, 240));
   check('and it will not finish on its own before the audit does',
     (function () { const n = run('ccjEmp().auditAt'); return n < run('ccjEmp().audit.length') || run('ccjEmp().auditDone'); })());
 
@@ -2389,9 +2451,13 @@ section('IT GOES TO THE EMPLOYEE, IN THE EMPLOYEE\'S OWN THREAD');
     'quote card ' + (stream().indexOf('ccj-cbubble quote') > -1) + ', invoice ' + run('ccjInvoice().id'));
   check('and so is the worker\'s, in its own lane',
     stream().indexOf('ccj-cbubble doc') > -1 && stream().indexOf('Marta Nowak') > -1);
+  /* A DONE await is the one deliberate exception: it was a state, not an event, and renders
+     nothing once the thing it waited for has happened. Everything that ever SAID something is
+     still on screen. */
   check('everything the run has ever said is on screen, in one list',
     count(stream(), 'id="ccj-m-') ===
-      run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length'),
+      run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length'
+        + " - ccjRun.client.msgs.filter(function(m){return m.kind==='await'&&m.done;}).length"),
     count(stream(), 'id="ccj-m-') + ' rendered vs '
       + run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length') + ' stored');
   check('and it is in true chronological order', (function () {
@@ -2514,15 +2580,16 @@ section('STAGE 8 — IDENTITY VERIFICATION, AS A REAL ONE RUNS');
      sentence for ten seconds is the screen a reader refreshes — the same failure the waits had
      before they were given rows. Every figure is read from ccjOnb(), the store the card beside it
      is drawn from, so the block and the card cannot disagree about how far along something is. */
-  check('the held block reports progress, not just that it is holding',
-    liveBlock().indexOf('ccj-hold-rows') > -1 && liveBlock().indexOf('Checks') > -1,
-    liveBlock().slice(liveBlock().indexOf('ccj-hold'), liveBlock().indexOf('ccj-hold') + 320));
+  check('the held gist reports progress, not just that it is holding',
+    liveBlock().indexOf('Checks') > -1 && liveBlock().indexOf(' of ') > -1,
+    liveBlock().slice(0, 240));
   check('and the count it shows is the provider\'s own position in the check',
     liveBlock().indexOf(run("Math.min(ccjOnb().kyc.step+(ccjOnb().kyc.done?0:1),CCJ_KYC_PHASES.length)"
       + "+' of '+CCJ_KYC_PHASES.length")) > -1,
     run("Math.min(ccjOnb().kyc.step+(ccjOnb().kyc.done?0:1),CCJ_KYC_PHASES.length)+' of '+CCJ_KYC_PHASES.length"));
-  check('it names the session, which is what a person chasing this would quote',
-    liveBlock().indexOf(run('ccjOnb().kyc.session')) > -1, run('ccjOnb().kyc.session'));
+  // The session moved with the details: it lives on the KYC console beside the block now.
+  check('the console names the session, which is what a person chasing this would quote',
+    screen().indexOf(run('ccjOnb().kyc.session')) > -1, run('ccjOnb().kyc.session'));
   // A row with nothing in it yet is dropped rather than rendered blank — the outcome only exists
   // once the provider has returned one.
   check('and it claims no outcome before the provider has returned one',
@@ -2824,17 +2891,20 @@ section('PAYROLL IS SET UP, NOT RUN — AND IT IS LEFT PENDING');
   check('it holds while it does', until(() => run("ccjRun.phase==='hold'")), run('ccjRun.phase'));
   /* The held block reports progress rather than one unchanging sentence — the same rule stage 8's
      six holds follow, and read from ccjPayrun() so the block and the screen cannot disagree. */
-  check('the held block says where the setup has got to',
-    liveBlock().indexOf('Setup') > -1 && liveBlock().indexOf('ccj-hold-rows') > -1,
-    liveBlock().slice(liveBlock().indexOf('ccj-hold'), liveBlock().indexOf('ccj-hold') + 320));
+  check('the held gist says where the setup has got to',
+    liveBlock().indexOf('Setup') > -1 && liveBlock().indexOf(' of ') > -1,
+    liveBlock().slice(0, 240));
   // The COUNT, against the store, not just the word. A hard-coded "1 of 6" satisfies the check
   // above and reports nothing — which is exactly what a progress row must not be.
   check('and the count is the setup\'s own position, not a printed constant',
     liveBlock().indexOf(run("Math.min(ccjPayrun().step+(ccjPayrun().done?0:1),CCJ_PR_PHASES.length)"
       + "+' of '+CCJ_PR_PHASES.length")) > -1,
     run("Math.min(ccjPayrun().step+(ccjPayrun().done?0:1),CCJ_PR_PHASES.length)+' of '+CCJ_PR_PHASES.length"));
-  check('and reports the access it granted',
-    liveBlock().indexOf('Access') > -1 && liveBlock().indexOf('Granted') > -1);
+  // The access grant's record moved with the details: the store carries it and the worker was
+  // told in their own thread (both asserted above); the block's line stays one line.
+  check('and the access it granted is recorded and told',
+    run('ccjPayrun().accessAt') > 0
+    && run("ccjWorker().msgs.some(function(m){return m.kind==='access';})") === true);
 
   check('setup completes and payroll is left PENDING',
     until(() => run("ccjPayrun().state==='pending'")), run('ccjPayrun().state'));
