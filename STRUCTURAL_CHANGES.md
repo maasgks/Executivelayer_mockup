@@ -386,6 +386,48 @@ transcript swept for **twelve** retired phrases: none survives.
 
 ---
 
+### Wave 7b · Open full run lands mid-journey, prepopulated — ✅ `APPLIED`
+
+**Ask:** "when we open full run, it should open the hire and onboard and should open till that
+phase and all the previous steps details prepopulate according to the details present." This
+supersedes wave 7's open-at-the-composer behaviour for every deal past stage 1.
+(In the same message: **SC-03 is cancelled** — no backend change was made, none was pending;
+client creation and store creation untouched.)
+
+| # | Task | Type | Where | Status |
+|---|---|---|---|---|
+| 45 | `ccjSeedRunToDeal` — settle every stage before the deal's, push their blocks | `STRUCTURAL` | [contract-journey.js](js/contract-journey.js) | ✅ done |
+| 46 | `ccjSeedStep` — one shared step-of-history writer (settled + decision + block) | `LOGIC` | beside it | ✅ done |
+| 47 | `ccjSeedStageOutcome` — the artefact each completed stage leaves behind | `LOGIC` | beside it | ✅ done |
+| 48 | `ccjSeedMidStage` — what the live stage's own earlier steps already produced | `LOGIC` | beside it | ✅ done |
+| 49 | Stage-1 deals keep the composer — nothing before them to settle | `LOGIC` | `ccjOpenDealRun` | ✅ done |
+
+> **It writes state, not prose.** Prior steps settle through the same keys the runner writes
+> (`settled`, `decisions`, `stepMsgs`), their blocks go through `ccjPush`, and summaries come from
+> `ccjSummary` against the seeded artefacts — the same sentence a walked run would have recorded.
+> The live step is NOT seeded: `ccjEnterStep` halts on its gate or parks on its wait, so from the
+> first moment the run is live, not a replay.
+
+> **The details are the deal's, divided honestly.** Client, role, country and person come from the
+> deal. Monthly gross is `value / roles / 12` — Norrbridge's ₹3,12,000 across 6 roles seeds €4,300,
+> not an invented figure. An engagement seeds no person (*"Fleet Coordinator hire"*), because
+> inventing a name would put a fictional person on a real quote; a placement keeps its real one.
+
+> **A screenshot caught the gap the first version had.** Steps before `deal.sub` *inside* the live
+> stage were unseeded, so a deal at Deposit due sub 1 showed *"invoice is with the client"* beside
+> an invoice panel reading *"not raised yet"* — one fact, two surfaces, two answers. The live
+> stage's earlier steps now settle through the same shared writer, plus `ccjSeedMidStage` for the
+> artefacts they imply (invoice issued; contract drafted; KYC cleared).
+
+**Verified:** 46 checks in `browser-w7b` — one deal from **every** stage the dashboard holds, each
+landing on its own stage with all earlier steps settled, blocks on screen, nothing rendering
+`undefined`/`NaN`, and the live step genuinely live; the deal's own client/role/country/value on
+the artefacts; a placement keeping its person with signed contract history; seeded runs surviving
+a reload and reopening painted. `browser-w7` updated to the new contract (26 checks). Suites
+953 + 8 + 46; `.ccjv1-lock` OK.
+
+---
+
 ## The plan is complete
 
 Waves 0-8, tasks 1-44. What remains in this file is **SC-03** only — the backend alignment left

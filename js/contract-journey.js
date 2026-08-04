@@ -9227,11 +9227,19 @@ function ccjOpenDealRun(dealId){
     ccjRun=null;
     run=ccjNewRun();
     run.dealId=dealId;
-    // Written for you rather than filled in behind you: the run still starts where every run
-    // starts, and the sentence that starts it is the one this deal is about.
-    run.seedPrompt=ccjDealPrompt(deal);
     ccjRuns[dealId]=run;
     ccjRun=run;
+    // A deal already mid-journey opens ON its stage, with everything before it settled and its
+    // artefacts built from the deal — see ccjSeedRunToDeal. A deal still in stage 1 starts at
+    // the composer with its request written for you: written, not sent, because stage 1 IS the
+    // conversation and there is nothing before it to settle.
+    if(ccjSeedRunToDeal(run,deal)){
+      page=ccjPageId(run.stage);
+      renderADTPage();
+      ccjEnterStep();                          // the live step runs for real — gate, wait or work
+      return;
+    }
+    run.seedPrompt=ccjDealPrompt(deal);
     page='ccj-model';
     renderADTPage();
     return;
@@ -9253,6 +9261,159 @@ function ccjDealPrompt(d){
   return d.kind==='engagement'
     ?'Hire '+(vowel?'an ':'a ')+d.role+' for '+d.client+' in '+d.country
     :'Hire '+d.subject+' for '+d.client+' in '+d.country+' as a'+(vowel?'n ':' ')+d.role;
+}
+/* == OPENING A DEAL THAT IS ALREADY MID-JOURNEY =============================================
+   A deal at Deposit due did not start there. Opening its run lands ON that stage, with every
+   stage before it settled and the artefacts those stages produce — the form, the quote, the
+   signed agreement, the paid invoice — built from what the deal actually knows: its client, its
+   role, its country, its value.
+
+   IT WRITES STATE, NOT PROSE. Each prior step is settled through the same keys the runner uses
+   (`settled`, `decisions`, `stepMsgs`) and its block pushed through ccjPush, so the transcript,
+   the rail, the screens and the drawer all derive from state exactly as they do on a walked run.
+   Summaries come from ccjSummary against the seeded artefacts — the same sentence a walked run
+   would have recorded — with 'Done' only where a summary needs state this seed does not build.
+
+   THE LIVE STEP IS NOT SEEDED. run.stage/run.sub are set and ccjEnterStep does what it always
+   does — halts on its gate, parks on its wait, or runs its actions. From the reader's first
+   moment the run is live, not a replay.
+
+   MONEY IS THE DEAL'S, DIVIDED HONESTLY. `value` is the annual engagement value across every
+   role, so monthly gross is value / roles / 12, rounded to the hundred. Inventing a number when
+   the deal states one would put two figures for the same engagement on one screen. */
+function ccjSeedRunToDeal(run,deal){
+  const target=typeof amStageIndex==='function'?amStageIndex(deal.stage):-1;
+  if(target<1)return false;              // stage-1 deals start at the composer, as before
+  const stages=ccjStages();
+  const placement=deal.kind==='placement';
+  // An engagement has no person yet, and inventing one would put a fictional name on a real
+  // quote. "<Role> hire" is what that stage of the deal actually knows.
+  const person=placement?String(deal.subject):String(deal.role)+' hire';
+  const roles=placement?1:(parseInt(deal.subject,10)||1);
+  const annual=parseFloat(String(deal.value||'').replace(/[^0-9.]/g,''))||0;
+  const monthly=annual?Math.max(1500,Math.round(annual/roles/12/100)*100):5700;
+
+  run.model='EOR';run.started=true;
+  run.intake={raw:ccjDealPrompt(deal),name:person,country:deal.country,type:'EOR',client:deal.client};
+  // A record object, not ccjCreateEmployee(): that writes into the shared Employees store, and a
+  // seeded view of a deal must not mint listing rows as a side effect of being looked at.
+  run.createdEmp={name:person,country:deal.country,empId:'GEP'+String(100+deal.id)};
+  const parts=person.split(' ');
+  run.form.fname=parts[0]||'';run.form.lname=parts.slice(1).join(' ');
+  run.form.country=deal.country;run.form.jobTitle=deal.role;run.form.pay=String(monthly);
+  ccjAllFields().forEach(function(f){
+    if(!ccjFieldApplies(f))return;
+    if(String(run.form[f.k]||'').trim())return;
+    if(f.type==='date')run.form[f.k]='2026-09-01';
+    else if(f.options)run.form[f.k]=f.options==='countries'?deal.country:f.options[0];
+    // Free-text fields stay empty rather than holding filler — stage 1 is settled, nothing
+    // re-asks for them, and a blank is more honest than an invented answer.
+  });
+
+  for(let i=0;i<target;i++){
+    run.stage=i;                          // so each block stamps its stage's own lane mode
+    const steps=ccjSteps(i);
+    for(let n=0;n<steps.length;n++)ccjSeedStep(run,i,steps[n],n);
+    ccjSeedStageOutcome(stages[i]&&stages[i].id,run,person);
+  }
+
+  run.stage=target;
+  const liveSub=Math.min(deal.sub||0,Math.max(0,ccjSteps(target).length-1));
+  // The live stage's OWN earlier steps settled too. A deal at Deposit due sub 1 has already
+  // raised its invoice at sub 0 — leaving that step unseeded had the wait block saying "invoice
+  // is with the client" beside an invoice panel saying "not raised yet": two surfaces, one fact,
+  // two answers, which is the exact drift the settled keys exist to prevent.
+  const liveSteps=ccjSteps(target);
+  for(let n=0;n<liveSub;n++)ccjSeedStep(run,target,liveSteps[n],n);
+  ccjSeedMidStage(stages[target]&&stages[target].id,run,liveSub);
+  run.sub=liveSub;
+  run.screen=(ccjScreensFor(target)[0]||{}).id||'prompt';
+  run.phase='idle';run.act=0;
+  return true;
+}
+/* One step of history: settled through the same keys the runner writes, its gate answered with
+   the continuing option (a seeded past is a past that chose to proceed), and its block pushed so
+   the transcript carries it. Shared between whole stages and the live stage's earlier steps —
+   two copies of this loop is how one of them stops writing decisions. */
+function ccjSeedStep(run,i,step,n){
+  run.sub=n;
+  const key=ccjKey(i,step);
+  let applies=true;try{applies=ccjStepApplies(i,step);}catch(e){}
+  if(!applies){
+    run.settled[key]={summary:'Not applicable',skipped:true};
+  }else{
+    let gate=null;try{gate=ccjGateFor(i,step)||ccjPostGateFor(i,step);}catch(e){}
+    if(gate&&gate.options&&gate.options.length){
+      const o=gate.options[0];
+      run.decisions[key]=Object.assign({},o,{done:o.done+' by '+ccjActor()});
+    }
+    let summary='Done';try{summary=ccjSummary(i,step);}catch(e){}
+    run.settled[key]={summary:summary};
+  }
+  const m={who:'agent',kind:'step',stage:i,sub:n,pass:1};
+  run.stepMsgs[key+'#1']=m;
+  ccjPush(m);
+}
+/* What the live stage's completed steps have already produced, by how far in it is. Only the
+   flips a mid-stage surface actually reads — the stage is not done, so its outcome must not be. */
+function ccjSeedMidStage(stageId,run,sub){
+  if(!stageId||!sub)return;
+  if(stageId==='deposit-due'){
+    // Raised and sent, not paid — that is what "mid deposit-due" means.
+    const p=ccjPay();
+    if(!p.issuedAt){p.issuedAt=1400;p.dueAt=1400+14*1440;p.state='issued';}
+  }
+  if(stageId==='employment-contract'){
+    // The draft and its audit exist before the approval that is now live.
+    const e=ccjEmp();
+    try{if(!e.terms)ccjDraftContract();}catch(err){}
+    if(sub>=2)e.auditDone=true;
+  }
+  if(stageId==='onboarding'&&sub>=1){
+    const o=ccjOnb();
+    if(!o.kyc.done){o.kyc.done=true;o.kyc.decision='clear';o.kyc.score=96;o.kyc.at=3200;}
+  }
+}
+/* What a stage leaves behind once it is done — the artefact flips, made after that stage's steps
+   settle, in journey order so each builds on the one before. Timestamps are simulated minutes on
+   the client clock, spaced so the trail reads as days of work rather than one burst. */
+function ccjSeedStageOutcome(stageId,run,person){
+  if(!stageId)return;
+  const c=ccjClient();
+  if(stageId==='quote-review'){
+    c.mins=620;c.state='accepted';c.version=1;
+    c.msgs.push({who:'us',text:'Quote v1 sent for review.',at:15});
+    c.msgs.push({who:'client',text:'Quote accepted.',at:600});
+  }
+  if(stageId==='agreement-signature'){
+    const m=ccjMsa();
+    c.mins=1330;
+    m.screening='clean';m.clientSignedAt=1200;m.adtSignedAt=1295;
+  }
+  if(stageId==='deposit-due'){
+    const p=ccjPay();
+    c.mins=2100;
+    p.issuedAt=1400;p.dueAt=1400+14*1440;p.state='cleared';p.clearedAt=2050;
+    let due=0;try{due=ccjAmountDue();}catch(e){}
+    if(due){p.receipts.push({at:2050,amount:due,kind:'full',method:'Bank transfer',payer:ccjParties().client.name});
+      c.msgs.push({who:'client',text:'Deposit paid &mdash; '+ccjMoney(due)+'.',at:2050});}
+  }
+  if(stageId==='employment-contract'){
+    const e=ccjEmp();
+    try{ccjDraftContract();}catch(err){}
+    e.auditDone=true;e.approvedBy=ccjActor();e.approvedAt=2400;
+    e.sentAt=2500;e.openedAt=2560;e.workerSignedAt=2900;e.adtSignedAt=2995;
+  }
+  if(stageId==='onboarding'){
+    const o=ccjOnb();
+    o.kyc.done=true;o.kyc.decision='clear';o.kyc.score=96;o.kyc.at=3200;o.kyc.reviewed=ccjActor();
+    o.docs.forEach(function(d,i){d.status='verified';d.ref='DOC-'+(4400+i);d.at=3300+i*40;});
+    o.docsDone=true;
+    o.tax={ref:'TX-'+(9200+(run.gen||0)),id:'',submittedAt:3600,confirmedAt:3900,state:'confirmed'};
+    o.ss={ref:'SS-'+(5100+(run.gen||0)),id:'',submittedAt:3620,confirmedAt:3950,state:'confirmed'};
+    o.bank={iban:'&bull;&bull;&bull;&bull; 4417',holder:person,score:100,pennyAt:3700,verifiedAt:4000,state:'verified'};
+    o.payroll={builtAt:4100,calendar:'Monthly',payDay:'25th',firstPay:'',prorated:0,days:0,state:'built'};
+  }
 }
 function ccjGoRunPage(){
   const run=ccjRun;if(!run)return;
