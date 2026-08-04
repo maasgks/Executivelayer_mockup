@@ -941,7 +941,18 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
    waiting on the left with the rest of the thread. LEFT, explicitly: this is the one message
    waiting on the reader, so it sits with everything else and GLOWS instead of moving — a slow
    purple pulse, because an unsent draft is the only thing in the thread that needs a hand. */
-.ccj-cmsg.draft{align-items:flex-start}
+/* THE DRAFT SITS ON OUR SIDE, and it is the only thing in the thread that does. Everything else
+   here is a record of what happened — what they sent, what we sent, when it was opened — and a
+   record reads as one column down the left whichever direction it went. The draft is not a record.
+   Nothing has happened yet: it is the agent putting a recommendation in front of US, addressed to
+   the reader rather than to the client, and it is the one item in the thread waiting on a decision
+   from the person looking at it.
+
+   Hanging it off the right edge is what says that without a label. It is not "outbound" — a sent
+   message stays left with the rest of the record (see .ccj-cmsg.us) — it is "yours to answer".
+   The 84% max-width on the bubble below is what gives it an edge to hang from; at full width there
+   would be no side for it to be on. */
+.ccj-cmsg.draft{align-items:flex-end}
 .ccj-cbubble.draft{background:#faf5ff;border:1.5px dashed #c4b5fd;color:var(--navy);max-width:84%;
   animation:ccjDraftGlow 2.4s ease-in-out infinite}
 @keyframes ccjDraftGlow{0%,100%{box-shadow:0 0 0 3px rgba(124,58,237,.05)}
