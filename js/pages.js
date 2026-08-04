@@ -6814,7 +6814,11 @@ function buildAIExecutiveDashboardHTML(){
     const card=(AI_EXEC_CARD_COPY[j.id]||{});
     const cardName=card.name||j.name;
     const cardDesc=card.desc||j.desc;
-    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
+    // The card body is not a link. It used to open the journey-detail page (runs, stages,
+    // timeline) — an admin surface a person launching work has no reason to land on, and one
+    // click away from the action they actually came for. The footer action ("Create Client",
+    // "Create Contract") is the card's one way in; a locked card still explains itself on tap.
+    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':'')+'>'
       +'<div class="ai-journey-card-head">'
       +'<span class="ai-journey-icon">'+(j.icon||'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>')+'</span>'
       +'<div class="ai-journey-head-text">'
