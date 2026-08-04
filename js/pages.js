@@ -627,6 +627,17 @@ function amSubCellHTML(d){
   const s=amStageById(d.stage)||{};
   const steps=amSubSteps(d.stage);
   if(!steps.length)return '<span class="lp-dash">&mdash;</span>';
+  // A terminal stage is a STATE, not a position. "Active ⚡AUTO · Step 3 of 3" dressed a finished
+  // placement in mid-flight machinery — a step counter with nothing left to count and an auto tag
+  // with nothing left to run. Done reads as done: the pill and one settled fact.
+  if(s.terminal){
+    return '<div class="am-where" title="'+attrSafe(String(s.plain).replace(/&mdash;/g,'—'))+'">'
+      +'<span class="am-sub-pill '+amBadgeClass(d.stage)+'">'+s.short+'</span>'
+      +'<span class="am-where-step am-where-done">'
+      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
+      +'Employed and on payroll</span>'
+      +'</div>';
+  }
   const idx=amSubIndex(d);
   const cur=steps[idx];
   return '<div class="am-where"'
@@ -640,6 +651,10 @@ function amSubCellHTML(d){
 const amBoltSvg='<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>';
 function amNextActionCellHTML(d){
   const a=amNextAction(d);
+  // A finished placement's next action belongs to the calendar, not to a person or an agent —
+  // "⚡ Auto" here claimed machinery was about to do something when nothing is left to do.
+  const st=amStageById(d.stage);
+  if(st&&st.terminal)return '<span class="am-act wait">Payroll on schedule</span>';
   // Auto steps get a passive marker in the listing — there is nothing here for a person to do,
   // and a button would say otherwise. The drawer carries the demo-only "run it now" control.
   if(a.kind==='auto')return '<span class="am-act auto">'+amBoltSvg+' Auto</span>';

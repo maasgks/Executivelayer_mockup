@@ -208,6 +208,10 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
    sits at the END of the row beside the drawer's hamburger, and must not wrap mid-label. */
 .am-row-end{display:flex;align-items:center;justify-content:flex-end;gap:6px}
 .am-sb-openrun.row{width:auto;margin-top:0;padding:7px 10px;font-size:11.5px;white-space:nowrap;flex-shrink:0}
+/* A finished placement's one settled fact — tick and sentence in the completed green, replacing
+   the step counter and auto tag that dressed a done record as mid-flight machinery. */
+.am-where-done{display:inline-flex;align-items:center;gap:6px;color:#15803d;font-weight:600}
+.am-where-done svg{flex-shrink:0}
 /* The rest of the stage, read-only. */
 .am-sb-steps{border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:18px;background:#fff}
 .am-sb-steps-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:10px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:9px}
