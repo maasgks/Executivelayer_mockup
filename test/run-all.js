@@ -7,9 +7,12 @@
 //   ccj-harness    the rebuilt journey behaves correctly
 //   ccj-handlers   every control it draws actually works
 //   runner-harness the ORIGINAL journey still works — the regression guard
+//   connector-newforce-mw  the CRM push maps, encodes and reads replies correctly
+//   connector-bhaiyaa      the store poll parses Bhaiyaa's nested payloads correctly
 const { execFileSync } = require('child_process');
 const path = require('path');
-const suites = ['ccj-harness.js', 'ccj-handlers.js', 'runner-harness.js'];
+const suites = ['ccj-harness.js', 'ccj-handlers.js', 'runner-harness.js',
+                'connector-newforce-mw.js', 'connector-bhaiyaa.js'];
 let failed = 0;
 for (const s of suites) {
   process.stdout.write('\n══ ' + s + ' ' + '═'.repeat(Math.max(0, 56 - s.length)) + '\n');

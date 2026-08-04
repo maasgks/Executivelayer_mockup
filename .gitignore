@@ -1,5 +1,9 @@
 backend/data/
 
+# Live CRM credentials (NF_MW_OUTH_KEY, NF_MW_JWT_SECRET). backend/.env.example is the tracked
+# copy — it carries the variable names and the warnings, never the values.
+backend/.env
+
 # The KYC portrait is a real person's photograph. It is read by the contract journey's identity
 # verification console (CCJ_KYC_PORTRAIT) and is deliberately NOT tracked: git keeps what it is
 # given even after a later delete, and this repository has a remote. Drop the file in locally;

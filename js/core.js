@@ -963,8 +963,18 @@ function soSteps(d,stageId){
 }
 function soStageById(id){return soPipelineStages.find(function(s){return s.id===id;})||null;}
 function soStageIndex(id){return soPipelineStages.findIndex(function(s){return s.id===id;});}
-function soStageCount(id){return soRuns.filter(function(d){return d.stage===id;}).length;}
-function soRunsForStage(id){return id?soRuns.filter(function(d){return d.stage===id;}):soRuns.slice();}
+/* == LIVE RUNS ============================================================================
+   Stores that came from the real Bhaiyaa, sitting alongside the twelve seeded ones above.
+   Kept in a separate array and concatenated rather than pushed into soRuns, so the two never
+   get confused for each other: a seeded run is a story and a live one is a record, and only
+   one of them survives a refresh. Every function that reads the board goes through
+   soRunsAll(), which is the single place that decides the board is both. == */
+let soLiveRuns=[];
+// Live first, seeded after. A store that arrived minutes ago is the thing an Ops Manager came to
+// this board for; the twelve fixtures are scenery and can wait below the fold.
+function soRunsAll(){return soLiveRuns.concat(soRuns);}
+function soStageCount(id){return soRunsAll().filter(function(d){return d.stage===id;}).length;}
+function soRunsForStage(id){const all=soRunsAll();return id?all.filter(function(d){return d.stage===id;}):all;}
 function soSubIndex(d){const steps=soSteps(d,d.stage);return Math.min(d.sub||0,Math.max(0,steps.length-1));}
 function soCurrentSub(d){return soSteps(d,d.stage)[soSubIndex(d)]||null;}
 function soIsHalted(d){return d.halted===d.stage;}
@@ -1054,6 +1064,67 @@ let soSelectedId=null,soRunTab='basic-details';
 // Seeds may sit on an automated step; roll them forward once so the invariant above holds from
 // the first render. Halted records stop on their halt step and stay there, which is the point.
 soRuns.forEach(function(d){soSkipAutoSteps(d);});
+
+/* -- A backend store row -> a board run.
+   The stage is DERIVED, never stored twice: a store arrives from Bhaiyaa with its signup already
+   finished (that is the only reason we know about it), so it lands on KYC, and clearing KYC is
+   what moves it on. Storing "which stage" alongside kyc_status would give the badge and the
+   timeline two sources to disagree about, which is the bug the client status form exists to
+   avoid.
+   Bhaiyaa's signup captures none of category, turnover band or city, so those are placeholders
+   and say so — an em-dash reads as "not known", which is true, where an invented band would
+   read as something the merchant chose. -- */
+function soRunFromStore(s,idx){
+  const verified=String(s.kyc_status||'').toLowerCase()==='verified';
+  return {
+    id:100000+idx,
+    live:true,
+    code:s.store_code,
+    ref:s.store_code,
+    bhaiyaaRef:s.source_record_id,
+    store:s.store_name||'Untitled store',
+    merchant:s.first_name||'—',
+    role:s.role||'seller',
+    category:s.store_type||'—',
+    band:'—',
+    city:'—',
+    kycStatus:s.kyc_status||'Pending',
+    updated:soFormatStoreDate(s.updated_at||s.created_at),
+    age:soDaysSince(s.created_at),
+    // Signup is done by definition; KYC is the outstanding gate. Once it clears, the store is
+    // already registered on Bhaiyaa — that is where it came from — so it goes straight to the
+    // terminal stage rather than pretending to run a creation it never performed.
+    stage:verified?'store-live':'kyc',
+    sub:0
+  };
+}
+function soFormatStoreDate(iso){
+  const d=new Date(iso);
+  if(isNaN(d))return '—';
+  return d.getDate()+' '+amMonths[d.getMonth()]+' '+d.getFullYear();
+}
+function soDaysSince(iso){
+  const d=new Date(iso);
+  if(isNaN(d))return 0;
+  return Math.max(0,Math.floor((Date.now()-d.getTime())/86400000));
+}
+/* -- Fetches the synced stores and rebuilds the live half of the board. Called on entering the
+   page and after a poll; never merges in place, because a rebuild from the server is the only
+   version of this list anyone should trust. -- */
+let soLiveLoaded=false;
+function soLoadLiveRuns(){
+  return execApiListStores({pageSize:200}).then(function(res){
+    if(!res.ok||!res.data)return false;
+    const rows=(res.data.stores||[]).filter(function(s){return s.source==='bhaiyaa'&&s.source_record_id;});
+    // Newest first within the live block, so the store that just arrived is the top row of the
+    // board rather than the bottom of its own group. Sorted here rather than relying on whatever
+    // order the listing endpoint happened to return.
+    rows.sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''));});
+    soLiveRuns=rows.map(soRunFromStore);
+    soLiveLoaded=true;
+    return true;
+  });
+}
 
 let openDropdowns=new Set();
 let activeSidebarItem='dashboard';
@@ -3739,6 +3810,11 @@ let cfgModelBackPage='cfg-data-foundation';
 // cfgUserIntakeBackPage is whatever page the operator was on when they hit Create Contract:
 // the form is a sidebar-less focused flow, so Exit has to be told where to put them back. --
 let cfgUserIntakeModelId=null,cfgUserIntakeFields=null,cfgUserIntakeResult=null,cfgUserIntakeError='',cfgUserIntakeBusy=false,cfgUserIntakeOffline=false,cfgUserIntakeBackPage='ai-executive';
+// -- Whether the field list came from the source system's own published definition (the mock
+// site publishes one) or is a copy we maintain (the NewForce middleware publishes none). The
+// form says which, because "rendered from its published field definition" is a claim, and it is
+// only true in one of the two cases. --
+let cfgUserIntakePublished=true;
 // cfgUserIntakeStep is the stage of the three-part journey (0 form, 1 ingestion, 2 record);
 // cfgUserIntakeProgress indexes the ingestion feed within stage 1. cfgUserIntakeDraft holds what
 // has been typed, because re-rendering to show a validation error rebuilds the inputs and would

@@ -50,7 +50,11 @@ async function execApiRequest(method, path, body){
   let payload = null;
   try{ payload = await res.json(); }catch(e){ payload = null; }
   if(!res.ok){
-    return {ok:false, error:(payload && payload.error) || (res.status + ' ' + res.statusText), status:res.status};
+    // `field` travels with the error when the backend (or the system behind it) was specific
+    // about which input was wrong, so the caller can put the message on that control instead of
+    // in a banner above a form that looks fine.
+    return {ok:false, error:(payload && payload.error) || (res.status + ' ' + res.statusText),
+            field:(payload && payload.field) || null, status:res.status};
   }
   return {ok:true, data:payload};
 }

@@ -18,6 +18,7 @@ const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
+const connectors = require('./connectors');
 
 const PORT = process.env.PORT || 4000;
 const DATA_DIR = path.join(__dirname, 'data');
@@ -49,8 +50,24 @@ const FALLBACK_INTAKE_FIELDS = [
   { name: 'heard_about_us', label: 'How did you hear about us?', type: 'select', options: ['Google Search', 'LinkedIn', 'Referral', 'Conference / Event', 'Existing Customer', 'Other'] }
 ];
 
+// The field list for the real CRM. Unlike the mock's, this one is not published by the system it
+// describes — the middleware has no schema endpoint — so it is maintained here against
+// Adtwebsite::_validateInputs('add'). `required` mirrors that validator exactly: the CRM rejects a
+// lead missing any of these, and finding that out after a round trip rather than before is a worse
+// experience for no gain. If the CRM's rules change, this list is what has to change with them.
+const CRM_INTAKE_FIELDS = [
+  { name: 'full_name', label: 'Full name', type: 'text', required: true },
+  { name: 'work_email', label: 'Work email', type: 'email', required: true },
+  { name: 'phone_country_code', label: 'Phone number', type: 'select', options: ['+91', '+31', '+49', '+34', '+44', '+1', '+65'], placeholder: 'Select', required: true },
+  { name: 'phone_number', label: '', type: 'text', required: true },
+  { name: 'company_name', label: 'Company name', type: 'text', required: true },
+  { name: 'country_hiring_in', label: 'Country hiring in', type: 'select', options: ['India', 'Netherlands', 'Germany', 'Spain', 'United Kingdom', 'United States', 'Singapore'], required: true },
+  { name: 'looking_for', label: 'What are you looking for?', type: 'select', options: ['Employer of Record (EOR)', 'Contractor Management', 'Payroll Outsourcing', 'Entity Setup', 'PEO Services'] },
+  { name: 'heard_about_us', label: 'How did you hear about us?', type: 'select', options: ['Google Search', 'LinkedIn', 'Referral', 'Conference / Event', 'Existing Customer', 'Other'] }
+];
+
 const VALID_STATUSES = ['Pending', 'Active', 'Inactive'];
-const VALID_SOURCES = ['manual', 'adt_solution'];
+const VALID_SOURCES = ['manual', 'adt_solution', 'newforce_mw'];
 // Columns a caller may edit through PATCH /employees/:code. Deliberately excludes identity and
 // provenance (employee_code, source_record_id, source) — the first is set once by this server,
 // the second is the source system's own id and ours to record rather than rewrite. An edit
@@ -124,6 +141,50 @@ const VALID_STORE_ROLES = ['seller', 'buyer'];
 const VALID_KYC = ['Pending', 'Verified', 'Failed'];
 
 const findStoreByCode = (code) => db.prepare('SELECT * FROM stores WHERE store_code = ?').get(code);
+// Scoped by source for the same reason the client lookup is: two platforms may each mint '3675'
+// for different stores, and the unique index is on the pair.
+const findStoreBySourceRecord = (source, sourceRecordId) =>
+  db.prepare('SELECT * FROM stores WHERE source = ? AND source_record_id = ?').get(source, sourceRecordId);
+
+// Files one store that Bhaiyaa already opened.
+//
+// No id is minted for Bhaiyaa here — theirs arrived with the record, which is the whole difference
+// between this and the client flow. Ours is minted because a store has to be nameable in this
+// system too, and it lands `mirrored` because there is nothing left to push: both systems already
+// hold it.
+//
+// KYC is the exception, and the reason this integration exists. Bhaiyaa's signup captures an
+// Aadhaar document, never a number, so nothing has been verified against UIDAI at this point —
+// the store arrives kyc_status 'Pending' and an Ops Manager clears it.
+function ingestBhaiyaaStore(mapped) {
+  return transaction(() => {
+    const ts = nowIso();
+    const code = mintStoreCode();
+    const info = db.prepare(
+      `INSERT INTO stores
+         (store_code, source_record_id, source, mirror_state, role, store_name, auto_named,
+          handle, category, store_type, plan, first_name, last_name, email,
+          phone_country_code, mobile, mobile_verified, kyc_status, status, raw_signup,
+          created_at, updated_at)
+       VALUES (?,?,'bhaiyaa','mirrored',?,?,0,NULL,NULL,?,NULL,?,NULL,?,NULL,NULL,0,'Pending','Pending',?,?,?)`
+    ).run(
+      code, mapped.source_record_id, mapped.role, mapped.store_name, mapped.store_type,
+      // Bhaiyaa's list and detail calls return the store, not the person. The merchant's name and
+      // email would need a further retailer lookup; until that exists the columns stay empty
+      // rather than holding a guess.
+      mapped.retailer_id ? ('Retailer ' + mapped.retailer_id) : 'Unknown',
+      '',
+      JSON.stringify(mapped.raw || {}), ts, ts
+    );
+    const id = info.lastInsertRowid;
+    db.prepare(
+      'INSERT INTO store_events (store_id, title, actor_user, description, occurred_at) VALUES (?,?,?,?,?)'
+    ).run(id, 'Signup completed on Bhaiyaa', 'Bhaiyaa Sync',
+      'The merchant finished Bhaiyaa\'s signup. Filed here as ' + code
+      + ', Bhaiyaa store ' + mapped.source_record_id + '. KYC has not run yet.', ts);
+    return db.prepare('SELECT * FROM stores WHERE id = ?').get(id);
+  });
+}
 function getStoreConsents(storeId) {
   return db.prepare('SELECT document, accepted_at FROM store_consents WHERE store_id = ? ORDER BY id').all(storeId);
 }
@@ -360,8 +421,9 @@ async function fetchLatestAdtSubmission(sinceId) {
 // Client ID exists and is committed whether or not the source system can be reached. The intake
 // body is kept verbatim in raw_source_payload, which is what makes a retry possible later: the
 // exact payload to re-send is on the row rather than in the memory of a request that has ended.
-function createMirrorPendingClient(body) {
+function createMirrorPendingClient(body, sourceId) {
   const mapped = mapAdtSubmission(body);
+  const source = sourceId || connectors.activeSourceId();
   return transaction(() => {
     const employeeCode = mintClientCode();
     const ts = nowIso();
@@ -370,9 +432,10 @@ function createMirrorPendingClient(body) {
          (employee_code, source_record_id, source, name, email, phone_country_code,
           contact, company_name, country, looking_for, heard_about_us, status, raw_source_payload,
           mirror_state, created_at, updated_at)
-       VALUES (?, NULL, 'adt_solution', ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, 'pending', ?, ?)`
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, 'pending', ?, ?)`
     ).run(
-      employeeCode, mapped.name, mapped.email, mapped.phone_country_code, mapped.contact,
+      employeeCode, source,
+      mapped.name, mapped.email, mapped.phone_country_code, mapped.contact,
       mapped.company_name, mapped.country, mapped.looking_for, mapped.heard_about_us,
       JSON.stringify(body), ts, ts
     );
@@ -395,35 +458,19 @@ async function attemptMirror(row) {
   let payload = {};
   try { payload = row.raw_source_payload ? JSON.parse(row.raw_source_payload) : {}; } catch { payload = {}; }
   // Our Client ID travels with the record, so the source system stores OUR name for the client
-  // alongside its own. That is what lets a human on either side line the two records up, and
-  // what a later reconciliation would match on.
-  const outbound = Object.assign({}, payload, { external_ref: row.employee_code });
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ADT_TIMEOUT_MS);
-  let submitted = null;
-  let failure = null;
-  try {
-    const r = await fetch(ADT_BASE_URL + '/api/employee-intake/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ADT_API_KEY },
-      body: JSON.stringify(outbound),
-      signal: controller.signal
-    });
-    if (!r.ok) failure = 'NewForce Solutions rejected the submission (' + r.status + ')';
-    else {
-      const parsed = await r.json();
-      submitted = parsed && parsed.data ? parsed.data : parsed;
-      if (!submitted || !mapAdtSubmission(submitted).source_record_id) {
-        failure = 'NewForce Solutions accepted the record but returned no id for it';
-        submitted = null;
-      }
-    }
-  } catch (e) {
-    failure = 'Could not reach NewForce Solutions: ' + e.message;
-  } finally {
-    clearTimeout(timer);
-  }
+  // alongside its own. That is what lets a human on either side line the two records up, and what
+  // a later reconciliation would match on. Where it lands is the connector's business: the mock
+  // has an external_ref field for it, the CRM has none and carries it in LAST_ACTIVITY instead.
+  //
+  // Which system this row belongs to decides how it is pushed — the row's own `source`, not the
+  // currently configured one, so a mock-sourced client still retries against the mock after the
+  // backend has been repointed at the real middleware.
+  const result = await connectors.submitTo(row.source, payload, {
+    externalRef: row.employee_code,
+    actor: 'Executive Layer'
+  });
+  const submitted = result.ok ? (result.submission || null) : null;
+  const failure = result.ok ? null : result.error;
 
   const ts = nowIso();
   if (failure) {
@@ -434,16 +481,19 @@ async function attemptMirror(row) {
         WHERE id = ?`
     ).run(failure, ts, ts, row.id);
     insertLog(row.id, 'Updated', 'Mirror to NewForce Solutions failed: ' + failure, 'Executive Layer');
-    return { ok: false, error: failure };
+    // `field` names the input the operator has to fix, when the source system's rejection was
+    // specific enough to say. Carried out to the UI so the message lands under that input.
+    return { ok: false, error: failure, field: result.field || null };
   }
 
-  const sourceRecordId = mapAdtSubmission(submitted).source_record_id;
+  const sourceRecordId = result.sourceRecordId;
   // The source system can hand back an id we already hold — most plausibly because it was
   // restored from a backup, or (in this demo) restarted with its counter rewound. Storing it
   // would attach two different clients to one source record, so the composite unique index
   // refuses. That refusal is a mirror failure like any other, not a 500: the record stays, the
   // reason is recorded in plain words, and Retry is available once the collision is resolved.
-  const clash = findBySourceRecord('adt_solution', sourceRecordId);
+  // Scoped to this row's own source, because the index is: two systems may both mint '27800'.
+  const clash = findBySourceRecord(row.source, sourceRecordId);
   if (clash && clash.id !== row.id) {
     const msg = 'NewForce Solutions returned source record ' + sourceRecordId
       + ', which is already held by ' + clash.employee_code + '.';
@@ -474,8 +524,10 @@ async function attemptMirror(row) {
       'Executive Layer');
   });
   // Move the cursor past this submission so the background poller does not re-ingest the record
-  // we just pushed as though it were a new arrival.
-  setSyncState('adt_last_seen_source_id', sourceRecordId);
+  // we just pushed as though it were a new arrival. Only the mock is polled — the middleware
+  // publishes no read-back endpoint, and writing a CRM user_id into the mock's cursor would
+  // strand the poller on an id it will never be handed.
+  if (row.source === 'adt_solution') setSyncState('adt_last_seen_source_id', sourceRecordId);
   return { ok: true, submission: submitted };
 }
 
@@ -719,8 +771,46 @@ async function handle(req, res, url, segments) {
         employee.status + ' → ' + body.status + '. ' + String(body.comment).trim(), body.user || 'Admin');
       return { row: db.prepare('SELECT * FROM direct_employees WHERE id = ?').get(employee.id), log };
     });
+
+    // Ours first, theirs second — the same order as creation, and for the same reason: the
+    // operator's decision and its audit entry are committed before anything is sent anywhere, so
+    // an outage at the source system cannot lose them. A push that fails is recorded as a further
+    // log entry rather than rolled back, because the status here really did change.
+    //
+    // Only for a client the source system actually holds. A record that never mirrored has no
+    // counterpart to update, and one created here manually has no source system at all.
+    let statusPush = null;
+    if (result.row.source_record_id && result.row.mirror_state === 'mirrored') {
+      statusPush = await connectors.pushStatusTo(result.row.source, result.row.source_record_id, body.status, {
+        externalRef: result.row.employee_code,
+        actor: body.user || 'Admin'
+      });
+      if (statusPush.supported === false) {
+        statusPush = null;                       // nowhere to send it; not a failure to report
+      } else if (statusPush.ok) {
+        // Only worth a line in the trail when something actually moved over there. Re-stating a
+        // status the CRM already held is not news.
+        if (statusPush.changed) {
+          insertLog(employee.id, 'Updated',
+            'Status ' + body.status + ' pushed to NewForce Solutions (record '
+            + result.row.source_record_id + ').', 'NewForce Solutions Sync');
+        }
+      } else {
+        insertLog(employee.id, 'Updated',
+          'Status ' + body.status + ' could NOT be pushed to NewForce Solutions: ' + statusPush.error
+          + ' The two systems now disagree until this is retried.', 'NewForce Solutions Sync');
+      }
+    }
+
     sendJson(res, 200, {
-      employee: hydrateEmployee(result.row), log: result.log,
+      employee: hydrateEmployee(findById(employee.id)), log: result.log,
+      // What happened to the onward push, said plainly rather than left for the caller to infer
+      // from the log text: null when there was nowhere to send it.
+      statusSync: statusPush ? {
+        ok: statusPush.ok,
+        changed: statusPush.ok ? statusPush.changed : false,
+        error: statusPush.ok ? null : statusPush.error
+      } : null,
       logs: getLogs(employee.id), workflow: getWorkflow(employee.id)
     }, origin);
     return;
@@ -787,6 +877,13 @@ async function handle(req, res, url, segments) {
   // the form. Falls back to the known field set if ADT is unreachable, since the page has to
   // render something.
   if (req.method === 'GET' && segments[0] === 'adt' && segments[1] === 'form-schema' && segments.length === 2) {
+    // The middleware publishes no schema endpoint, so against the real CRM the field list is ours
+    // and is maintained here — including which fields are mandatory, which the CRM enforces on
+    // submit and the form should therefore enforce before spending a round trip on it.
+    if (connectors.activeSourceId() === 'newforce_mw') {
+      sendJson(res, 200, { fields: CRM_INTAKE_FIELDS, source: 'newforce_mw', published: false }, origin);
+      return;
+    }
     let schema = null;
     try {
       const r = await fetch(ADT_BASE_URL + '/api/employee-intake/schema', { headers: { Accept: 'application/json' } });
@@ -814,7 +911,17 @@ async function handle(req, res, url, segments) {
       throw new HttpError(400, 'Work email is not a valid address');
     }
 
-    const employeeRow = createMirrorPendingClient(body);
+    // Refusals we can see coming are settled before a Client ID is minted, so a client the source
+    // system will never accept does not become a record here that can never mirror. Everything
+    // else still follows the ours-first order below.
+    const source = connectors.activeSourceId();
+    const pre = await connectors.precheckAt(source, body);
+    if (!pre.ok) {
+      sendJson(res, 409, { status: 'rejected', error: pre.error, field: pre.field || null }, origin);
+      return;
+    }
+
+    const employeeRow = createMirrorPendingClient(body, source);
     const result = await attemptMirror(employeeRow);
     const employee = hydrateEmployee(findById(employeeRow.id));
 
@@ -824,6 +931,7 @@ async function handle(req, res, url, segments) {
       status: result.ok ? 'ingested' : 'mirror_failed',
       mirrorState: employee.mirror_state,
       mirrorError: employee.mirror_error || null,
+      mirrorField: result.field || null,
       employee,
       logs: getLogs(employee.id),
       workflow: getWorkflow(employee.id),
@@ -947,6 +1055,81 @@ async function handle(req, res, url, segments) {
     return;
   }
 
+  // POST /stores/poll — ask Bhaiyaa what has been opened since we last looked, and file it.
+  //
+  // Inbound, unlike everything on the client side: the merchant filled in Bhaiyaa's own signup,
+  // so the store exists there before it exists here. We are recording it, not authoring it —
+  // which is why the row lands `mirrored` with Bhaiyaa's id already on it, and why nothing is
+  // ever pushed back out.
+  if (req.method === 'POST' && segments[0] === 'stores' && segments[1] === 'poll' && segments.length === 2) {
+    const cursor = getSyncState('bhaiyaa_last_seen_store_id');
+    const result = await connectors.pollStoresSince('bhaiyaa', cursor, { listOnly: !cursor });
+    setSyncState('bhaiyaa_last_polled_at', nowIso());
+    if (!result.ok) throw new HttpError(502, result.error);
+
+    // First poll ever: take the platform as it stands and watch from here. Without this the
+    // board would fill with a page of stores that were opened long before anyone connected the
+    // two systems, which is not "what has been signed up" — it is just history.
+    if (!cursor) {
+      if (result.highestSeen) setSyncState('bhaiyaa_last_seen_store_id', String(result.highestSeen));
+      sendJson(res, 200, {
+        status: 'baseline', count: 0, stores: [],
+        cursor: getSyncState('bhaiyaa_last_seen_store_id'),
+        note: 'Cursor set to the newest store on Bhaiyaa. Sign-ups from now on will appear here.'
+      }, origin);
+      return;
+    }
+
+    const ingested = [];
+    (result.stores || []).forEach((s) => {
+      // Idempotency, same rule as client ingestion: the same store seen twice — a cursor reset,
+      // a restart, an overlapping poll — resolves to the row it already made.
+      const existing = findStoreBySourceRecord('bhaiyaa', s.source_record_id);
+      if (existing) return;
+      ingested.push(hydrateStore(ingestBhaiyaaStore(s)));
+    });
+    if (result.highestSeen) setSyncState('bhaiyaa_last_seen_store_id', String(result.highestSeen));
+
+    sendJson(res, 200, {
+      status: ingested.length ? 'ingested' : 'idle',
+      count: ingested.length,
+      stores: ingested,
+      cursor: getSyncState('bhaiyaa_last_seen_store_id')
+    }, origin);
+    return;
+  }
+
+  // POST /stores/:code/kyc — the Ops Manager has run the owner check from the Logs drawer.
+  //
+  // Writes the outcome and moves the run on in one transaction, for the reason the client status
+  // form exists: a badge that says Verified beside a timeline that never mentions it is worse
+  // than either alone.
+  if (req.method === 'POST' && segments[0] === 'stores' && segments[2] === 'kyc' && segments.length === 3) {
+    const store = findStoreByCode(decodeURIComponent(segments[1]));
+    if (!store) throw new HttpError(404, 'Store not found');
+    if (store.kyc_status === 'Verified') throw new HttpError(409, 'KYC is already verified for this store');
+    const body = await readJsonBody(req);
+    const actor = body.user || 'Ops Manager';
+    const ts = nowIso();
+
+    const updated = transaction(() => {
+      db.prepare(
+        `UPDATE stores SET kyc_status = 'Verified', kyc_verified_by = ?, kyc_verified_at = ?,
+                           aadhaar_masked = COALESCE(?, aadhaar_masked), updated_at = ?
+          WHERE id = ?`
+      ).run(actor, ts, body.aadhaar_masked || null, ts, store.id);
+      db.prepare(
+        'INSERT INTO store_events (store_id, title, actor_user, description, occurred_at) VALUES (?,?,?,?,?)'
+      ).run(store.id, 'KYC verified', actor,
+        'Owner checked against UIDAI and screened. '
+        + (body.aadhaar_masked ? 'Aadhaar ' + body.aadhaar_masked + '. ' : '')
+        + 'The store can now be opened.', ts);
+      return db.prepare('SELECT * FROM stores WHERE id = ?').get(store.id);
+    });
+    sendJson(res, 200, { store: hydrateStore(updated) }, origin);
+    return;
+  }
+
   // PATCH /stores/:code/status — the only mutation a store has so far.
   if (req.method === 'PATCH' && segments[0] === 'stores' && segments[2] === 'status' && segments.length === 3) {
     const store = findStoreByCode(decodeURIComponent(segments[1]));
@@ -1007,9 +1190,16 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 server.listen(PORT, () => {
+  const source = connectors.activeSourceId();
   console.log('Executive Layer storage backend listening on http://localhost:' + PORT);
   console.log('  Data file:     ' + DB_PATH);
-  console.log('  NewForce Solutions:  ' + ADT_BASE_URL + ADT_LATEST_PATH);
+  console.log('  New clients:   ' + source + ' -> ' + (connectors.configFor(source).baseUrl || '(unset)'));
+  if (source === 'adt_solution') console.log('  Poll source:   ' + ADT_BASE_URL + ADT_LATEST_PATH);
+  else console.log('  Poll source:   none — ' + source + ' is push-only (no read-back endpoint)');
+  // Said here rather than at the first submission: a missing credential is a setup mistake, and
+  // the moment to hear about it is startup, not when an Account Manager presses Submit.
+  const problem = connectors.describeMisconfiguration(source);
+  if (problem) console.error('  CONFIG ERROR:  ' + problem + ' — client creation will fail until this is set.');
   if (!API_TOKEN) console.log('  Auth:          DISABLED (set EXEC_API_TOKEN before exposing this beyond localhost)');
   if (ALLOWED_ORIGINS.includes('*')) console.log('  CORS:          open to all origins (set ALLOWED_ORIGINS to restrict)');
 });
