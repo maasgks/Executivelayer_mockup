@@ -565,9 +565,19 @@ function buildAmDealsListingHTML(){
     {w:'9%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
      cell:function(d){return '<span class="am-c-age'+(d.breach?' breach':'')+'">'+d.age+'d</span>'
        +(d.breach?'<div class="cell-sub am-c-late">Too long</div>':'');}},
-    {w:'19%',cw:'24%',th:'What to do next',cell:amNextActionCellHTML},
-    {w:'8%',cw:'8%',th:'',
-     cell:function(d){return '<button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>';}}
+    {w:'14%',cw:'18%',th:'What to do next',cell:amNextActionCellHTML},
+    // The way into the deal's run sits at the END of the row — same design as everywhere, sized
+    // for a cell — with the drawer's hamburger beside it. It moved here from the drawer's Logs
+    // panel: two clicks to reach a button that opens something else was one too many.
+    //
+    // Not on Working. An active placement's journey is finished — payroll runs on the calendar,
+    // not on a run — so a run button there would open nine settled stages with nothing live to
+    // do, and a control that opens nothing to act on teaches people to stop pressing it.
+    {w:'13%',cw:'14%',th:'',
+     cell:function(d){return '<div class="am-row-end">'
+       +'<button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>'
+       +(d.stage==='active'?'':ccjOpenRunBtnHTML(d,true))
+       +'</div>';}}
   ].filter(function(c){return !(compact&&c.hideWhenCompact);});
   const colgroup='<colgroup>'+columns.map(function(c){return '<col style="width:'+(compact?c.cw:c.w)+'">';}).join('')+'</colgroup>';
   const head='<thead><tr>'+columns.map(function(c){return '<th'+(c.thTitle?' title="'+attrSafe(c.thTitle)+'"':'')+'>'+c.th+'</th>';}).join('')+'</tr></thead>';
@@ -617,6 +627,17 @@ function amSubCellHTML(d){
   const s=amStageById(d.stage)||{};
   const steps=amSubSteps(d.stage);
   if(!steps.length)return '<span class="lp-dash">&mdash;</span>';
+  // A terminal stage is a STATE, not a position. "Active ⚡AUTO · Step 3 of 3" dressed a finished
+  // placement in mid-flight machinery — a step counter with nothing left to count and an auto tag
+  // with nothing left to run. Done reads as done: the pill and one settled fact.
+  if(s.terminal){
+    return '<div class="am-where" title="'+attrSafe(String(s.plain).replace(/&mdash;/g,'—'))+'">'
+      +'<span class="am-sub-pill '+amBadgeClass(d.stage)+'">'+s.short+'</span>'
+      +'<span class="am-where-step am-where-done">'
+      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
+      +'Employed and on payroll</span>'
+      +'</div>';
+  }
   const idx=amSubIndex(d);
   const cur=steps[idx];
   return '<div class="am-where"'
@@ -630,6 +651,10 @@ function amSubCellHTML(d){
 const amBoltSvg='<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>';
 function amNextActionCellHTML(d){
   const a=amNextAction(d);
+  // A finished placement's next action belongs to the calendar, not to a person or an agent —
+  // "⚡ Auto" here claimed machinery was about to do something when nothing is left to do.
+  const st=amStageById(d.stage);
+  if(st&&st.terminal)return '<span class="am-act wait">Payroll on schedule</span>';
   // Auto steps get a passive marker in the listing — there is nothing here for a person to do,
   // and a button would say otherwise. The drawer carries the demo-only "run it now" control.
   if(a.kind==='auto')return '<span class="am-act auto">'+amBoltSvg+' Auto</span>';
@@ -811,6 +836,8 @@ function renderAmDealSidebar(){
           ?'<button class="lp-logs-save-btn" onclick="amCompleteStep('+d.id+')">Mark &ldquo;'+a.step.label+'&rdquo; done</button>'
           :'<button class="lp-logs-save-btn" onclick="amSimulateStep('+d.id+')">'+simLabel+'</button>'
             +(a.kind==='chase'?'<button class="am-sb-chase-link" onclick="amRemindClient('+d.id+')">Send the client a reminder instead</button>':''))
+        // The way into the deal's run lives at the end of the LISTING ROW, not here — the Logs
+        // panel keeps to its one job, completing the step in front of you.
         +'</div>';
     /* The "Manual steps in <stage>" checklist that used to sit above the trail is gone. Logs is
        the action tab: one thing to do, and the record of what has been done. The checklist was a
@@ -7042,7 +7069,11 @@ function buildAIExecutiveDashboardHTML(){
     const card=(AI_EXEC_CARD_COPY[j.id]||{});
     const cardName=card.name||j.name;
     const cardDesc=card.desc||j.desc;
-    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':(locked?'':' onclick="viewAIJourney(\''+j.id+'\')"'))+'>'
+    // The card body is not a link. It used to open the journey-detail page (runs, stages,
+    // timeline) — an admin surface a person launching work has no reason to land on, and one
+    // click away from the action they actually came for. The footer action ("Create Client",
+    // "Create Contract") is the card's one way in; a locked card still explains itself on tap.
+    return '<div class="ai-journey-card ai-journey-card-lg'+(isActive?' ai-journey-card-active':'')+(locked?' ai-journey-card-locked':'')+'"'+(lockedTap?' style="cursor:pointer" onclick="showLockedJourneyToast(\''+j.id+'\',\''+j.name+'\')"':'')+'>'
       +'<div class="ai-journey-card-head">'
       +'<span class="ai-journey-icon">'+(j.icon||'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>')+'</span>'
       +'<div class="ai-journey-head-text">'
@@ -9673,6 +9704,18 @@ function buildCfgDataFoundationHTML(){
     +'</div>'
     +'<div class="ai-journey-grid">'+cards+'</div>'
     +'</div>';
+}
+/* The way into a deal's own run of the Hire and Onboard journey. Says which of the two it is —
+   opening a run that exists is a different act from starting one, and a control that reads the
+   same either way makes the first click feel destructive. `row` is the cell-sized cut of the same
+   design; stopPropagation because the whole row is itself a click that opens the drawer. */
+function ccjOpenRunBtnHTML(d,row){
+  const has=typeof ccjRuns!=='undefined'&&ccjRuns[d.id];
+  const ico='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+    +'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
+  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="event.stopPropagation();ccjOpenDealRun('+d.id+')" title="'
+    +(has?'Open this deal&rsquo;s run from here':'Start this deal&rsquo;s run from here')+'">'+ico
+    +(has?'Open run':'Start run')+'</button>';
 }
 function cfgMapRow(unified,source,type){
   return '<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed var(--border)">'

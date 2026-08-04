@@ -105,7 +105,7 @@ Stillness is the primary signal: the page has exactly one moving thing while the
 |---|---|---|---|---|---|
 | New intake | Account Manager | AUTO | NewForce Solutions · `EmployeeIntake` | Prompt resolves to client + country + type | Client, Contract Type, Country |
 | CSM assigned | Account Manager | AUTO · 1h | Executive Layer | Owner has capacity in this entity | Owner (Arjun Vaidya) |
-| Qualified / Disqualified | Account Manager | **US** | — | — | Qualification decision |
+| Qualified / Rejected | Account Manager | **US** | — | — | Qualification decision |
 
 ### 2 · Quote in preparation — `quote-prep` — AI Compliance Hub Sync
 | Sub-status | Owner | Kind | Reaches | Validates | Captures |

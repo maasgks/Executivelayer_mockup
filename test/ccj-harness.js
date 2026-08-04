@@ -243,9 +243,13 @@ function answerGatesUntil(pred, cap) {
   }
   return pred();
 }
+// A reason is passed on every answer. Positive options ignore it; negative ones require it, and
+// without one they open the reason prompt instead of deciding — which is the behaviour, not a
+// quirk to work around. Driving with it here keeps these flow checks about the flow; the prompt
+// itself is asserted on separately.
 function answerGate(id) {
   const opt = id || run("(function(){var s=ccjSteps(ccjRun.stage)[ccjRun.sub];var g=s&&(ccjGateFor(ccjRun.stage,s)||ccjPostGateFor(ccjRun.stage,s));return g&&g.options?g.options[0].id:'';})()");
-  if (opt) run("ccjChooseGate('" + opt + "')");
+  if (opt) run("ccjChooseGate('" + opt + "','driven by the harness')");
   return opt;
 }
 function driveTo(stageIdx, cap) {
@@ -798,9 +802,15 @@ section('ACTION BY ACTION — NEW INTAKE SHOWS ITS WORKING');
 check('the step declares one action per thing it does',
   run("ccjActsFor(0,ccjSteps(0)[0]).map(function(a){return a.id;}).join(',')") === 'connect,fetch,verify,save',
   run("ccjActsFor(0,ccjSteps(0)[0]).map(function(a){return a.id;}).join(',')"));
-check('only the first action is on screen, and it is running',
-  count(evl(), 'class="ccj-act ') === 1 && evl().indexOf('ccj-act doing') > -1, count(evl(), 'class="ccj-act ') + ' actions');
-check('it names the system it is connecting to', evl().indexOf('Connecting to NewForce Solutions') > -1);
+/* THE LIVE BLOCK IS A WINDOW, NOT A LEDGER. Nothing in flight is drawn in the body any more —
+   the head carries the claim of activity as a spark and one word, and the body's window shows
+   only work that has actually finished. So the first honest assertion is an absence: before the
+   first action completes, the window claims nothing. */
+check('nothing is claimed done before the first action finishes',
+  count(liveBlock(), 'ccj-sl act') === 0, count(liveBlock(), 'ccj-sl act') + ' done lines');
+check('the head names the work underway — a spark and one word',
+  liveBlock().indexOf('ccj-spark') > -1 && liveBlock().indexOf('Connecting&hellip;') > -1,
+  liveBlock().slice(0, 240));
 // Tested directly rather than by hoping the timers interleave a certain way. The invariant is
 // "a beat writes the log node and nothing else" — so call the beat painter and look at what it
 // touched. Timing-based versions of this broke the moment the pace was tuned for readability,
@@ -827,16 +837,28 @@ check('a beat repaints the log alone, never the whole conversation',
   'looked for ' + run('ccjEvLinesId(0,0,1)') + ', saw '
   + Object.keys(nodes).filter((k) => k.indexOf('ccj-ev') === 0).join(','));
 clearEv(); advance(ACT);
-check('the connect completes and the fetch starts',
-  evl().indexOf('ccj-act done') > -1 && evl().indexOf('Connected') > -1 && evl().indexOf('Fetching') > -1);
-check('only the running action animates', count(evl(), 'ccj-act doing new') === 1, count(evl(), 'ccj-act doing new') + ' animating');
+check('the connect completes into the window, naming the system',
+  evl().indexOf('ccj-sl act') > -1 && evl().indexOf('Connected to NewForce Solutions') > -1,
+  evl().slice(0, 240));
+check('and the verb moves on to the fetch', liveBlock().indexOf('Fetching&hellip;') > -1,
+  liveBlock().slice(0, 240));
+/* Only the latest beat's lines animate in — the rest were already read, and re-running their
+   entry on every rebuild is the flicker the `new` class exists to prevent. */
+check('only the newest lines animate', count(evl(), 'ccj-sl act new') === 1
+  && count(evl(), 'ccj-act doing') === 0, count(evl(), 'ccj-sl act new') + ' animating');
 clearEv(); advance(ACT);
 check('the fetch reports how many records came back', evl().indexOf('records returned') > -1);
-check('and shows them, not just the count', count(evl(), 'ccj-act-row') >= 3, count(evl(), 'ccj-act-row') + ' rows shown');
-check('the verify is now running', evl().indexOf('Verifying against the rules') > -1);
+check('and shows them, not just the count', count(evl(), 'ccj-sl row') >= 3, count(evl(), 'ccj-sl row') + ' rows shown');
+/* Two actions are done now, so this is the first moment "only the newest animates" can be told
+   apart from "everything animates" — the beat-one version of this check passes either way. */
+check('the lines already read do not animate again', count(evl(), 'ccj-sl act') === 2
+  && count(evl(), 'ccj-sl act new') === 1,
+  count(evl(), 'ccj-sl act new') + ' of ' + count(evl(), 'ccj-sl act') + ' animating');
+check('the verify is now running, as the one word in the head',
+  liveBlock().indexOf('Validating&hellip;') > -1, liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
 check('the verify reports its verdicts', evl().indexOf('checks passed') > -1);
-check('and shows each rule with its result', count(evl(), 'ccj-act-check pass') === 2, count(evl(), 'ccj-act-check pass') + ' passes');
+check('and shows each rule with its result', count(evl(), 'ccj-sl chk pass') === 2, count(evl(), 'ccj-sl chk pass') + ' passes');
 clearEv(); advance(ACT);
 check('the save completes the step', evl().indexOf('saved') > -1);
 
@@ -858,7 +880,7 @@ check('nothing has settled yet', run('Object.keys(ccjRun.settled).length') === 0
 check('progress bar has not moved', prog() === '0%' || prog() === '', prog());
 check('the panel says why it is held', panel().indexOf('ccj-hold') > -1 && panel().indexOf('Completes when the proposal is created') > -1);
 check('it is still visibly working', panel().indexOf('ccj-spin') > -1);
-check('all four actions completed while held', count(panel(), 'ccj-act done') === 4, count(panel(), 'ccj-act done') + ' done');
+check('all four actions completed while held', count(panel(), 'ccj-sl act') === 4, count(panel(), 'ccj-sl act') + ' done');
 advance(Math.round(60000*PACE));
 check('sixty seconds of waiting does not advance it',
   run('ccjRun.phase') === 'hold' && run('ccjRun.sub') === 0 && run('ccjRun.stage') === 0);
@@ -1068,7 +1090,12 @@ check('and the conversation says the intake is logged, which only this gate can 
   run("(function(){var m=ccjRun.msgs.filter(function(x){return x.who==='agent'&&x.text;}).pop();"
     + "return m?m.text:'';})()").indexOf('Request logged and routed') > -1);
 check('gate rendered in the row it belongs to', p2.indexOf('ccj-gate') > -1);
-check('gate offers both answers', p2.indexOf('>Qualify<') > -1 && p2.indexOf('>Disqualify<') > -1);
+check('gate offers both answers', p2.indexOf('>Qualify<') > -1 && p2.indexOf('>Reject<') > -1);
+// The whole point of the rename was that one decision stopped being called two things. Asserted
+// as an absence, because a half-finished rename shows up as the old word surviving somewhere
+// rather than as anything failing.
+check('and the retired word survives nowhere on the card',
+  p2.indexOf('Disqualif') === -1, p2.slice(p2.indexOf('Disqualif') - 60, p2.indexOf('Disqualif') + 60));
 check('gate names who owns it', (p2.split('ccj-gate-who')[1] || '').indexOf('Arjun Vaidya') > -1);
 check('nothing is still spinning', p2.indexOf('ccj-spin') === -1);
 check('the conversation asked for the decision', stream().toLowerCase().indexOf('qualify') > -1);
@@ -1089,8 +1116,8 @@ check('drawer carries the authored explanation', dw.indexOf('ccj-dw-note') > -1)
 run('ccjCloseDrawer()');
 check('drawer closes', drawer() === '');
 
-section('DISQUALIFY — THE TERMINAL BRANCH');
-run("ccjChooseGate('disqualified')");
+section('REJECT — THE TERMINAL BRANCH');
+run("ccjChooseGate('rejected','Headcount pulled for this quarter.')");
 check('run stops', run('ccjRun.stopped') === true);
 check('stage does not advance', run('ccjRun.stage') === 0);
 check('panel says so and offers a way back', panel().indexOf('ccj-gate stopped') > -1 && panel().indexOf('Reopen') > -1);
@@ -1145,13 +1172,13 @@ check('the quote is not shown complete before the work is done',
   screen().indexOf('ccj-q-skel') > -1 && screen().indexOf('ccj-q-row pend') > -1);
 
 // -- 1. Country data check: connect, fetch, verify, save --
-check('it connects to the Compliance Hub', evl().indexOf('Connecting to Compliance Hub') > -1, evl().slice(0, 120));
+check('the verb says it is connecting', liveBlock().indexOf('Connecting&hellip;') > -1, liveBlock().slice(0, 240));
 clearEv(); advance(ACT);
-check('then fetches the rates and rules', evl().indexOf('Fetching Rates & Rules') > -1);
+check('it connected to the Compliance Hub', evl().indexOf('Connected to Compliance Hub') > -1, evl().slice(0, 240));
 clearEv(); advance(ACT);
-check('the country rules come back and are shown', count(evl(), 'ccj-act-row') >= 1);
+check('the country rules come back and are shown', count(evl(), 'ccj-sl row') >= 1);
 clearEv(); advance(ACT);
-check('the rules are verified with verdicts', count(evl(), 'ccj-act-check') >= 2, count(evl(), 'ccj-act-check') + ' checks');
+check('the rules are verified with verdicts', count(evl(), 'ccj-sl chk') >= 2, count(evl(), 'ccj-sl chk') + ' checks');
 advance(Math.round(2000*PACE));
 check('country data check settles', run("!!ccjRun.settled['quote-prep/Country data check']") === true);
 check('the quote picks up the country rules',
@@ -1226,7 +1253,7 @@ advance(Math.round(30000*PACE));
 check('it does not approve itself', run('ccjRun.phase') === 'halt' && run('ccjRun.stage') === 1);
 
 section('SENDING A QUOTE BACK IS A LOOP, NOT A STOP');
-run("ccjChooseGate('rework')");
+run("ccjChooseGate('rework','Margin is below the standard band.')");
 check('it returns to the cost build, not to the top of the stage',
   run('ccjRun.sub') === 2, 'sub ' + run('ccjRun.sub'));
 check('the work being redone is un-ticked',
@@ -1853,7 +1880,7 @@ section('THE AGREEMENT COMES BACK AND WAITS FOR APPROVAL');
   advance(60000);
   check('and it will not countersign itself', run('ccjMsa().adtSignedAt')===0 && run('ccjRun.stage')===4);
   // Declining is terminal — an agreement nobody countersigned is not in force.
-  run("ccjChooseGate('declineMsa')");
+  run("ccjChooseGate('declineMsa','Liability cap not agreed.')");
   check('declining stops the run', run('ccjRun.stopped')===true && run('ccjMsa().adtSignedAt')===0);
   run('ccjReopen()');
   run("ccjChooseGate('countersign')");
@@ -2117,7 +2144,7 @@ section('RELEASING AGAINST A SHORTFALL IS AN EXCEPTION, AND IS RECORDED AS ONE')
   check('the run stops on a shortfall', until(() => run("ccjRun.phase==='halt'")
     && run('ccjSteps(5)[ccjRun.sub].label') === 'Part-paid'), run('ccjRun.phase'));
   const short = run('ccjOutstanding()');
-  run("ccjChooseGate('releaseShort')");
+  run("ccjChooseGate('releaseShort','Client is good for the balance; start date cannot slip.')");
   check('the shortfall is recorded, not forgotten',
     run('ccjPay().released') === true && run('ccjPay().shortfall') === short,
     run('ccjPay().shortfall') + ' vs ' + short);
@@ -2285,16 +2312,28 @@ section('THE HUMAN APPROVAL, AND SENDING IT BACK');
     until(() => run("ccjRun.phase==='halt'")
       && run('ccjSteps(6)[ccjRun.sub].label') === 'Internal approval'), run('ccjRun.phase'));
   check('the ask names the contract', panel().indexOf(run('ccjEmp().id')) > -1);
-  check('and the reason names what was rewritten and why it matters',
-    panel().indexOf('rewritten to meet local law') > -1
-    && panel().indexOf('probationary period') > -1
-    && panel().indexOf('we carry the employment liability') > -1);
+  check('and the reason names which clauses the statutory check moved',
+    panel().indexOf('changed to meet local law') > -1
+    && panel().indexOf('probationary period') > -1);
+  // It reports the finding and stops there. "The employee signs whatever this says, and we carry
+  // the employment liability" is true, but it argues for the control instead of describing this
+  // contract — the register that made the card read as a walkthrough of itself. Pinned so it
+  // cannot drift back in.
+  check('without also arguing for why the approval exists',
+    panel().indexOf('we carry the employment liability') === -1);
+  // It read "1 clause were rewritten": the noun pluralised, the verb did not, so the COMMON case —
+  // a single adjusted clause — printed a grammatical error. Asserted against whichever branch this
+  // run actually takes rather than a fixed count.
+  check('and the count agrees with its verb', (function () {
+    const m = panel().match(/(\d+) clauses? (was|were) changed/);
+    return !!m && ((m[1] === '1') === (m[2] === 'was'));
+  })(), (panel().match(/\d+ clauses? (?:was|were) changed/) || ['no match'])[0]);
   advance(80000);
   check('it will not approve itself',
     run("ccjRun.phase==='halt'") && run('ccjEmp().sentAt') === 0);
 
   const v = run('ccjEmp().version');
-  run("ccjChooseGate('ecRedraft')");
+  run("ccjChooseGate('ecRedraft','Notice period does not match the offer.')");
   check('sending it back returns to the draft, it does not stop the run',
     run('ccjRun.stopped') === false
     && run('ccjSteps(6)[ccjRun.sub].label') === 'Draft generated', run('ccjSteps(6)[ccjRun.sub].label'));
@@ -2411,7 +2450,7 @@ section('IT GOES TO THE EMPLOYEE, IN THE EMPLOYEE\'S OWN THREAD');
     panel().indexOf('Approve and countersign') > -1 && panel().indexOf('>Decline<') > -1);
   advance(60000);
   check('and it will not countersign itself', run('ccjEmp().adtSignedAt') === 0);
-  run("ccjChooseGate('ecDecline')");
+  run("ccjChooseGate('ecDecline','Right-to-work evidence has expired.')");
   check('declining is terminal — nothing is in force',
     run('ccjRun.stopped') === true && run('ccjEmp().adtSignedAt') === 0);
   run('ccjReopen()');
@@ -2544,7 +2583,7 @@ section('A VERIFICATION THAT CANNOT CLEAR ITSELF GOES TO A PERSON');
     panel().indexOf('Confirm identity') > -1 && panel().indexOf('>Reject<') > -1);
   advance(60000);
   check('and it will not decide for itself', run("ccjRun.phase==='halt'"));
-  run("ccjChooseGate('kycReject')");
+  run("ccjChooseGate('kycReject','Document is illegible.')");
   check('rejecting stops the placement outright', run('ccjRun.stopped') === true);
   run('ccjReopen()');
   // Reopening re-runs the verification and asks again. It must not carry the rejection forward:
