@@ -1922,3 +1922,68 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 /* overflow:hidden only while folded. Permanently clipping would cut the shadows and the hover
    affordances off every message in an open step. */
 .ccj-own.folded>*{overflow:hidden}
+
+/* ---- THE SPLITTER ---------------------------------------------------------------------------
+   The 12px gap between the conversation and the artefact becomes a grab handle. It sits IN the
+   gap rather than taking width of its own, so turning it on moves nothing: the columns are where
+   they were and the space between them was already there.
+
+   Empty until the pointer is near. A permanent divider would draw a third vertical line between
+   two cards that already have borders, and the page reads as two cards — the affordance arrives
+   when it is wanted and gets out of the way when it is not. */
+.ccj-body.no-panel{position:relative}
+/* ZERO WIDTH, AND A NEGATIVE MARGIN THAT CANCELS ONE GAP. .ccj-body is a flex row with gap:12px,
+   so a third child gets a gap on BOTH sides of it — switching the splitter on would silently push
+   the two cards 24px apart. The -12px puts the spacing back exactly as it was, which is what lets
+   this be added to a finished layout without moving anything.
+
+   In flow rather than absolutely positioned, deliberately: an overlay placed at `left:60%` is only
+   at the seam while the columns actually resolve to 60%, and they do not — a min-width or a
+   collapsed sibling moves the real boundary and the handle would float off it. A zero-width flex
+   item is always exactly at the seam because it IS the seam. */
+.ccj-split{flex:0 0 0;width:0;margin-left:-12px;position:relative;z-index:3;align-self:stretch;
+  cursor:col-resize;touch-action:none;outline:none}
+/* 14px of hit area over a 12px gap — something to aim at, without stealing clicks from either
+   card. The gap runs 0->12 from this element's own left edge, so its centre is +6 and the grip and
+   the hit area are both struck from there. */
+.ccj-split::before{content:"";position:absolute;top:0;bottom:0;left:-1px;width:14px}
+.ccj-split-grip{position:absolute;top:50%;left:4px;width:4px;height:44px;margin-top:-22px;
+  border-radius:99px;background:#cbd5e1;opacity:0;transition:opacity .16s ease,background .16s ease;
+  pointer-events:none}
+.ccj-split:hover .ccj-split-grip{opacity:1}
+/* Keyboard focus must show, and must show the same thing hover does — one affordance, two ways in. */
+.ccj-split:focus-visible .ccj-split-grip{opacity:1;background:var(--navy);height:64px;margin-top:-32px}
+.ccj-body.ccj-splitting .ccj-split-grip{opacity:1;background:var(--navy)}
+/* While dragging, the cursor owns the page: no text gets selected, and nothing under the pointer
+   claims the cursor back as it sweeps across the transcript. */
+.ccj-body.ccj-splitting{cursor:col-resize;user-select:none}
+.ccj-body.ccj-splitting *{cursor:col-resize!important;user-select:none}
+/* A width the reader chose replaces the designed proportion AND its responsive rules. min-width:0
+   is the half that matters: the 420px floor is what makes the default sane, and it is also what
+   would stop a deliberate collapse dead. */
+.ccj-body.no-panel.ccj-split-on .ccj-chat-col{flex:0 0 var(--ccj-split,60%);min-width:0}
+/* COLLAPSED, NOT SHRUNK. The column goes away entirely rather than holding a sliver, and the gap
+   goes with it — but the handle does not. It docks against the edge it was pushed to and keeps its
+   full hit area, which is the whole reason either side is allowed to collapse: every state this
+   can be dragged into can be dragged back out of. */
+/* With the chat gone the handle has no preceding sibling, so there is no gap to cancel and the
+   negative margin would drag it outside the body. Reset it and the handle sits flush at x=0, with
+   the 12px gap to the artefact still to its right — the offsets above stay correct. */
+.ccj-body.no-panel.chat-gone .ccj-chat-col{display:none}
+.ccj-body.no-panel.chat-gone .ccj-split{margin-left:0}
+/* With the artefact gone the handle is the LAST child and sits hard against the body's right
+   edge, so a hit area struck to the right of it would hang off the page. Both are reflected
+   inward — the handle is still 14px wide and still exactly on the seam, just on the inside of it. */
+.ccj-body.no-panel.art-gone .ccj-rside{display:none}
+.ccj-body.no-panel.art-gone .ccj-split::before{left:-13px;width:14px}
+.ccj-body.no-panel.art-gone .ccj-split-grip{left:-8px}
+/* A collapsed side leaves a permanent grip, not a hover-only one. Hover discovers a handle you can
+   see the effect of; here the column it restores is off screen, so the handle is the only evidence
+   it exists at all and has to be visible without being hunted for. */
+.ccj-body.no-panel.chat-gone .ccj-split-grip,
+.ccj-body.no-panel.art-gone .ccj-split-grip{opacity:1}
+/* Nothing to divide on a conversation-led screen — the artefact column is empty and hidden, so a
+   handle there would part the body from an empty half. `solo` is toggled per screen by
+   ccjPaintWork, which is why this is a class test and not a build-time decision. */
+.ccj-body.solo .ccj-split{display:none}
+@media(prefers-reduced-motion:reduce){.ccj-split-grip{transition:none}}

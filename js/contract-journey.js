@@ -300,6 +300,10 @@ function ccjNewRun(){
                             // block it has stopped being can be closed without hunting for it
     restAsked:{},           // stageId -> this stage's "carry on" ask is already in the transcript.
                             // A run rests on more than one stage, so it cannot be a single flag
+    split:CCJ_SPLIT_DEF,    // how the body is shared: the chat's share as a percent, 0-100. Set by
+                            // dragging the handle between the two columns, kept for the whole run
+                            // and saved with it, because it is a preference about how the reader
+                            // wants to work rather than anything about this stage
     railOpen:false,         // the rail is showing all nine rather than a window of four
     railFrom:undefined,     // the window position the rail was last drawn at, so a stage change can
                             // be animated from it — see ccjPaintRail
@@ -2598,6 +2602,10 @@ function ccjRenderPage(el){
     run.screen=(ccjScreensFor(i)[0]||{}).id||'';
   }
   el.innerHTML=buildCCJStageHTML(i<0?run.stage:i);
+  // The body is a new node, so the width the reader chose has to be put back on it. Written after
+  // the markup rather than into it because it is a style, not content — and because every other
+  // caller that changes the split goes through this same function.
+  ccjApplySplit();
   ccjRenderChat();
   ccjAfterScreen();
 }
@@ -2689,6 +2697,12 @@ function buildCCJStageHTML(i){
     // it, the conversation is built once per STAGE and never remounted, which is exactly the
     // guarantee the panel used to give and the one the sub-statuses need.
     +(ccjUsesTranscript(i)?'<div class="ccj-chat-col">'+buildCCJChatHTML(false)+'</div>':'')
+    // The grab handle. Emitted on every transcript stage and hidden by CSS when the body is `solo`,
+    // rather than emitted conditionally: a stage can lose its artefact and get it back as the
+    // screen changes inside it, and ccjPaintWork toggles `solo` for exactly that. Deciding it here
+    // would fix the answer at the moment the stage was built and be wrong from the next screen on —
+    // the same trap the comment on `solo` above describes.
+    +(ccjUsesTranscript(i)?ccjSplitterHTML():'')
     // The right column: the window rail on top, the artefact under it. The work area keeps its id
     // and its own node either way, so every surgical paint lands regardless of the rail's state.
     +(railTop
@@ -2701,6 +2715,128 @@ function buildCCJStageHTML(i){
     +'</div>'
     +'<div class="ccj-drawer-host" id="ccj-drawer-host">'+buildCCJDrawerHTML()+'</div>'
     +'</div>';
+}
+/* ---- THE SPLITTER ---------------------------------------------------------------------------
+   Drag the gap between the conversation and the artefact to decide how the body is shared. Left
+   gives the artefact more room, right gives it to the chat.
+
+   EITHER SIDE MAY COLLAPSE COMPLETELY, which is what makes the handle's own reachability the
+   whole design problem rather than a detail. A collapsed chat takes the composer off screen; a
+   collapsed right column takes the nine-step rail with it. So the handle never collapses with the
+   column it borders — at 0% and at 100% it docks against the edge of the body and stays exactly as
+   grabbable as it was in the middle. There is no state this can be dragged into that it cannot be
+   dragged out of, and that is the property that makes full collapse safe to offer at all.
+
+   SNAP RATHER THAN SLIVER. Below CCJ_SPLIT_SNAP the column goes to nothing instead of holding a
+   few unreadable pixels — a 20px-wide transcript is not a smaller transcript, it is a broken one,
+   and nobody drags to it deliberately. The same threshold at the other end.
+
+   Double-click restores the 60/40 the stage was designed around; the keyboard drives it too. */
+const CCJ_SPLIT_DEF=60;    // the share the chat was designed at, and what a reset returns to
+const CCJ_SPLIT_SNAP=14;   // closer to an edge than this and the column gives up the rest
+const CCJ_SPLIT_STEP=2;    // one arrow key
+function ccjSplitterHTML(){
+  const pct=ccjSplitPct();
+  /* A real separator, not a styled div. role + aria-valuenow is what tells a screen reader this is
+     a two-pane split and where it currently sits, and tabindex is what lets it be driven without a
+     pointer at all — the arrow keys below do the same job as the drag. */
+  return '<div class="ccj-split" id="ccj-split" role="separator" aria-orientation="vertical"'
+    +' tabindex="0" aria-label="Resize conversation and artefact"'
+    +' aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pct)+'"'
+    +' onpointerdown="ccjSplitDown(event)" onkeydown="ccjSplitKey(event)"'
+    +' ondblclick="ccjSplitReset()" title="Drag to resize &middot; double-click to reset">'
+    +'<span class="ccj-split-grip"></span></div>';
+}
+function ccjSplitPct(){
+  const run=ccjRun;
+  const v=run&&typeof run.split==='number'?run.split:CCJ_SPLIT_DEF;
+  return Math.max(0,Math.min(100,v));
+}
+/* Writes the width to the DOM and nowhere else. Called on every pointer move, so it must not
+   rebuild anything: it sets one custom property and two classes, and the browser lays out from
+   there. Rebuilding the columns mid-drag would tear down the transcript under the cursor. */
+function ccjApplySplit(){
+  const body=document.getElementById('ccj-body');
+  if(!body)return;
+  const pct=ccjSplitPct();
+  // Guarded per capability, not per object. The headless stub hands back an element whose `style`
+  // is a plain object with no setProperty on it, so testing `body.style` alone passes and then
+  // throws one line later — which is a page that renders in a browser and dies in the harness.
+  if(body.style&&typeof body.style.setProperty==='function')body.style.setProperty('--ccj-split',pct+'%');
+  if(body.classList&&typeof body.classList.toggle==='function'){
+    // `on` marks that a width was chosen at all. Until then the stage keeps its designed
+    // proportions and its responsive rules, which are better than anything a default here
+    // could say — the splitter adds a choice, it does not replace the layout.
+    body.classList.add('ccj-split-on');
+    body.classList.toggle('chat-gone',pct<=0);
+    body.classList.toggle('art-gone',pct>=100);
+  }
+  const el=document.getElementById('ccj-split');
+  if(el&&el.setAttribute)el.setAttribute('aria-valuenow',String(Math.round(pct)));
+}
+function ccjSetSplit(pct,persist){
+  const run=ccjRun;if(!run)return;
+  let v=Math.max(0,Math.min(100,pct));
+  if(v<CCJ_SPLIT_SNAP)v=0;
+  else if(v>100-CCJ_SPLIT_SNAP)v=100;
+  run.split=v;
+  ccjApplySplit();
+  // Saved on release, not on every frame: ccjSaveRuns serialises the whole run store, and doing
+  // that sixty times a second during a drag is work nobody asked for.
+  if(persist&&typeof persistAppState==='function')persistAppState();
+}
+function ccjSplitReset(){ccjSetSplit(CCJ_SPLIT_DEF,true);}
+let ccjSplitDrag=null;
+function ccjSplitDown(e){
+  const body=document.getElementById('ccj-body');
+  if(!body||!e||typeof body.getBoundingClientRect!=='function')return;
+  if(e.preventDefault)e.preventDefault();                 // no text selection while dragging
+  const r=body.getBoundingClientRect();
+  if(!r.width)return;
+  ccjSplitDrag={left:r.left,width:r.width};
+  if(body.classList)body.classList.add('ccj-splitting');
+  const el=document.getElementById('ccj-split');
+  // Pointer capture, so the drag survives the cursor outrunning the handle — without it a fast
+  // drag drops the moment the pointer leaves the 12px gap, which reads as the splitter sticking.
+  if(el&&el.setPointerCapture&&e.pointerId!==undefined){try{el.setPointerCapture(e.pointerId);}catch(err){}}
+  if(typeof window!=='undefined'&&window.addEventListener){
+    window.addEventListener('pointermove',ccjSplitMove);
+    window.addEventListener('pointerup',ccjSplitUp);
+    window.addEventListener('pointercancel',ccjSplitUp);
+  }
+}
+function ccjSplitMove(e){
+  if(!ccjSplitDrag||!e)return;
+  if(e.preventDefault)e.preventDefault();
+  ccjSetSplit((e.clientX-ccjSplitDrag.left)/ccjSplitDrag.width*100,false);
+}
+function ccjSplitUp(){
+  if(!ccjSplitDrag)return;
+  ccjSplitDrag=null;
+  const body=document.getElementById('ccj-body');
+  if(body&&body.classList)body.classList.remove('ccj-splitting');
+  if(typeof window!=='undefined'&&window.removeEventListener){
+    window.removeEventListener('pointermove',ccjSplitMove);
+    window.removeEventListener('pointerup',ccjSplitUp);
+    window.removeEventListener('pointercancel',ccjSplitUp);
+  }
+  ccjSetSplit(ccjSplitPct(),true);                        // the release is what gets remembered
+}
+/* Arrow keys move it, Home and End take it to the extremes, Enter restores the default. The same
+   set a native split pane answers to, so nobody has to learn this one. */
+function ccjSplitKey(e){
+  if(!e)return;
+  const k=e.key;
+  const at=ccjSplitPct();
+  let to=null;
+  if(k==='ArrowLeft')to=at-CCJ_SPLIT_STEP;
+  else if(k==='ArrowRight')to=at+CCJ_SPLIT_STEP;
+  else if(k==='Home')to=0;
+  else if(k==='End')to=100;
+  else if(k==='Enter'||k===' ')to=CCJ_SPLIT_DEF;
+  if(to===null)return;
+  if(e.preventDefault)e.preventDefault();
+  ccjSetSplit(to,true);
 }
 /* The work area is 3/4 of the body and splits again: the conversation on the left, the
    screen's own surface on the right. On the first screen the conversation IS the screen, so
