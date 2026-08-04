@@ -1887,3 +1887,27 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 
 .ccj-msa-foot{max-width:720px;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;animation:ccjIn .3s ease both}
 .ccj-msa-done{font-size:12.5px;font-weight:600;color:#15803d}
+
+/* ---- A FOLDED SUB-STATUS TAKES ITS CONVERSATION WITH IT -----------------------------------
+   The block already folded to one line when the runner moved on; everything it SAID stayed
+   behind as loose bubbles, so a step whose block claimed to be closed still held the full height
+   of its transcript. These wrappers carry the messages a step emitted, and fold with it.
+
+   grid-template-rows 0fr -> 1fr because the content has no height to transition from: a bubble,
+   a document card and a form question are all different sizes and none of them is known here.
+   This is the one way to ease an unknown height without measuring it in JS on every beat.
+
+   And it can ease, unlike the panel rows: these nodes are appended once and then only have a
+   class toggled, so the browser has a start state to travel from. A rebuilt node would render
+   already folded and play nothing. */
+.ccj-own{display:grid;grid-template-rows:1fr;transition:grid-template-rows .28s ease,opacity .2s ease,margin .28s ease}
+.ccj-own>*{min-height:0}
+/* The -12px is not a fudge: .ccj-stream is a flex column with gap:12px, so a wrapper collapsed to
+   zero height STILL contributes its share of the gap. Fold three messages and twelve pixels of
+   nothing appears three times over, which reads as the fold not having worked. A negative bottom
+   margin equal to the gap cancels exactly one of them, per folded item. Keep the two numbers in
+   step: if the stream's gap changes, this changes with it. */
+.ccj-own.folded{grid-template-rows:0fr;opacity:0;margin:0 0 -12px;pointer-events:none}
+/* overflow:hidden only while folded. Permanently clipping would cut the shadows and the hover
+   affordances off every message in an open step. */
+.ccj-own.folded>*{overflow:hidden}

@@ -3456,6 +3456,10 @@ function ccjToggleStep(i,n,p){
   if(run.open[pkey])delete run.open[pkey];else run.open[pkey]=true;
   const m=run.stepMsgs[pkey];
   if(m)ccjRepaintMsg(m);
+  // The block's own body is only half of what it discloses. Everything it said while it ran is
+  // underneath it, and opening one without the other shows a step's detail while still hiding
+  // its conversation.
+  ccjFoldOwned(pkey);
 }
 /* A step arriving in the transcript. Pushed once per step and then held onto, so every later
    repaint addresses the same block rather than adding another.
@@ -4076,7 +4080,32 @@ function ccjStreamMsgHTML(mode,m,isLast,prev){
   // `prev` absent means this is the first message in the stream, and an opening conversation has
   // not been handed over from anything.
   const was=prev&&prev.mode,now=m&&m.mode;
-  return (prev&&was&&now&&was!==now?ccjHandoverHTML(now):'')+body;
+  const html=(prev&&was&&now&&was!==now?ccjHandoverHTML(now):'')+body;
+  return ccjOwnWrap(m,html);
+}
+/* A message that belongs to a sub-status is wrapped so it can be folded with it. The wrapper
+   carries the owner key as a data attribute rather than a class, because the key contains '/' and
+   '#' and is not a legal class name — and it is what ccjFoldOwned queries on.
+
+   WRAPPED, NOT CLASSED DIRECTLY. The body is sometimes two elements (a handover rule ahead of the
+   message), and folding has to take both or the transcript keeps a divider introducing a thread
+   that is no longer on screen. */
+function ccjOwnWrap(m,html){
+  if(!m||!m._own)return html;
+  return '<div class="ccj-own'+(ccjStepOpenByKey(m._own)?'':' folded')+'" data-own="'+attrSafe(m._own)+'">'
+    +html+'</div>';
+}
+/* Fold or unfold every message a step emitted, without touching the rest of the stream. The nodes
+   already exist and only their class changes, so the fold can ease — unlike a rebuild, which would
+   hand the browser new nodes already at their final state and play no transition at all. */
+function ccjFoldOwned(pkey){
+  if(!pkey||typeof document.querySelectorAll!=='function')return;
+  const open=ccjStepOpenByKey(pkey);
+  const nodes=document.querySelectorAll('.ccj-own[data-own="'+pkey.replace(/"/g,'&quot;')+'"]');
+  if(!nodes||!nodes.length)return;
+  for(let i=0;i<nodes.length;i++){
+    if(nodes[i].classList)nodes[i].classList.toggle('folded',!open);
+  }
 }
 /* A message whose body is derived from state that is STILL MOVING — the document card counting
    fields in — is repainted in place rather than by rebuilding the stream around it. This is the
@@ -4110,12 +4139,42 @@ function ccjStampMode(msg){
   if(run&&msg&&!msg.mode)msg.mode=typeof ccjChatMode==='function'?ccjChatMode():'agent';
   return msg;
 }
+/* WHICH SUB-STATUS A MESSAGE BELONGS TO. Stamped at push, because it is only knowable then: the
+   runner is on exactly one step when a message is emitted, and nothing about the message itself
+   says which. Later it is unrecoverable — the stream is one flat list in id order.
+
+   This is what lets a folded step take its conversation with it. A sub-status block already folds
+   to one line when the runner moves on, but everything it SAID stayed behind as loose bubbles, so
+   the transcript kept the full height of a step whose block claimed to be closed.
+
+   A step block is not stamped: it is the thing being folded, not something folded underneath it.
+   Nor is anything pushed outside a step (run.sub is -1 before the first one) — the opening
+   invitation and the request that starts the run belong to the conversation, not to a step. */
+function ccjOwnerKey(){
+  const run=ccjRun;
+  if(!run||!run.started||run.sub<0)return '';
+  if(!ccjUsesTranscript(run.stage))return '';
+  const step=ccjSteps(run.stage)[run.sub];
+  return step?ccjPassKey(run.stage,step):'';
+}
 function ccjPush(msg){
   const run=ccjRun;if(!run)return;
   msg._id=ccjNextMsgId();
   ccjStampMode(msg);
+  if(msg.kind!=='step'&&!msg._own)msg._own=ccjOwnerKey();
   run.msgs.push(msg);
   ccjStreamSync();
+}
+/* Is this step showing its detail? The one rule, in one place, because three surfaces ask it: the
+   block deciding whether to draw its body, the messages underneath deciding whether to show at
+   all, and the repaint that folds them when the runner moves on. The live step is always open —
+   hiding the step that is running is never what someone means to do — and run.open records the
+   reader having opened a folded one by hand. */
+function ccjStepOpenByKey(pkey){
+  const run=ccjRun;
+  if(!run||!pkey)return true;
+  if(run.open[pkey])return true;
+  return pkey===ccjOwnerKey();
 }
 /* The ghost has to outlive the render that emitted it, or the fade never plays: the two opening
    messages are pushed back to back, and clearing the flag on emit meant the second render tore
@@ -4154,8 +4213,11 @@ function ccjRenderChat(){
     const ghost=run.emptyGhost?'<div class="ccj-empty ghost">'+ccjChatEmptyInnerHTML()+'</div>':'';
     // Only the last message animates in. On this path the whole conversation is being written at
     // once, so animating all of them would replay it from nothing.
+    // ccjOwnWrap here as well as in ccjStreamMsgHTML: this is the REBUILD path and it does not go
+    // through that function, so without it a rebuilt transcript comes back with every folded step
+    // expanded again — the fold would survive the runner but not a repaint of the page.
     el.innerHTML=st.msgs.length
-      ?ghost+st.msgs.map(function(m,n){return ccjMsgHTML(m,n===st.msgs.length-1);}).join('')
+      ?ghost+st.msgs.map(function(m,n){return ccjOwnWrap(m,ccjMsgHTML(m,n===st.msgs.length-1));}).join('')
       :ccjChatEmptyHTML();
   }
   ccjMarkStream(el,st);
@@ -9373,8 +9435,18 @@ function ccjPaintBlocks(){
   const run=ccjRun;
   const step=ccjSteps(run.stage)[run.sub];
   const liveKey=step?ccjPassKey(run.stage,step):'';
-  if(run.liveKey&&run.liveKey!==liveKey&&run.stepMsgs[run.liveKey])ccjRepaintMsg(run.stepMsgs[run.liveKey]);
+  if(run.liveKey&&run.liveKey!==liveKey&&run.stepMsgs[run.liveKey]){
+    ccjRepaintMsg(run.stepMsgs[run.liveKey]);
+    // The step the runner has just left folds, and its conversation folds with it. This is the
+    // moment the user described: the sub-status is done, the runner has moved to the next one, and
+    // everything between the two gives back its height. Only ever called on a transition, so a
+    // reader who opened this block by hand keeps it open — ccjStepOpenByKey checks run.open first.
+    ccjFoldOwned(run.liveKey);
+  }
   if(liveKey&&run.stepMsgs[liveKey])ccjRepaintMsg(run.stepMsgs[liveKey]);
+  // The step being entered must be unfolded, not just drawn: a step re-entered on the same pass
+  // after a reject already has messages on screen, and they were folded when it was left.
+  if(liveKey&&liveKey!==run.liveKey)ccjFoldOwned(liveKey);
   run.liveKey=liveKey;
 }
 /* One beat inside a step. Touches the evidence lines and nothing else, so the spinner keeps
