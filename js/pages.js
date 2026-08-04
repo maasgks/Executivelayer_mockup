@@ -546,8 +546,15 @@ function buildAmDealsListingHTML(){
   // that is not in the table under it reads as a bug.
   if(amSelectedDealId&&!rows.some(function(d){return d.id===amSelectedDealId;}))amSelectedDealId=null;
   const title=stage?stage.short:'All your work';
-  const sub=stage?String(stage.plain).replace(/&mdash;/g,'—')+' &nbsp;·&nbsp; Should take: '+(amStageSla[stage.id]||'&mdash;')
-    :'Everything you own, in one list. Click a step above to narrow it down.';
+  /* "Click a step above" pointed at the rail, and the rail is nine STAGES — the steps are the
+     three-to-six sub-statuses inside each one, which live in this table and in the drawer. One
+     word, but it was the word that taught a new reader the wrong name for the thing they were
+     about to click, and the same reader then met "Stage 2 of 9 · step 5 of 6" in every row. */
+  const sub=stage
+    ?String(stage.plain).replace(/&mdash;/g,'—')
+      +' &nbsp;·&nbsp; Stage '+stage.n+' of '+amPipelineStages.length
+      +' &nbsp;·&nbsp; Should take: '+(amStageSla[stage.id]||'&mdash;')
+    :'Everything you own, in one list. Pick a stage above to narrow it down.';
   /* One list defines the columns, and the colgroup, the header row and every cell are all
      generated from it. That is the fix for a real bug: the drawer-open view used to hide two
      columns with `display:none` while leaving all six <col> elements in place, and under
@@ -559,9 +566,13 @@ function buildAmDealsListingHTML(){
   const columns=[
     {w:'19%',cw:'32%',th:'Client',
      cell:function(d){return '<div class="cell-primary am-c-client">'+d.client+'</div><div class="cell-sub">'+d.ref+'</div>';}},
-    {w:'18%',hideWhenCompact:true,th:'Who we are placing',
+    /* "Who we are placing" asked for a person and got "4 roles" on more than half the rows —
+       an engagement has no named hire yet, which is the whole reason it is an engagement. "The
+       hire" holds both: a headcount being quoted and a person being onboarded are the same
+       column answering "what is being hired", and the line under it says the job and where. */
+    {w:'18%',hideWhenCompact:true,th:'The hire',thTitle:'The headcount on a client request, or the person on a placement',
      cell:function(d){return '<div class="cell-primary am-c-client">'+d.subject+'</div><div class="cell-sub">'+d.role+' &middot; '+d.country+'</div>';}},
-    {w:'27%',cw:'36%',th:'Where it is now',cell:amSubCellHTML},
+    {w:'27%',cw:'36%',th:'Where it is now',thTitle:'The stage the client sees, the step being worked, and how far in that is',cell:amSubCellHTML},
     {w:'9%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
      cell:function(d){return '<span class="am-c-age'+(d.breach?' breach':'')+'">'+d.age+'d</span>'
        +(d.breach?'<div class="cell-sub am-c-late">Too long</div>':'');}},
@@ -586,11 +597,17 @@ function buildAmDealsListingHTML(){
       +columns.map(function(c){return '<td>'+c.cell(d)+'</td>';}).join('')
       +'</tr>';
   }).join('')
-    :'<tr><td colspan="'+columns.length+'" style="padding:34px;text-align:center;color:var(--gray);font-size:12.5px">Nothing here right now.</td></tr>';
+    // An empty table under a stage filter is not the same fact as an empty queue, and one
+    // sentence for both left the reader checking the rail to find out which they were looking at.
+    :'<tr><td colspan="'+columns.length+'" style="padding:34px;text-align:center;color:var(--gray);font-size:12.5px">'
+      +(stage?'Nothing is sitting at &ldquo;'+stage.short+'&rdquo; right now.':'Nothing here right now.')
+      +'</td></tr>';
   return '<div class="am-list-block">'
     +'<div class="am-list-head">'
       +'<div><div class="am-list-title">'+title+'</div><div class="am-list-sub">'+sub+'</div></div>'
-      +'<div class="am-list-right"><span class="am-list-count">'+total+' of '+amDeals.length+'</span>'
+      // "3 of 19" on its own never said of what. The tooltip says it once rather than spending
+      // table width on the words.
+      +'<div class="am-list-right"><span class="am-list-count" title="'+attrSafe(total+' shown of the '+amDeals.length+' pieces of work you own')+'">'+total+' of '+amDeals.length+'</span>'
       +(stage?'<button class="lp-pill-reset" onclick="amClearPipelineStage()">Show all</button>':'')+'</div>'
     +'</div>'
     +'<div class="lp-split-wrap"><div class="lp-split-main">'
@@ -636,6 +653,9 @@ function amSubCellHTML(d){
       +'<span class="am-where-step am-where-done">'
       +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
       +'Employed and on payroll</span>'
+      // The one row where "of 9" is the whole point: this is the ninth, and saying so is what
+      // separates a journey that finished from a stage that happens to have run out of steps.
+      +'<span class="am-where-prog">Stage '+amJourneyPos(d).stageNo+' of '+amPipelineStages.length+' &middot; all done</span>'
       +'</div>';
   }
   const idx=amSubIndex(d);
@@ -644,7 +664,9 @@ function amSubCellHTML(d){
     +' title="'+attrSafe(String(s.plain).replace(/&mdash;/g,'—'))+'">'
     +'<span class="am-sub-pill '+amBadgeClass(d.stage)+'">'+s.short+'</span>'
     +'<span class="am-where-step">'+cur.label+(cur.auto?'<span class="am-sub-tag auto">'+amBoltSvg+' auto</span>':'')+(cur.cond?'<i class="am-sub-cond">'+cur.cond+'</i>':'')+'</span>'
-    +'<span class="am-where-prog">Step '+(idx+1)+' of '+steps.length+'</span>'
+    // Journey first, stage second — see amProgressText. "Step 3 of 3" alone had a brand new
+    // request reading as a completed one.
+    +'<span class="am-where-prog">'+amProgressText(d)+'</span>'
     +'</div>';
 }
 /* The one column a new user should be able to act from without reading anything else. */
@@ -1942,13 +1964,32 @@ function saAgentUsage(){
   });
   return used;
 }
-/* Sequential ink ramp, light-on-dark ordered, for parts-of-a-whole bars on this page. The bands
-   it colours are ordinal (how much human involvement a guardrail demands), so one hue stepped by
-   lightness is the correct encoding — a categorical rainbow would imply the bands are unrelated
-   identities, and would fight the monochrome language the rest of the app uses.
-   Steps are validated, not eyeballed: adjacent CVD separation 17.6 (target >= 8), normal-vision
-   17.7 (floor 15), and every step clears 3:1 against the white card. */
+/* Sequential ink ramp, light-on-dark ordered, for parts-of-a-whole bars on this page. Every band
+   it colours is ordinal — how much human involvement a guardrail demands, how far from automation
+   a step sits — so one hue stepped by lightness is the correct encoding. A categorical rainbow
+   would imply the bands are unrelated identities, and would fight the monochrome language the
+   rest of the app uses.
+
+   Validated, not eyeballed, against the white card this page draws on: lightness monotone,
+   every adjacent gap over the 0.06 floor, hue spread 9° (one hue), and the light end at 3.60:1
+   on #fff. The app ships no dark mode — there is no prefers-color-scheme rule anywhere in css/ —
+   so there is one surface to clear and this ramp clears it. */
 const SA_RAMP=['#0f172a','#475569','#7c8899'];
+/* == WHO RUNS A STEP ======================================================================
+   The three bands every chart on this page splits by, in the order they are read: furthest
+   inside the machine first, furthest outside it last. That order is what makes the ramp
+   ordinal rather than decorative — dark is work nobody touches, pale is work we cannot even
+   schedule.
+
+   `other` in saStepSplit is not a leftover. It is a step carrying `Client Action` WITHOUT
+   `Human Required` — Client signing, Deposit due — work that belongs to the counterparty. A
+   band called "Other" would have hidden the one fact those steps carry, which is that no
+   amount of configuration will ever automate them. == */
+const SA_BANDS=[
+  {k:'ai',    label:'Agent',    note:'runs unattended'},
+  {k:'human', label:'Our team', note:'someone here has to act'},
+  {k:'other', label:'Client',   note:'waiting on the counterparty'}
+];
 function saRampStep(i){return SA_RAMP[Math.min(i,SA_RAMP.length-1)];}
 // 2px surface gaps between segments and rounded ends, so neighbouring bands stay separable
 // without a border; min-width keeps a one-of-twelve segment from collapsing to nothing.
@@ -1971,6 +2012,119 @@ function saLegendHTML(parts,total){
       +'</div>';
   }).join('')+'</div>';
 }
+/* == THE HEADLINE CHART: COVERAGE BY JOURNEY ==============================================
+   The estate's 27 steps, split by who runs them, one row per journey. A horizontal stacked bar
+   because the split is part-to-whole and the category names are long sentences — columns would
+   have turned five journey names into five rotated labels nobody reads.
+
+   SORTED BY COVERAGE, not by the order journeys happen to be declared in. The question this
+   answers is "which journeys still need people", and an answer you have to scan for is not an
+   answer. The fully-manual journey landing at the bottom is the point of the chart.
+
+   EVERY VALUE IS READABLE WITHOUT HOVERING. The coverage percentage is direct-labelled on each
+   row, the step count sits beside it, the legend above carries the estate totals per band, and
+   the row itself opens the journey — where all nine steps are listed with their owners. The
+   tooltip adds precision; it never holds the only copy of a number. */
+function saCoverageChartHTML(){
+  const rows=(aiJourneys||[]).map(function(j){
+    const s=saStepSplit(j.id);
+    return {j:j,s:s,pct:s.total?Math.round(s.ai/s.total*100):0};
+  }).sort(function(a,b){return b.pct-a.pct||b.s.total-a.s.total;});
+  const max=rows.reduce(function(n,r){return Math.max(n,r.s.total);},0)||1;
+  /* Three series, so a legend is not optional — but LABELS ONLY. The hero card a few inches
+     above already carries the same three bands with their estate totals, and repeating those
+     numbers here made the reader check whether the two sets agreed instead of reading either.
+     Identity is what this legend owes the chart; the totals belong to the figure they total. */
+  const legend='<div class="sa-key">'+SA_BANDS.map(function(b,i){
+    return '<span class="sa-key-item" title="'+attrSafe(b.label+' — '+b.note)+'">'
+      +'<span class="sa-key-dot" style="background:'+saRampStep(i)+'"></span>'
+      +b.label+'</span>';
+  }).join('')
+    +'<span class="sa-key-note">'+rows.length+' journeys, longest bar is '+max+' steps</span>'
+    +'</div>';
+  const body=rows.map(function(r){
+    // Bars share ONE scale across the rows — a nine-step journey draws wider than a three-step
+    // one. Normalising each row to full width would have made a three-step journey and a
+    // nine-step journey look like the same amount of work, which is the lie a percentage on its
+    // own already tells and the reason this chart exists beside the percentage.
+    const segs=SA_BANDS.map(function(b,i){
+      const n=r.s[b.k];if(!n)return '';
+      return '<span class="sa-cv-seg" style="width:'+(n/r.s.total*100)+'%;background:'+saRampStep(i)+'"'
+        +' title="'+attrSafe(r.j.name+' — '+n+' of '+r.s.total+' steps: '+b.label+', '+b.note)+'"></span>';
+    }).join('');
+    const name=String(r.j.name).replace(/\s*Journey$/,'');
+    return '<div class="sa-cv-row" onclick="selectedAIJourneyId=\''+r.j.id+'\';navigatePage(\'ai-journey-detail\')"'
+      +' title="'+attrSafe('Open '+r.j.name)+'">'
+      +'<div class="sa-cv-name">'+name+'</div>'
+      +'<div class="sa-cv-track"><div class="sa-cv-bar" style="width:'+(r.s.total/max*100)+'%">'+segs+'</div></div>'
+      // The percentage is the label; the step count under it is what stops the percentage being
+      // read as a volume. "0% · 3 steps" and "0% · 30 steps" are very different problems.
+      +'<div class="sa-cv-val"><b>'+r.pct+'%</b><i>'+r.s.total+' step'+(r.s.total===1?'':'s')+'</i></div>'
+      +'</div>';
+  }).join('');
+  return '<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Automation coverage by journey</div>'
+    +'<span onclick="navigatePage(\'cfg-context-journey\')">Context &amp; Journey</span></div>'
+    +legend
+    +'<div class="sa-cv">'+body+'</div>'
+    +'</div>';
+}
+/* == WHERE THE HOURS GO ===================================================================
+   A dumbbell, because the data is before-and-after per item: what a run actually cost a person
+   against what the same run was estimated to cost an agent. Two bars per row would have made
+   the reader measure the gap; a dumbbell draws the gap itself, which is the number the page is
+   about.
+
+   One hue, two shades, from the same ramp as everything else above — the two ends are the same
+   quantity measured twice, not two identities, so a second hue would be inventing a distinction
+   that is not in the data. */
+function saHoursChartHTML(){
+  const runs=(typeof saManualRuns==='function'?saManualRuns():[])
+    .filter(function(r){return (r.manualHours||0)>0;})
+    .sort(function(a,b){return (b.manualHours||0)-(a.manualHours||0);});
+  if(!runs.length)return '';
+  // Rounded up to a whole hour so the axis reads in clean numbers and the longest bar keeps a
+  // little air at the end for its label.
+  const max=Math.ceil(runs.reduce(function(n,r){return Math.max(n,r.manualHours||0);},0))||1;
+  const ticks=[0,max/2,max];
+  const body=runs.map(function(r){
+    const a=Math.min(r.agentEstimateHours||0,r.manualHours||0);
+    const b=r.manualHours||0;
+    const saved=Math.round((b-a)*10)/10;
+    return '<div class="sa-hr-row" title="'+attrSafe(r.subject+' &mdash; '+saJourneyName(r.journeyId)
+        +': '+b+'h by hand against an agent estimate of '+a+'h')+'">'
+      +'<div class="sa-hr-name">'+r.subject+'<i>'+String(saJourneyName(r.journeyId)).replace(/\s*Journey$/,'')+'</i></div>'
+      +'<div class="sa-hr-track">'
+        +'<span class="sa-hr-grid"></span>'
+        // The connector is drawn first and the dots over it, each with a 2px ring in the card
+        // colour so they stay separable where a small gap brings them close.
+        +'<span class="sa-hr-link" style="left:'+(a/max*100)+'%;width:'+((b-a)/max*100)+'%"></span>'
+        +'<span class="sa-hr-dot agent" style="left:'+(a/max*100)+'%" title="'+attrSafe('Agent estimate '+a+'h')+'"></span>'
+        +'<span class="sa-hr-dot human" style="left:'+(b/max*100)+'%" title="'+attrSafe('By hand '+b+'h')+'"></span>'
+      +'</div>'
+      +'<div class="sa-hr-val"><b>'+saved+'h</b><i>saved</i></div>'
+      +'</div>';
+  }).join('');
+  // A row of the same grid, so the ticks land on the track without either side knowing the
+  // other's width. The empty cells are the label and value columns.
+  const axis='<div class="sa-hr-axis-row"><div></div><div class="sa-hr-axis">'+ticks.map(function(t,i){
+    return '<span style="left:'+(t/max*100)+'%"'+(i===ticks.length-1?' class="end"':'')+'>'
+      +(Math.round(t*10)/10)+(i===ticks.length-1?'h':'')+'</span>';
+  }).join('')+'</div><div></div></div>';
+  const total=runs.reduce(function(n,r){return n+((r.manualHours||0)-Math.min(r.agentEstimateHours||0,r.manualHours||0));},0);
+  return '<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Hours per run &mdash; by hand against agent estimate</div>'
+    +'<span onclick="navigatePage(\'my-runs\')">All runs</span></div>'
+    // Two series, so a legend, and it names which end is which rather than leaving the reader to
+    // infer it from "the dark one must be the slow one".
+    +'<div class="sa-key">'
+      +'<span class="sa-key-item"><span class="sa-key-dot" style="background:'+SA_RAMP[0]+'"></span>By hand</span>'
+      +'<span class="sa-key-item"><span class="sa-key-dot" style="background:'+SA_RAMP[2]+'"></span>Agent estimate</span>'
+      +'<span class="sa-key-note">'+(Math.round(total*10)/10)+'h across '+runs.length+' run'+(runs.length===1?'':'s')+'</span>'
+    +'</div>'
+    +'<div class="sa-hr">'+body+axis+'</div>'
+    +'</div>';
+}
 function buildAgentModelAnalyticsHTML(){
   const agents=typeof cfgAgents!=='undefined'?cfgAgents:[];
   const used=saAgentUsage();
@@ -1988,10 +2142,50 @@ function buildAgentModelAnalyticsHTML(){
   const totalApis=systems.reduce(function(n,s){return n+(s.apis||0);},0);
   const m=saMetrics();
 
+  /* == THE HERO ===========================================================================
+     One number, once, at the top: the share of the estate that runs without a person. It is the
+     figure every other card on this page is a breakdown of, and it used to be the third of four
+     equal tiles — which is the standard way a dashboard buries its own headline.
+
+     A METER RATHER THAN A BAR CHART, because this is one ratio against a limit. The track is a
+     lighter step of the same ramp the fill comes from, so the whole width reads as one quantity
+     divided, and the two segments beyond the fill are the honest remainder: our team, then the
+     client. Proportional figures, not tabular — 63% at 46px would sit loose on equal-width
+     digits, and there is no column here to align to. */
+  const bandTot={ai:0,human:0,other:0};
+  (aiJourneys||[]).forEach(function(j){const s=saStepSplit(j.id);bandTot.ai+=s.ai;bandTot.human+=s.human;bandTot.other+=s.other;});
+  const meter=m.totalSteps?'<div class="sa-meter">'+SA_BANDS.map(function(b,i){
+    const n=bandTot[b.k];if(!n)return '';
+    return '<span class="sa-meter-seg" style="width:'+(n/m.totalSteps*100)+'%;background:'+saRampStep(i)+'"'
+      +' title="'+attrSafe(n+' of '+m.totalSteps+' steps: '+b.label+', '+b.note)+'"></span>';
+  }).join('')+'</div>':'';
+  const hero='<div class="sa-hero">'
+    +'<div class="sa-hero-main">'
+      +'<div class="sa-hero-fig">'+m.coverage+'%</div>'
+      +'<div class="sa-hero-lab">of journey steps run without a person</div>'
+      +meter
+      +'<div class="sa-hero-legend">'+SA_BANDS.map(function(b,i){
+        return '<span class="sa-key-item" title="'+attrSafe(b.label+' — '+b.note)+'">'
+          +'<span class="sa-key-dot" style="background:'+saRampStep(i)+'"></span>'
+          +b.label+'<b>'+bandTot[b.k]+'</b></span>';
+      }).join('')+'</div>'
+    +'</div>'
+    /* The right-hand column is the sentence the number does not say: how many steps, spread over
+       how many journeys, and — the fact a coverage figure hides — that two of those steps sit
+       with the client and are not automatable at any coverage. */
+    +'<div class="sa-hero-side">'
+      +'<div class="sa-hero-row"><span>Steps in the estate</span><b>'+m.totalSteps+'</b></div>'
+      +'<div class="sa-hero-row"><span>Live journeys</span><b>'+m.liveJourneys+'</b></div>'
+      +'<div class="sa-hero-row"><span>Runs in flight</span><b>'+m.running+'</b></div>'
+      +'<div class="sa-hero-row'+(m.attention?' warn':'')+'"><span>Needing attention</span><b>'+m.attention+'</b></div>'
+      +'<div class="sa-hero-foot">'+bandTot.other+' of the remaining steps wait on the client &mdash; no configuration automates those.</div>'
+    +'</div>'
+    +'</div>';
+
   const tiles='<div class="stat-grid dash-stat-grid">'
     +dashStatNav('Agents configured',String(agents.length),wired.length+' wired into a journey'+(idle?' &middot; '+idle+' idle':''),idle?'orange':'green',dashIcoShield,'cfg-agents')
-    +dashStatNav('Steps run by agents',String(m.aiSteps),'Of '+m.totalSteps+' journey steps','teal',dashIcoDoc)
-    +dashStatNav('Unattended',agents.length?Math.round(auto/agents.length*100)+'%':'0%',auto+' of '+agents.length+' need no human','blue',dashIcoUser)
+    +dashStatNav('Unattended agents',agents.length?Math.round(auto/agents.length*100)+'%':'0%',auto+' of '+agents.length+' need no human','blue',dashIcoUser)
+    +dashStatNav('Hours saved',m.saved+'h',m.manualHours+'h by hand vs '+m.agentHours+'h estimated','teal',dashIcoDoc,'my-runs')
     +dashStatNav('Systems connected',connected+'/'+String(systems.length),totalApis+' APIs available','green',dashIcoShield,'cfg-systems')
     +'</div>';
 
@@ -2058,11 +2252,18 @@ function buildAgentModelAnalyticsHTML(){
     +'<th>System</th><th class="sa-col-apis">APIs available</th><th>Last tested</th>'
     +'</tr></thead><tbody>'+sysRows+'</tbody></table></div>';
 
+  /* Charts before tables, and the charts in the order a reader's questions arrive: how much of
+     the estate is automated (hero), how that is spread (coverage), what it is worth (hours),
+     what governs it (guardrails and models), then the two registers underneath for anyone who
+     came for a specific agent or system. */
   return '<div class="dash-ref">'
-    +'<div class="dash-ref-title">Agent &amp; Model Analytics</div>'
+    +'<div class="dash-ref-title">Analytics</div>'
     +'<div class="dash-ref-sub">What the agent estate is doing across all '+((aiJourneys||[]).length)+' journeys, and how much of it runs without a person.</div>'
     +'</div>'
-    +tiles+agentTable+mix+sysTable;
+    +hero+tiles
+    +saCoverageChartHTML()
+    +saHoursChartHTML()
+    +mix+agentTable+sysTable;
 }
 function buildEntityAdminDashboardHTML(){
   const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
@@ -9710,11 +9911,26 @@ function buildCfgDataFoundationHTML(){
    same either way makes the first click feel destructive. `row` is the cell-sized cut of the same
    design; stopPropagation because the whole row is itself a click that opens the drawer. */
 function ccjOpenRunBtnHTML(d,row){
-  const has=typeof ccjRuns!=='undefined'&&ccjRuns[d.id];
+  /* "Start run" on a deal already sitting at the deposit invoice was wrong in the only way that
+     matters: clicking it starts nothing, it rebuilds five settled stages and lands on the live
+     step. What the two words distinguish is whether there is work behind this record — not
+     whether a run OBJECT happens to have been minted yet, which is an implementation detail the
+     reader has no way of knowing and no reason to care about. ccjDealPos answers the real
+     question: it returns null only for a record that has not moved off its first step. */
+  const live=typeof ccjRuns!=='undefined'&&!!ccjRuns[d.id];
+  const has=live||(typeof ccjDealPos==='function'&&!!ccjDealPos(d));
   const ico='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
     +'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
-  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="event.stopPropagation();ccjOpenDealRun('+d.id+')" title="'
-    +(has?'Open this deal&rsquo;s run from here':'Start this deal&rsquo;s run from here')+'">'+ico
+  // The tooltip names the step it will land on, so the button can be trusted before it is
+  // pressed — the whole point of the run opening where the row says it is.
+  const cur=typeof amCurrentSub==='function'?amCurrentSub(d):null;
+  const pos=typeof amJourneyPos==='function'?amJourneyPos(d):null;
+  const where=cur&&pos
+    ?' — stage '+pos.stageNo+' of '+pos.stages+', '+String(cur.label).replace(/&mdash;/g,'—')
+    :'';
+  const title=(has?'Opens where this run was left off':'Starts this run')+where;
+  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="event.stopPropagation();ccjOpenDealRun('+d.id+')"'
+    +' title="'+attrSafe(title)+'">'+ico
     +(has?'Open run':'Start run')+'</button>';
 }
 function cfgMapRow(unified,source,type){

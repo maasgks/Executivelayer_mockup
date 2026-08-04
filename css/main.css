@@ -754,6 +754,91 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .sa-apis-val{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
 .sa-note{margin-top:9px;padding:9px 11px;border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:7px;background:#fff;font-size:11.5px;line-height:1.55;color:var(--gray)}
 .sa-note b{color:var(--navy)}
+/* == ANALYTICS: HERO, LEGEND, TWO CHARTS ==================================================
+   Marks are thin and the chrome is recessive: 10px bars, 2px surface gaps doing the
+   separating rather than borders, one hairline gridline, and no dashes anywhere. Values wear
+   text tokens; only the marks wear the ramp. == */
+.sa-hero{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(210px,1fr);gap:0;background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden}
+.sa-hero-main{padding:22px 24px 20px;min-width:0;display:flex;flex-direction:column;justify-content:center}
+/* Proportional figures on purpose — tabular-nums makes a display-size number sit loose, and
+   there is no column of figures here to align against. */
+.sa-hero-fig{font-size:46px;font-weight:800;color:var(--navy);letter-spacing:-1.6px;line-height:1}
+.sa-hero-lab{font-size:13px;font-weight:600;color:var(--navy);margin-top:6px}
+/* The meter track is the ramp's own remainder rather than a grey slot, so the full width reads
+   as one quantity divided three ways instead of a bar sitting in a gutter. */
+.sa-meter{display:flex;gap:2px;height:12px;margin:16px 0 12px;border-radius:4px}
+.sa-meter-seg{border-radius:3px;min-width:4px;transition:opacity .15s}
+.sa-meter:hover .sa-meter-seg{opacity:.5}
+.sa-meter .sa-meter-seg:hover{opacity:1}
+.sa-hero-legend{display:flex;flex-wrap:wrap;gap:8px 18px}
+.sa-hero-side{padding:22px 22px 18px;border-left:1px solid var(--border);background:#fbfcfd;display:flex;flex-direction:column;gap:0;min-width:0}
+.sa-hero-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #eef2f6;font-size:11.5px;color:var(--gray)}
+.sa-hero-row b{font-size:14px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+.sa-hero-row.warn b{color:#b45309}
+.sa-hero-foot{margin-top:10px;font-size:11px;line-height:1.5;color:var(--gray)}
+/* Legend: identity is the dot, the value is text. Never the label in the series colour. */
+.sa-key{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:14px 18px 4px}
+.sa-key-item{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--gray)}
+.sa-key-dot{width:9px;height:9px;border-radius:2.5px;flex-shrink:0}
+.sa-key-item b{font-size:12px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+.sa-key-note{margin-left:auto;font-size:11px;font-weight:600;color:var(--gray)}
+/* -- Coverage by journey -- */
+.sa-cv{padding:6px 18px 18px}
+.sa-cv-row{display:grid;grid-template-columns:minmax(96px,150px) minmax(0,1fr) 62px;align-items:center;gap:14px;padding:9px 0;border-top:1px solid #f1f5f9;cursor:pointer}
+.sa-cv-row:first-child{border-top:none}
+.sa-cv-row:hover .sa-cv-name{color:var(--orange)}
+.sa-cv-name{font-size:12px;font-weight:700;color:var(--navy);line-height:1.35;min-width:0}
+.sa-cv-track{min-width:0}
+/* One scale across every row: a three-step journey draws a third the width of a nine-step one,
+   so the chart reports volume as well as share. */
+.sa-cv-bar{display:flex;gap:2px;height:10px;min-width:8px}
+.sa-cv-seg{border-radius:3px;min-width:4px;transition:opacity .15s}
+.sa-cv-bar:hover .sa-cv-seg{opacity:.5}
+.sa-cv-bar .sa-cv-seg:hover{opacity:1}
+.sa-cv-val{text-align:right;line-height:1.25}
+.sa-cv-val b{display:block;font-size:13px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+.sa-cv-val i{font-style:normal;font-size:10.5px;color:var(--gray);white-space:nowrap}
+/* -- Hours: dumbbell, one hue two shades -- */
+.sa-hr{padding:6px 18px 8px}
+.sa-hr-row{display:grid;grid-template-columns:minmax(96px,150px) minmax(0,1fr) 58px;align-items:center;gap:14px;padding:11px 0;border-top:1px solid #f1f5f9}
+.sa-hr-row:first-child{border-top:none}
+.sa-hr-name{font-size:12px;font-weight:700;color:var(--navy);line-height:1.3;min-width:0}
+.sa-hr-name i{display:block;font-style:normal;font-size:10.5px;font-weight:600;color:var(--gray);margin-top:1px}
+.sa-hr-track{position:relative;height:14px;min-width:0}
+/* One hairline, solid, one step off the surface — the baseline the dots are read against. */
+.sa-hr-grid{position:absolute;left:0;right:0;top:50%;height:1px;background:#eef2f6}
+.sa-hr-link{position:absolute;top:50%;height:2px;transform:translateY(-1px);background:#c8d0da;border-radius:1px}
+/* 10px marks with a 2px ring in the card colour, so two dots that land close stay separable.
+   The ::after is the HIT TARGET, not decoration: a 14px painted dot you have to land on
+   dead-centre is a tooltip nobody reaches, so the target is grown to 24px square while the mark
+   stays thin. It is transparent and centred, so it costs nothing visually and overlapping
+   targets still resolve to whichever dot is on top — the human one, which is the one further
+   from zero and the one worth reading first. */
+.sa-hr-dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;box-shadow:0 0 0 2px var(--card)}
+.sa-hr-dot::after{content:'';position:absolute;top:50%;left:50%;width:24px;height:24px;transform:translate(-50%,-50%);border-radius:50%}
+.sa-hr-dot.human{background:#0f172a}
+.sa-hr-dot.agent{background:#7c8899}
+.sa-hr-val{text-align:right;line-height:1.25}
+.sa-hr-val b{display:block;font-size:13px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+.sa-hr-val i{font-style:normal;font-size:10.5px;color:var(--gray)}
+/* The axis band is part of the card's height rather than something the plot overlaps, so no row
+   ever needs its own scrollbar to show its labels — and it is a row of THE SAME GRID as the
+   dumbbells, so its ticks sit on the track by construction. Reproducing the track's offset with
+   a calc() that guesses at the label column's resolved width put 6h about thirty pixels left of
+   where the 6h dot would land, which is a chart lying quietly. */
+.sa-hr-axis-row{display:grid;grid-template-columns:minmax(96px,150px) minmax(0,1fr) 58px;gap:14px}
+.sa-hr-axis{position:relative;height:20px;min-width:0}
+.sa-hr-axis span{position:absolute;top:4px;transform:translateX(-50%);font-size:10px;font-weight:600;color:#9ca3af;font-variant-numeric:tabular-nums}
+.sa-hr-axis span.end{transform:translateX(-100%)}
+@media(max-width:900px){
+  .sa-hero{grid-template-columns:1fr}
+  .sa-hero-side{border-left:none;border-top:1px solid var(--border)}
+  .sa-cv-row,.sa-hr-row{grid-template-columns:minmax(0,1fr) 62px;grid-template-areas:'name val' 'track track';gap:6px 12px}
+  .sa-cv-name,.sa-hr-name{grid-area:name}
+  .sa-cv-track,.sa-hr-track{grid-area:track}
+  .sa-cv-val,.sa-hr-val{grid-area:val}
+  .sa-hr-axis-row{grid-template-columns:1fr}
+}
 .dash-panel{margin-bottom:16px}
 .dash-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px 12px;border-bottom:1px solid var(--border);font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase}
 .dash-panel-head span{font-size:11px;text-transform:none;color:var(--gray);font-weight:600}
