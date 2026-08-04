@@ -341,6 +341,10 @@
 .ccj-doc-name{font-size:11.5px;font-weight:700;color:var(--navy);word-break:break-all}
 .ccj-doc-stat{font-size:10.5px;color:var(--gray);margin-top:1px}
 .ccj-doc-head .ccj-spin{margin-left:auto;flex-shrink:0}
+/* Reading: one line, same instrument as a live sub-status — no rule, no rows, nothing to fold. */
+.ccj-doc.live .ccj-doc-head{padding-bottom:0;border-bottom:none;margin-bottom:0}
+.ccj-doc.live .ccj-doc-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.ccj-doc.live .ccj-sb-live{margin-left:auto}
 /* THE READ DOCUMENT, FOLDED. Once its values are in the form, the form is where they live; the
    card restating all nineteen of them is the same information twice and the taller of the two.
    So it folds to one line — and the whole line is the control, which is the difference between
@@ -542,44 +546,15 @@
   background-size:220% 100%;-webkit-background-clip:text;background-clip:text;
   animation:ccjVerbSheen 1.7s linear infinite}
 @keyframes ccjVerbSheen{from{background-position:120% 0}to{background-position:-120% 0}}
-/* The window. One hairline rule under the head (the user's line), then a clip CCJ_STREAM_H tall —
-   keep max-height in step with that constant, the glide measures overflow against it. The roll
-   inside is what moves: mounted at its old offset, sent to the new one a tick later, so each
-   beat's lines push the previous ones out through the top of the clip. */
-.ccj-sb-streambox{border-top:1px solid var(--border);padding-top:8px;margin-top:2px}
-.ccj-sb-stream{max-height:78px;overflow:hidden}
-/* Only a window that is actually overflowing fades its top edge — a short one would be fading
-   its own first line for no reason. */
-.ccj-sb-stream.deep{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 24px);
-  mask-image:linear-gradient(to bottom,transparent 0,#000 24px)}
-.ccj-sb-roll{display:flex;flex-direction:column;gap:3px;
-  transition:transform .55s cubic-bezier(.3,.6,.25,1)}
-/* The lines themselves: flat, one thing each, truncating rather than wrapping — a line that
-   wrapped would make the window's height mean nothing. */
-.ccj-sl{display:flex;align-items:baseline;gap:7px;font-size:11px;line-height:1.5;min-width:0;
-  color:var(--gray)}
-.ccj-sl.new{animation:ccjEvIn .3s cubic-bezier(.4,0,.2,1) both}
-.ccj-sl.act{color:var(--navy);font-weight:500}
-.ccj-sl.act.ok .ccj-sl-x{color:#15803d}
-.ccj-sl-t{flex-shrink:0;align-self:center;width:11px;height:11px;display:flex;color:#15803d}
-.ccj-sl-t svg{width:11px;height:11px}
-.ccj-sl-x{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ccj-sl.row,.ccj-sl.chk{padding-left:18px}
-.ccj-sl.row b{flex-shrink:0;font-weight:500;font-size:10.5px;color:var(--gray)}
-.ccj-sl.row i,.ccj-sl.chk i{font-style:normal;color:var(--navy);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis}
-.ccj-sl.row.off i{color:var(--gray)}
-.ccj-sl-vd{flex-shrink:0;font-weight:700}
-.ccj-sl.chk.pass .ccj-sl-vd{color:#15803d}
-.ccj-sl.chk.fail .ccj-sl-vd{color:#b91c1c}
-.ccj-sl.chk.na .ccj-sl-vd{color:var(--gray)}
-.ccj-sl.chk b{flex-shrink:0;font-weight:500;font-size:10.5px;color:var(--gray)}
-.ccj-sl.chk i{color:var(--navy)}
+/* The gist: two or three words of the data actually moving, trailing off. It truncates rather
+   than wrapping — the live block is ONE LINE by design, and a gist that wrapped would give it a
+   second. Muted, so the dark sub-status name stays the loudest thing on the line. */
+.ccj-sb-gist{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  font-size:11px;font-weight:400;color:var(--gray)}
+.ccj-sb-dots{letter-spacing:1px;color:#94a3b8}
 @media(prefers-reduced-motion:reduce){
   .ccj-spark{animation:none}
   .ccj-sb-verb{animation:none;background:none;color:#d97757}
-  .ccj-sb-roll{transition:none}
-  .ccj-sl.new{animation:none}
 }
 
 /* ---- WAITING ON A PERSON --------------------------------------------------------------------
@@ -963,8 +938,16 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-cmsg.note i{font-size:9.5px;color:#cbd5e1}
 
 /* A bubble, not a band — full width made the draft read as a page block rather than a message
-   waiting on the left with the rest of the thread. */
-.ccj-cbubble.draft{background:#faf5ff;border:1px dashed #d8b4fe;color:var(--navy);max-width:84%}
+   waiting on the left with the rest of the thread. LEFT, explicitly: this is the one message
+   waiting on the reader, so it sits with everything else and GLOWS instead of moving — a slow
+   purple pulse, because an unsent draft is the only thing in the thread that needs a hand. */
+.ccj-cmsg.draft{align-items:flex-start}
+.ccj-cbubble.draft{background:#faf5ff;border:1.5px dashed #c4b5fd;color:var(--navy);max-width:84%;
+  animation:ccjDraftGlow 2.4s ease-in-out infinite}
+@keyframes ccjDraftGlow{0%,100%{box-shadow:0 0 0 3px rgba(124,58,237,.05)}
+  50%{box-shadow:0 0 0 7px rgba(124,58,237,.16)}}
+@media(prefers-reduced-motion:reduce){.ccj-cbubble.draft{animation:none;
+  box-shadow:0 0 0 4px rgba(124,58,237,.10)}}
 .ccj-draft-tag{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#7c3aed;margin-bottom:7px}
 .ccj-draft-tag svg{width:10px;height:10px}
 .ccj-draft-btns{margin-top:10px}
