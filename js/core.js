@@ -2675,7 +2675,7 @@ const aiJourneys=[
   // matcher, a compliance sync and a publisher — none of which exist anywhere in the build. The
   // one journey wired to a real backend is the one that should not be describing imaginary work. --
   {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',modules:['Client','Master Data','NewForce Solutions'],coverage:0,humanSteps:3,aiSteps:0,status:'Active',risk:'Low',updated:'29 Jul 2026, 9:45 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3"/><path d="M20 5.5v6"/><path d="M4 12c0 1.7 3.6 3 8 3"/><path d="M18 15v6M15 18h6"/></svg>'},
-  {id:'contract-creation',name:'Hire and Onboard Journey',category:'O2C',desc:'Takes a client request from quote and client contract through the deposit, the employment contract, onboarding, and on to payroll.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
+  {id:'contract-creation',name:'Hire and Onboard Journey',category:'H2R',desc:'Takes a client request from quote and client contract through the deposit, the employment contract, onboarding, and on to payroll.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
   {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'},
   // -- Two human stages (the role choice and the signup) and three the agents run: KYC, the
@@ -3134,7 +3134,16 @@ const cfgJourneys=[
      it is the word the AI Executive cards had already settled on — see AI_EXEC_CARD_COPY.
      The id stays 'contract-creation' — it is wired through routing, RBAC, activation state,
      run records and aiJourneyEvents. Only the label changed. -- */
-  {id:'contract-creation',name:'Hire and Onboard Journey',category:'O2C',desc:'Takes a client request from quote and client contract through the deposit, the employment contract, onboarding, and on to payroll.',status:'Inactive',tags:['9 steps','Deal Desk, Contracts'],
+  /* CATEGORY. H2R, not O2C. The journey is named for what it delivers — a person hired, onboarded
+     and on payroll — and that is Hire to Retire's territory: "Hiring to payroll, leave,
+     offboarding". Filed under Order to Cash it was categorised by its opening move rather than
+     its outcome, which is the same mistake the old name made.
+
+     Worth knowing when reading it: the first five stages genuinely are Order to Cash work — a
+     quote, a client contract, a deposit invoice — and that half is why it sat here. One journey
+     spans both, the split is amPipelineTracks (Client contract / Worker onboarding), and a single
+     category has to pick the end it is judged by. It ends in a hire. */
+  {id:'contract-creation',name:'Hire and Onboard Journey',category:'H2R',desc:'Takes a client request from quote and client contract through the deposit, the employment contract, onboarding, and on to payroll.',status:'Inactive',tags:['9 steps','Deal Desk, Contracts'],
     steps:[
       {name:'New request',src:'AI Prompt Parser',type:'src'},
       {name:'Quote in preparation',src:'AI Compliance Hub Sync',type:'src'},
