@@ -179,8 +179,10 @@ function ccjClient(){
    events, which is the only thing these numbers have to protect. */
 const CCJ_CLIENT_SCRIPT=[
   {ev:'viewed',   in:1800, at:128,  when:function(c){return c.state==='sent';}},
-  {ev:'chase',    in:1600, at:4320, when:function(c){return c.state==='viewed'&&c.chases===0;}},
-  {ev:'chase',    in:1600, at:7200, when:function(c){return c.state==='chased'&&c.chases===1;}},
+  // 2000, the user's number: each gap is filled by the "Waiting for confirmation" beat, and two
+  // seconds is long enough to read the word and see the spark move before the reminder lands.
+  {ev:'chase',    in:2000, at:4320, when:function(c){return c.state==='viewed'&&c.chases===0;}},
+  {ev:'chase',    in:2000, at:7200, when:function(c){return c.state==='chased'&&c.chases===1;}},
   {ev:'changed',  in:2000, at:7620, kind:'price', when:function(c){return c.state==='chased'&&c.chases>=2;}},
   {ev:'agreed',   in:4200, at:7900, when:function(c){return c.state==='negotiating';}},
   {ev:'viewed2',  in:2600, at:9020, when:function(c){return c.state==='reissued';}},
@@ -1567,6 +1569,28 @@ const CCJ_HOLDS={
     plain:'Completes when the proposal is created.'
   }
 };
+/* THE RE-ISSUE CANNOT PRECEDE THE REPLY. "Change requested" used to settle off its beats alone,
+   so "Re-issued v2" opened — parked, but visibly THERE — while the drafted answer still sat
+   unsent in the thread below it. A step named after sending the client a revised quote must not
+   appear before our half of the negotiation has left the building (the user's words: "it should
+   show after we send the message"). So the step holds until the reply is sent — ccjSendDraft and
+   ccjSendToClient reach the 'draft-sent' milestone — and it is a FUNCTION because the hold only
+   exists while a change is actually unanswered (`state==='changed'`): on the re-run pass after
+   the client has accepted there is no reply to send, and an unconditional hold would park the
+   pass-2 walk forever on a milestone nobody can reach. */
+CCJ_HOLDS['quote-review/Change requested']=function(){
+  const c=ccjRun&&ccjRun.client;
+  // 'negotiating' too, and it is load-bearing: ccjSendDraft moves the state there BEFORE it
+  // reaches the milestone, and ccjReachScreen re-asks this function on release — a hold that
+  // has vanished by then cannot be released, and the runner parks forever on a step whose
+  // condition was already satisfied.
+  if(!c||(c.state!=='changed'&&c.state!=='negotiating'))return null;
+  return {until:'draft-sent',
+    verb:function(){return ccjClient().drafted?'Waiting':'Drafting';},
+    note:function(){return ccjClient().drafted
+      ?'A reply is drafted for you below. The re-issue follows once you send it.'
+      :'Drafting a reply for you.';}};
+};
 /* An entry may be a function of run state, for the same reason CCJ_GATES may: a step whose work
    happens in two halves either side of a human decision holds on a DIFFERENT milestone before and
    after that decision. The first payroll run is the case — it parks on the calculation being
@@ -2315,17 +2339,47 @@ function ccjStageOpener(i){
   return s.short+'. Starting with <b>'+(first?first.label:'the first step')+'</b>.';
 }
 
+/* == THE GAP BETWEEN CLIENT EVENTS IS A STATE, AND IT NOW SAYS SO ========================
+   Between the quote being opened and the first reminder — and between each reminder and the
+   next thing the client does — the thread used to sit silent, indistinguishable from a thread
+   that had finished. A "Waiting for confirmation" line with the Claude spark now occupies that
+   gap. It is TRANSIENT, not a record: the moment the next event lands the line is done and
+   renders nothing, because "we were waiting" is not information once the thing waited for has
+   happened — the timeline and the log carry the durable facts. It is a NOTE, not a lane
+   message: the client never received our waiting, so it must not sit under a "To" rail. */
+function ccjAwaitStart(label){
+  const c=ccjClient();
+  if(c.awaitMsg&&!c.awaitMsg.done)return;
+  const m={who:'note',kind:'await',label:label||'Waiting for confirmation',at:c.mins};
+  c.awaitMsg=m;
+  ccjClientPush(m);
+}
+function ccjAwaitEnd(){
+  const c=ccjClient();
+  const m=c.awaitMsg;
+  if(!m||m.done)return;
+  m.done=true;
+  c.awaitMsg=null;
+  // A mutated message is invisible to the append-only sync — same reason the chase's own
+  // send-complete rebuilds. The next event's pushes then append as normal.
+  ccjRenderChat();
+}
 /* Every client event lands here — scripted or clicked, the same path, so the override strip
    cannot produce a state the auto-run could not reach. */
 function ccjClientEvent(ev,at,kind){
   const run=ccjRun;if(!run)return;
   const c=ccjClient();
   if(at!==undefined)c.mins=Math.max(c.mins,at);
+  // Whatever arrives, the wait for it is over. Each branch below re-arms it if a new wait begins.
+  ccjAwaitEnd();
   if(ev==='viewed'||ev==='viewed2'){
     c.state=ev==='viewed'?'viewed':'viewed2';
     if(c.openedAt===null)c.openedAt=c.mins;
     ccjClientLog(ev==='viewed'?'opened':'opened2',ev==='viewed'?'Opened':'Opened v2','Tracked on open');
     ccjClientNote('Opened the quote'+(c.version>1?' (v'+c.version+')':''));
+    // Opened is not answered. The gap between this and whatever they do next is a wait, and it
+    // shows itself as one — the user's spec: viewed, then ~2s of waiting, then the follow-up.
+    ccjAwaitStart();
     ccjResolveWait();
   }else if(ev==='chase'){
     /* A REMINDER IS SENT, NOT CONJURED. It used to appear complete in the same frame it was
@@ -2356,6 +2410,9 @@ function ccjClientEvent(ev,at,kind){
       m.detail=c.chases>=3?'Final reminder':'Scheduled reminder';
       ccjClientLog('chase'+c.chases,'Follow-up '+c.chases+' of 3',m.detail);
       ccjRenderChat();
+      // Sent, and now we are waiting again — for a reply, or for the next reminder to become
+      // due. The loader re-arms the moment the reminder has actually gone out, never before.
+      ccjAwaitStart();
       ccjResolveWait();ccjPaint();ccjPaintScreen();
       ccjClientSchedule();
     },CCJ_CHASE_SEND);
@@ -2409,6 +2466,7 @@ function ccjClientEvent(ev,at,kind){
     ccjResolveWait();
   }else if(ev==='quiet'){
     c.state='viewed';                              // back to waiting; the chases resume
+    ccjAwaitStart();
   }
   ccjPaintWork();
   ccjClientSchedule();
@@ -3905,7 +3963,7 @@ function ccjStreamSync(){
   ccjUnmarkLast(p.lastId);                             // only the newest message animates in
   let html='';
   for(let i=p.n;i<st.msgs.length;i++){
-    html+=ccjStreamMsgHTML(st.mode,st.msgs[i],i===st.msgs.length-1,st.msgs[i-1]);
+    html+=ccjStreamMsgHTML(st.mode,st.msgs[i],i===st.msgs.length-1,ccjPrevMsg(st.msgs,i));
   }
   // insertAdjacentHTML, not innerHTML+= : the second re-parses every node already on screen,
   // which restarts each animation and destroys anything mid-flight above the new message.
@@ -4030,6 +4088,15 @@ function ccjHandoverHTML(mode){
     +'<span class="ccj-hand-text">now talking to <b>'+who+'</b></span>'
     +'<span class="ccj-hand-rule"></span></div>';
 }
+/* The message the head/handover decisions compare against. An await between two lane messages
+   must not break the To/From grouping: it renders outside the lane (or as nothing at all once
+   done), so the neighbour that matters is the last REAL message. Without this, two follow-ups
+   with a waiting beat between them re-announce "To <client>" over each one — the noise the
+   lane rule exists to prevent. */
+function ccjPrevMsg(list,n){
+  for(let k=n-1;k>=0;k--){if(list[k].kind!=='await')return list[k];}
+  return undefined;
+}
 function ccjStreamMsgHTML(mode,m,isLast,prev){
   const body=ccjMsgLane(m)?ccjClientMsgHTML(m,isLast,prev):ccjMsgHTML(m,isLast);
   // `prev` absent means this is the first message in the stream, and an opening conversation has
@@ -4102,7 +4169,7 @@ function ccjRenderChat(){
   const mode=st.mode;
   if(mode==='client'||mode==='worker'){
     el.innerHTML=st.msgs.length
-      ?st.msgs.map(function(m,n){return ccjStreamMsgHTML(mode,m,n===st.msgs.length-1,st.msgs[n-1]);}).join('')
+      ?st.msgs.map(function(m,n){return ccjStreamMsgHTML(mode,m,n===st.msgs.length-1,ccjPrevMsg(st.msgs,n));}).join('')
       :'<div class="ccj-empty"><div class="ccj-empty-text">'
        +(mode==='worker'?'Nothing has gone to the employee yet.':'The quote has not gone out yet.')
        +'</div></div>';
@@ -5570,6 +5637,10 @@ function ccjSendToClient(text){
   ccjPaintComposer();
   // Replying is what a negotiation needs to move; the client answers on the script's clock.
   if(c.state==='changed'){c.state='negotiating';ccjClientSchedule();}
+  // Our half of the negotiation has left the building: the step holding for it can move, and
+  // the thread is back to waiting on them — which it now says.
+  ccjReachScreen('draft-sent');
+  ccjAwaitStart();
 }
 function ccjSendDraft(){
   const c=ccjClient();
@@ -5578,6 +5649,8 @@ function ccjSendDraft(){
   draft.kind='';draft.who='us';draft.sent=true;
   c.drafted=false;
   if(c.state==='changed'){c.state='negotiating';ccjClientSchedule();}
+  ccjReachScreen('draft-sent');
+  ccjAwaitStart();
   ccjRenderChat();ccjPaintComposer();
 }
 /* The id goes on whatever element the body already opens with, rather than on a wrapper of our
@@ -5629,6 +5702,13 @@ function ccjClientMsgBodyHTML(m,isLast){
   // side of the thread. The STORE is separate; only the rendering is shared.
   const cls=(m.who==='client'||m.who==='worker'?'client'
     :m.who==='note'?'note':m.who==='agent'?'draft':'us')+(isLast?' in':'');
+  /* The waiting beat. Done, it renders NOTHING — it was a state, not an event, and a transcript
+     keeps events. Live, it is the same spark-and-shimmer the blocks use, so "the agent is on
+     this" reads identically everywhere. No timestamp: there is no moment to stamp until the
+     thing being waited for happens, and that moment belongs to the message that ends this one. */
+  if(m.kind==='await')return m.done?''
+    :'<div class="ccj-cmsg note await">'+ccjSparkHTML()
+    +'<span class="ccj-sb-verb">'+(m.label||'Waiting for confirmation')+'&hellip;</span></div>';
   if(m.who==='note')return '<div class="ccj-cmsg note"><span>'+m.text+'</span><i>'+ccjStamp(m.at)+'</i></div>';
   if(m.kind==='quote')return '<div class="ccj-cmsg '+cls+'">'+ccjQuoteCardHTML(m)+'<i>'+ccjStamp(m.at)+'</i></div>';
   // Two states: going out, and gone. A reminder that has not left yet must not say "sent", and it

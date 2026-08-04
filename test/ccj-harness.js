@@ -1363,9 +1363,17 @@ section('THEY OPEN IT, THEN GO QUIET');
 check('Viewed resolves on the open',
   until(() => run("!!ccjRun.settled['quote-review/Viewed']")));
 check('the timeline records it', screen().indexOf('Opened') > -1);
+/* THE GAP BETWEEN EVENTS SAYS IT IS WAITING. After the open, before the first reminder, the
+   thread carries a spark-and-shimmer "Waiting for confirmation" beat — the user's spec. It is
+   transient: each one renders nothing once the thing it waited for happens. */
+check('the gap after the open is a visible waiting beat',
+  stream().indexOf('ccj-cmsg note await') > -1
+  && run('!!(ccjRun.client.awaitMsg&&!ccjRun.client.awaitMsg.done)') === true);
 check('a follow-up goes out when they do not reply',
   until(() => run('ccjRun.client.chases') >= 1), run('ccjRun.client.chases') + ' chases');
 check('it appears in the thread as a chase', stream().indexOf('ccj-cmsg note chase') > -1);
+check('one waiting beat at a time — the answered one renders nothing',
+  count(stream(), 'ccj-cmsg note await') === 1, count(stream(), 'ccj-cmsg note await') + ' visible');
 check('a second follow-up follows', until(() => run('ccjRun.client.chases') >= 2));
 /* The point stands, the surface moved: three follow-ups are ONE sub-status that counts them, not
    three sub-statuses. Counted by this stage's own block ids — stage index 2 — because the
@@ -1384,12 +1392,24 @@ check('the client asks for a change',
 check('quoting the real total, not an invented one',
   stream().indexOf(v1Total.toLocaleString()) > -1, v1Total.toLocaleString());
 check('the chases stop the moment they reply', run('ccjRun.client.chases') === 2);
+check('their reply ends the waiting beat', count(stream(), 'ccj-cmsg note await') === 0,
+  count(stream(), 'ccj-cmsg note await') + ' visible');
 check('the agent drafts a reply but does not send it',
   until(() => run('ccjRun.client.drafted') === true) && stream().indexOf('ccj-cbubble draft') > -1);
 check('and it is visibly unsent', stream().indexOf('not sent') > -1);
+/* THE RE-ISSUE CANNOT PRECEDE THE REPLY. The step holds — verb saying it is waiting on you —
+   and "Re-issued v2" has no block anywhere until the draft is actually sent. */
+check('Change requested holds for our reply',
+  until(() => run("ccjRun.phase") === 'hold'), run('ccjRun.phase'));
+check('the hold names the drafted reply and waits on you',
+  liveBlock().indexOf('A reply is drafted for you below') > -1
+  && liveBlock().indexOf('ccj-sb-verb">Waiting&hellip;') > -1, liveBlock().slice(0, 240));
+check('and the re-issue step has no block yet', stream().indexOf('Re-issued v2') === -1);
 run('ccjSendDraft()');
 check('sending it turns the draft into a sent message',
   run('ccjRun.client.drafted') === false && stream().indexOf('ccj-cbubble draft') === -1);
+check('and the thread goes back to visibly waiting on them',
+  count(stream(), 'ccj-cmsg note await') === 1, count(stream(), 'ccj-cmsg note await') + ' visible');
 check('the client agrees', until(() => run('ccjRun.client.state') === 'agreed'));
 check('and the agreed margin lands on the run', run('ccjRun.margin') === 17, run('ccjRun.margin'));
 
@@ -2401,9 +2421,13 @@ section('IT GOES TO THE EMPLOYEE, IN THE EMPLOYEE\'S OWN THREAD');
     'quote card ' + (stream().indexOf('ccj-cbubble quote') > -1) + ', invoice ' + run('ccjInvoice().id'));
   check('and so is the worker\'s, in its own lane',
     stream().indexOf('ccj-cbubble doc') > -1 && stream().indexOf('Marta Nowak') > -1);
+  /* A DONE await is the one deliberate exception: it was a state, not an event, and renders
+     nothing once the thing it waited for has happened. Everything that ever SAID something is
+     still on screen. */
   check('everything the run has ever said is on screen, in one list',
     count(stream(), 'id="ccj-m-') ===
-      run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length'),
+      run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length'
+        + " - ccjRun.client.msgs.filter(function(m){return m.kind==='await'&&m.done;}).length"),
     count(stream(), 'id="ccj-m-') + ' rendered vs '
       + run('ccjRun.msgs.length + ccjRun.client.msgs.length + ccjRun.worker.msgs.length') + ' stored');
   check('and it is in true chronological order', (function () {

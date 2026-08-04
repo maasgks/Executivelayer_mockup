@@ -938,7 +938,10 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 
 .ccj-cmsg{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
 .ccj-cmsg.in{animation:ccjIn .26s ease both}
-.ccj-cmsg.us{align-items:flex-end}
+/* Left, like everything else in the thread — the user's rule: whatever we send comes in on the
+   left. Direction is already carried twice over (the navy bubble, the To/From lane head), so a
+   third signal by alignment bought nothing and cost the column its one reading line. */
+.ccj-cmsg.us{align-items:flex-start}
 .ccj-cmsg>i{font-size:9.5px;font-style:normal;color:#94a3b8;padding:0 2px}
 /* White for the same reason as .ccj-bubble — it shares the tinted canvas. */
 .ccj-cbubble{max-width:100%;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.6;background:var(--card);border:1px solid var(--border);color:var(--navy);word-wrap:break-word}
@@ -952,9 +955,16 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
    sits on the same baseline as the text rather than above it. */
 .ccj-cmsg.note.chase.sending span{color:#94a3b8;font-weight:500}
 .ccj-cmsg.note.chase.sending .ccj-spin{flex:0 0 auto}
+/* The waiting beat between client events — the same spark and shimmer the live blocks use, so
+   "the agent is on this" reads identically everywhere it appears. */
+.ccj-cmsg.note.await{gap:6px}
+.ccj-cmsg.note.await .ccj-spark{width:12px;height:12px;color:#d97757}
+.ccj-cmsg.note.await .ccj-sb-verb{font-size:10.5px}
 .ccj-cmsg.note i{font-size:9.5px;color:#cbd5e1}
 
-.ccj-cbubble.draft{background:#faf5ff;border:1px dashed #d8b4fe;color:var(--navy);max-width:100%}
+/* A bubble, not a band — full width made the draft read as a page block rather than a message
+   waiting on the left with the rest of the thread. */
+.ccj-cbubble.draft{background:#faf5ff;border:1px dashed #d8b4fe;color:var(--navy);max-width:84%}
 .ccj-draft-tag{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#7c3aed;margin-bottom:7px}
 .ccj-draft-tag svg{width:10px;height:10px}
 .ccj-draft-btns{margin-top:10px}
