@@ -23,9 +23,14 @@ CREATE TABLE IF NOT EXISTS source_systems (
 );
 -- 'manual' is a source_systems row like any other so the FK holds for hand-created clients.
 -- It has no console_url because there is no external system to open.
+-- 'adt_solution' is the mock site (backend/mock-adt-server.js); 'newforce_mw' is the real CRM
+-- reached through the NewForce middleware. Two rows rather than one repointed row, because a
+-- client's source records where it actually went — repointing the backend must not rewrite the
+-- history of clients that were pushed to the mock.
 INSERT OR IGNORE INTO source_systems (id, label, console_url) VALUES
   ('manual',       'Manual',             NULL),
-  ('adt_solution', 'NewForce Solutions', 'https://admin.newforceltd.com/login/authentication');
+  ('adt_solution', 'NewForce Solutions', 'https://admin.newforceltd.com/login/authentication'),
+  ('newforce_mw',  'NewForce Solutions', 'https://admin.newforceltd.com/login/authentication');
 
 CREATE TABLE IF NOT EXISTS direct_employees (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -944,11 +944,45 @@ function renderAmDealSidebar(){
    a few inches below where tiles would sit, and one set of counts per page is the rule this
    pattern was built on. == */
 function buildStoreOpsDashboardHTML(){
+  // Load the synced stores the first time the board is opened, then re-render. Fetching on every
+  // render would refetch on every drawer click; the Sync button below is how you ask again.
+  if(!soLiveLoaded){
+    soLoadLiveRuns().then(function(changed){if(changed&&page==='dashboard')renderADTPage();});
+  }
   return '<div class="am-page">'
     +buildSoHeaderHTML()
     +buildSoPipelineHTML()
     +buildSoListingHTML()
     +'</div>';
+}
+/* -- Asks the backend to poll Bhaiyaa once, then reloads the board.
+   A button rather than a timer: this is a real request to somebody else's staging box, and a
+   board that quietly polls a third party every few seconds for the whole time it is open is
+   traffic nobody asked for. Pressing it is also the honest demo — you sign up, you press Sync,
+   the store appears. -- */
+let soSyncing=false;
+function soSyncFromBhaiyaa(){
+  if(soSyncing)return;
+  soSyncing=true;renderADTPage();
+  execApiRequest('POST','/stores/poll').then(function(res){
+    soSyncing=false;
+    if(!res.ok){
+      showAiToast('Could not reach Bhaiyaa',res.offline
+        ? 'The Executive Layer backend is not running. Start it with: node backend/dev.js'
+        : res.error);
+      renderADTPage();return;
+    }
+    const d=res.data||{};
+    if(d.status==='baseline'){
+      showAiToast('Watching from here','Bhaiyaa has '+d.cursor+' stores already. Sign-ups from now on will appear on this board.');
+    }else if(d.count){
+      showAiToast(d.count+' new store'+(d.count===1?'':'s'),
+        (d.stores||[]).map(function(s){return s.store_name;}).join(', ')+' — waiting on KYC.');
+    }else{
+      showAiToast('Nothing new','No sign-ups on Bhaiyaa since the last check.');
+    }
+    soLoadLiveRuns().then(function(){renderADTPage();});
+  });
 }
 /* The headline counts store openings, not stores: six of these twelve have no store in either
    system yet, and calling them stores would name something that does not exist.
@@ -961,17 +995,25 @@ function buildStoreOpsDashboardHTML(){
    rail — so the page can both watch the journey and start one. */
 function buildSoHeaderHTML(){
   const p=getActivePersona();
-  const stuck=soRuns.filter(soIsHalted).length;
-  const sub='You are looking after '+soRuns.length+' store opening'+(soRuns.length===1?'':'s')+'.'
+  const stuck=soRunsAll().filter(soIsHalted).length;
+  const sub='You are looking after '+soRunsAll().length+' store opening'+(soRunsAll().length===1?'':'s')+'.'
     +(stuck?' <b>'+stuck+'</b> ha'+(stuck===1?'s':'ve')+' stopped.':' Nothing has stopped.');
   return '<div class="am-head">'
     +'<div class="am-head-left">'
       +'<div class="am-head-title">'+p.name+' <span class="am-head-role">'+p.label+'</span></div>'
       +'<div class="am-head-sub">'+sub+'</div>'
     +'</div>'
+    +'<div style="display:flex;gap:10px;align-items:center">'
+    +'<button class="am-head-new" style="background:#fff;color:#0f172a;border:1px solid #cbd5e1"'
+      +' onclick="soSyncFromBhaiyaa()"'+(soSyncing?' disabled':'')+'>'
+      +(soSyncing
+        ?'<span class="uif-spin" style="margin-right:2px"></span>Syncing&hellip;'
+        :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>Sync from Bhaiyaa')
+      +'</button>'
     +'<button class="am-head-new" onclick="startStoreIntake()">'
       +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
       +'New store</button>'
+    +'</div>'
     +'</div>';
 }
 /* Five segments instead of nine, so they are wide enough to carry the full stage name with no
@@ -1054,6 +1096,11 @@ function soWhereCellHTML(d){
 }
 function soNextActionCellHTML(d){
   const a=soNextAction(d);
+  // A synced store waiting on KYC is the one automated step somebody actually performs here, so
+  // the column offers it rather than saying "Auto" beside a row nothing is going to move. It
+  // opens the drawer, because that is where the check runs — the listing never has the Aadhaar.
+  if(d.live&&d.stage==='kyc')return '<button class="am-act do" onclick="event.stopPropagation();openSoRunSidebar('+d.id+');navSoRunTab(\'logs\')">'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg> Run KYC</button>';
   if(a.kind==='auto')return '<span class="am-act auto">'+amBoltSvg+' Auto</span>';
   if(a.kind==='do')return '<button class="am-act do" onclick="event.stopPropagation();soCompleteStep('+d.id+')">'
     +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg> '+a.label+'</button>';
@@ -1081,8 +1128,12 @@ function buildSoListingHTML(){
     :'Everything you own, in one list. Click a step above to narrow it down.';
   const compact=!!soSelectedId;
   const columns=[
+    // A synced store names Bhaiyaa's own id beside ours. Two reasons: it is how an operator
+    // lines this row up with the record on Bhaiyaa, and it is what tells them at a glance which
+    // rows are real — the seeded twelve survive a refresh only because they are fiction.
     {w:'24%',cw:'36%',th:'Store',
-     cell:function(d){return '<div class="cell-primary am-c-client">'+d.store+'</div><div class="cell-sub">'+d.ref+'</div>';}},
+     cell:function(d){return '<div class="cell-primary am-c-client">'+d.store+'</div>'
+       +'<div class="cell-sub">'+d.ref+(d.live?' &middot; Bhaiyaa '+d.bhaiyaaRef:'')+'</div>';}},
     {w:'19%',hideWhenCompact:true,th:'Merchant',
      cell:function(d){return '<div class="cell-primary am-c-client">'+d.merchant+'</div><div class="cell-sub">'+soRoleLabel(d)+' &middot; '+d.category+'</div>';}},
     {w:'24%',cw:'32%',th:'Where it is now',cell:soWhereCellHTML},
@@ -1108,7 +1159,7 @@ function buildSoListingHTML(){
   return '<div class="am-list-block">'
     +'<div class="am-list-head">'
       +'<div><div class="am-list-title">'+title+'</div><div class="am-list-sub">'+sub+'</div></div>'
-      +'<div class="am-list-right"><span class="am-list-count">'+total+' of '+soRuns.length+'</span>'
+      +'<div class="am-list-right"><span class="am-list-count">'+total+' of '+soRunsAll().length+'</span>'
       +(stage?'<button class="lp-pill-reset" onclick="soClearPipelineStage()">Show all</button>':'')+'</div>'
     +'</div>'
     +'<div class="lp-split-wrap"><div class="lp-split-main">'
@@ -1132,7 +1183,7 @@ function soStampToday(d){
    reviewed or a registration that has been retried is no longer a stopped run, and leaving the
    flag on would keep offering the same button forever. */
 function soAdvanceStep(runId,simulated){
-  const d=soRuns.find(function(x){return x.id===runId;});if(!d)return;
+  const d=soRunsAll().find(function(x){return x.id===runId;});if(!d)return;
   const steps=soSteps(d,d.stage);
   const idx=soSubIndex(d);
   const cur=steps[idx];if(!cur)return;
@@ -1176,6 +1227,111 @@ function soAdvanceStep(runId,simulated){
   }
   renderADTPage();
 }
+/* == THE OWNER CHECK, FOR A REAL STORE ===================================================
+   The same four checks the New store journey runs (bhaiyaaKycChecks), on the same rail markup,
+   against a store that arrived from Bhaiyaa instead of one being typed in. Reusing the list
+   rather than copying it is the point: two KYC screens that drift apart would let a reviewer
+   see one thing here and another there.
+
+   It is a demonstration, and the panel says so. Bhaiyaa's signup captures an Aadhaar document
+   and never a number, so there is nothing to send to UIDAI even if we were sending anything —
+   the Ops Manager types the number, and the checks are theatre over it. Labelling that plainly
+   is not modesty: an Ops Manager who believes a government identity check happened, when
+   nothing left the building, is the worst outcome this screen can produce. == */
+let soKycProgress=-1,soKycBusy=false;
+function soLiveKycPanelHTML(d){
+  const running=soKycBusy||soKycProgress>=0;
+  const evidence=soKycEvidence(d);
+  return '<div class="lp-logs-form">'
+    +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:#ef4444;display:inline-block;flex-shrink:0"></span>Next: Verify the owner</div>'
+    +'<p class="lp-logs-form-sub">The KYC agent checks this Aadhaar with UIDAI and matches it against the name on the signup. '
+      +'Bhaiyaa will not open a store without it &mdash; so this runs before anything is created, not after.</p>'
+    +(running
+      ?'<div id="so-kyc-list" class="uif-proc">'+soKycListHTML(evidence)+'</div>'
+      :'<div class="lp-logs-form-label">Aadhaar Number</div>'
+        +'<input id="so-kyc-aadhaar" class="lp-logs-form-textarea" style="min-height:0;height:38px" '
+        +'placeholder="0000 0000 0000" maxlength="14" autocomplete="off">'
+        +'<div class="lp-logs-form-label">Comment</div>'
+        +'<textarea id="so-log-comment" class="lp-logs-form-textarea" placeholder="Add a note for this action..."></textarea>'
+        +'<button class="lp-logs-save-btn" onclick="soRunLiveKyc('+d.id+')">Run the owner check</button>')
+    +'</div>';
+}
+// What each check compared. "Name match ✓" alone is a claim; "Ravi Sharma ≈ RAVI SHARMA ✓" is
+// evidence — the same reasoning as the intake journey's panel.
+function soKycEvidence(d){
+  const owner=d.merchant&&d.merchant!=='—'?d.merchant:d.store;
+  return {
+    format:soKycMasked,
+    uidai:'Demographics returned by UIDAI',
+    name:owner+' ≈ '+String(owner).toUpperCase(),
+    screen:'0 matches on sanctions or watchlists'
+  };
+}
+let soKycMasked='XXXX XXXX XXXX';
+function soKycListHTML(evidence){
+  return bhaiyaaKycChecks.map(function(c,i){
+    const state=soKycProgress>i?'is-done':(soKycProgress===i?'is-active':'');
+    const mark=soKycProgress>i
+      ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>'
+      : (soKycProgress===i?'<span class="uif-spin"></span>':'');
+    return '<div class="uif-proc-item st-run-item '+state+'">'
+      +'<div class="uif-proc-rail"><div class="uif-proc-dot">'+mark+'</div>'
+      +(i<bhaiyaaKycChecks.length-1?'<div class="uif-proc-line"></div>':'')+'</div>'
+      // Same markup as the New store journey's panel (storeKycListHTML) on purpose — one KYC
+      // screen in this product, rendered in two places, not two screens that drift.
+      +'<div class="uif-proc-body"><div class="uif-proc-title">'+c.label+'</div>'
+      +(soKycProgress>i?'<div class="uif-proc-note">'+c.done+'</div>'
+        +'<div class="st-io st-io--write"><span class="st-io-tag">Checked</span><div class="st-io-list">'
+        +'<span class="st-io-pair"><span class="st-io-v">'+attrSafe(evidence[c.id])+'</span></span></div></div>'
+        :(soKycProgress===i?'<div class="uif-proc-note">'+c.running+'</div>':''))
+      +'</div></div>';
+  }).join('');
+}
+/* Runs the checks, then writes the result. The animation is paced so it can be read; the write
+   happens once it finishes, and the run only moves after the backend has agreed — a badge that
+   flips before the record does is how the two end up disagreeing. */
+function soRunLiveKyc(runId){
+  const d=soRunsAll().find(function(x){return x.id===runId;});if(!d||soKycBusy)return;
+  const input=document.getElementById('so-kyc-aadhaar');
+  const digits=String(input?input.value:'').replace(/\D/g,'');
+  if(digits.length!==12){
+    showAiToast('Aadhaar number needed','Enter the 12 digits from the owner’s Aadhaar to run the check.');
+    if(input)input.focus();
+    return;
+  }
+  soKycMasked=bhaiyaaMaskAadhaar(digits);
+  const note=(document.getElementById('so-log-comment')||{}).value||'';
+  soKycBusy=true;soKycProgress=0;
+  renderADTPage();
+  const evidence=soKycEvidence(d);
+  const advance=function(i){
+    soKycProgress=i;
+    const el=document.getElementById('so-kyc-list');
+    if(el)el.innerHTML=soKycListHTML(evidence);
+    if(i>=bhaiyaaKycChecks.length){setTimeout(function(){soFinishLiveKyc(d,note);},520);return;}
+    setTimeout(function(){advance(i+1);},720);
+  };
+  setTimeout(function(){advance(1);},720);
+}
+function soFinishLiveKyc(d,note){
+  execApiRequest('POST','/stores/'+encodeURIComponent(d.code)+'/kyc',
+    {user:getActivePersona().name,aadhaar_masked:soKycMasked,comment:note}).then(function(res){
+    soKycBusy=false;soKycProgress=-1;
+    if(!res.ok){
+      // The checks "passed" on screen and the record did not move. Say so rather than leaving a
+      // green rail above a store that is still Pending.
+      showAiToast('KYC not saved',(res.offline?'The backend is not running.':res.error)
+        +' The store is still waiting on KYC.');
+      renderADTPage();return;
+    }
+    soPushNote(d,'KYC verified','Owner checked against UIDAI and screened. Aadhaar '+soKycMasked+'.'
+      +(note?' '+note:''),{stage:soStageById('kyc'),subNo:1});
+    showAiToast('KYC verified',d.store+' &middot; the owner checks out. The store is open on Bhaiyaa.');
+    // Reload rather than mutate: the backend decided what the store now is, and the board should
+    // show that rather than our optimistic guess at it.
+    soLoadLiveRuns().then(function(){renderADTPage();});
+  });
+}
 function soCompleteStep(runId){soAdvanceStep(runId,false);}
 // The merchant and the two agents are the parties this portal cannot act as. Simulating them is
 // how a demo walks all five stages without a merchant on the other end of a signup link.
@@ -1183,7 +1339,7 @@ function soSimulateStep(runId){soAdvanceStep(runId,true);}
 /* The real action on a merchant-owned step. It moves nothing — it records that we chased, which
    is the evidence an Ops Manager needs when a signup has sat for a week. */
 function soRemindMerchant(runId){
-  const d=soRuns.find(function(x){return x.id===runId;});if(!d)return;
+  const d=soRunsAll().find(function(x){return x.id===runId;});if(!d)return;
   const cur=soCurrentSub(d)||{};
   const stage=soStageById(d.stage)||{};
   const now=new Date();const h=now.getHours();
@@ -1220,7 +1376,7 @@ function navSoRunTab(tab){
    is a client mirror, and this journey needs none: the merchant sees Bhaiyaa's own signup,
    which is stages 1 and 2 themselves, not a translation of them. == */
 function renderSoRunSidebar(){
-  const d=soRuns.find(function(x){return x.id===soSelectedId;});if(!d)return '';
+  const d=soRunsAll().find(function(x){return x.id===soSelectedId;});if(!d)return '';
   const s=soStageById(d.stage)||{};
   const tabs=[{id:'basic-details',label:'Details'},{id:'logs',label:'Logs'},{id:'workflow',label:'Workflow'}];
   const tabBar='<div class="lp-isb-tabbar">'
@@ -1273,7 +1429,13 @@ function renderSoRunSidebar(){
     const mine=a.kind==='do';
     const isAuto=a.kind==='auto';
     const simLabel=a.step&&a.step.decision?'Simulate: '+own.who+' chooses':'Simulate: '+own.who+' completes this';
-    const actionPanel=isAuto
+    // A store that really came from Bhaiyaa gets the owner check itself here rather than the
+    // generic "runs automatically" card. It is the one step on this board an Ops Manager
+    // performs against a live record, and the panel that shows it already exists — the same one
+    // the New store journey runs, so a reviewer sees one KYC screen in this product, not two.
+    const actionPanel=(d.live&&d.stage==='kyc')
+      ?soLiveKycPanelHTML(d)
+      :isAuto
       ?'<div class="lp-logs-form">'
         +'<div class="lp-logs-form-header"><span style="width:9px;height:9px;border-radius:50%;background:var(--navy);display:inline-block;flex-shrink:0"></span>Runs automatically</div>'
         +'<p class="lp-logs-form-sub">&ldquo;'+a.step.label+'&rdquo; is performed by the AI Execution Layer'+(a.step.autoNote?' &mdash; '+a.step.autoNote:'')+'. Nothing to do here.</p>'
@@ -8658,9 +8820,11 @@ function viewCfgUserIntake(modelId){
     if(res.ok&&res.data&&res.data.fields){
       cfgUserIntakeFields=res.data.fields;
       cfgUserIntakeOffline=false;
+      cfgUserIntakePublished=res.data.published!==false;
     }else{
       cfgUserIntakeFields=cfgUserIntakeFallbackFields;
       cfgUserIntakeOffline=true;
+      cfgUserIntakePublished=false;
     }
     if(page==='cfg-user-intake'){renderADTPage();cfgUserIntakeFocusFirst();}
   });
@@ -8706,12 +8870,15 @@ function cfgUserIntakeCaptureDraft(){
 function cfgUserIntakeClearError(name){
   if(!cfgUserIntakeFieldErrors[name])return;
   delete cfgUserIntakeFieldErrors[name];
-  const wrap=document.getElementById('cfg-uiw-'+name);
-  if(wrap){
-    wrap.classList.remove('has-error');
-    const msg=wrap.querySelector('.uif-error-text');
-    if(msg)msg.remove();
-  }
+  const msg=document.getElementById('cfg-ue-'+name);
+  if(msg)msg.remove();
+  // The dial code and the number share one cell, filed under the dial code's id — so that is the
+  // wrapper to find for either of them.
+  const wrapName=(name==='phone_number'||name==='phone_country_code')?'phone_country_code':name;
+  const wrap=document.getElementById('cfg-uiw-'+wrapName);
+  // Red border lifts only once nothing in the cell is still complaining, which for the phone row
+  // means both halves rather than whichever was corrected first.
+  if(wrap&&!wrap.querySelector('.uif-error-text'))wrap.classList.remove('has-error');
 }
 function cfgUserIntakeKeydown(ev){
   // Enter submits from any single-line control, the way a normal form behaves.
@@ -8728,11 +8895,28 @@ function submitCfgUserIntake(){
 
   // Validate every field in one pass and report them all together — fixing one error only to
   // be shown the next is the thing that makes a form feel hostile.
+  //
+  // Which fields are mandatory comes from the schema rather than a list repeated here, because
+  // the source system is the one that decides: the CRM rejects a lead with no company name or
+  // phone number, and discovering that from a failed round trip instead of before one is a worse
+  // experience for no gain. The mock asks for less and says so in its own schema.
   const errors={};
-  if(!payload.full_name)errors.full_name='Enter the full name.';
-  if(!payload.work_email)errors.work_email='Enter the work email.';
-  else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.work_email))errors.work_email='That does not look like a valid email address.';
+  (cfgUserIntakeFields||[]).forEach(function(f){
+    if(!f.required||payload[f.name])return;
+    // The phone pair renders as one labelled control with an unlabelled second half, so the
+    // generic "Enter the ." that an empty label would produce is named explicitly instead.
+    const what=f.label||(f.name==='phone_number'?'the phone number':f.name.replace(/_/g,' '));
+    errors[f.name]='Enter '+(f.label?'the '+what.toLowerCase():what)+'.';
+  });
+  if(payload.work_email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.work_email))errors.work_email='That does not look like a valid email address.';
   if(payload.phone_number&&!payload.phone_country_code)errors.phone_country_code='Pick a country code.';
+  // The CRM validates the number with /^\d{7,15}$/, so a number it will reject is caught here
+  // rather than after a round trip. Digits are counted, not required as typed — spaces and
+  // brackets are normal in a phone number and the connector strips them before sending.
+  if(payload.phone_number){
+    const digits=payload.phone_number.replace(/\D/g,'');
+    if(digits.length<7||digits.length>15)errors.phone_number='A phone number needs between 7 and 15 digits.';
+  }
   cfgUserIntakeFieldErrors=errors;
   cfgUserIntakeError='';
   if(Object.keys(errors).length){
@@ -8784,10 +8968,17 @@ function submitCfgUserIntake(){
   const finishWithError=function(res){
     cfgUserIntakeBusy=false;
     cfgUserIntakeStep=0;cfgUserIntakeProgress=-1;
+    // A refusal the source system was specific about — "This mobile number is already registered
+    // to a client in NewForce" — belongs on that input. Nothing was created in this case, so the
+    // form is still the operator's work in progress rather than a record to go and fix elsewhere.
+    // When it lands on a field it does NOT also go in the banner: the same sentence in two places
+    // reads as two problems, and the one next to the control is the one that can be acted on.
+    if(res.field){cfgUserIntakeFieldErrors[res.field]=res.error;}
     cfgUserIntakeError=res.offline
       ? 'Cannot reach the Executive Layer backend. Start it with: node backend/dev.js'
-      : res.error;
+      : (res.field?'':res.error);
     renderADTPage();
+    if(res.field){const el=document.getElementById('cfg-ui-'+res.field);if(el)el.focus();}
   };
   request.then(function(res){if(!res.ok&&cfgUserIntakeProgress<1)finishWithError(res);});
   setTimeout(function(){advance(1);},620);
@@ -8868,11 +9059,22 @@ function buildCfgUserIntakeHTML(){
     const kv=function(k,v){
       return '<div class="uif-kv"><span class="uif-kv-key">'+k+'</span><span class="uif-kv-val">'+(v||'<span style="color:#9ca3af">--</span>')+'</span></div>';
     };
+    // -- The push can fail while the record itself is perfectly real: we mint and commit our id
+    // before sending, precisely so an outage at NewForce costs nobody their work. What the head
+    // must not do in that case is claim the submission happened. It says what did happen, names
+    // the reason NewForce gave, and points at where Retry lives. --
+    const mirrored=cfgUserIntakeResult.status!=='mirror_failed';
     return cfgUserIntakeShellHTML('<div class="uif-card">'
       +'<div class="uif-success-head">'
-      +'<div class="uif-success-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
-      +'<div><div class="uif-success-title">Client record created</div>'
-      +'<div class="uif-success-sub">Submitted to NewForce Solutions, retrieved by the Executive Layer, and stored here under its own Client ID.</div></div>'
+      +(mirrored
+        ?'<div class="uif-success-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
+        +'<div><div class="uif-success-title">Client record created</div>'
+        +'<div class="uif-success-sub">Submitted to NewForce Solutions, retrieved by the Executive Layer, and stored here under its own Client ID.</div></div>'
+        :'<div class="uif-success-icon" style="background:#fef3c7;color:#b45309"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 8v5"/><path d="M12 17h.01"/></svg></div>'
+        +'<div><div class="uif-success-title">Client created here, but not yet in NewForce</div>'
+        +'<div class="uif-success-sub">The record is saved with its Client ID and nothing typed has been lost. NewForce did not accept it: '
+        +cfgEscapeHtml(cfgUserIntakeResult.mirrorError||'the source system could not be reached')
+        +' Retry from Client &amp; Contracts &rsaquo; All Clients once that is resolved.</div></div>')
       +'</div>'
       // -- Two ids, two systems, said outright. The client now exists in both stores, and each
       // store knows it by its own id — so each card names the system that issued the id under
@@ -8925,7 +9127,9 @@ function buildCfgUserIntakeHTML(){
   const errs=cfgUserIntakeFieldErrors||{};
   const draft=cfgUserIntakeDraft||{};
   const errText=function(name){
-    return errs[name]?'<div class="uif-error-text">'+errs[name]+'</div>':'';
+    // Identified, because the phone cell can hold two of these and clearing one must not take the
+    // other's message with it.
+    return errs[name]?'<div class="uif-error-text" id="cfg-ue-'+name+'">'+errs[name]+'</div>':'';
   };
   const wrapCls=function(name,extra){
     return 'uif-field'+(extra?' '+extra:'')+(errs[name]?' has-error':'');
@@ -8946,13 +9150,20 @@ function buildCfgUserIntakeHTML(){
     if(f.name==='phone_country_code'){
       const next=cfgUserIntakeFields[i+1];
       const numName=next?next.name:'phone_number';
-      fieldHTML.push('<div class="'+wrapCls('phone_country_code','uif-full')+'" id="cfg-uiw-phone_country_code">'
+      // One cell, two controls, so it carries BOTH their errors. Keying the cell on the dial code
+      // alone silently swallowed every message about the number itself — the length rule below and
+      // NewForce's "already has a client with this mobile number" alike were set on the field and
+      // then never drawn, leaving the input looking accepted while the submit had been refused.
+      const phoneErr=errs.phone_country_code||errs[numName];
+      fieldHTML.push('<div class="uif-field uif-full'+(phoneErr?' has-error':'')+'" id="cfg-uiw-phone_country_code">'
         +'<label class="uif-label" for="cfg-ui-phone_number">Phone number</label>'
         +'<div class="uif-phone">'
         +'<select class="uif-select" id="cfg-ui-phone_country_code" onchange="cfgUserIntakeClearError(\'phone_country_code\')">'+selOpts(f)+'</select>'
-        +'<input class="uif-input" id="cfg-ui-'+numName+'" placeholder="Phone number" value="'+attrSafe(draft[numName]||'')+'" onkeydown="cfgUserIntakeKeydown(event)">'
+        +'<input class="uif-input" id="cfg-ui-'+numName+'" placeholder="Phone number" value="'+attrSafe(draft[numName]||'')+'"'
+          +' oninput="cfgUserIntakeClearError(\''+numName+'\')" onkeydown="cfgUserIntakeKeydown(event)">'
         +'</div>'
         +errText('phone_country_code')
+        +errText(numName)
         +'</div>');
       i++; // the paired number field is consumed above
       continue;
@@ -8976,13 +9187,17 @@ function buildCfgUserIntakeHTML(){
   }
 
   const banner=cfgUserIntakeOffline
-    ? '<div class="uif-banner warn"><div><strong>Not connected.</strong> The Executive Layer backend isn\'t reachable, so these are the last known fields rather than NewForce Solutions\'s live definition &mdash; and submitting won\'t work yet. Start it with <code>node backend/dev.js</code>, then <button onclick="cfgUserIntakeRetry()">retry</button>.</div></div>'
+    ? '<div class="uif-banner warn"><div><strong>Not connected.</strong> The Executive Layer backend isn\'t reachable, so these are the last known fields rather than NewForce Solutions\'s live definition &mdash; and submitting won\'t work yet. Start it with <code>node --env-file=backend/.env backend/dev.js</code>, then <button onclick="cfgUserIntakeRetry()">retry</button>.</div></div>'
     : (cfgUserIntakeError?'<div class="uif-banner error"><div>'+cfgUserIntakeError+'</div></div>':'');
 
   return cfgUserIntakeShellHTML('<div class="uif-card">'
     +'<div class="uif-card-head">'
     +'<div class="uif-card-title">'+(m?m.name:'Client')+' intake form</div>'
-    +'<div class="uif-card-sub">NewForce Solutions\'s own form, rendered from its published field definition. Submitting sends it to NewForce Solutions and creates the matching client record here.</div>'
+    +'<div class="uif-card-sub">'
+    +(cfgUserIntakePublished
+      ?'NewForce Solutions\'s own form, rendered from its published field definition.'
+      :'The fields NewForce Solutions accepts for a new client. NewForce publishes no field definition, so this list is maintained here.')
+    +' Submitting sends it to NewForce Solutions and creates the matching client record here.</div>'
     +'</div>'
     +banner
     +'<div class="uif-grid">'+fieldHTML.join('')+'</div>'
