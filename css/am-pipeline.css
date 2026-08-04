@@ -204,6 +204,10 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
   color:var(--navy);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
 .am-sb-openrun:hover{border-color:var(--navy);background:var(--light)}
 .am-sb-openrun svg{flex-shrink:0;opacity:.75}
+/* The same button cut for a listing cell: auto width, tighter padding, no stacking margin. It
+   sits at the END of the row beside the drawer's hamburger, and must not wrap mid-label. */
+.am-row-end{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.am-sb-openrun.row{width:auto;margin-top:0;padding:7px 10px;font-size:11.5px;white-space:nowrap;flex-shrink:0}
 /* The rest of the stage, read-only. */
 .am-sb-steps{border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:18px;background:#fff}
 .am-sb-steps-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:10px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:9px}

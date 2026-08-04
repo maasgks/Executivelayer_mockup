@@ -565,9 +565,15 @@ function buildAmDealsListingHTML(){
     {w:'9%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
      cell:function(d){return '<span class="am-c-age'+(d.breach?' breach':'')+'">'+d.age+'d</span>'
        +(d.breach?'<div class="cell-sub am-c-late">Too long</div>':'');}},
-    {w:'19%',cw:'24%',th:'What to do next',cell:amNextActionCellHTML},
-    {w:'8%',cw:'8%',th:'',
-     cell:function(d){return '<button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>';}}
+    {w:'14%',cw:'18%',th:'What to do next',cell:amNextActionCellHTML},
+    // The way into the deal's run sits at the END of the row — same design as everywhere, sized
+    // for a cell — with the drawer's hamburger beside it. It moved here from the drawer's Logs
+    // panel: two clicks to reach a button that opens something else was one too many.
+    {w:'13%',cw:'14%',th:'',
+     cell:function(d){return '<div class="am-row-end">'
+       +'<button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>'
+       +ccjOpenRunBtnHTML(d,true)
+       +'</div>';}}
   ].filter(function(c){return !(compact&&c.hideWhenCompact);});
   const colgroup='<colgroup>'+columns.map(function(c){return '<col style="width:'+(compact?c.cw:c.w)+'">';}).join('')+'</colgroup>';
   const head='<thead><tr>'+columns.map(function(c){return '<th'+(c.thTitle?' title="'+attrSafe(c.thTitle)+'"':'')+'>'+c.th+'</th>';}).join('')+'</tr></thead>';
@@ -811,10 +817,8 @@ function renderAmDealSidebar(){
           ?'<button class="lp-logs-save-btn" onclick="amCompleteStep('+d.id+')">Mark &ldquo;'+a.step.label+'&rdquo; done</button>'
           :'<button class="lp-logs-save-btn" onclick="amSimulateStep('+d.id+')">'+simLabel+'</button>'
             +(a.kind==='chase'?'<button class="am-sb-chase-link" onclick="amRemindClient('+d.id+')">Send the client a reminder instead</button>':''))
-        // -- Deliberately OUTSIDE the `mine` branch. Marking a step done is owned; opening the
-        // record is not, and gating it would hide the way in on every deal waiting on Pricing or
-        // on the client — which is exactly when someone wants to look at the detail. --
-        +ccjOpenRunBtnHTML(d)
+        // The way into the deal's run lives at the end of the LISTING ROW, not here — the Logs
+        // panel keeps to its one job, completing the step in front of you.
         +'</div>';
     /* The "Manual steps in <stage>" checklist that used to sit above the trail is gone. Logs is
        the action tab: one thing to do, and the record of what has been done. The checklist was a
@@ -9035,13 +9039,15 @@ function buildCfgDataFoundationHTML(){
 }
 /* The way into a deal's own run of the Hire and Onboard journey. Says which of the two it is —
    opening a run that exists is a different act from starting one, and a control that reads the
-   same either way makes the first click feel destructive. */
-function ccjOpenRunBtnHTML(d){
+   same either way makes the first click feel destructive. `row` is the cell-sized cut of the same
+   design; stopPropagation because the whole row is itself a click that opens the drawer. */
+function ccjOpenRunBtnHTML(d,row){
   const has=typeof ccjRuns!=='undefined'&&ccjRuns[d.id];
   const ico='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
     +'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
-  return '<button class="am-sb-openrun" onclick="ccjOpenDealRun('+d.id+')">'+ico
-    +(has?'Open full run':'Start full run')+'</button>';
+  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="event.stopPropagation();ccjOpenDealRun('+d.id+')" title="'
+    +(has?'Open this deal&rsquo;s run from here':'Start this deal&rsquo;s run from here')+'">'+ico
+    +(has?'Open run':'Start run')+'</button>';
 }
 function cfgMapRow(unified,source,type){
   return '<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed var(--border)">'
