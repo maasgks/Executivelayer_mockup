@@ -2943,52 +2943,28 @@ const cfgModels=[
       // under a day type is the category error the logs table already had to be corrected for.
       ['Demo Slot','demo_datetime','string']
     ],
-    // -- Account, commercial, compliance. Not one of these is on the intake form, and that is the
-    // point: the form produces a lead, and this set is what a lead has to acquire before it can be
-    // contracted against. The shape follows a standard customer master rather than anything
-    // invented here — stewardship (owner), classification (industry, tier), commercial terms
-    // (contracting entity, tax id, payment terms, currency) and credit/compliance (KYB, risk
-    // category). That is the same four-part split Vendor above carries in miniature as Risk
-    // Category / ESG Score / Preferred Status.
+    // -- Account and commercial. Not one of these is on the intake form, and that is the point:
+    // the form produces a lead, and these seven are what a lead has to acquire before it can be
+    // contracted against. Service Line Confirmed sits deliberately next to the mapped Looking For
+    // — the form's answer is what the lead said they wanted, this is what they actually bought,
+    // and conflating the two is how a pipeline reports revenue against a wish. --
     //
-    // Three of these exist because we sell EOR, not software. Contracting Entity is the legal
-    // party that signs and is billed, which is routinely not the trading name typed into the form
-    // — Helioworks the brand, Helioworks B.V. the counterparty. Tax / VAT ID is what decides
-    // whether an invoice carries VAT or is reverse-charged across a border. KYB Status is a gate
-    // rather than a note: no worker is onboarded under a client that has not cleared it, which is
-    // an obligation our banking and AML exposure imposes on us, not a preference.
-    //
-    // Credit Risk Category closes an asymmetry that was hard to defend — we scored vendors for
-    // risk and extended payment terms to clients without scoring them at all. Payment Terms is
-    // its pair: Vendor carries terms as a mapped field from SAP, and the client side had no terms
-    // recorded anywhere, so every invoice run had to infer them.
-    //
-    // Service Line Confirmed sits deliberately next to the mapped Looking For — the form's answer
-    // is what the lead said they wanted, this is what they actually bought, and conflating the two
-    // is how a pipeline reports revenue against a wish. --
-    //
-    // Lead Stage is gone, for the same reason Status went before it: this is a master record, and
-    // pipeline position is opportunity state that moves week to week. A master object holding it
-    // guarantees a stale field, and the record's own Pending/Active already reports whether it is
-    // usable. The employee-shaped set both of those replaced (Department, Job Title, Branch,
-    // Joining Date) was a leftover from when this object was called `user` and held a person. It
-    // holds a company.
+    // The employee-shaped set this replaced (Department, Job Title, Branch, Joining Date) was a
+    // leftover from when this object was called `user` and held a person. It holds a company.
+    // Status went with them: a record's lifecycle state is set by the system, not supplied by an
+    // operator, so it was never an enrichment field — it is still on the record and still what
+    // Pending/Active reports.
     enrichment:[
       {name:'Account Owner',type:'string'},
-      {name:'Industry',type:'string'},
       {name:'Client Tier',type:'string'},
+      {name:'Lead Stage',type:'string'},
       {name:'Expected Headcount',type:'number'},
       {name:'Service Line Confirmed',type:'string'},
-      {name:'Contracting Entity',type:'string'},
-      {name:'Tax / VAT ID',type:'string'},
-      {name:'KYB Status',type:'string'},
-      {name:'Credit Risk Category',type:'string'},
-      {name:'Payment Terms',type:'string'},
-      {name:'Billing Currency',type:'string'},
-      {name:'Contract Start Date',type:'date'}
+      {name:'Contract Start Date',type:'date'},
+      {name:'Billing Currency',type:'string'}
     ],
     rules:{makerChecker:true,validation:'Full name and work email are required. Client ID is minted here and unique; Source Record ID must be unique too — a repeat resolves to the existing client instead of creating a second one. Record enters as Pending until enrichment fields are supplied'},
-    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Industry','Renewable Energy'],['Client Tier','Mid-market'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contracting Entity','Helioworks B.V.'],['Tax / VAT ID','NL861847533B01'],['KYB Status','Cleared · 22 Jul 2026'],['Credit Risk Category','Low'],['Payment Terms','Net 30'],['Billing Currency','EUR'],['Contract Start Date','2026-09-01']]}
+    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Client Tier','Mid-market'],['Lead Stage','Qualified'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contract Start Date','2026-09-01'],['Billing Currency','EUR']]}
 ];
 let cfgModelTested={};
 let cfgModelEditing=false;
