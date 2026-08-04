@@ -258,3 +258,15 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
    thing it competes with is the one it must not: the age column that says late. */
 .so-halt{margin:-2px 0 15px;padding:10px 13px;border:1px solid var(--am-strong-line);border-left:3px solid var(--navy);border-radius:8px;background:var(--am-quiet-bg);font-size:11.5px;line-height:1.6;color:var(--gray)}
 .so-halt b{color:var(--navy);font-weight:800}
+
+/* The KYC preview in the Logs action panel: a few lines of what Bhaiyaa returned,
+   shown before the button that leaves for the journey. It sits inside the panel's
+   own card, so it is inset rather than bordered all round — another box inside a
+   box reads as two panels when it is one thought. */
+.so-kycp{margin:2px 0 12px;padding:10px 12px;border-radius:9px;background:#f8fafc;
+  border-left:2.5px solid #cbd5e1}
+.so-kycp-head{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;
+  letter-spacing:.4px;text-transform:uppercase;color:var(--gray);margin-bottom:8px}
+.so-kycp-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:2.5px 0}
+.so-kycp-k{font-size:11px;color:var(--gray);flex-shrink:0}
+.so-kycp-v{font-size:11.5px;font-weight:600;color:var(--navy);text-align:right;overflow-wrap:anywhere}
