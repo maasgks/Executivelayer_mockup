@@ -2675,7 +2675,7 @@ const aiJourneys=[
   // matcher, a compliance sync and a publisher — none of which exist anywhere in the build. The
   // one journey wired to a real backend is the one that should not be describing imaginary work. --
   {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',modules:['Client','Master Data','NewForce Solutions'],coverage:0,humanSteps:3,aiSteps:0,status:'Active',risk:'Low',updated:'29 Jul 2026, 9:45 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3"/><path d="M20 5.5v6"/><path d="M4 12c0 1.7 3.6 3 8 3"/><path d="M18 15v6M15 18h6"/></svg>'},
-  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
+  {id:'contract-creation',name:'Hire and Onboard Journey',category:'O2C',desc:'Takes a client request from quote and client contract through the deposit, the employment contract, onboarding, and on to payroll.',modules:['Deal Desk','Employee Profile','Proposal','Contracts','Onboarding','Payroll'],coverage:72,humanSteps:2,aiSteps:5,status:'Active',risk:'Medium',updated:'02 Jul 2026, 10:20 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>'},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',modules:['Payroll','Timesheet','Payheads','Compliance Hub','Finance'],coverage:83,humanSteps:1,aiSteps:5,status:'Active',risk:'Medium',updated:'03 Jul 2026, 4:30 PM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.6"/></svg>'},
   {id:'h2r-lifecycle',name:'Hire to Retire (H2R) Journey',category:'H2R',desc:'Automates the full employee lifecycle from creation through country-specific compliance and leave policy setup to eventual offboarding.',modules:['Employee Profile','Compliance Hub','Leave','Onboarding'],coverage:65,humanSteps:1,aiSteps:4,status:'Active',risk:'Medium',updated:'28 Jun 2026, 11:00 AM',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>'},
   // -- Two human stages (the role choice and the signup) and three the agents run: KYC, the
@@ -3117,16 +3117,38 @@ const cfgJourneys=[
       {name:'Submission & Ingestion',src:'Account Manager',type:'rule'},
       {name:'Client Record Created',src:'Account Manager',type:'rule'}
     ]},
-  {id:'contract-creation',name:'Contract Creation Journey',category:'O2C',desc:'Automates the flow from deal creation through proposal, contract signing, onboarding, and payroll readiness.',status:'Inactive',tags:['8 steps','Deal Desk, Contracts'],
+  /* -- Nine steps, and they are the nine amPipelineStages `short` labels verbatim — the same
+     vocabulary the pipeline board, the journey bar and aiJourneyEvents already use. The eight
+     that were here were the journey as it was first built, before the deposit gate and before
+     the two signings were told apart, and they were a second set of names for the same states:
+     "Send Proposal" for what the board calls Quote sent, "Signature Received" for Worker signing.
+
+     The count is not cosmetic. buildAIResponsibilitySplitHTML pairs these steps with
+     aiJourneyEvents POSITIONALLY and only when the two lengths match — at eight against nine it
+     matched nothing, so the configured names were silently dropped and the split fell back to the
+     event names. Nine is what makes this list the one that is actually read.
+
+     NAME. "Contract Creation Journey" described the first half and stopped there: five of these
+     nine stages happen after the client contract is signed, and the journey does not finish until
+     a named person is employed and on payroll. Hire and Onboard is what it does end to end, and
+     it is the word the AI Executive cards had already settled on — see AI_EXEC_CARD_COPY.
+     The id stays 'contract-creation' — it is wired through routing, RBAC, activation state,
+     run records and aiJourneyEvents. Only the label changed. -- */
+  {id:'contract-creation',name:'Hire and Onboard Journey',category:'O2C',desc:'Takes a client request from quote and client contract through the deposit, the employment contract, onboarding, and on to payroll.',status:'Inactive',tags:['9 steps','Deal Desk, Contracts'],
     steps:[
-      {name:'Create Deal & Employee Record',src:'AI Prompt Parser',type:'src'},
-      {name:'Send Proposal',src:'AI Contract Assistant',type:'src'},
-      {name:'Proposal Approval',src:'Deal Manager',type:'rule'},
-      {name:'Send Contract for Signature',src:'AI + Docuseal',type:'src'},
-      {name:'Signature Received',src:'Employee (via Docuseal)',type:'src'},
-      {name:'Contract Approval',src:'Ops Manager',type:'rule'},
-      {name:'Run Onboarding',src:'AI Onboarding Engine',type:'src'},
-      {name:'Check Payroll Readiness',src:'AI Payroll Readiness Check',type:'src'}
+      {name:'New request',src:'AI Prompt Parser',type:'src'},
+      {name:'Quote in preparation',src:'AI Compliance Hub Sync',type:'src'},
+      {name:'Quote sent',src:'AI Contract Assistant',type:'src'},
+      {name:'Quote accepted',src:'Deal Manager',type:'rule'},
+      {name:'Client signing',src:'AI + Docuseal',type:'src'},
+      // The gate. Human, not agent-run: money has to be confirmed received before a placement
+      // may start, and that is a call Finance makes.
+      {name:'Deposit due',src:'Finance',type:'rule'},
+      // The worker's own signature, then the Ops Manager's approval of it — one stage, and human
+      // at both ends, which is why it is a rule where the old 'Signature Received' was a source.
+      {name:'Worker signing',src:'Employee (via Docuseal)',type:'rule'},
+      {name:'Onboarding',src:'AI Onboarding Engine',type:'src'},
+      {name:'Working',src:'AI Payroll Readiness Check',type:'src'}
     ]},
   {id:'payroll-creation',name:'Payroll Creation Journey',category:'H2R',desc:'Automates payroll runs end-to-end from a prompt through attendance capture, salary calculation, approval, and salary slip creation.',status:'Active',tags:['6 steps','Payroll, Compliance Hub'],
     steps:[
@@ -3169,13 +3191,13 @@ let notifiedRunIds=new Set();
 // -- runId -> personaId of whoever a "Notify Owner" action targeted. Lets a notified persona see the run in their own My Tasks even when the event-source ownership heuristic in personaOwnedRunItems doesn't independently recognize them as the owner. --
 let notifiedRunOwners={};
 const cockpitDepartmentDirectory=[
-  {id:'hr',name:'HR',summary:'Employee lifecycle, onboarding, attendance, payroll setup, and H2R approvals.',admin:{name:'Ananya Rao',email:'ananya.rao@dhi.com',title:'HR Team Lead',journeys:['Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Ramesh Patel',email:'ramesh.patel@dhi.com',title:'HR Associate',journeys:['Payroll Creation Journey']},{name:'Priya Sharma',email:'priya.sharma@dhi.com',title:'HR Associate',journeys:['Hire to Retire (H2R) Journey']},{name:'Aishi Verma',email:'aishi.verma@dhi.com',title:'HR Associate',journeys:['Contract Creation Journey','Payroll Creation Journey']}]},
-  {id:'compliance',name:'Compliance',summary:'Compliance Hub checks, statutory rules, document readiness, and blockers.',admin:{name:'Kiran Iyer',email:'kiran.iyer@dhi.com',title:'Compliance Team Lead',journeys:['Contract Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Meera Nair',email:'meera.nair@dhi.com',title:'Compliance Associate',journeys:['Contract Creation Journey']},{name:'Devika Rao',email:'devika.rao@dhi.com',title:'Compliance Associate',journeys:['Hire to Retire (H2R) Journey']}]},
+  {id:'hr',name:'HR',summary:'Employee lifecycle, onboarding, attendance, payroll setup, and H2R approvals.',admin:{name:'Ananya Rao',email:'ananya.rao@dhi.com',title:'HR Team Lead',journeys:['Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Ramesh Patel',email:'ramesh.patel@dhi.com',title:'HR Associate',journeys:['Payroll Creation Journey']},{name:'Priya Sharma',email:'priya.sharma@dhi.com',title:'HR Associate',journeys:['Hire to Retire (H2R) Journey']},{name:'Aishi Verma',email:'aishi.verma@dhi.com',title:'HR Associate',journeys:['Hire and Onboard Journey','Payroll Creation Journey']}]},
+  {id:'compliance',name:'Compliance',summary:'Compliance Hub checks, statutory rules, document readiness, and blockers.',admin:{name:'Kiran Iyer',email:'kiran.iyer@dhi.com',title:'Compliance Team Lead',journeys:['Hire and Onboard Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Meera Nair',email:'meera.nair@dhi.com',title:'Compliance Associate',journeys:['Hire and Onboard Journey']},{name:'Devika Rao',email:'devika.rao@dhi.com',title:'Compliance Associate',journeys:['Hire to Retire (H2R) Journey']}]},
   {id:'finance',name:'Finance',summary:'Payroll approvals, disbursement authorization, payments, and GL posting.',admin:{name:'Nisha Kapoor',email:'nisha.kapoor@dhi.com',title:'Finance Team Lead',journeys:['Payroll Creation Journey','Payroll to GL Posting Journey']},associates:[{name:'Arun Menon',email:'arun.menon@dhi.com',title:'Finance Associate',journeys:['Payroll Creation Journey']},{name:'Fatima Khan',email:'fatima.khan@dhi.com',title:'Finance Associate',journeys:['Month-End Close & Reconciliation Journey']}]},
-  {id:'operations',name:'Operations',summary:'Signed-contract readiness, onboarding handoff, payroll readiness, and escalations.',admin:{name:'Sanjay Kulkarni',email:'sanjay.kulkarni@dhi.com',title:'Ops Team Lead',journeys:['Contract Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Gojendra Singh',email:'gojendra.singh@dhi.com',title:'Ops Associate',journeys:['Contract Creation Journey']},{name:'Sneha Kulkarni',email:'sneha.kulkarni@dhi.com',title:'Ops Associate',journeys:['Hire to Retire (H2R) Journey']}]},
-  {id:'legal',name:'Legal',summary:'Contract generation, clause review, signature readiness, and legal exceptions.',admin:{name:'Dev Rajan',email:'dev.rajan@dhi.com',title:'Legal / Contracts Team Lead',journeys:['Contract Creation Journey']},associates:[{name:'Neha Sharma',email:'neha.sharma@dhi.com',title:'Contracts Associate',journeys:['Contract Creation Journey']},{name:'Owen Brooks',email:'owen.brooks@dhi.com',title:'Legal Associate',journeys:['Vendor Onboarding Journey']}]},
-  {id:'sales',name:'Sales',summary:'Deal desk, proposal drafting, client acceptance, and commercial approvals.',admin:{name:'Arjun Vaidya',email:'arjun.vaidya@dhi.com',title:'Sales Team Lead',journeys:['Contract Creation Journey']},associates:[{name:'Rajdeep Singh',email:'rajdeep.singh@dhi.com',title:'Account Manager',journeys:['Contract Creation Journey']},{name:'Anika Shah',email:'anika.shah@dhi.com',title:'Deal Desk Associate',journeys:['Contract Creation Journey']}]},
-  {id:'admin',name:'Admin',summary:'Entity governance, activation requests, system setup, and operational ownership.',admin:{name:'Entity Admin',email:'entity.admin@dhi.com',title:'Entity Team Lead',journeys:['Contract Creation Journey','Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Rahul Mehta',email:'rahul.mehta@dhi.com',title:'Entity Coordinator',journeys:['Contract Creation Journey']},{name:'Deepak Joshi',email:'deepak.joshi@dhi.com',title:'Systems Coordinator',journeys:['Hire to Retire (H2R) Journey']}]}
+  {id:'operations',name:'Operations',summary:'Signed-contract readiness, onboarding handoff, payroll readiness, and escalations.',admin:{name:'Sanjay Kulkarni',email:'sanjay.kulkarni@dhi.com',title:'Ops Team Lead',journeys:['Hire and Onboard Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Gojendra Singh',email:'gojendra.singh@dhi.com',title:'Ops Associate',journeys:['Hire and Onboard Journey']},{name:'Sneha Kulkarni',email:'sneha.kulkarni@dhi.com',title:'Ops Associate',journeys:['Hire to Retire (H2R) Journey']}]},
+  {id:'legal',name:'Legal',summary:'Contract generation, clause review, signature readiness, and legal exceptions.',admin:{name:'Dev Rajan',email:'dev.rajan@dhi.com',title:'Legal / Contracts Team Lead',journeys:['Hire and Onboard Journey']},associates:[{name:'Neha Sharma',email:'neha.sharma@dhi.com',title:'Contracts Associate',journeys:['Hire and Onboard Journey']},{name:'Owen Brooks',email:'owen.brooks@dhi.com',title:'Legal Associate',journeys:['Vendor Onboarding Journey']}]},
+  {id:'sales',name:'Sales',summary:'Deal desk, proposal drafting, client acceptance, and commercial approvals.',admin:{name:'Arjun Vaidya',email:'arjun.vaidya@dhi.com',title:'Sales Team Lead',journeys:['Hire and Onboard Journey']},associates:[{name:'Rajdeep Singh',email:'rajdeep.singh@dhi.com',title:'Account Manager',journeys:['Hire and Onboard Journey']},{name:'Anika Shah',email:'anika.shah@dhi.com',title:'Deal Desk Associate',journeys:['Hire and Onboard Journey']}]},
+  {id:'admin',name:'Admin',summary:'Entity governance, activation requests, system setup, and operational ownership.',admin:{name:'Entity Admin',email:'entity.admin@dhi.com',title:'Entity Team Lead',journeys:['Hire and Onboard Journey','Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Rahul Mehta',email:'rahul.mehta@dhi.com',title:'Entity Coordinator',journeys:['Hire and Onboard Journey']},{name:'Deepak Joshi',email:'deepak.joshi@dhi.com',title:'Systems Coordinator',journeys:['Hire to Retire (H2R) Journey']}]}
 ];
 const manualJourneyStepCatalog={
   // -- Every step agentCapable:false, which is what makes this journey read as Manual Mode with no
@@ -3197,7 +3219,13 @@ const manualJourneyStepCatalog={
     {name:'Signature Received',ownerRole:'Legal / Contracts Manager',modulePage:'contracts',manualAction:'Track the Docuseal countersignature request and confirm the employee has signed before routing for approval.',sla:'48h',agentCapable:true,exceptionType:'Signature timeout or bounce'},
     {name:'Signed Contract Approved',ownerRole:'Ops Manager',modulePage:'my-tasks',manualAction:'Verify signed contract against approved proposal and approve readiness.',sla:'4h',agentCapable:false,approvalRequired:true},
     {name:'Onboarding',ownerRole:'HR',modulePage:'direct',manualAction:'Run onboarding checklist, documents, reminders, and employee setup manually.',sla:'8h',agentCapable:true},
-    {name:'Payroll Readiness',ownerRole:'HR',modulePage:'payroll',manualAction:'Validate bank details, tax ID, compensation mapping, and pay frequency manually.',sla:'4h',agentCapable:true,exceptionType:'Incomplete bank details'}
+    {name:'Payroll Readiness',ownerRole:'HR',modulePage:'payroll',manualAction:'Validate bank details, tax ID, compensation mapping, and pay frequency manually.',sla:'4h',agentCapable:true,exceptionType:'Incomplete bank details'},
+    /* The deposit gate had no manual counterpart, because this catalogue predates it. Appended at
+       the END rather than inserted in journey order on purpose: run records carry currentStepIdx
+       into this array, and inserting at position 6 would silently move every step after it under
+       runs already in flight. Order here is not the journey's order — cfgToManualStepIndexMap is
+       what states that — so the safe position and the correct one are the same position. */
+    {name:'Deposit Invoice Cleared',ownerRole:'Finance Approver',modulePage:'payments',manualAction:'Raise the deposit invoice against the signed agreement and confirm the receipt has cleared before releasing the placement.',sla:'48h',agentCapable:false,exceptionType:'Deposit unpaid past terms'}
   ],
   'payroll-creation':[
     {name:'Payroll Run Initiated',ownerRole:'HR',modulePage:'payroll',manualAction:'Select payroll scope, employee list, and pay period manually.',sla:'2h',agentCapable:true},
@@ -3226,7 +3254,12 @@ const manualJourneyStepCatalog={
 };
 const cfgToManualStepIndexMap={
   'user-master-data':[0,1,2],
-  'contract-creation':[0,2,3,5,6,7,8,9],
+  /* Nine config steps now, so nine entries. Not in ascending order, and it should not be: this
+     maps journey position -> catalogue position, and the catalogue is stored in the order it grew
+     in. Deposit due is the appended step 10; Client signing is 5 and lands before it. Catalogue
+     step 7 (Signed Contract Approved) has no entry of its own because Worker signing covers the
+     signature and the approval of it in one stage. */
+  'contract-creation':[0,1,2,3,5,10,6,8,9],
   'payroll-creation':[0,1,2,3,4,7],
   'h2r-lifecycle':[0,3,6,7,11]
 };
@@ -3547,13 +3580,13 @@ const cfgAgents=[
 
 Model: Bharat GPT
 Type: Transaction agent
-Used in: Contract Creation Journey, Payroll Creation Journey, H2R Lifecycle Journey
+Used in: Hire and Onboard Journey, Payroll Creation Journey, H2R Lifecycle Journey
 Guardrail: Fully automated
 
 ## Role
 Parses a natural-language prompt to extract the employee's name, ID, and other key details needed to kick off a journey.
 
-## Context: Contract Creation Journey
+## Context: Hire and Onboard Journey
 Step: Create Deal & Employee Record
 Fields read: Employee Name, Employee ID, Country, Client, Contract Type
 Validation: Employee name and ID are matched or created against existing records.
@@ -3573,12 +3606,12 @@ On failure: A duplicate match raises an exception for manual resolution.
 
 ## Audit
 Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
-  {name:'AI Contract Assistant',type:'Transaction agent',desc:'Drafts commercial terms and compliance items, then prepares the proposal for approval.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Human approves next step',
+  {name:'AI Contract Assistant',type:'Transaction agent',desc:'Drafts commercial terms and compliance items, then prepares the proposal for approval.',model:'Bharat GPT',usedIn:'Hire and Onboard Journey',guardrail:'Human approves next step',
     skillMd:`# AI Contract Assistant — skill.md
 
 Model: Bharat GPT
 Type: Transaction agent
-Used in: Contract Creation Journey
+Used in: Hire and Onboard Journey
 Guardrail: Human approves next step
 
 ## Role
@@ -3601,12 +3634,12 @@ The next step, Proposal Approval, is owned by the Deal Manager and must be signe
 
 ## Audit
 Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
-  {name:'AI + Docuseal',type:'Transaction agent',desc:'Generates the contract from the approved proposal and sends it for signature via Docuseal.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Human approves next step',
+  {name:'AI + Docuseal',type:'Transaction agent',desc:'Generates the contract from the approved proposal and sends it for signature via Docuseal.',model:'Bharat GPT',usedIn:'Hire and Onboard Journey',guardrail:'Human approves next step',
     skillMd:`# AI + Docuseal — skill.md
 
 Model: Bharat GPT
 Type: Transaction agent
-Used in: Contract Creation Journey
+Used in: Hire and Onboard Journey
 Guardrail: Human approves next step
 
 ## Role
@@ -3629,12 +3662,12 @@ The next step, Contract Approval, is owned by the Ops Manager and must be signed
 
 ## Audit
 Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
-  {name:'AI Onboarding Engine',type:'Transaction agent',desc:'Runs the onboarding checklist — documents, compliance checks, and system access provisioning.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Fully automated',
+  {name:'AI Onboarding Engine',type:'Transaction agent',desc:'Runs the onboarding checklist — documents, compliance checks, and system access provisioning.',model:'Bharat GPT',usedIn:'Hire and Onboard Journey',guardrail:'Fully automated',
     skillMd:`# AI Onboarding Engine — skill.md
 
 Model: Bharat GPT
 Type: Transaction agent
-Used in: Contract Creation Journey
+Used in: Hire and Onboard Journey
 Guardrail: Fully automated
 
 ## Role
@@ -3654,12 +3687,12 @@ A missing document flags an exception for HR follow-up.
 
 ## Audit
 Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
-  {name:'AI Payroll Readiness Check',type:'Transaction agent',desc:'Validates that bank details, tax info, and compensation mapping are complete before the next payroll cycle.',model:'Bharat GPT',usedIn:'Contract Creation Journey',guardrail:'Fully automated',
+  {name:'AI Payroll Readiness Check',type:'Transaction agent',desc:'Validates that bank details, tax info, and compensation mapping are complete before the next payroll cycle.',model:'Bharat GPT',usedIn:'Hire and Onboard Journey',guardrail:'Fully automated',
     skillMd:`# AI Payroll Readiness Check — skill.md
 
 Model: Bharat GPT
 Type: Transaction agent
-Used in: Contract Creation Journey
+Used in: Hire and Onboard Journey
 Guardrail: Fully automated
 
 ## Role

@@ -241,7 +241,14 @@ const CCJ_CHASE_SEND=900;  // a reminder is visibly SENT before it reads as sent
                            // seconds of watching. The pause has to say "this was sent", not
                            // "wait here" — 900ms says the first and not the second.
 const CCJ_DOC_STEP=620;  // how long one field takes to come out of a document
-const CCJ_SCROLL=560;    // how long the form takes to travel to the field that just landed
+/* How long a scroll takes, as a function of how far it goes. A single duration cannot serve both
+   ends of the range: 560ms across a whole sheet is a glide, 560ms across one row is a drift that
+   is still finishing when the next field lands. So CCJ_SCROLL is now the ceiling — reached at
+   CCJ_SCROLL_FULL of travel — and anything shorter is scaled down to it, never below the floor,
+   which is where the easing stops reading as motion and starts reading as a jump. */
+const CCJ_SCROLL=560;      // the longest a travel may take — a full sheet
+const CCJ_SCROLL_MIN=220;  // the shortest — a hop to the next row
+const CCJ_SCROLL_FULL=560; // px of travel that earns the full duration
 const CCJ_AUTOGAP=2600;  // the pause after the last required field, before the proposal is made
 
 function ccjNewRun(){
@@ -4743,6 +4750,18 @@ function ccjStartExtraction(name,size){
     kept++;
     return false;
   });
+  /* Read in the SHEET's order, not the extractor's. ccjDocExtract lists the person before the
+     eligibility answers, which on the form live one section above them — so the read walked down
+     to Address, jumped back up to Nationality, then down again, and no amount of easing makes a
+     scroll that reverses look deliberate. Ordering the landings by the form puts the read where a
+     human reading the same document would be: top to bottom, one section at a time, each glide a
+     short hop onto the next blank. It also lines the card's citations up in section order, which
+     is the order a reviewer checks the paper in.
+
+     Sorted here rather than in ccjDocExtract because that function states what the document says;
+     the order it is REPLAYED in is a property of this animation. */
+  const sheetOrder=ccjAllFields().map(function(f){return f.k;});
+  fields.sort(function(a,b){return sheetOrder.indexOf(a.k)-sheetOrder.indexOf(b.k);});
   // `open` is the card's own disclosure state. It reads while it is reading, and folds to one
   // line once the run has moved past it — see ccjFinishExtraction.
   run.doc={name:name,size:size||0,fields:fields,at:0,done:false,open:true,kept:kept,absent:0};
@@ -4767,7 +4786,13 @@ function ccjExtractStep(){
   d.at++;
   ccjRepaintMsg(d.msg);                             // the card alone, not the stream around it
   ccjPaintScreen();
-  ccjScrollToField(item.k);                       // follow the fill down the sheet
+  /* Look ahead to the blank about to be filled, not back at the one just filled. The field that
+     landed is still on screen — it is the row directly above, and it is the one flashing — so
+     centring the next one shows the result and the destination together, and the sheet travels
+     one row at a time instead of re-centring on ground already covered. On the last field there
+     is no next, so it holds on what landed. */
+  const next=d.fields[d.at];
+  ccjScrollToField(next?next.k:item.k);
   ccjPaint();
   ccjScheduleChat(ccjExtractStep,CCJ_DOC_STEP);
 }
@@ -5174,9 +5199,27 @@ function ccjMaybeAutoProceed(){
     ccjCreateProposal();
   },CCJ_AUTOGAP);
 }
+/* A repaint rebuilds the screen's whole subtree, so the form's scroller is a NEW node — and a new
+   node starts at scrollTop 0. That is why the sheet snapped to the top every time a field landed:
+   not a scroll that went wrong, a scroll position that no longer existed. ccjScrollToField then
+   glided the entire sheet from 0 back down to the field, once per CCJ_DOC_STEP, which is the long
+   swoop between fields.
+
+   Carrying the offset across the swap makes the repaint invisible, and leaves the following glide
+   travelling the short distance it was always meant to travel — from where the eye already is to
+   the next field. Every caller benefits, not just the document read: typing a value into the form
+   repaints too, and threw the sheet to the top in exactly the same way.
+
+   Restored synchronously, before the browser can paint the new subtree, so there is no frame where
+   the form is drawn at the top. */
 function ccjPaintScreen(){
   const el=document.getElementById('ccj-screen');
-  if(el)el.innerHTML=ccjScreenHTML(ccjRun.stage,ccjRun.screen);
+  if(!el)return;
+  const scroller=function(){return el.querySelector?el.querySelector('.ccj-form-scroll'):null;};
+  const was=scroller();
+  const keep=was?was.scrollTop:0;
+  el.innerHTML=ccjScreenHTML(ccjRun.stage,ccjRun.screen);
+  if(keep>0){const now=scroller();if(now)now.scrollTop=keep;}
 }
 /* Bring a field into view inside the form's own scroller — never the page, which does not
    scroll. Used whenever attention moves to a field the user did not move it to themselves:
@@ -5195,7 +5238,10 @@ function ccjScrollToField(k){
   const r=el.getBoundingClientRect(),br=box.getBoundingClientRect();
   if(!r.height&&!br.height)return;                 // not laid out yet
   // Centre it, so the rows above give context for the one that just changed.
-  ccjGlide(box,box.scrollTop+(r.top-br.top)-(box.clientHeight/2-r.height/2));
+  // Its own lane. The transcript ('stream') scrolls on the same beat during a document read, and
+  // sharing the default lane meant whichever started second cancelled the other — the exact
+  // failure the lane comment below describes, still being made by this call site.
+  ccjGlide(box,box.scrollTop+(r.top-br.top)-(box.clientHeight/2-r.height/2),'form');
 }
 /* Native smooth scrolling is about 300ms and cannot be slowed, which reads as a snap when a
    document is landing a field every half second. This eases over CCJ_SCROLL instead, and a new
@@ -5213,6 +5259,7 @@ function ccjGlide(box,top,lane){
   if(typeof requestAnimationFrame!=='function'){box.scrollTop=target;return;}
   const from=box.scrollTop, dist=target-from;
   if(Math.abs(dist)<2)return;
+  const dur=Math.max(CCJ_SCROLL_MIN,Math.min(CCJ_SCROLL,CCJ_SCROLL*Math.abs(dist)/CCJ_SCROLL_FULL));
   const token=(ccjGlideLane[key]={box:box,target:target});
   let t=0;
   // Counted, not flagged: two lanes can be gliding at once and a boolean would be cleared by
@@ -5224,7 +5271,7 @@ function ccjGlide(box,top,lane){
   const tick=function(){
     if(ccjGlideLane[key]!==token){finish();return;}  // a newer scroll on this lane took over
     t+=16;
-    const k=Math.min(1,t/CCJ_SCROLL);
+    const k=Math.min(1,t/dur);
     const e=1-Math.pow(1-k,3);                     // ease-out cubic
     box.scrollTop=from+dist*e;
     if(k<1){requestAnimationFrame(tick);return;}

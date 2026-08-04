@@ -217,7 +217,7 @@ check('the AI Executive cards render the launcher copy, not the catalogue names'
   run(`(function(){portalRole='entity-user';activePersonaId='account-manager';
         const h=buildAIExecutiveDashboardHTML();
         return h.indexOf('Create Client')>-1 && h.indexOf('Hire and Onboard')>-1
-          && h.indexOf('Client Creation Journey')===-1 && h.indexOf('Contract Creation Journey')===-1
+          && h.indexOf('Client Creation Journey')===-1 && h.indexOf('Hire and Onboard Journey')===-1
           && h.indexOf('ai-journey-meta-chip')===-1;})()`));
 
 /* ------------------------------------------------- 9. the stitch: one owner per hop ---- */

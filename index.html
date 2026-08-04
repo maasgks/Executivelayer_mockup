@@ -149,13 +149,23 @@
      owns, so pointing it back at the input above would have been the one thread still tying the
      snapshot to the file it was taken from. -->
 <input type="file" id="ccjv1-upload-input" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="ccjv1HandleUpload(event)">
-<script src="js/exec-config.js"></script>
-<script src="js/execApi.js"></script>
-<script src="js/core.js"></script>
-<script src="js/pages.js"></script>
-<script src="js/contract-journey.js"></script>
-<script src="js/contract-journey-v1.js"></script>
-<script src="js/renderer.js"></script>
+<!-- The ?v= token is a cache key, not decoration. These files are plain <script src> with no
+     bundler and no content hash, so a browser that has seen js/core.js once is entitled to keep
+     serving it: backend/static-server.js sends Cache-Control: no-cache, but the app is also
+     opened over file:// and through other static servers that do not, and there the stale copy
+     wins silently — the page renders old data with no error to notice. Changing the token
+     changes the URL, which is the one thing a cache cannot ignore.
+
+     BUMP THIS whenever you change a js/ file and want to be sure of what you are looking at.
+     Same token on every tag on purpose: they are one application and shipping half a new build
+     against half an old one is worse than shipping the old one. -->
+<script src="js/exec-config.js?v=20260804-1"></script>
+<script src="js/execApi.js?v=20260804-1"></script>
+<script src="js/core.js?v=20260804-1"></script>
+<script src="js/pages.js?v=20260804-1"></script>
+<script src="js/contract-journey.js?v=20260804-1"></script>
+<script src="js/contract-journey-v1.js?v=20260804-1"></script>
+<script src="js/renderer.js?v=20260804-1"></script>
 
 
 

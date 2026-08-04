@@ -3145,7 +3145,7 @@ function prReadinessBannerHTML(emp){
   const curStep=steps[run.currentStepIdx];
   if(!curStep||curStep.name!=='Payroll Readiness')return '';
   const j=aiJourneys.find(function(x){return x.id===run.journeyId;})||cfgJourneys.find(function(x){return x.id===run.journeyId;})||{};
-  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(run.currentStepIdx+1)+' of '+steps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Hire and Onboard Journey')+' &mdash; Step '+(run.currentStepIdx+1)+' of '+steps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
   const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
   const action=isOwner
     ?'<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Payroll Readiness Complete</button></div>'
@@ -4314,7 +4314,7 @@ function renderCtSidebar(){
       const curStep=linkedSteps[linkedRun.currentStepIdx];
       if(curStep&&curStep.modulePage==='compliance'){
         const j=aiJourneys.find(function(x){return x.id===linkedRun.journeyId;})||cfgJourneys.find(function(x){return x.id===linkedRun.journeyId;})||{};
-        const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(linkedRun.currentStepIdx+1)+' of '+linkedSteps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+        const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Hire and Onboard Journey')+' &mdash; Step '+(linkedRun.currentStepIdx+1)+' of '+linkedSteps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
         const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
         if(isOwner){
           actionSection='<div class="ep-form-card" style="margin-bottom:16px">'
@@ -7014,10 +7014,16 @@ function buildAIClientsListingHTML(){
    first stage rather than its outcome — the run does not stop at a signed contract, it stops
    with a person hired, onboarded and on payroll. "Hire and Onboard" is what the reader gets.
 
-   Scoped to these cards deliberately, rather than renaming the journeys. `name` is load-bearing
-   elsewhere — agents reference "Contract Creation Journey" in their usedIn and skill.md text,
-   run records carry it, and the journey detail page is a governance surface where the formal
-   name is the right one. -- */
+   THE CATALOGUE HAS SINCE FOLLOWED. This override used to be scoped to these cards deliberately,
+   on the grounds that the formal name was load-bearing elsewhere; the journey has now been
+   renamed at source to "Hire and Onboard Journey", everywhere it is named. So the gap this map
+   closes is narrower than it was — one journey's worth of suffix, plus a description written as
+   a job rather than as a summary of the plumbing. It is kept for exactly that: the card says
+   "Hire and Onboard", the catalogue and the governance surfaces say "Hire and Onboard Journey".
+
+   Worth knowing when reading the harness: the check that these cards use launcher copy can no
+   longer prove it by the absence of "Contract Creation Journey", because nothing says that any
+   more. It tests for the absence of the SUFFIXED name instead. -- */
 const AI_EXEC_CARD_COPY={
   'user-master-data':{name:'Create Client',
     desc:'Capture a new client on the NewForce intake form and register them here as a client record.'},
@@ -10846,7 +10852,7 @@ function manualStepBannerHTML(c,tabId){
   const curStep=linkedSteps[linkedRun.currentStepIdx];
   if(!curStep||ctTabForManualStep(curStep)!==tabId)return '';
   const j=aiJourneys.find(function(x){return x.id===linkedRun.journeyId;})||cfgJourneys.find(function(x){return x.id===linkedRun.journeyId;})||{};
-  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(linkedRun.currentStepIdx+1)+' of '+linkedSteps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Hire and Onboard Journey')+' &mdash; Step '+(linkedRun.currentStepIdx+1)+' of '+linkedSteps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
   const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
   const action=isOwner
     ?'<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+linkedRun.runId+'\')">Mark '+curStep.name+' Complete</button></div>'
@@ -10860,7 +10866,7 @@ function deOnboardingBannerHTML(emp){
   const curStep=steps[run.currentStepIdx];
   if(!curStep||curStep.name!=='Onboarding')return '';
   const j=aiJourneys.find(function(x){return x.id===run.journeyId;})||cfgJourneys.find(function(x){return x.id===run.journeyId;})||{};
-  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Contract Creation Journey')+' &mdash; Step '+(run.currentStepIdx+1)+' of '+steps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
+  const contextLine='<div style="font-size:11.5px;color:var(--gray);margin-bottom:12px">'+(j.name||'Hire and Onboard Journey')+' &mdash; Step '+(run.currentStepIdx+1)+' of '+steps.length+': <strong style="color:var(--navy)">'+curStep.name+'</strong></div>';
   const isOwner=portalRole!=='entity-user'||activePersonaId===manualStepOwnerPersonaId(curStep.ownerRole);
   const action=isOwner
     ?'<div style="display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" onclick="completeManualStep(\''+run.runId+'\')">Mark Onboarding Complete</button></div>'
@@ -11925,7 +11931,7 @@ function agentRunBuildContractRow(d){
     workSchedule:'40',payAmount:(f['Pay Rate']||'').replace(/[^0-9.]/g,'')||'0',currency:'USD',
     jobDesc:'Created via Agent Mode',payFrequency:'Monthly',
     commercial:{adtFee:'0',annualGross:'0',baseGross:'0',holidayBonus:'0',month13:'0',monthlyGrossNet:'0',monthlyInvoice:'0',monthlySalary12:'0',monthlySalary1392:'0',netPay:'0',socialPremAmt:'0',socialPremPct:'0',totalMonthlyGross:'0'},
-    complianceItems:[{item:'Contract Creation Journey',note:'Completed via Agent Mode',status:'Approved',doc:null}]
+    complianceItems:[{item:'Hire and Onboard Journey',note:'Completed via Agent Mode',status:'Approved',doc:null}]
   };
 }
 function agentRunFinish(){
@@ -12118,7 +12124,7 @@ function buildAgentRunPanelHTML(){
   const fillingBadge=d.lastFilled?'<span class="agrun-live-badge"><span class="agrun-activity-dot"></span>Filling&hellip;</span>':'';
   return '<div class="agrun-wrap">'
     +'<div class="agrun-header">'
-    +'<div><div class="agrun-title">Contract Creation Journey</div><div class="agrun-sub">'+d.name+' &middot; '+d.country+(d.selectedAgentLabel?' &middot; Running as <b>'+d.selectedAgentLabel+'</b>':'')+'</div></div>'
+    +'<div><div class="agrun-title">Hire and Onboard Journey</div><div class="agrun-sub">'+d.name+' &middot; '+d.country+(d.selectedAgentLabel?' &middot; Running as <b>'+d.selectedAgentLabel+'</b>':'')+'</div></div>'
     +'<span class="status-pill '+statusCls+'">'+statusLabel+'</span>'
     +'</div>'
     +agentRunProgressHTML(d)
@@ -12147,7 +12153,7 @@ function renderAgentRunPanel(){
 }
 
 // -- AI CONTRACT ASSISTANT (Contracts "+" flow, gated on the contract-creation journey being Active) --
-// -- Contract Creation Journey: persistent animated step bar (bound to aiJourneyEvents['contract-creation']) --
+// -- Hire and Onboard Journey: persistent animated step bar (bound to aiJourneyEvents['contract-creation']) --
 // Maps an AI-assisted journey stage (aiCtJourneyStage(), 0-8) to the furthest step it implies
 // in manualJourneyStepCatalog['contract-creation'] (0-9). The AI flow moves faster than the
 // manual catalog's granularity (e.g. no separate "Client Acceptance" step), so this is a
@@ -14079,7 +14085,7 @@ function buildAIJourneyCompleteHTML(){
   return '<div class="ep-page" style="max-width:680px;margin:20px auto 0">'
     +'<div class="success-card">'
     +'<div class="success-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>'
-    +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Contract Creation Journey Complete</h2>'
+    +'<h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Hire and Onboard Journey Complete</h2>'
     +'<p style="font-size:12.5px;color:var(--gray);margin-bottom:22px;max-width:420px;line-height:1.55">'+(emp.name||rec.empName||'The employee')+' has been onboarded and is ready for payroll. Here\'s a summary of everything AI put together.</p>'
     +'<div style="text-align:left;width:100%;max-width:460px">'
     +'<div class="review-section"><div class="review-title">Employee Details</div><div class="review-grid" style="grid-template-columns:1fr">'+empRows+'</div></div>'
