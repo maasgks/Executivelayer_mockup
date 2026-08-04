@@ -569,10 +569,14 @@ function buildAmDealsListingHTML(){
     // The way into the deal's run sits at the END of the row — same design as everywhere, sized
     // for a cell — with the drawer's hamburger beside it. It moved here from the drawer's Logs
     // panel: two clicks to reach a button that opens something else was one too many.
+    //
+    // Not on Working. An active placement's journey is finished — payroll runs on the calendar,
+    // not on a run — so a run button there would open nine settled stages with nothing live to
+    // do, and a control that opens nothing to act on teaches people to stop pressing it.
     {w:'13%',cw:'14%',th:'',
      cell:function(d){return '<div class="am-row-end">'
        +'<button class="lp-action-btn" onclick="event.stopPropagation();openAmDealSidebar('+d.id+')" title="Open this record">'+hamburger+'</button>'
-       +ccjOpenRunBtnHTML(d,true)
+       +(d.stage==='active'?'':ccjOpenRunBtnHTML(d,true))
        +'</div>';}}
   ].filter(function(c){return !(compact&&c.hideWhenCompact);});
   const colgroup='<colgroup>'+columns.map(function(c){return '<col style="width:'+(compact?c.cw:c.w)+'">';}).join('')+'</colgroup>';
