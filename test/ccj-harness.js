@@ -3614,6 +3614,57 @@ check('nothing still shows the old system name to a reader',
 check('it describes what it actually holds rather than three endpoints',
   run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") >= 12,
   run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") + ' apis listed');
+// We are both ends of this one, so it carries no integration contract to review.
+check('and it is marked internal, so no endpoint or credentials are put on show',
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).internal") === true);
+const adtPage = run("(function(){selectedCfgSystemId='nfadmin';var h=buildCfgSystemDetailHTML();selectedCfgSystemId='sap';return h;})()");
+// Asserted structurally — the panel, the badge, and what must NOT be on the page. Pinning the
+// sentence itself made this fail on a copy edit that changed nothing it cares about.
+check('its page says internal system and drops the connection block',
+  adtPage.indexOf('Internal system') > -1
+  && adtPage.indexOf('cfg-sys-internal') > -1
+  && adtPage.indexOf('saas.adt.local') === -1
+  && adtPage.indexOf('OAuth') === -1
+  && adtPage.indexOf('Test connection') === -1);
+/* The panel is the whole route, so it has to say something rather than render empty. Both lines
+   are checked for content and nothing is checked for length: the headline is deliberately short
+   ("<name> is an internal system.") and a floor tuned to the previous, longer wording was the
+   test dictating copy rather than guarding it. */
+check('and the panel carries a real statement, not a bare heading',
+  /cfg-sys-internal-lead">[^<]{10,}</.test(adtPage)
+  && /cfg-sys-internal-sub">[^<]{10,}/.test(adtPage));
+// It says internal in words, not only in a badge a reader has to interpret.
+check('and says so in a sentence, not just in the badge',
+  /cfg-sys-internal-lead">[^<]*internal system/.test(adtPage));
+// One sentence and nothing else. Every other block on that page answers a question about an
+// integration, and none of those questions mean anything when we own both ends.
+check('and shows no API inventory at all — the page is the integration contract, and there is none',
+  adtPage.indexOf('Available APIs') === -1
+  && adtPage.indexOf('What this platform holds') === -1
+  && adtPage.indexOf('ContractRegistry') === -1
+  && adtPage.indexOf('EmployeeMaster') === -1);
+// The list stays on the RECORD — it is the inventory, not a contract — so nothing was deleted
+// to achieve the above and flipping `internal` brings it straight back.
+check('though the record keeps its inventory, so the flag is the only switch',
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") >= 12);
+// An external system still reads as an integration contract.
+check('an external system is untouched by that branch',
+  run("(function(){selectedCfgSystemId='bhaiyaa';var h=buildCfgSystemDetailHTML();selectedCfgSystemId='sap';return h;})()")
+    .indexOf('Available APIs') > -1);
+
+/* A system page listing capabilities nobody wired up is a brochure, and it makes the ones that
+   are real impossible to pick out. Every Bhaiyaa row must correspond to something the connector
+   or a screen actually calls. */
+check('Bhaiyaa lists only the calls this build actually makes',
+  run("JSON.stringify(cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList.map(function(a){return a.name.split(' · ')[0];}))")
+    === '["StoreIntake","OwnerKyc","StoreRegistry"]',
+  run("JSON.stringify(cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList.map(function(a){return a.name.split(' · ')[0];}))"));
+check('the field-workforce and payout integrations nothing calls are gone',
+  ['WorkforceRoster', 'AttendanceFeed', 'PayoutBatch'].every((n) =>
+    run("JSON.stringify(cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList)").indexOf(n) === -1));
+// We never hold the full number — the store object has no column for one, so the row is a read.
+check('and the Aadhaar check is read-only, matching the object that has no column for it',
+  run("cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList.find(function(a){return a.name.indexOf('OwnerKyc')===0;}).dir") === 'r');
 
 check('Data Foundation carries the Store object',
   run("!!cfgModels.find(function(m){return m.id==='store';})") === true);
@@ -3683,6 +3734,36 @@ check('every agent gets its own icon rather than the fallback sparkle',
 check('the journey count on a tile is derived from the wiring, not from the usedIn sentence',
   run("agentJourneyCount(cfgAgents.find(function(a){return a.name==='AI Prompt Parser';}))") === 3
   && run("agentJourneyIds(cfgAgents.find(function(a){return a.name==='Store Agent';})).join(',')") === 'bhaiyaa-store-creation');
+
+/* A roadmap journey used to render at exactly the weight of a live one, leaving an
+   eleven-pixel grey pill to carry the whole distinction. */
+const cjHtml = run("(function(){portalRole='super-admin';cfgJourneyCategoryFilter='';return buildCfgContextJourneyHTML();})()");
+const cjRows = cjHtml.split('cfg-journey-card').slice(1);
+check('every unconfigured journey is greyed, and only those',
+  run(`(function(){portalRole='super-admin';cfgJourneyCategoryFilter='';
+      var h=buildCfgContextJourneyHTML();
+      return cfgJourneys.every(function(j){
+        var at=h.indexOf('>'+j.name+'<');
+        if(at<0)return false;
+        var card=h.lastIndexOf('ai-journey-card',at);
+        var cls=h.slice(card,at);
+        return !!j.locked===(cls.indexOf('cfg-journey-card-unconfigured')>-1);});})()`) === true);
+check('the number greyed matches the number the badge calls Not Configured',
+  (cjHtml.match(/cfg-journey-card-unconfigured/g) || []).length
+    === (cjHtml.match(/Not Configured/g) || []).length,
+  (cjHtml.match(/cfg-journey-card-unconfigured/g) || []).length + ' greyed vs '
+    + (cjHtml.match(/Not Configured/g) || []).length + ' badged');
+// Muted, not disabled: Super Admin configures the journey FROM this row, so it keeps its click.
+// Fading a live control is how a page teaches people not to press it.
+check('and a greyed row is still the control that configures it',
+  cjRows.filter((r) => r.indexOf('cfg-journey-card-unconfigured') > -1)
+    .every((r) => r.indexOf('openLockedJourneyModal') > -1));
+// For anyone below Super Admin these rows genuinely do nothing, which is a different class with
+// a blanket opacity — the two states must not both be applied to one card.
+check('the non-clickable locked state is a separate treatment, never both at once',
+  run(`(function(){portalRole='entity-admin';var h=buildCfgContextJourneyHTML();portalRole='super-admin';
+      return h.indexOf('ai-journey-card-locked')>-1
+        && h.indexOf('cfg-journey-card-unconfigured')===-1;})()`) === true);
 
 const agHtml = run("(function(){cfgAgentJourneyFilter='';return buildCfgAgentsHTML();})()");
 // Read the GROUP HEADINGS, not the raw string — every journey name also appears above as a

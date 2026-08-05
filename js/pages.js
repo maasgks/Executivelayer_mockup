@@ -8001,7 +8001,7 @@ function buildCfgSystemDetailHTML(){
     :'<p style="font-size:17px;font-weight:700;margin-bottom:6px">'+s.name+(s.domain?' <span style="font-weight:500;color:var(--gray)">('+s.domain+')</span>':'')+'</p>'
       +'<p style="font-size:12.5px;color:var(--gray);margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +(internal
-        ?'<span class="badge" style="color:#475569;background:#f1f5f9;border-color:#cbd5e1">Internal platform</span>'
+        ?'<span class="badge" style="color:#475569;background:#f1f5f9;border-color:#cbd5e1">Internal system</span>'
           +'<span class="status-pill '+(s.status==='Connected'?'active':'inactive')+'">'+s.status+'</span>'
         :s.type+' &middot; connected via released APIs')
       +'</p>';
@@ -8113,7 +8113,32 @@ function buildCfgSystemDetailHTML(){
   return '<div class="ai-exec-page">'
     +cfgBackBtn('cfg-systems','Systems')
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap"><div>'+heading+'</div>'+actionBtns+'</div>'
-    +(internal?'':'<div class="review-title" style="margin-bottom:12px">Connection</div>'+connectionBlock)
+    /* An internal platform gets one sentence and nothing else. Every other block on this page
+       exists to answer a question about an integration — what is the endpoint, does it still
+       respond, which APIs has the vendor released to us — and not one of those questions has a
+       meaning when we own both ends. The record keeps its apiList and its counts; they are the
+       inventory, not an integration contract, and this page is only ever the contract. */
+    /* The whole page, so it is sized like the whole page rather than like a footnote. It was
+       borrowing .sa-note — an eleven-pixel annotation meant to sit under a chart — which left
+       the one thing this route has to say set smaller than the thing it replaced.
+
+       Two short paragraphs, not one long one: the first says what this system IS, the second
+       says what follows from that, and those are the two separate facts a reader came for. */
+    +(internal
+      ?'<div class="cfg-sys-internal">'
+        +'<span class="cfg-sys-internal-ico">'
+        +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+        +'<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg></span>'
+        +'<div class="cfg-sys-internal-body">'
+          +'<p class="cfg-sys-internal-lead">'+s.name+' is an internal system.</p>'
+          // The second line is not decoration: it is why this page has nothing else on it. State
+          // "internal" without it and the empty route reads as a page that failed to load.
+          +'<p class="cfg-sys-internal-sub">It runs inside the organisation rather than being a '
+          +'third party we integrate with &mdash; so there is no endpoint to configure, no '
+          +'credentials to hold and no connection to test.</p>'
+        +'</div>'
+      +'</div>'
+      :'<div class="review-title" style="margin-bottom:12px">Connection</div>'+connectionBlock)
     +dataFoundationBlock
     +(internal?'':'<div class="review-title" style="margin-bottom:12px">Available APIs'+(editing?'':' &middot; released')+'</div>'
       +'<div class="ep-form-card" style="padding:0">'+apiRows+addApiForm+'</div>')
@@ -10289,7 +10314,19 @@ function buildCfgContextJourneyHTML(){
     const locked=isRoadmap&&portalRole!=='super-admin';
     const superAdminUnconfigured=isRoadmap&&portalRole==='super-admin';
     const clickAttr=locked?'':(superAdminUnconfigured?' style="cursor:pointer" onclick="openLockedJourneyModal(\''+j.id+'\')"':' onclick="viewCfgJourney(\''+j.id+'\')"');
-    return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+clickAttr+'>'
+    /* A roadmap journey reads as a roadmap journey. It used to render at exactly the same weight
+       as a live one — same ink, same arrow — so a list of eleven rows gave a reader no way to
+       tell the four that exist from the six that are only named yet, and the "Not Configured"
+       pill was doing that work alone in eleven-pixel grey.
+
+       Muted rather than disabled, and the distinction matters: for Super Admin this row is still
+       a control — it opens the modal that configures the journey. `ai-journey-card-locked` is
+       the other case (no click at all), which is why it can afford a blanket opacity; fading a
+       live control at .55 is how a page teaches people not to press it. Here the content drops
+       to a recessive weight and hover brings it back, which says "nothing here yet" without
+       saying "nothing here". */
+    return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')
+      +(superAdminUnconfigured?' cfg-journey-card-unconfigured':'')+'" '+clickAttr+'>'
       +'<div class="cfg-journey-main">'
       +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked,superAdminUnconfigured)+(!locked&&portalRole!=='super-admin'?journeyModeBadgeHTML(j.id):'')+'</div></div>'
       // -- One line, ellipsised, with the full text on hover. Journeys are picked by name and

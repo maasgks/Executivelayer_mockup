@@ -2983,17 +2983,29 @@ const cfgSystems=[
     apiList:[
       {name:'EmployeeIntake · Client Master Data',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'}
     ]},
-  // -- Bhaiyaa is a storefront platform: the thing it owns is a store, and everything else it
-  // gives us hangs off one. StoreIntake is the write side of that — the API behind Create Store
-  // (buildCreateStoreHTML, js/pages.js) — and it is `rw` for the same reason ADT's EmployeeIntake
-  // is: we post a signup to it and read the store back with the id Bhaiyaa minted. --
+  /* == BHAIYAA ============================================================================
+     Three calls, because three calls is what this integration makes. It used to list five, and
+     the two extra were the problem this page exists to prevent: WorkforceRoster, AttendanceFeed
+     and PayoutBatch described a field-workforce and contractor-payout integration that nothing
+     in this build ever calls — no route in backend/connectors/bhaiyaa.js, no screen, no journey
+     step. A system page that lists capabilities nobody wired up is a brochure, and it makes the
+     three that ARE real impossible to pick out.
+
+     What is left is what the connector actually does:
+       StoreIntake   Create Store posts a signup and reads the store back with Bhaiyaa's own id.
+                     `rw` for the same reason ADT's EmployeeIntake is.
+       StoreRegistry the poll. connectors/bhaiyaa.js pollSince() reads the store list and then
+                     each store's detail — one capability, two round trips.
+       OwnerKyc      the Aadhaar check the KYC Agent runs before any store is opened. It is a
+                     read against Bhaiyaa's KYC service, which is what fronts UIDAI here: we
+                     never hold the full number, which is why the store object has no column for
+                     one and this row is read-only.
+     If one of the dropped three is ever built, it goes back on this list at that point. == */
   {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.adt.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'StoreIntake · Store Signup',dir:'rw',cat:'Store Management',sub:'Store Onboarding',type:'Transactional'},
-      {name:'StoreRegistry · Store Master',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'},
-      {name:'WorkforceRoster · Field Workforce',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'},
-      {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Store Management',sub:'Time & Attendance',type:'Transactional'},
-      {name:'PayoutBatch · Contractor Payouts',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
+      {name:'OwnerKyc · Aadhaar Verification',dir:'r',cat:'Store Management',sub:'Store Onboarding',type:'Transactional'},
+      {name:'StoreRegistry · Store Master',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'}
     ]},
   /* == ADT SaaS ============================================================================
      The product this Execution Layer is built on top of — the one whose modules the sidebar
@@ -3005,7 +3017,11 @@ const cfgSystems=[
      about what this system holds, on the one system a reader of this page already knows: every
      object listed here has a module in the nav. They are grouped the way the rest of the estate
      is — by the process the call belongs to, not by the screen it is reached from. == */
-  {id:'nfadmin',name:'ADT SaaS',type:'ADT SaaS',method:'REST / SOAP',endpoint:'https://saas.adt.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+  // `internal` is the flag that says we are both ends of this one: no Connection block, no
+  // endpoint or credentials on show, no Test connection button. Endpoint and auth stay on the
+  // record because the edit form still writes them and a future split could need them; they are
+  // simply not an integration contract anyone reviews here.
+  {id:'nfadmin',name:'ADT SaaS',type:'ADT SaaS',internal:true,method:'REST / SOAP',endpoint:'https://saas.adt.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       // Who the entity is, and who may act inside it.
       {name:'EntityRegistry · Legal Entity Master',dir:'r',cat:'Others',sub:'General',type:'Transformational'},
