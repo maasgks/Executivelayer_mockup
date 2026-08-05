@@ -4665,23 +4665,7 @@ function renderCtSidebar(){
         +'</div>';
     }
   }else if(ctTab==='compliance'){
-    const thS='padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--navy);background:#f8fafc;border-bottom:1px solid var(--border)';
-    const tdS='padding:10px 12px;font-size:13px;color:var(--navy);border-bottom:1px solid #f1f5f9';
-    const upIco='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
-    const itemsTable='<div class="ep-form-title" style="margin:0 0 10px">Compliance Items</div>'
-      +'<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden">'
-      +'<thead><tr>'
-      +'<th style="'+thS+'">S.NO</th><th style="'+thS+'">Compliance Item</th><th style="'+thS+'">Note</th><th style="'+thS+'">Status</th><th style="'+thS+'">Documents</th><th style="'+thS+'">ACTION</th>'
-      +'</tr></thead>'
-      +'<tbody>'+c.complianceItems.map((ci,i)=>'<tr>'
-        +'<td style="'+tdS+';color:#6b7280">'+(i+1)+'</td>'
-        +'<td style="'+tdS+';font-weight:600">'+ci.item+'</td>'
-        +'<td style="'+tdS+';font-weight:500">'+ci.note+'</td>'
-        +'<td style="'+tdS+'">'+ci.status+'</td>'
-        +'<td style="'+tdS+'">'+(ci.doc?'<span style="color:#16a34a;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'+ci.doc+'</span>':'<span style="color:var(--navy);font-size:12px;cursor:pointer" onclick="ctUploadComplianceDoc('+c.id+','+i+')">Upload your document</span>')+'</td>'
-        +'<td style="'+tdS+'"><button style="border:none;background:none;cursor:pointer;color:var(--navy);padding:0" title="Upload" onclick="ctUploadComplianceDoc('+c.id+','+i+')">'+upIco+'</button></td>'
-        +'</tr>').join('')
-      +'</tbody></table>';
+    const itemsTable=ctComplianceDocsHTML(c);
     // -- If this contract has a live journey run currently sitting on a compliance-type step, surface the action here instead of the standalone modal, gated to whoever owns that step. --
     const linkedRun=manualJourneyRuns.find(function(r){return r.contractRecordId===c.id&&r.status!=='Completed';});
     let actionSection='';
@@ -7767,10 +7751,576 @@ function ctUploadComplianceDoc(contractId,itemIdx){
     if(!file)return;
     ci.doc=file.name;
     if(ci.status==='Missing')ci.status='Uploaded';
+    ctRememberDocFile(contractId,'item',itemIdx,file);
     refreshCtSidebar();
     if(typeof showAiToast==='function')showAiToast('Document uploaded',file.name+' attached to '+ci.item+'.');
   };
   input.click();
+}
+
+/* == COMPLIANCE DOCUMENTS ====================================================================
+   A compliance item that reads Approved was approved against a document. The journey collects
+   and verifies every one of them before it writes the contract row, so the tab that offered
+   "Upload your document" for those items was asking for files the journey had already taken —
+   the one screen in the product that contradicted the run that fed it.
+
+   The document set is DERIVED rather than seeded because there are five writers of
+   complianceItems (js/core.js, the journey, its V1 snapshot, the contract wizard, Agent Mode)
+   and a contract created tomorrow by a sixth would have started out empty again. Derivation also
+   means a contract restored from localStorage before this change gains its documents on load.
+
+   Nothing here writes to complianceItems. ctComplianceBadge, resolveMissingCountryConfig and
+   buildContractCommercialReviewSectionsHTML all read that array, and a document is not a
+   compliance item — user uploads live on c.ctDocs instead, a field contractsData already carries
+   through persistAppState without a change to it.
+   ============================================================================================ */
+
+// -- An item genuinely still waiting on a file keeps its upload prompt. Only the France exception
+// is in that state today, and resolveMissingCountryConfig refuses to close until item.doc is set:
+// handing it a derived document would let that exception resolve against a file nobody sent. --
+function ctItemAwaitingFile(ci){return ci.status==='Missing';}
+
+// Only user input reaches these as text; contract fields are inserted raw everywhere else in this
+// file and already carry their own entities (&mdash; and the like), which escaping would show.
+function ctTextSafe(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Stable across re-renders, which Math.random would not be: a reference number that changed each
+// time you opened the drawer would read as a different document every time.
+function ctDocHash(s){let h=2166136261;s=String(s||'');for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h>>>0;}
+function ctDocRef(prefix,seed){return prefix+'-'+(1000+ctDocHash(seed)%9000);}
+
+function ctDocKind(text){
+  const t=String(text||'').toLowerCase();
+  if(/payroll|payslip|salary run/.test(t))return 'payroll';
+  if(/onboard/.test(t))return 'onboarding';
+  if(/proposal|quotation/.test(t))return 'proposal';
+  if(/employment contract|contract/.test(t))return 'contract';
+  return 'generic';
+}
+const CT_DOC_TITLES={contract:'Employment Contract',onboarding:'Onboarding Verification Report',payroll:'Payroll Release Note',proposal:'Employer of Record Proposal',generic:'Compliance Document'};
+
+function ctDocSlug(text){
+  // Hyphens survive: the reference an item carries (EC-7102, PR-2026-09-DE-001) is how the
+  // document is known, and flattening it to underscores makes the filename stop matching the row.
+  return String(text||'document').replace(/&[a-z]+;/gi,' ').replace(/[^A-Za-z0-9-]+/g,'_')
+    .replace(/^[_-]+|[_-]+$/g,'')||'Document';
+}
+// A filename an operator would recognise. Items carrying their own reference (EC-7102, PR-2026-09)
+// are already unique; the rest take the employee's name, the way a filed document would.
+function ctItemDocName(c,ci){
+  const slug=ctDocSlug(ci.item);
+  return (/\d/.test(slug)?slug:slug+'_'+ctDocSlug(c.empName))+'.pdf';
+}
+
+function ctDocDate(s){
+  const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(!m)return String(s||'&mdash;');
+  const mo=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return String(Number(m[3]))+' '+mo[Number(m[2])-1]+' '+m[1];
+}
+function ctDocMoney(n,ccy){
+  const v=Number(String(n).replace(/[^0-9.\-]/g,''));
+  if(!isFinite(v)||!v)return (ccy?ccy+' ':'')+'&mdash;';
+  return (ccy?ccy+' ':'')+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// -- The compliance items and the contract's own uploads, as one list of table rows. Kept separate
+// in storage and joined only here, so the two never contaminate each other. --
+function ctComplianceRows(c){
+  const rows=(c.complianceItems||[]).map(function(ci,i){
+    return {item:ci.item,note:ci.note,status:ci.status,
+      doc:ci.doc||(ctItemAwaitingFile(ci)?'':ctItemDocName(c,ci)),
+      src:'item',idx:i};
+  });
+  (c.ctDocs||[]).forEach(function(d,j){
+    rows.push({item:d.name,note:d.note||('Uploaded by '+(d.by||'Account Manager')+' on '+ctDocDate(d.at)),
+      status:'Uploaded',doc:d.file,src:'upload',idx:j});
+  });
+  return rows;
+}
+
+function ctComplianceDocsHTML(c){
+  const thS='padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--navy);background:#f8fafc;border-bottom:1px solid var(--border)';
+  const tdS='padding:10px 12px;font-size:13px;color:var(--navy);border-bottom:1px solid #f1f5f9';
+  const upIco='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+  const okIco='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
+  const dlIco='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  const plusIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  const rows=ctComplianceRows(c);
+  const head='<div class="ct-docs-head">'
+    +'<div class="ct-docs-head-t">Compliance Items</div>'
+    +'<div class="ct-docs-add">'
+    +'<button type="button" class="ct-docs-add-btn" onclick="ctToggleDocAdd('+c.id+')">'+plusIco+'Upload document</button>'
+    +'<div class="ct-docs-add-row" id="ct-docs-add-'+c.id+'" style="display:none">'
+    +'<input type="text" class="ct-docs-add-name" id="ct-docs-name-'+c.id+'" placeholder="Name this document" '
+    +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();ctPickContractDoc('+c.id+');}">'
+    +'<button type="button" class="ct-docs-add-up" title="Choose a file to attach" onclick="ctPickContractDoc('+c.id+')">'+upIco+'</button>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+  return head
+    +'<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden">'
+    +'<thead><tr>'
+    +'<th style="'+thS+'">S.NO</th><th style="'+thS+'">Compliance Item</th><th style="'+thS+'">Note</th><th style="'+thS+'">Status</th><th style="'+thS+'">Documents</th><th style="'+thS+'">ACTION</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows.map(function(r,i){
+      const action=r.src==='upload'
+        ?'ctPickContractDoc('+c.id+','+r.idx+')'
+        :'ctUploadComplianceDoc('+c.id+','+r.idx+')';
+      const docCell=r.doc
+        ?'<button type="button" class="ct-doc-link" title="Open '+attrSafe(r.doc)+'" onclick="ctOpenDoc('+c.id+',\''+r.src+'\','+r.idx+')">'+okIco+'<span>'+ctTextSafe(r.doc)+'</span></button>'
+        :'<span style="color:var(--navy);font-size:12px;cursor:pointer" onclick="'+action+'">Upload your document</span>';
+      return '<tr>'
+        +'<td style="'+tdS+';color:#6b7280">'+(i+1)+'</td>'
+        +'<td style="'+tdS+';font-weight:600">'+ctTextSafe(r.item).replace(/&amp;(mdash|ndash|nbsp);/g,'&$1;')+'</td>'
+        +'<td style="'+tdS+';font-weight:500">'+ctTextSafe(r.note).replace(/&amp;(mdash|ndash|nbsp);/g,'&$1;')+'</td>'
+        +'<td style="'+tdS+'">'+r.status+'</td>'
+        +'<td style="'+tdS+'">'+docCell+'</td>'
+        // Download once there is something to download; the upload prompt stays only on a row
+        // still waiting for its file, which is the missing-country exception and nothing else.
+        +'<td style="'+tdS+'">'+(r.doc
+          ?'<button style="border:none;background:none;cursor:pointer;color:var(--navy);padding:0" title="Download '+attrSafe(r.doc)+'" onclick="ctDownloadDoc('+c.id+',\''+r.src+'\','+r.idx+')">'+dlIco+'</button>'
+          :'<button style="border:none;background:none;cursor:pointer;color:var(--navy);padding:0" title="Upload" onclick="'+action+'">'+upIco+'</button>')+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table>';
+}
+
+// Toggled in the DOM rather than through a re-render: renderCtSidebar rebuilds the whole panel,
+// so re-rendering to reveal an input would throw away anything already typed into it.
+function ctToggleDocAdd(contractId){
+  const row=document.getElementById('ct-docs-add-'+contractId);
+  if(!row)return;
+  const open=row.style.display!=='none';
+  row.style.display=open?'none':'flex';
+  if(!open){const n=document.getElementById('ct-docs-name-'+contractId);if(n)n.focus();}
+}
+
+/* -- The chosen file itself, held for as long as the tab is open so clicking the row opens what
+   was actually uploaded. Deliberately not persisted: contractsData goes through JSON.stringify,
+   which a File survives as {} and an object URL survives as a string pointing at nothing. After a
+   reload the row still lists the document and opens the generated sheet for it instead. -- */
+const ctDocFiles={};
+function ctDocFileKey(contractId,src,idx){return contractId+':'+src+':'+idx;}
+function ctRememberDocFile(contractId,src,idx,file){
+  try{
+    const key=ctDocFileKey(contractId,src,idx);
+    if(ctDocFiles[key])URL.revokeObjectURL(ctDocFiles[key].url);
+    ctDocFiles[key]={url:URL.createObjectURL(file),type:file.type||'',name:file.name};
+  }catch(e){}
+}
+
+// -- Attaches a document to the contract itself rather than to a compliance item: named by the
+// operator, listed alongside the items, and left out of complianceItems so no rollup counts it as
+// an obligation. Pass replaceIdx to swap the file on a row that already exists. --
+function ctPickContractDoc(contractId,replaceIdx){
+  const c=contractsData.find(function(x){return x.id===contractId;});if(!c)return;
+  const replacing=typeof replaceIdx==='number';
+  const nameEl=document.getElementById('ct-docs-name-'+contractId);
+  const typed=nameEl?nameEl.value.trim():'';
+  if(!replacing&&!typed){
+    if(nameEl){ctToggleDocAdd(contractId);nameEl.focus();}
+    if(typeof showAiToast==='function')showAiToast('Name the document','Give the document a name, then choose the file to attach.');
+    return;
+  }
+  const input=document.createElement('input');
+  input.type='file';
+  input.onchange=function(){
+    const file=input.files&&input.files[0];
+    if(!file)return;
+    const now=typeof aiFormatNow==='function'?aiFormatNow():{date:'2026-08-05',time:'09:12:00'};
+    c.ctDocs=c.ctDocs||[];
+    const idx=replacing?replaceIdx:c.ctDocs.length;
+    if(replacing&&c.ctDocs[idx])c.ctDocs[idx].file=file.name;
+    else c.ctDocs.push({name:typed,file:file.name,at:now.date,by:'Account Manager'});
+    ctRememberDocFile(contractId,'upload',idx,file);
+    if(nameEl)nameEl.value='';
+    refreshCtSidebar();
+    if(typeof showAiToast==='function')showAiToast('Document uploaded',file.name+' attached to '+c.empName+'.');
+  };
+  input.click();
+}
+
+/* -- Opening a document. A file uploaded in this session opens as itself; everything else opens as
+   the generated sheet for that item, which is what the contract's paperwork looks like. One
+   overlay, created on first use and reused after, so nothing is added to index.html and the
+   existing ct-modal-overlay keeps belonging to openCtModal alone. -- */
+function ctOpenDoc(contractId,src,idx){
+  const c=contractsData.find(function(x){return x.id===contractId;});if(!c)return;
+  const rows=ctComplianceRows(c);
+  const r=rows.filter(function(x){return x.src===src&&x.idx===idx;})[0];
+  if(!r)return;
+  const held=ctDocFiles[ctDocFileKey(contractId,src,idx)];
+  let inner;
+  if(held&&/^image\//.test(held.type))inner='<div class="ct-doc-raw"><img src="'+attrSafe(held.url)+'" alt="'+attrSafe(r.doc)+'"></div>';
+  else if(held&&/pdf/i.test(held.type))inner='<div class="ct-doc-raw"><iframe src="'+attrSafe(held.url)+'" title="'+attrSafe(r.doc)+'"></iframe></div>';
+  else if(held)inner='<div class="ct-doc-raw ct-doc-raw-file"><div class="ct-doc-raw-name">'+ctTextSafe(held.name)+'</div>'
+    +'<p>This file type has no in-page preview. Open it in a new tab to view it with your own application.</p>'
+    +'<a class="btn btn-primary" href="'+attrSafe(held.url)+'" download="'+attrSafe(held.name)+'" target="_blank" rel="noopener">Open document</a></div>';
+  else inner=ctDocSheetHTML(ctDocModel(c,r));
+  let ov=document.getElementById('ct-doc-overlay');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='ct-doc-overlay';
+    ov.className='ct-doc-overlay';
+    ov.onclick=function(e){if(e.target===ov)ctCloseDoc();};
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML='<div class="ct-doc-panel">'
+    +'<div class="ct-doc-bar">'
+    +'<div class="ct-doc-bar-n">'+ctTextSafe(r.doc)+'</div>'
+    +'<button type="button" class="ct-modal-close" title="Close" onclick="ctCloseDoc()">'
+    +'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+    +'</button></div>'
+    +'<div class="ct-doc-scroll">'+inner+'</div>'
+    +'</div>';
+  ov.style.display='flex';
+}
+function ctCloseDoc(){const ov=document.getElementById('ct-doc-overlay');if(ov)ov.style.display='none';}
+
+/* -- The document as content, drawn from the contract it belongs to so no two read alike, and kept
+   separate from how it is drawn because it is now drawn twice: as the sheet you read on screen and
+   as the PDF the download hands you. One model, so the file cannot say something the preview does
+   not. Sections are {t, rows|paras|table|sign}. -- */
+function ctDocModel(c,r){
+  const kind=ctDocKind(r.item);
+  const ccy=c.currency||'EUR';
+  const country=c.countryOfOp||c.country||'&mdash;';
+  const signed=[
+    {name:c.empName,role:'Employee',date:'Signed '+ctDocDate(c.date)},
+    {name:'M. van Leeuwen',role:'Authorised signatory, OpenDhi Global Employment Services',date:'Signed '+ctDocDate(c.date)}
+  ];
+  let sections;
+  if(kind==='contract'){
+    sections=[
+      {t:'Parties',rows:[
+        ['Employer','OpenDhi Global Employment Services B.V.'],['Employee',c.empName],
+        ['Nationality',c.nationality||'&mdash;'],['Date of birth',c.dob||'&mdash;'],
+        ['Correspondence',c.email||'&mdash;']]},
+      {t:'Terms of engagement',rows:[
+        ['Position',c.jobTitle||c.empDesig||'&mdash;'],['Place of work',country],
+        ['Engagement model',(c.empType||c.type||'EOR')+' &mdash; Employer of Record'],
+        ['Term',c.empDuration||'&mdash;'],['Working hours',(c.workSchedule||'8')+' hours per day'],
+        ['Gross remuneration',ctDocMoney(c.payAmount,ccy)+' per month'],
+        ['Pay frequency',c.payFrequency||'Monthly'],
+        ['Notice period','Two calendar months, either party']]},
+      {t:'Duties',paras:[
+        c.jobDesc||'The Employee shall perform the duties of '+(c.jobTitle||'the role')+' and such other duties as reasonably assigned.',
+        'The Employee is engaged under the statutory employment framework of '+country+'. Payroll, tax withholding and social security contributions are administered by the Employer as Employer of Record on behalf of the Client.']},
+      {t:'Governing law',paras:[
+        'This agreement is governed by the laws of '+country+'. Any dispute arising out of or in connection with it shall be submitted to the competent court of the Employer&rsquo;s registered seat.']},
+      {sign:signed}
+    ];
+  }else if(kind==='onboarding'){
+    const onb=(typeof CCJ_ONB!=='undefined'&&CCJ_ONB[c.country])||null;
+    const list=(onb&&onb.docs?onb.docs.filter(function(x){return x.req;}):[
+      {label:'Passport or national ID',why:'Identity and right to work'},
+      {label:'Proof of address',why:'Residency registration'},
+      {label:'Bank account details',why:'Salary payment'},
+      {label:'Tax registration form',why:'Payroll tax filing'}]);
+    sections=[
+      {t:'Subject',rows:[
+        ['Employee',c.empName],['Country of operation',country],
+        ['Engagement model',c.empType||c.type||'EOR'],
+        ['Verified by','Compliance Desk &mdash; OpenDhi'],['Completed',ctDocDate(c.date)]]},
+      {t:'Documents verified',table:{
+        head:['#','Document','Purpose','Reference','Outcome'],
+        widths:[22,150,190,74,60],
+        body:list.map(function(d,i){
+          return [String(i+1),d.label,d.why||'&mdash;',ctDocRef('DOC',c.contractId+d.label),{v:'Verified',ok:true}];
+        })}},
+      {t:'Statement',paras:[
+        'All statutory onboarding requirements for '+country+' have been collected, checked against the issuing authority&rsquo;s format and retained in the employee record. No exception was raised during verification.'
+      ].concat(onb&&onb.taxAuthority?['Payroll registration was filed with the '+onb.taxAuthority+' ('+(onb.taxFiling||'registration')+') and social security enrolment completed with '+(onb.ssAuthority||'the competent authority')+'.']:[])},
+      {sign:signed}
+    ];
+  }else if(kind==='payroll'){
+    const gross=Number(String(c.payAmount).replace(/[^0-9.\-]/g,''))||0;
+    sections=[
+      {t:'Run details',rows:[
+        ['Employee',c.empName],['Period',r.note||'&mdash;'],['Country',country],
+        ['Run reference',(String(r.item).match(/PR-[\w-]+/)||['&mdash;'])[0]],
+        ['Released on',ctDocDate(c.date)],['Released by','Payroll Operations']]},
+      {t:'Amounts',table:{head:null,widths:[300,180],body:[
+        ['Gross salary',{v:ctDocMoney(gross,ccy),num:true}],
+        ['Employee social contributions',{v:'&minus; '+ctDocMoney(gross*0.089,ccy),num:true}],
+        ['Payroll tax withheld',{v:'&minus; '+ctDocMoney(gross*0.191,ccy),num:true}]],
+        total:['Net pay',{v:ctDocMoney(gross*0.72,ccy),num:true}]}},
+      {t:'Payment',rows:[
+        ['Method','SEPA credit transfer'],
+        ['Payment reference',ctDocRef('PAY',c.contractId+String(r.item))],
+        ['Value date',ctDocDate(c.date)],['Status','Released']]},
+      {t:'Note',paras:['This release note confirms that the payroll run above was calculated, approved and released. Statutory filings for the period were submitted alongside the payment.']}
+    ];
+  }else if(kind==='proposal'){
+    sections=[
+      {t:'Proposal for',rows:[
+        ['Candidate',c.empName],['Role',c.jobTitle||c.empDesig||'&mdash;'],
+        ['Country of operation',country],
+        ['Engagement model',(c.empType||c.type||'EOR')+' &mdash; Employer of Record'],
+        ['Proposed start',(String(c.empDuration||'').split(/&ndash;|–/)[0]||'&mdash;').trim()||'&mdash;'],
+        ['Issued',ctDocDate(c.date)]]},
+      {t:'Commercial summary',table:{head:null,widths:[300,180],body:[
+        ['Monthly gross salary',{v:ctDocMoney(c.payAmount,ccy),num:true}],
+        ['Platform fee per employee per month',{v:ctDocMoney((c.commercial||{}).adtFee,ccy),num:true}],
+        ['Pay frequency',{v:c.payFrequency||'Monthly',num:true}],
+        ['Working hours',{v:(c.workSchedule||'8')+' hours per day',num:true}]]}},
+      {t:'Scope',paras:[
+        'OpenDhi will act as Employer of Record in '+country+', issuing a compliant local employment contract, running payroll, withholding tax and social contributions, and filing all statutory returns for the duration of the engagement.',
+        'Employer contributions, statutory allowances and any country-specific benefits are billed at cost and itemised on the monthly invoice.']},
+      {t:'Validity',paras:['This proposal is valid for 30 days from the date of issue. Acceptance is confirmed by countersigning and returning this document.']},
+      {sign:signed}
+    ];
+  }else{
+    sections=[
+      {t:'Document',rows:[
+        ['Title',ctTextSafe(r.item)],['Contract',c.contractId||'&mdash;'],
+        ['Employee',c.empName],['Country',country],['Status',r.status||'&mdash;'],
+        ['Filed',ctDocDate(r.src==='upload'?(((c.ctDocs||[])[r.idx]||{}).at):c.date)]]},
+      {t:'Note',paras:[ctTextSafe(r.note)||'Filed against the contract record.']}
+    ];
+  }
+  const ref=ctDocRef('ODH-'+(c.contractId||c.id),r.item);
+  return {
+    kind:kind,title:CT_DOC_TITLES[kind]||'Compliance Document',ref:ref,
+    stamp:r.status||'Filed',file:r.doc,
+    org:'OpenDhi Global Employment Services B.V.',
+    addr:'Herengracht 124, 1015 BT Amsterdam, Netherlands &middot; KvK 68452291 &middot; VAT NL857312894B01',
+    meta:[['Reference',ref],['Contract',c.contractId||'&mdash;'],['Issued',ctDocDate(c.date)],['Jurisdiction',country]],
+    sections:sections
+  };
+}
+
+function ctDocSheetHTML(m){
+  const body=m.sections.map(function(s){
+    let inner='';
+    if(s.rows)inner='<div class="ct-sheet-rows">'+s.rows.map(function(p){
+      return '<div class="ct-sheet-row"><span>'+p[0]+'</span><b>'+p[1]+'</b></div>';}).join('')+'</div>';
+    else if(s.paras)inner=s.paras.map(function(t){return '<p class="ct-sheet-p">'+t+'</p>';}).join('');
+    else if(s.table){
+      const t=s.table;
+      inner='<table class="ct-sheet-tbl">'
+        +(t.head?'<thead><tr>'+t.head.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead>':'')
+        +'<tbody>'+t.body.map(function(row){
+          return '<tr>'+row.map(function(v){
+            const o=typeof v==='object'&&v;
+            return '<td'+(o&&o.num?' class="ct-sheet-num"':o&&o.ok?' class="ct-sheet-ok"':'')+'>'+(o?o.v:v)+'</td>';
+          }).join('')+'</tr>';}).join('')
+        +(t.total?'<tr class="ct-sheet-tot">'+t.total.map(function(v){
+          const o=typeof v==='object'&&v;
+          return '<td'+(o&&o.num?' class="ct-sheet-num"':'')+'>'+(o?o.v:v)+'</td>';}).join('')+'</tr>':'')
+        +'</tbody></table>';
+    }else if(s.sign)return '<div class="ct-sheet-sign">'+s.sign.map(function(x){
+      return '<div class="ct-sheet-sign-c"><div class="ct-sheet-sign-l">'+x.name+'</div>'
+        +'<div class="ct-sheet-sign-r">'+x.role+'</div><div class="ct-sheet-sign-d">'+x.date+'</div></div>';
+    }).join('')+'</div>';
+    return '<div class="ct-sheet-sec"><div class="ct-sheet-sec-t">'+s.t+'</div>'+inner+'</div>';
+  }).join('');
+  return '<div class="ct-sheet">'
+    +'<div class="ct-sheet-lh">'
+    +'<div class="ct-sheet-brand"><img src="assets/Opendhilogo.png" alt=""><div>'
+    +'<div class="ct-sheet-org">'+m.org+'</div><div class="ct-sheet-addr">'+m.addr+'</div>'
+    +'</div></div>'
+    +'<div class="ct-sheet-stamp">'+m.stamp+'</div>'
+    +'</div>'
+    +'<div class="ct-sheet-title">'+m.title+'</div>'
+    +'<div class="ct-sheet-meta">'+m.meta.map(function(p){
+      return '<div class="ct-sheet-m"><span>'+p[0]+'</span><b>'+p[1]+'</b></div>';}).join('')+'</div>'
+    +body
+    +'<div class="ct-sheet-foot"><span>'+m.ref+'</span><span>'+ctTextSafe(m.file)+'</span><span>Page 1 of 1</span></div>'
+    +'</div>';
+}
+
+/* == PDF ======================================================================================
+   The download hands over a real .pdf because the row says .pdf, and a file whose contents
+   disagree with its name is the kind of detail that decides whether a product is trusted.
+
+   Written by hand rather than with a library: the app has no build step and no npm dependencies,
+   and a PDF of flowed text needs only the format's original 1.4 feature set — one uncompressed
+   content stream per page, the two base-14 Helvetica faces every reader ships, and an xref table
+   of byte offsets. Everything emitted here is ASCII, which is what lets String.length stand in
+   for the byte offsets the xref needs.
+   ============================================================================================ */
+
+// Base-14 Helvetica has no glyph for an em dash or a euro sign under WinAnsi without a font
+// descriptor, so the text is folded to ASCII on the way in rather than rendered as blanks.
+function ctPdfPlain(s){
+  return String(s==null?'':s)
+    .replace(/<[^>]*>/g,'')
+    .replace(/&mdash;|&ndash;|&minus;|[–—−]/g,'-')
+    .replace(/&rsquo;|&lsquo;|[‘’]/g,"'")
+    .replace(/&ldquo;|&rdquo;|[“”]/g,'"')
+    .replace(/&middot;|[·]/g,'-')
+    .replace(/&nbsp;| /g,' ')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+    .replace(/€/g,'EUR').replace(/£/g,'GBP').replace(/₹/g,'INR')
+    .replace(/[^\x20-\x7e]/g,'')
+    .trim();
+}
+// Widths good enough to wrap and right-align on. Helvetica averages ~0.5em, its bold ~0.55em.
+function ctPdfWidth(s,size,bold){return s.length*size*(bold?0.55:0.5);}
+function ctPdfEsc(s){return s.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');}
+function ctPdfWrap(s,size,bold,max){
+  const words=s.split(/\s+/),lines=[];let cur='';
+  words.forEach(function(w){
+    const next=cur?cur+' '+w:w;
+    if(cur&&ctPdfWidth(next,size,bold)>max){lines.push(cur);cur=w;}else cur=next;
+  });
+  if(cur)lines.push(cur);
+  return lines.length?lines:[''];
+}
+
+function ctDocPdf(m){
+  const W=595.28,H=841.89,ML=56,MR=56,MB=58,CW=W-ML-MR;
+  const pages=[];let ops=[],y=0;
+  const out=function(s){ops.push(s);};
+  const text=function(x,yy,s,size,bold,gray){
+    s=ctPdfPlain(s);if(!s)return;
+    out('BT /'+(bold?'F2':'F1')+' '+size+' Tf '+(gray||'0 0 0')+' rg 1 0 0 1 '+x.toFixed(2)+' '+yy.toFixed(2)+' Tm ('+ctPdfEsc(s)+') Tj ET');
+  };
+  const rule=function(yy,x1,x2,w,gray){
+    out((gray||'0.86 0.88 0.91')+' RG '+(w||0.6)+' w '+x1.toFixed(2)+' '+yy.toFixed(2)+' m '+x2.toFixed(2)+' '+yy.toFixed(2)+' l S');
+  };
+  const newPage=function(){if(ops.length)pages.push(ops.join('\n'));ops=[];y=H-58;};
+  const room=function(n){if(y-n<MB)newPage();};
+
+  newPage();
+  // Letterhead
+  text(ML,y,m.org,12,true);y-=13;
+  ctPdfWrap(ctPdfPlain(m.addr),7.5,false,CW).forEach(function(l){text(ML,y,l,7.5,false,'0.42 0.45 0.5');y-=9;});
+  y-=3;rule(y,ML,W-MR,1.2,'0.06 0.09 0.16');y-=24;
+  text(ML,y,m.title,17,true);
+  text(W-MR-ctPdfWidth(ctPdfPlain(m.stamp),8,true)-2,y+3,ctPdfPlain(m.stamp).toUpperCase(),8,true,'0.09 0.64 0.29');
+  y-=22;
+  // Meta strip, two per line
+  m.meta.forEach(function(p,i){
+    const x=ML+(i%2)*(CW/2);
+    text(x,y,String(p[0]).toUpperCase(),6.8,true,'0.42 0.45 0.5');
+    text(x,y-10,p[1],9.5,true);
+    if(i%2===1)y-=25;
+  });
+  if(m.meta.length%2===1)y-=25;
+  y-=6;
+
+  m.sections.forEach(function(s){
+    if(s.sign){
+      room(78);y-=14;
+      s.sign.forEach(function(x,i){
+        const cx=ML+i*(CW/2),cw=CW/2-24;
+        text(cx,y,x.name,13,false,'0.12 0.23 0.54');
+        rule(y-7,cx,cx+cw,0.7,'0.06 0.09 0.16');
+        ctPdfWrap(ctPdfPlain(x.role),7.5,false,cw).forEach(function(l,j){text(cx,y-19-j*9,l,7.5,false,'0.42 0.45 0.5');});
+        text(cx,y-40,x.date,7,false,'0.6 0.63 0.68');
+      });
+      y-=52;return;
+    }
+    room(52);
+    text(ML,y,String(s.t).toUpperCase(),7.5,true,'0.42 0.45 0.5');y-=6;
+    rule(y,ML,W-MR);y-=15;
+    if(s.rows){
+      s.rows.forEach(function(p){
+        const vx=ML+168,ls=ctPdfWrap(ctPdfPlain(p[1]),9,true,CW-168);
+        room(ls.length*11+6);
+        text(ML,y,p[0],9,false,'0.42 0.45 0.5');
+        ls.forEach(function(l,i){text(vx,y-i*11,l,9,true);});
+        y-=(ls.length-1)*11+15;
+      });
+    }else if(s.paras){
+      s.paras.forEach(function(t){
+        ctPdfWrap(ctPdfPlain(t),9,false,CW).forEach(function(l){room(13);text(ML,y,l,9,false,'0.2 0.25 0.33');y-=12.5;});
+        y-=7;
+      });
+    }else if(s.table){
+      const t=s.table,ws=t.widths||[],xs=[];let acc=ML;
+      (t.head||t.body[0]).forEach(function(_,i){xs.push(acc);acc+=ws[i]||CW/(t.head||t.body[0]).length;});
+      const cellV=function(v){return typeof v==='object'&&v?v.v:v;};
+      const isNum=function(v){return typeof v==='object'&&v&&v.num;};
+      if(t.head){
+        t.head.forEach(function(h,i){text(xs[i],y,String(h).toUpperCase(),6.8,true,'0.42 0.45 0.5');});
+        y-=6;rule(y,ML,W-MR);y-=13;
+      }
+      const line=function(row,bold,top){
+        let hMax=1;
+        row.forEach(function(v,i){
+          const w=(ws[i]||CW/row.length)-8,txt=ctPdfPlain(cellV(v));
+          const ls=ctPdfWrap(txt,8.5,bold,w);
+          hMax=Math.max(hMax,ls.length);
+          const gray=(typeof v==='object'&&v&&v.ok)?'0.09 0.64 0.29':bold?'0 0 0':'0.12 0.16 0.24';
+          const rightAligned=isNum(v);
+          ls.forEach(function(l,j){
+            const x=rightAligned?xs[i]+(ws[i]||CW/row.length)-ctPdfWidth(l,8.5,bold||rightAligned):xs[i];
+            text(x,y-j*10,l,8.5,bold||rightAligned,gray);
+          });
+        });
+        if(top)rule(y+11,ML,W-MR,1,'0.06 0.09 0.16');
+        y-=hMax*10+5;
+        rule(y+4,ML,W-MR,0.4,'0.95 0.96 0.97');
+      };
+      t.body.forEach(function(row){room(24);line(row,false,false);});
+      if(t.total){room(26);y-=4;line(t.total,true,true);}
+    }
+    y-=14;
+  });
+  // Guarded: a section whose last row lands exactly on a break would otherwise close the file with
+  // a page nothing was drawn on, and a blank final page reads as a truncated document.
+  if(ops.length||!pages.length)pages.push(ops.join('\n'));
+
+  // Footer on every page, written after the fact so it can carry the real page count.
+  const total=pages.length;
+  const stamped=pages.map(function(body,i){
+    const f=[];
+    f.push('0.86 0.88 0.91 RG 0.6 w '+ML+' '+(MB-8)+' m '+(W-MR)+' '+(MB-8)+' l S');
+    const put=function(x,s){f.push('BT /F1 7 Tf 0.6 0.63 0.68 rg 1 0 0 1 '+x.toFixed(2)+' '+(MB-20)+' Tm ('+ctPdfEsc(ctPdfPlain(s))+') Tj ET');};
+    put(ML,m.ref);
+    put(ML+CW/2-ctPdfWidth(ctPdfPlain(m.file),7,false)/2,m.file);
+    const pg='Page '+(i+1)+' of '+total;
+    put(W-MR-ctPdfWidth(pg,7,false),pg);
+    return body+'\n'+f.join('\n');
+  });
+
+  // Assemble. Objects: 1 catalog, 2 pages, 3..(2+n) page objects, then n content streams, then 2 fonts.
+  const n=stamped.length,firstPage=3,firstStream=3+n,fontA=3+2*n,fontB=fontA+1;
+  const objs=[];
+  objs.push('<</Type/Catalog/Pages 2 0 R>>');
+  objs.push('<</Type/Pages/Kids['+stamped.map(function(_,i){return (firstPage+i)+' 0 R';}).join(' ')+']/Count '+n+'>>');
+  stamped.forEach(function(_,i){
+    objs.push('<</Type/Page/Parent 2 0 R/MediaBox[0 0 '+W.toFixed(2)+' '+H.toFixed(2)+']'
+      +'/Resources<</Font<</F1 '+fontA+' 0 R/F2 '+fontB+' 0 R>>>>/Contents '+(firstStream+i)+' 0 R>>');
+  });
+  stamped.forEach(function(body){objs.push('<</Length '+body.length+'>>\nstream\n'+body+'\nendstream');});
+  objs.push('<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>');
+  objs.push('<</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold/Encoding/WinAnsiEncoding>>');
+
+  let pdf='%PDF-1.4\n';
+  const offsets=[];
+  objs.forEach(function(o,i){offsets.push(pdf.length);pdf+=(i+1)+' 0 obj\n'+o+'\nendobj\n';});
+  const xref=pdf.length;
+  pdf+='xref\n0 '+(objs.length+1)+'\n0000000000 65535 f \n';
+  offsets.forEach(function(o){pdf+=String(o).padStart(10,'0')+' 00000 n \n';});
+  pdf+='trailer\n<</Size '+(objs.length+1)+'/Root 1 0 R>>\nstartxref\n'+xref+'\n%%EOF';
+  return pdf;
+}
+
+// -- The ACTION column. A file uploaded in this session downloads as itself; everything else is
+// rendered to PDF on the spot, under the filename the row has been showing all along. --
+function ctDownloadDoc(contractId,src,idx){
+  const c=contractsData.find(function(x){return x.id===contractId;});if(!c)return;
+  const r=ctComplianceRows(c).filter(function(x){return x.src===src&&x.idx===idx;})[0];
+  if(!r||!r.doc)return;
+  const held=ctDocFiles[ctDocFileKey(contractId,src,idx)];
+  let url=held&&held.url,revoke=false;
+  if(!url){
+    const bytes=ctDocPdf(ctDocModel(c,r));
+    const buf=new Uint8Array(bytes.length);
+    for(let i=0;i<bytes.length;i++)buf[i]=bytes.charCodeAt(i)&0xff;
+    url=URL.createObjectURL(new Blob([buf],{type:'application/pdf'}));
+    revoke=true;
+  }
+  const a=document.createElement('a');
+  a.href=url;a.download=r.doc;a.rel='noopener';
+  document.body.appendChild(a);a.click();a.remove();
+  if(revoke)setTimeout(function(){URL.revokeObjectURL(url);},4000);
+  if(typeof showAiToast==='function')showAiToast('Download started',r.doc);
 }
 // -- Resolves an "Agent exception" caused by Compliance Hub failing to return country config: fills Country of Operation, clears the compliance item, and closes out the underlying AI run so it drops off the cockpit exception queue. --
 function resolveMissingCountryConfig(contractId){
