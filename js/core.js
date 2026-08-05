@@ -3125,19 +3125,20 @@ const cfgModels=[
       ['Country Hiring In','country_hiring_in','string'],
       ['Looking For','looking_for','string'],
       ['Heard About Us','heard_about_us','string'],
-      // The free-text box the form reveals when "How did you hear about us" is answered Other.
-      // Mapped rather than dropped: it is the only place an unlisted channel is ever named.
-      ['Heard About Us Detail','heard_about_us_other','string'],
       // The demo slot the lead picked. Typed string, not date: it carries a time and a zone, and
-      // 'date' in this vocabulary means a calendar day (Contract Start Date). Storing an instant
+      // 'date' in this vocabulary means a calendar day with no time on it. Storing an instant
       // under a day type is the category error the logs table already had to be corrected for.
       ['Demo Slot','demo_datetime','string']
     ],
-    // -- Account and commercial. Not one of these is on the intake form, and that is the point:
-    // the form produces a lead, and these seven are what a lead has to acquire before it can be
-    // contracted against. Service Line Confirmed sits deliberately next to the mapped Looking For
-    // — the form's answer is what the lead said they wanted, this is what they actually bought,
-    // and conflating the two is how a pipeline reports revenue against a wish. --
+    // -- Due diligence and the named contact. Not one of these is on the intake form, and that is
+    // the point: the form produces a lead, and these five are what a lead has to acquire before it
+    // can be contracted against. KYB is the gate — a company we have not verified is a company we
+    // cannot legally employ on behalf of — and the SPOC set is the answer to "who signs, and who
+    // do we chase", which the form never asks because the person who books a demo is routinely
+    // not the person who owns the account.
+    //
+    // Client Segment, not Client Tier: a tier ranks clients against each other, a segment says
+    // what kind of client this is, and the second is what actually routes the work.
     //
     // The employee-shaped set this replaced (Department, Job Title, Branch, Joining Date) was a
     // leftover from when this object was called `user` and held a person. It holds a company.
@@ -3145,16 +3146,14 @@ const cfgModels=[
     // operator, so it was never an enrichment field — it is still on the record and still what
     // Pending/Active reports.
     enrichment:[
-      {name:'Account Owner',type:'string'},
-      {name:'Client Tier',type:'string'},
-      {name:'Lead Stage',type:'string'},
-      {name:'Expected Headcount',type:'number'},
-      {name:'Service Line Confirmed',type:'string'},
-      {name:'Contract Start Date',type:'date'},
-      {name:'Billing Currency',type:'string'}
+      {name:'KYB Status',type:'string'},
+      {name:'Client Segment',type:'string'},
+      {name:'SPOC Name',type:'string'},
+      {name:'SPOC Email',type:'string'},
+      {name:'SPOC Contact',type:'string'}
     ],
     rules:{makerChecker:true,validation:'Full name and work email are required. Client ID is minted here and unique; Source Record ID must be unique too — a repeat resolves to the existing client instead of creating a second one. Record enters as Pending until enrichment fields are supplied'},
-    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Client Tier','Mid-market'],['Lead Stage','Qualified'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contract Start Date','2026-09-01'],['Billing Currency','EUR']]},
+    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Demo Slot','12 Aug 2026, 15:00 IST'],['KYB Status','Verified'],['Client Segment','Mid-market'],['SPOC Name','Daan Visser'],['SPOC Email','daan.visser@helioworks.com'],['SPOC Contact','+31 6 2244 8190']]},
   /* == STORE ===============================================================================
      The second live object, and the one Data Foundation was missing entirely: Bhaiyaa's store
      signup lands in a real `stores` table (sql/schema_direct_employees.sql), the Store

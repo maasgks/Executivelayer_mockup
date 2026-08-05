@@ -2961,6 +2961,169 @@ function mdSaveProgressHTML(){
   }).join('');
 }
 
+/* -- The enrichment set this drawer completes, read from the Client object's own definition in
+   Data Foundation instead of being retyped here. The drawer used to list Department, Branch, Job
+   Title and Joining Date — the employee-shaped set the object carried back when it was called
+   `user` — and went on listing them after the object was redefined around KYB and the SPOC, so a
+   reader comparing the two pages saw one object described two ways. Reading cfgModels means the
+   section cannot drift again: add or rename an enrichment line item there and this section, and
+   the Pending note that names what is outstanding, follow it.
+
+   `key` is where the value sits on a record once one has been supplied. A real value always wins;
+   the mock below only fills a key the store has nothing for. -- */
+const mdEnrichKeys={
+  'KYB Status':'kybStatus','Client Segment':'clientSegment',
+  'SPOC Name':'spocName','SPOC Email':'spocEmail','SPOC Contact':'spocContact'
+};
+function mdEnrichKeyFor(name){
+  if(mdEnrichKeys[name])return mdEnrichKeys[name];
+  // A line item added later, before it is given an entry above: "Billing Currency" -> billingCurrency.
+  return String(name).replace(/[^a-zA-Z0-9 ]/g,' ').trim().split(/\s+/)
+    .map(function(w,i){w=w.toLowerCase();return i?w.charAt(0).toUpperCase()+w.slice(1):w;}).join('');
+}
+function mdClientEnrichFields(){
+  const m=(typeof cfgModels!=='undefined')&&cfgModels.find(function(x){return x.id==='user';});
+  return ((m&&m.enrichment)||[]).map(function(e){
+    return {name:e.name,type:e.type,key:mdEnrichKeyFor(e.name)};
+  });
+}
+/* == MOCK ENRICHMENT =========================================================================
+   The store has no columns for these five yet, so every card read '--'. Until the columns exist,
+   the drawer stands them up from the record itself rather than from a fixed table of invented
+   clients — a SPOC at a company the record does not name, or a phone number whose country code
+   contradicts the country three cards above it, is worse than a dash, because it reads as a fact.
+
+   So every value below is DERIVED from what the same drawer already shows:
+     KYB Status      <- the record's own lifecycle status
+     Client Segment  <- what the lead said they were Looking For
+     SPOC e-mail     <- the company's own mail domain, taken from the work e-mail when that is a
+                        company address and built from the company name when it is a free one
+     SPOC name/phone <- the country the client is hiring in, so the name and the dialling code
+                        belong to the same place
+   and the pick within each pool is seeded off the client id, so a record shows the SAME SPOC on
+   every render and two clients do not share one. Nothing is stored: this is a display fallback.
+
+   One switch turns the whole thing off — flip it to false the day the columns land, and every
+   card goes back to reporting exactly what the store holds. == */
+const mdEnrichMockOn=true;
+// Free mailbox providers. A SPOC address is built at the company's own domain, and a lead who
+// filled the form from a personal mailbox has not told us that domain.
+const mdFreeMailDomains=['gmail.com','googlemail.com','yahoo.com','yahoo.co.in','outlook.com','hotmail.com','live.com','icloud.com','me.com','aol.com','proton.me','protonmail.com','rediffmail.com','zoho.com','mail.com'];
+/* Dialling code, mobile prefix, digit grouping and a two-name pool per country these records
+   actually carry. `grp` is how that country writes a mobile number and `mob` is what one starts
+   with there, so the generated number does not read as foreign to the country three cards above
+   it — a German SPOC on a +49 number that no German mobile could have is the same lie as a
+   Dutch one, just quieter. */
+const mdCountryProfile={
+  'India':{dial:'+91',mob:'9',grp:[5,5],names:['Ananya Iyer','Rohit Malhotra']},
+  'Germany':{dial:'+49',mob:'151',grp:[3,3,4],names:['Lena Brandt','Jonas Keller']},
+  // '61' rather than '6': the grouping puts the next digit straight after it, and a Dutch mobile
+  // never reads 60.
+  'Netherlands':{dial:'+31',mob:'61',grp:[2,3,4],names:['Daan Visser','Sanne Bakker']},
+  'France':{dial:'+33',mob:'6',grp:[1,2,2,2,2],names:['Camille Laurent','Hugo Moreau']},
+  'Italy':{dial:'+39',mob:'34',grp:[3,3,4],names:['Giulia Ferrari','Marco Conti']},
+  'Spain':{dial:'+34',mob:'6',grp:[3,3,3],names:['Lucia Ortega','Pablo Serrano']},
+  'Belgium':{dial:'+32',mob:'47',grp:[3,2,2,2],names:['Elke Maes','Thomas Peeters']},
+  'Poland':{dial:'+48',mob:'5',grp:[3,3,3],names:['Zofia Kaminska','Piotr Nowak']},
+  'Portugal':{dial:'+351',mob:'91',grp:[3,3,3],names:['Ines Almeida','Tiago Sousa']},
+  'Ireland':{dial:'+353',mob:'87',grp:[2,3,4],names:['Niamh Byrne','Cian Murphy']},
+  'United Kingdom':{dial:'+44',mob:'77',grp:[4,3,3],names:['Olivia Hargreaves','Daniel Whitfield']},
+  'United States':{dial:'+1',mob:'2',grp:[3,3,4],names:['Erin Caldwell','Marcus Reed']},
+  'Canada':{dial:'+1',mob:'4',grp:[3,3,4],names:['Chloe Tremblay','Owen Fraser']},
+  'Australia':{dial:'+61',mob:'4',grp:[3,3,3],names:['Harriet Nolan','Liam Beckett']},
+  'Singapore':{dial:'+65',mob:'8',grp:[4,4],names:['Wei Lin Tan','Arjun Menon']},
+  'United Arab Emirates':{dial:'+971',mob:'50',grp:[2,3,4],names:['Layla Haddad','Omar Rashid']}
+};
+// Somewhere on earth, but not pretending to be anywhere in particular.
+const mdCountryProfileDefault={dial:'+44',mob:'77',grp:[4,3,3],names:['Alex Whitmore','Priya Raman']};
+function mdCountryProfileFor(rec){
+  return mdCountryProfile[String(rec.country||'').trim()]||mdCountryProfileDefault;
+}
+// Stable per client, so the SPOC does not change identity between two renders of the same record.
+// Seeded off the id WE minted, which every stored client has and no two share.
+function mdEnrichSeed(rec){
+  const s=String(rec.empId||rec.sourceRecordId||rec.name||'client');
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=(h*16777619)>>>0;}
+  return h;
+}
+function mdSeedPick(seed,list,salt){
+  return list[((seed>>>(salt||0))+(salt||0))%list.length];
+}
+// The company's own mail domain: the work e-mail's when it is a company address, otherwise built
+// from the company name, which is the only other place the record names the company.
+function mdClientDomain(rec){
+  const em=String(rec.email||'');
+  const at=em.lastIndexOf('@');
+  if(at>-1){
+    const dom=em.slice(at+1).toLowerCase().trim();
+    if(dom&&dom.indexOf('.')>-1&&mdFreeMailDomains.indexOf(dom)<0)return dom;
+  }
+  const co=String(rec.companyName||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+  return co?co+'.com':'';
+}
+/* The country's mobile prefix, filled out to the right length and grouped the way that country
+   writes it. Digits come off the HIGH bits of the generator: the low bit of a linear congruential
+   step alternates 0,1,0,1, which was enough to make a number read as "24680 44246" — patterned
+   enough that a reader can see it was machine-made. */
+function mdMockPhone(rec){
+  const p=mdCountryProfileFor(rec);
+  const len=p.grp.reduce(function(a,b){return a+b;},0);
+  let seed=mdEnrichSeed(rec)||1,digits=String(p.mob||'');
+  while(digits.length<len){
+    seed=(seed*1664525+1013904223)>>>0;
+    digits+=String((seed>>>19)%10);
+  }
+  let at=0;
+  const out=p.grp.map(function(n){const part=digits.substr(at,n);at+=n;return part;});
+  return p.dial+' '+out.join(' ');
+}
+/* What the mock says for one enrichment field, or '' for a field it has no honest way to fill —
+   a line item added to the object later reads '--' and is named by the Pending note, rather than
+   being handed a number pulled out of the air. */
+function mdEnrichMock(rec,f){
+  const seed=mdEnrichSeed(rec);
+  if(f.name==='KYB Status'){
+    // The one field that must never be invented independently: a client the layer is holding as
+    // Pending cannot be showing a cleared KYB, and an Inactive one cannot be showing a live one.
+    return rec.status==='Active'?'Verified'
+      :rec.status==='Inactive'?'Lapsed — re-verification required'
+      :'In review';
+  }
+  if(f.name==='Client Segment'){
+    const lf=String(rec.lookingFor||'').toLowerCase();
+    if(/entity setup|entity establishment/.test(lf))return 'Enterprise';
+    if(/employer of record|eor/.test(lf))return 'Mid-market';
+    if(/contractor|freelance/.test(lf))return 'SMB';
+    if(/payroll/.test(lf))return 'Enterprise';
+    return mdSeedPick(seed,['Enterprise','Mid-market','SMB','Startup'],3);
+  }
+  if(f.name==='SPOC Name')return mdSeedPick(seed,mdCountryProfileFor(rec).names,1);
+  if(f.name==='SPOC Email'){
+    const dom=mdClientDomain(rec);
+    if(!dom)return '';
+    // first.last — a name carrying a particle ("de Wit") keeps it attached to the surname rather
+    // than becoming a third dotted part, which is how those addresses are actually written.
+    const parts=mdSeedPick(seed,mdCountryProfileFor(rec).names,1).toLowerCase()
+      .replace(/[^a-z ]/g,'').trim().split(/\s+/);
+    const who=parts.length<2?parts[0]:(parts[0]+'.'+parts.slice(1).join(''));
+    return who+'@'+dom;
+  }
+  if(f.name==='SPOC Contact')return mdMockPhone(rec);
+  return '';
+}
+/* The value the card shows: what the store holds, or the mock standing in for it. One function
+   for both the cards and the Pending note, so the note can never list a field as outstanding
+   while the card beside it is showing a value. */
+function mdEnrichValue(rec,f){
+  const val=rec[f.key];
+  if(val&&val!=='--')return val;
+  return mdEnrichMockOn?(mdEnrichMock(rec,f)||''):'';
+}
+// A value the operator still owes us — after the mock has had its turn, so a field the mock
+// cannot fill is the only kind that stays outstanding.
+function mdEnrichMissing(rec,f){return !mdEnrichValue(rec,f);}
+
 function renderMdSidebar(){
   const rec=masterData.find(function(e){return e.id===mdSelectedId;});
   if(!rec)return '';
@@ -2988,6 +3151,10 @@ function renderMdSidebar(){
   const iPhone='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72c.2.73.43 1.44.7 2.81a2 2 0 0 1-.45 2.11L7.91 9a16 16 0 0 0 6 6l.9-.87a2 2 0 0 1 2.11-.45c1.37.27 2.08.5 2.81.7A2 2 0 0 1 21.73 16.92z"/></svg>';
   const iMail='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
   const iSearch='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+  // Due diligence reads as a shield, the segment as a tag — the two enrichment fields with no
+  // equivalent among the intake-form icons above.
+  const iShield='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>';
+  const iTag='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>';
   const fc=function(ico,label,val){
     return '<div class="lp-sb-field-card"><div class="lp-sb-field-icon">'+ico+'</div><div class="lp-sb-field-content"><div class="lp-sb-field-label">'+label+'</div><div class="lp-sb-field-value">'+val+'</div></div></div>';
   };
@@ -3007,15 +3174,24 @@ function renderMdSidebar(){
       +'<span class="badge" style="color:#0d9488;background:#f0fdfa;border-color:#99f6e4">Source Record ID: '+(rec.sourceRecordId||'--')+'</span>'
       +'<span class="lp-status-badge '+String(rec.status).toLowerCase()+'">'+rec.status+'</span>'
       +'</div>';
-    // -- Records ingested from NewForce Solutions sit in Pending because the intake form simply does
-    // not ask for department, job title, branch or joining date. Naming the missing fields is
-    // more useful than a bare badge — it tells the operator exactly what is outstanding. --
-    // -- Records ingested from NewForce Solutions sit in Pending because the intake form simply does
-    // not ask for department, job title, branch or joining date. Naming the missing fields is
-    // more useful than a bare badge — it tells the operator exactly what is outstanding. --
+    // -- An ingested record sits in Pending because the intake form does not ask for the object's
+    // enrichment fields. Naming the ones still outstanding is more useful than a bare badge — it
+    // tells the operator exactly what is owed — and naming them from the object's own definition
+    // means the sentence cannot go on citing fields the object no longer has. Only the missing
+    // ones are listed: a field already supplied is not what is holding the record. --
+    const enrichFields=mdClientEnrichFields();
+    const missingEnrich=enrichFields.filter(function(f){return mdEnrichMissing(rec,f);});
+    const enrichList=function(list){
+      const n=list.map(function(f){return f.name;});
+      return n.length<2?(n[0]||''):(n.slice(0,-1).join(', ')+' or '+n[n.length-1]);
+    };
     const pendingNote=rec.status==='Pending'
       ? '<div style="font-size:12px;color:#8a6d10;background:#fdf6d8;border:1px solid #f0dfa0;border-radius:8px;padding:10px 12px;margin-bottom:14px;line-height:1.6">'
-        +'<strong>Pending completion.</strong> The NewForce Solutions intake form does not capture department, job title, branch or joining date. Once those are filled in, set this record to Active from the Logs tab.'
+        +'<strong>Pending completion.</strong> '
+        +(missingEnrich.length
+          ? 'The '+srcSys+' intake form does not capture '+enrichList(missingEnrich)+'. Once '
+            +(missingEnrich.length===1?'that is':'those are')+' filled in, set this record to Active from the Logs tab.'
+          : 'Every field this object needs is now on the record. Set it to Active from the Logs tab.')
         +'</div>'
       : '';
     body='<div class="lp-sb-view-header"><span class="lp-sb-section-title">'+rec.name+'</span></div>'
@@ -3027,11 +3203,21 @@ function renderMdSidebar(){
       +fc(iPin,'Country Hiring In',v(rec.country))+fc(iSearch,'Looking For',v(rec.lookingFor))
       +fc(iI,'Heard About Us',v(rec.heardAboutUs))
       +'</div>'
-      +'<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;margin:20px 0 10px">Completed in the Executive Layer</div>'
-      +'<div class="lp-sb-detail-grid">'
-      +fc(iB,'Department',v(rec.dept))+fc(iPin,'Branch',v(rec.branch))
-      +fc(iBag,'Job Title',v(rec.jobTitle))+fc(iCal,'Joining Date',v(rec.joinDate))
-      +'</div>';
+      // -- One card per enrichment line item the Client object declares, in the order it declares
+      // them, so this section is the same list Data Foundation shows against the object — read
+      // there, filled in here. Nothing is hardcoded: the icon falls back to the generic field
+      // glyph for a line item added later, and the section drops out entirely if the object ever
+      // declares no enrichment at all, rather than leaving an empty heading behind. --
+      +(enrichFields.length
+        ?'<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6b7280;margin:20px 0 10px">Completed in the Executive Layer</div>'
+         +'<div class="lp-sb-detail-grid">'
+         +enrichFields.map(function(f){
+           const ico={'KYB Status':iShield,'Client Segment':iTag,'SPOC Name':iP,'SPOC Email':iMail,'SPOC Contact':iPhone}[f.name]
+             ||(f.type==='date'?iCal:iI);
+           return fc(ico,f.name,v(mdEnrichValue(rec,f)));
+         }).join('')
+         +'</div>'
+        :'');
 
   }else if(mdTab==='logs'){
     const logs=mdLogsData[rec.id]||[];
