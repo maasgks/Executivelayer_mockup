@@ -9981,9 +9981,17 @@ function buildCfgUserIntakeHTML(){
         +'<div class="uif-success-sub">Submitted to NewForce Solutions, retrieved by the Executive Layer, and stored here under its own Client ID.</div></div>'
         :'<div class="uif-success-icon" style="background:#fef3c7;color:#b45309"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 8v5"/><path d="M12 17h.01"/></svg></div>'
         +'<div><div class="uif-success-title">Client created here, but not yet in NewForce</div>'
+        /* -- The reason is a sentence from somewhere else — a CRM rejection, or the backend's own
+           configuration check — and it arrives without terminal punctuation, so it ran straight
+           into the next sentence ("...NF_MW_JWT_SECRET not set Retry from..."). Punctuate it here
+           rather than at every source: this is the only place the two are joined.
+
+           The path is the CURRENT menu. It read "Client & Contracts > All Clients", which was
+           right until the sidebar was rebuilt and is now a route to a place that does not exist
+           — the worst kind of stale string, because a user follows it and blames themselves. -- */
         +'<div class="uif-success-sub">The record is saved with its Client ID and nothing typed has been lost. NewForce did not accept it: '
-        +cfgEscapeHtml(cfgUserIntakeResult.mirrorError||'the source system could not be reached')
-        +' Retry from Client &amp; Contracts &rsaquo; All Clients once that is resolved.</div></div>')
+        +cfgPunctuate(cfgEscapeHtml(cfgUserIntakeResult.mirrorError||'the source system could not be reached'))
+        +' Retry from Clients &amp; Stores &rsaquo; Clients once that is resolved.</div></div>')
       +'</div>'
       // -- Two ids, two systems, said outright. The client now exists in both stores, and each
       // store knows it by its own id — so each card names the system that issued the id under
@@ -10803,6 +10811,16 @@ function cfgRecommendedAgentForStep(st){
 }
 // -- Configure: Agents --
 function cfgEscapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+/* -- Terminal full stop for a sentence that came from somewhere else — a CRM rejection, a
+   connector's configuration check, a mirror error. None of them punctuate, because each is
+   also read on its own in a log line or an API response where a trailing stop would be noise.
+   The joining is what needs it, so the joining does it. Leaves . ! ? : ; and a closing bracket
+   alone so an already-punctuated message is not given two. -- */
+function cfgPunctuate(s){
+  const t=String(s==null?'':s).trim();
+  if(!t)return t;
+  return /[.!?:;)\]]$/.test(t)?t:t+'.';
+}
 function cfgAgentSlug(name){return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');}
 function findCfgAgentByName(name){return cfgAgents.find(function(a){return a.name===name;});}
 function viewCfgAgentSkillByName(name){

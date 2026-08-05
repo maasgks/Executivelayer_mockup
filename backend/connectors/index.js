@@ -55,11 +55,22 @@ function configFor(sourceId) {
 // rather than when the first Account Manager presses Submit and gets a network error.
 function describeMisconfiguration(sourceId) {
   if (sourceId === 'bhaiyaa') {
-    return process.env.BHAIYAA_MW_URL ? null : 'Store sync is on but BHAIYAA_MW_URL is not set';
+    if (!process.env.BHAIYAA_MW_URL) return 'Store sync is on but BHAIYAA_MW_URL is not set';
+    // Absolute, for the same reason NF_MW_URL is checked below: a relative value concatenates
+    // into a path that fetch rejects, and the failure surfaces as ERR_INVALID_URL rather than
+    // as the configuration mistake it is.
+    const base = configFor(sourceId).baseUrl;
+    if (!/^https?:\/\//.test(base)) return 'BHAIYAA_MW_URL is not an absolute URL: ' + base;
+    return null;
   }
   if (sourceId !== 'newforce_mw') return null;
   const cfg = configFor(sourceId);
-  const missing = ['NF_MW_URL', 'NF_MW_OUTH_KEY', 'NF_MW_JWT_SECRET']
+  /* NF_MW_JWT_SECRET is NOT in this list, and that is deliberate. The live PHP client sends
+     outhKey alone — the Bearer header is commented out in submit_user.php — so requiring the
+     secret here blocked an integration that the far side never asked for. The connector still
+     signs and sends a token when one is configured; it just no longer refuses without it.
+     See the note above submit() in newforce-mw.js. */
+  const missing = ['NF_MW_URL', 'NF_MW_OUTH_KEY']
     .filter((name) => !process.env[name]);
   if (missing.length) return 'CLIENT_SOURCE=newforce_mw but ' + missing.join(', ') + ' not set';
   if (!/^https?:\/\//.test(cfg.baseUrl)) return 'NF_MW_URL is not an absolute URL: ' + cfg.baseUrl;
@@ -77,6 +88,19 @@ function connectorFor(sourceId) {
 // One call site for the push, whichever system it goes to. Returns
 // {ok:true, sourceRecordId, submission?} or {ok:false, error, field?}.
 function submitTo(sourceId, intake, extra) {
+  /* Same guard, same reason as pollStoresSince below. With NF_MW_JWT_SECRET blank the connector
+     reached signHs256 and threw "a secret is required", which escaped as HTTP 500
+     "Internal error" — a message that tells an Account Manager nothing and a developer almost
+     nothing. The startup banner already prints CONFIG ERROR; this makes the submission itself
+     say the same thing.
+
+     {ok:false} rather than a throw because attemptMirror already knows what to do with it: the
+     client record is still created here, the row is marked `failed` with this text in
+     mirror_error, and Retry appears in All Clients. That is the documented 202 path — created
+     here, not accepted by the CRM — so a lead typed in while the credentials were missing is
+     not lost, and completes on retry once they are set. */
+  const problem = describeMisconfiguration(sourceId);
+  if (problem) return Promise.resolve({ ok: false, error: problem });
   const cfg = Object.assign(configFor(sourceId), extra || {});
   return connectorFor(sourceId).submit(intake, cfg);
 }
@@ -96,6 +120,18 @@ function pollStoresSince(sourceId, cursor, extra) {
   if (typeof connector.pollSince !== 'function') {
     return Promise.resolve({ ok: false, error: sourceId + ' cannot be polled for stores' });
   }
+  /* Configuration is checked HERE, not inside the connector, and not only at startup.
+     describeMisconfiguration already knew this answer, but nothing on this path asked it: the
+     startup banner only checks the CLIENT source, and with BHAIYAA_MW_URL unset the connector
+     went ahead and called fetch('' + '/maas/BBC/JwtAuth/...') — a relative URL, which fetch
+     rejects with ERR_INVALID_URL. That escaped as an unhandled throw and the Sync button got
+     HTTP 500 "Internal error", which says nothing a person can act on.
+
+     Returning {ok:false} instead puts it through the route's existing 502 path, so the button
+     reports the missing variable by name — the behaviour INSTALL_AND_TEST.md section 3 already
+     promised ("Unset = the Sync button reports it cannot reach Bhaiyaa"). */
+  const problem = describeMisconfiguration(sourceId);
+  if (problem) return Promise.resolve({ ok: false, error: problem });
   return connector.pollSince(cursor, Object.assign(configFor(sourceId), extra || {}));
 }
 
@@ -105,6 +141,10 @@ function pollStoresSince(sourceId, cursor, extra) {
 function pushStatusTo(sourceId, sourceRecordId, status, extra) {
   const connector = connectorFor(sourceId);
   if (typeof connector.pushStatus !== 'function') return Promise.resolve({ ok: true, supported: false });
+  // Third path into the same credentials, so the same guard. `supported:true` with ok:false is
+  // the honest shape here: there IS somewhere to send this, we just cannot sign the request.
+  const problem = describeMisconfiguration(sourceId);
+  if (problem) return Promise.resolve({ ok: false, supported: true, error: problem });
   return connector.pushStatus(sourceRecordId, status, Object.assign(configFor(sourceId), extra || {}));
 }
 
