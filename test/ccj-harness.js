@@ -3679,19 +3679,29 @@ check('and every mapped field names a real stores column',
       return JSON.stringify(bad);})()`) === '[]',
   run(`(function(){var m=cfgModels.find(function(x){return x.id==='store';});
        return JSON.stringify(m.mapped.map(function(r){return r[1];}));})()`));
-check('it carries both ids, ours and Bhaiyaa’s',
-  run("cfgModels.find(function(m){return m.id==='store';}).identity.length") === 2
-  && run("JSON.stringify(cfgModels.find(function(m){return m.id==='store';}).identity.map(function(i){return i.mintedBy;}))")
-     === '["Executive Layer","Bhaiyaa"]');
+/* The Identity card is gone from Data Foundation — no model declares `identity` any more. The
+   ids themselves did not go anywhere, and that is what this still has to prove: dropping a
+   presentation card must not quietly drop the fact that two systems each name this record.
+   Bhaiyaa's id is a mapped column, ours is minted here and named in the sample and the rule. */
+check('it still carries both ids, ours and Bhaiyaa’s, without an Identity card',
+  run("!cfgModels.find(function(m){return m.id==='store';}).identity") === true
+  && run("cfgModels.find(function(m){return m.id==='store';}).mapped.some(function(r){return r[1]==='source_record_id';})") === true
+  && run("cfgModels.find(function(m){return m.id==='store';}).sample.some(function(r){return r[0]==='Store Code';})") === true
+  && run("cfgModels.find(function(m){return m.id==='store';}).rules.validation").indexOf('Store Code is minted here') > -1);
 // The schema is explicit that no column holds the real number. An object description that
 // listed one would be describing a field the database refuses to accept.
 check('and never claims to hold a full Aadhaar number',
   run(`(function(){var m=cfgModels.find(function(x){return x.id==='store';});
        return m.mapped.some(function(r){return r[1]==='aadhaar_masked';})
          && !m.mapped.some(function(r){return r[1]==='aadhaar_number'||r[0]==='Aadhaar';});})()`) === true);
-check('the identity note names the object it sits under, not always “client”',
-  run("(function(){selectedCfgModelId='store';var h=buildCfgModelDetailHTML();selectedCfgModelId='user';return h;})()")
-    .indexOf('each name this store in their own store') > -1);
+// The card is data-driven, so removing it means removing the data. If a model ever declares
+// `identity` again the section renders again — this checks the current state, both ways round.
+check('no model renders the Identity card, and none declares the data behind it',
+  run("cfgModels.filter(function(m){return m.identity&&m.identity.length;}).length") === 0
+  && run("(function(){selectedCfgModelId='store';var h=buildCfgModelDetailHTML();selectedCfgModelId='user';return h;})()")
+       .indexOf('the ids this object carries') === -1
+  && run("(function(){selectedCfgModelId='user';return buildCfgModelDetailHTML();})()")
+       .indexOf('the ids this object carries') === -1);
 
 // It hires a named person and puts them on payroll — the first half of Hire to Retire's own
 // sentence. Order to Cash is opening an account, which is what the other two O2C journeys do.
@@ -3919,11 +3929,25 @@ const orphans = navLeaves
   .filter((l) => !navOwned.has(l.id)).map((l) => l.id);
 check('every module an Entity User can see is claimed by the shared spine or by a persona',
   orphans.length === 0, 'unclaimed: ' + orphans.join(', '));
-// And the reverse, which is what a rename breaks: the table would keep hiding a module that no
-// longer exists under that id, and showing nothing where the new id is.
-const ghosts = [...navOwned].filter((id) => !navIds.has(id));
-check('and every id the table names still exists in the sidebar', ghosts.length === 0,
-  'named but absent: ' + ghosts.join(', '));
+/* And the reverse, which is what a rename breaks: the table would keep hiding a module that no
+   longer exists under that id, and showing nothing where the new id is.
+
+   PERSONA_PAGE_ACTIONS is the one legitimate way to be in the table without a sidebar row —
+   Create Client and Create Store are buttons on their listings now. It has to be declared
+   rather than inferred, because "in the table, not in the nav" is otherwise exactly the shape
+   of the rot this check exists to find. */
+const navActions = JSON.parse(run('JSON.stringify(PERSONA_PAGE_ACTIONS)'));
+const ghosts = [...navOwned].filter((id) => !navIds.has(id) && navActions.indexOf(id) === -1);
+check('and every id the table names still exists in the sidebar or as a declared page action',
+  ghosts.length === 0, 'named but absent: ' + ghosts.join(', '));
+// A page action that never renders anywhere is the same rot wearing an exemption.
+check('and every declared page action is actually reachable from the page it belongs to',
+  navActions.every((id) => {
+    const src = run(`(function(){portalRole='entity-user';activePersonaId='${
+      id === 'create-store' ? 'ops-manager' : 'account-manager'}';
+      return pageActionBtn('${id}','X','y()');})()`);
+    return src.indexOf('lp-pill-action') > -1;
+  }), navActions.join(', '));
 check('every persona has an entry', navPersonas.every((p) => !!navTable[p]),
   navPersonas.filter((p) => !navTable[p]).join(', '));
 check('and every entry is a real persona',
@@ -3955,12 +3979,26 @@ check('and everyone can reach the page their role lands on cold',
   navPersonas.every((p) => navByPersona[p].indexOf(run("defaultPageForRole('entity-user')")) > -1));
 
 // The concrete reads. Each one is a sentence from a persona's own `focus` line, asserted.
+/* Both create actions left the sidebar for a button on their listing, so they are read off
+   personaPageActions rather than off the nav. The invariant is unchanged and it is the point of
+   keeping them in personaModules: a button on a listing every persona can read would otherwise
+   have handed "open a store" to all nine. */
+const actionsFor = (personaId) => {
+  run("portalRole='entity-user';activePersonaId='" + personaId + "';");
+  return JSON.parse(run('JSON.stringify(personaPageActions())'));
+};
 check('the Account Manager creates client records; nobody else does',
-  navPersonas.filter((p) => navByPersona[p].indexOf('create-client') > -1).join(',') === 'account-manager',
-  navPersonas.filter((p) => navByPersona[p].indexOf('create-client') > -1).join(','));
+  navPersonas.filter((p) => actionsFor(p).indexOf('create-client') > -1).join(',') === 'account-manager',
+  navPersonas.filter((p) => actionsFor(p).indexOf('create-client') > -1).join(','));
 check('the Ops Manager owns the store journey; nobody else opens a store',
-  navPersonas.filter((p) => navByPersona[p].indexOf('create-store') > -1).join(',') === 'ops-manager',
-  navPersonas.filter((p) => navByPersona[p].indexOf('create-store') > -1).join(','));
+  navPersonas.filter((p) => actionsFor(p).indexOf('create-store') > -1).join(',') === 'ops-manager',
+  navPersonas.filter((p) => actionsFor(p).indexOf('create-store') > -1).join(','));
+// The gate is the button, not just the table — a persona without the action gets no markup.
+check('and a persona without the action gets no button rendered on the page',
+  run("(function(){portalRole='entity-user';activePersonaId='hr';return pageActionBtn('create-store','X','y()');})()") === ''
+  && run("(function(){portalRole='entity-user';activePersonaId='ops-manager';return pageActionBtn('create-store','X','y()');})()") !== ''
+  // Super Admin configures what a store is; it does not open one.
+  && run("(function(){portalRole='super-admin';return pageActionBtn('create-store','X','y()');})()") === '');
 check('only Finance sees Payments',
   navPersonas.filter((p) => navByPersona[p].indexOf('payments') > -1).join(',') === 'finance-approver',
   navPersonas.filter((p) => navByPersona[p].indexOf('payments') > -1).join(','));
@@ -3991,10 +4029,30 @@ const dropdownsFor = (personaId) => {
     walk(getSidebarItems());return JSON.stringify(out);})()`));
 };
 check('a group with nothing left in it disappears rather than rendering as a bare heading',
-  dropdownsFor('deal-manager').indexOf('Workforce') === -1
-  && dropdownsFor('deal-manager').indexOf('Finance') === -1
-  && dropdownsFor('finance-approver').indexOf('Finance') > -1,
+  dropdownsFor('deal-manager').indexOf('People') === -1
+  && dropdownsFor('hr').indexOf('People') > -1
+  && dropdownsFor('it-systems-admin').indexOf('Policies & Rates') === -1
+  && dropdownsFor('hr').indexOf('Policies & Rates') > -1,
   dropdownsFor('deal-manager').join(', '));
+
+// Both zones hold shared spine modules, so neither can empty out today. Asserted anyway: the
+// group filter is what a future zone will rely on, and a zone is cheap to add and easy to
+// leave dangling.
+const zonesFor = (personaId) => {
+  run("portalRole='entity-user';activePersonaId='" + personaId + "';");
+  return JSON.parse(run(`(function(){return JSON.stringify(getSidebarItems()
+    .filter(function(it){return it.group;}).map(function(it){return it.group;}));})()`));
+};
+check('both zones survive for every persona, and no other zone appears',
+  JSON.parse(run('JSON.stringify(enterprisePersonas.map(function(p){return p.id;}))'))
+    .every((id) => zonesFor(id).join('|') === 'AI Execution Layer|Workspace'),
+  zonesFor('hr-manager').join(', '));
+// Govern was proposed and deliberately not built: five rows against nothing behind them.
+check('and no Govern zone was left half-wired into the nav',
+  run("JSON.stringify(sidebarItems.filter(function(i){return i.group;}).map(function(i){return i.group;}))")
+    .indexOf('Govern') === -1
+  && ['audit-trail', 'approvals-controls', 'data-boundary', 'access-roles', 'value-usage']
+       .every((id) => !navIds.has(id)));
 
 // The two portal roles are not personas and must come through untouched — the gate only narrows
 // inside Entity User, and a filter that leaked upward would quietly strip an admin's nav.
@@ -4010,9 +4068,12 @@ const adminNav = (role) => {
 check('Super Admin still sees every module its role allows',
   adminNav('super-admin').indexOf('cfg-agents') > -1 && adminNav('super-admin').indexOf('all-users') > -1
   && adminNav('super-admin').indexOf('payments') > -1, adminNav('super-admin').length + ' modules');
-check('Entity Admin too', adminNav('entity-admin').indexOf('create-store') > -1
+check('Entity Admin too', adminNav('entity-admin').indexOf('stores') > -1
   && adminNav('entity-admin').indexOf('contract-templates') > -1
-  && adminNav('entity-admin').indexOf('my-tasks') > -1, adminNav('entity-admin').length + ' modules');
+  && adminNav('entity-admin').indexOf('my-tasks') > -1
+  // create-store is a page action now, not a nav row — an Entity Admin still gets the button.
+  && run("(function(){portalRole='entity-admin';return pageActionBtn('create-store','X','y()');})()") !== '',
+  adminNav('entity-admin').length + ' modules');
 check('and neither of them is narrowed by a persona that happens to be selected',
   adminNav('super-admin').length > 20 && adminNav('entity-admin').length > 20);
 run("portalRole='entity-user';activePersonaId='account-manager';");

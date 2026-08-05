@@ -153,6 +153,12 @@ function renderPageContentImpl(id){
   if(page==='switch-entity'){el.innerHTML=buildSwitchEntityHTML();return;}
   if(page==='support-tickets'){el.innerHTML=buildTicketsPageHTML();return;}
   if(page==='chats'){el.innerHTML=buildChatsPageHTML();return;}
+  /* -- Dashboard stays its own page, and the merge that briefly folded it into the launcher is
+     reversed. The reason is in the data, not in taste: dashboardTabsForRole resolves to
+     THIRTEEN role-specific boards — Deal Desk, Sales Team, Deal Approvals, Compliance,
+     Contracts, HR, Reporting Manager, IT Systems, Finance Approval, Finance Admin, Store
+     Operations, Ops, Ops Approvals — plus employee self-service. That is where a role starts
+     the day. The launcher lists journeys you can start. Two questions, two pages. -- */
   if(page==='dashboard'){el.innerHTML=buildDashboardPageHTML();return;}
   el.innerHTML=buildListingHTML(page);
 }

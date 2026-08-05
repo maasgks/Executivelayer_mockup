@@ -1,4 +1,14 @@
-﻿// -- DASHBOARD: tab bar + per-role tab dispatch --
+﻿/* -- The one renderer for a create action that used to be a sidebar row. Returns '' when this
+   role or persona may not perform it, so a listing every persona can read does not hand every
+   persona the button. Super Admin is excluded everywhere: it configures what an object is
+   (Data Foundation), it does not fill one in — the same rule the old nav rows carried. -- */
+function pageActionBtn(id,label,call){
+  if(typeof canUsePageAction!=='function'||!canUsePageAction(id,['entity-admin','entity-user']))return '';
+  return '<button class="lp-pill-action" onclick="'+call+'" title="'+attrSafe(label)+'">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    +'<span>'+label+'</span></button>';
+}
+// -- DASHBOARD: tab bar + per-role tab dispatch --
 function buildDashboardTabsHTML(){
   const tabs=dashboardTabsForRole(portalRole);
   if(tabs.length<2)return '';
@@ -3220,6 +3230,10 @@ function buildMasterDataHTML(){
     // -- Refresh sits with Reset and Search because all three act on this list, not on a record.
     // It is the only one that goes back to the server, hence the icon. --
     +refreshBtn
+    // -- Create Client used to be a sidebar row. It is an action on this list, so it is a
+    // button on this list — gated by canUsePageAction, which asks the same persona table the
+    // nav row asked, so moving it did not widen who may create a client. --
+    +pageActionBtn('create-client','New client','startContractIntake()')
     +'</div></div>'
     +'<div class="listing-stats">'
     +statTile('Pending',counts.Pending,'Pending','#b45309')
@@ -8487,6 +8501,9 @@ function buildStoresListingHTML(){
     +'<button class="lp-pill-reset" onclick="storeResetFilters()">Reset</button>'
     +'<button class="lp-pill-search" onclick="storeApplySearch()">Search</button>'
     +'<button class="lp-pill-reset" onclick="storesForceRefresh()">Refresh</button>'
+    // -- Was Create Store in the sidebar. Same move, same gate: inside Entity User only the
+    // Ops Manager sees it, which is what every stage of soPipelineStages already assumed. --
+    +pageActionBtn('create-store','New store','startStoreIntake()')
     +'</div></div>'
     +'<div class="listing-stats">'+stat('Pending','Pending')+stat('Active','Active')+stat('Inactive','Inactive')+'</div>'
     +'</div>'

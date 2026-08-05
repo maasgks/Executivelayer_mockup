@@ -2500,3 +2500,19 @@ button.aicj-scard:hover{border-color:#cbd5e1;box-shadow:0 1px 4px rgba(15,23,42,
 /* A step the runner resolved on someone else's behalf. Labelled, always — a viewer must never
    be left thinking the client actually signed something at that moment. */
 .aicj-sim{font-size:8.5px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.5px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:2px 7px}
+
+/* A zone without `box:true` — Workspace today. It keeps the group's child
+   spacing and the "drops out when empty" behaviour, but not the tinted panel
+   that marks the AI Execution Layer as one object. */
+.sb-group.sb-group-plain{background:transparent;border-color:transparent;box-shadow:none;
+  margin-top:6px;padding-top:2px}
+.sb-group.sb-group-plain > .sb-group-label{padding-left:15px}
+
+/* Create actions that were sidebar rows and are now buttons on the listing
+   they fill (pageActionBtn, js/pages.js). Sits in the filter bar beside
+   Reset/Search/Refresh, styled as the one primary among them. */
+.lp-pill-action{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;
+  border-radius:20px;border:1px solid var(--orange);background:var(--orange);color:#fff;
+  font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none}
+.lp-pill-action:hover{filter:brightness(1.06)}
+.lp-pill-action svg{flex:none}

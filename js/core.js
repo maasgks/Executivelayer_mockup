@@ -1247,6 +1247,12 @@ const PERSONA_SHARED_MODULES=[
   'all-leaves','timesheet',                             // everyone is also an employee
   'chats','support-tickets','ccjv1-journey'             // Support: belongs to nobody's daily work
 ];
+/* THE `journey-*` IDS ARE SIDEBAR ROWS, NOT PAGES. Each one is journey-<cfgJourneys id> and
+   opens viewAIJourney. They are listed per persona from the SAME source the rest of this table
+   is derived from — enterprisePersonas[].journeys — so a persona sees a journey row only if it
+   owns that journey. Three personas (hr-manager, it-systems-admin, finance-approver) own only
+   journeys with no row, and for them the whole Journeys zone drops out, which is why that zone
+   is a `group` rather than a `section`. */
 const personaModules={
   // Owns the client relationship and the commercial half of the journey: creates the record,
   // raises the request, carries the quote. No workforce, no payroll — a placement becomes an
@@ -1278,6 +1284,28 @@ const personaModules={
   // client are what an invoice is raised against; Employees is who is being paid.
   'finance-approver':['master-data','contracts','employees','payroll','payheads','salary-view','payments']
 };
+/* == PAGE ACTIONS: CURATED, BUT NOT NAV ROWS =============================================
+   Create Client and Create Store left the sidebar — a create action is something you do ON a
+   page, not a place you go, so they are buttons on the listing each one fills.
+
+   THEY STAY IN personaModules ANYWAY, and that is the point of this list. Who may open a
+   store is a real permission (every stage of soPipelineStages waits on the Ops Manager or an
+   agent), and moving the button onto a page every persona can read would have quietly handed
+   that permission to all nine. The button asks personaSeesModule exactly as the nav row did.
+
+   Declared here rather than inferred, because the harness's ghost check reads it: a module in
+   personaModules with no sidebar row is normally a rename that rotted, and the only way to
+   tell that apart from a deliberate page action is to write the deliberate ones down. == */
+const PERSONA_PAGE_ACTIONS=['create-client','create-store'];
+/* Mirrors sidebarRoleAllows for something that is not a sidebar entry: portal role first, then
+   the persona narrowing that only applies inside Entity User. Super Admin is excluded by the
+   `roles` argument at each call site — it configures what an object is, it does not fill one in. */
+function canUsePageAction(id,roles){
+  if(roles&&roles.indexOf(portalRole)===-1)return false;
+  if(portalRole==='entity-user'&&!personaSeesModule(id))return false;
+  return true;
+}
+function personaPageActions(){return PERSONA_PAGE_ACTIONS.filter(personaSeesModule);}
 /* Unlisted means hidden, on purpose: a module added without a line in the table above disappears
    for every persona, which is loud, immediate and caught by the harness — where the old default
    silently showed it to all nine and nobody noticed for twenty-four modules. */
@@ -1286,142 +1314,133 @@ function personaSeesModule(id){
   const own=personaModules[activePersonaId];
   return !!own&&own.indexOf(id)>-1;
 }
-// -- The sidebar is split in two. The `group` entry at the top holds the Executive Layer's OWN
-// modules — the AI execution layer: AI Executive (run journeys), Configure (define what it can
-// run), Client (the records it owns). Everything after the group belongs to the connected SaaS
-// product this app mirrors, so it sits below a divider under its own section label. --
+/* == THE SIDEBAR ==========================================================================
+   Two zones, and the split is by WHAT A ROW IS, not by which department owns it.
+
+     AI Execution Layer  The layer itself: the journey launcher, its analytics, the two
+                         personal queues, and the four screens that define what it can run.
+                         Boxed and dotted, because this block is the product.
+     Workspace           The connected product's own records — what a run reads and writes,
+                         and what a person browses between runs.
+
+   NO GOVERN ZONE. Audit Trail, Approvals & Controls, Data Boundary, Access & Roles and
+   Value & Usage were five new rows against nothing built, and a menu that lists five empty
+   rooms reads as a menu of empty rooms. They belong here when there is something behind them.
+
+   WHAT THIS SHAPE CORRECTS. An earlier pass folded Dashboard into the launcher and built a
+   "Journeys" zone out of Leaves, Timesheet, Payroll and Compliance Items. Both were wrong,
+   and the code says why:
+
+     - Dashboard is not one page. dashboardTabsForRole resolves to THIRTEEN role boards plus
+       employee self-service. The launcher lists journeys you can START. Different questions.
+     - The product already HAS a journey called Hire to Retire, with its own runs, category
+       and locked roadmap, inside cfgJourneys. Building a second thing with that name out of
+       HR pages would have put two different Hire to Retires in one product. AI Executive was
+       already the journey launcher; the only thing wrong with it was its name.
+
+   BOTH ZONES ARE A `group`. A group whose children are all filtered out is dropped label and
+   all (getSidebarItems), where a bare section heading would have survived and rendered an
+   empty zone. Nothing hits that today — both zones hold shared modules — but it is the
+   behaviour any new zone should inherit. == */
 const sidebarItems=[
-  {group:'AI Execution Layer',roles:['super-admin','entity-admin','entity-user'],items:[
-    {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
+  {group:'AI Execution Layer',dot:true,box:true,roles:['super-admin','entity-admin','entity-user'],items:[
+    /* Was "AI Executive". This page IS the journey launcher — it lists Client Creation, Hire
+       and Onboard, Store Creation, Payroll Creation and Hire to Retire, plus the six locked
+       roadmap journeys, filtered by O2C / P2P / H2R / F2A. It already does everything a
+       Journeys zone would do; it was only ever named after the layer instead of its contents. */
+    {id:'ai-executive',label:'Journeys',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
+    /* Agent & Model Analytics. It measures how the agents and models are performing, so it
+       belongs beside the launcher that runs them — and it is NOT renamed to "Ask": it is not
+       a question box over business data. Still Super Admin, so no client has yet seen it. */
     {id:'ai-analytics',label:'Analytics',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="13" rx="1"/></svg>'},
-    // -- My Runs is the history of what this user started; My Tasks is what is waiting on them.
-    // Both belong to the AI layer and sit under the module that fills them, in that order:
-    // what I set in motion, then what has come back to me. Same roles as My Tasks — Super Admin
-    // configures the platform rather than running journeys through it, so a personal run history
-    // would be permanently empty for them. --
-    {id:'my-runs',label:'My Runs',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16M4 12h16M4 18.5h9"/><circle cx="18.5" cy="18.5" r="3"/><path d="M18.5 17.2v1.5l1 .8"/></svg>'},
-    // -- My Tasks is the queue AI Executive runs hand back to a person, so it belongs to the AI
-    // layer and sits directly under the module that fills it. Its roles are unchanged: only
-    // Entity Admin and Entity User have it, and the group simply omits it for anyone else. --
+    // -- What is waiting on you: the exception and approval cards a run hands back. --
     {id:'my-tasks',label:'My Tasks',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12l2.5 2.5L16 9"/></svg>'},
-    {dropdown:'Configure',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',children:[
-      {id:'cfg-systems',label:'Systems',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg>'},
-      // -- Entity Admin sees Data Foundation now. It is the same shape as Systems one row up:
-      // the objects a journey reads and writes are context an entity admin needs when wiring
-      // Context & Journey, so hiding them made the layer above harder to reason about. What
-      // stays Super Admin is bringing a new object into being (cfg-model-add) and destroying
-      // one — the same split Systems already draws with cfg-system-add. --
-      {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
-      {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
-      {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'}
+    /* Keeps its name. The list filters on WHO STARTED THE RUN — agent and manual alike — and
+       holds it after it moves to someone else and after it completes. It really is yours;
+       "Live Runs" would have promised a firehose this page does not show. */
+    {id:'my-runs',label:'My Runs',roles:['entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16M4 12h16M4 18.5h9"/><circle cx="18.5" cy="18.5" r="3"/><path d="M18.5 17.2v1.5l1 .8"/></svg>'},
+    /* Keeps its name too. The block heading above already says AI Execution Layer, which is
+       where the branding belongs — renaming this dropdown would only repeat the heading. */
+    {dropdown:'Configure',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.2 7.5l1.9 1.1M17.9 15.4l1.9 1.1M4.2 16.5l1.9-1.1M17.9 8.6l1.9-1.1"/></svg>',children:[
+    {id:'cfg-systems',label:'Systems',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 10.8 15.8 7.2M8.2 13.2l7.6 3.6"/></svg>'},
+      // -- Entity Admin sees Data Foundation: the objects a journey reads and writes are
+      // context it needs when wiring Context & Journey. Creating and destroying an object
+      // stays Super Admin (cfg-model-add), the same split Systems draws with cfg-system-add. --
+    {id:'cfg-data-foundation',label:'Data Foundation',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>'},
+    {id:'cfg-context-journey',label:'Context & Journey',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2V15a3 3 0 0 0 3 3h6.8"/></svg>'},
+    {id:'cfg-agents',label:'Agents',roles:['super-admin','entity-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/></svg>'}
     ]}
-    // -- The intake form action used to sit here as "Create Contract". It now lives under
-    // Client as "Create Client": the form writes a client record, so the action belongs beside
-    // the module that lists those records rather than in the AI layer. --
   ]},
+  /* == WORKSPACE ============================================================================
+     The connected product's own modules. What changed from the department headings:
+       People            Was "Workforce" — one of the four module names in the company deck,
+                         so it cannot also be a two-item submenu.
+       Clients & Stores  Was "Client & Contracts", six rows over three nouns. Split in two,
+                         and the two create actions become buttons on their listing pages
+                         (see mdHeadActionsHTML / the Sites header) rather than nav rows. A
+                         create action is something you do ON a page, not a place you go.
+       Contracts         Its own place, with Templates under it.
+       Time & Pay        Was "Time & Payroll", which mixed the work with the settings behind
+                         it. The settings moved to Policies & Rates.
+       Policies & Rates  New shelf: what a journey reads but nobody works day to day.
+       Compliance        Was "Compliance Hub > Compliance Items". With Rates & Rules moved
+                         out the group held one child, so the wrapper goes.
+       Payments          Was "Finance > Payments". Same rule — Finance held one child. == */
+  {group:'Workspace',roles:['super-admin','entity-admin','entity-user'],items:[
+    {id:'dashboard',label:'Dashboard',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'},
+    {dropdown:'People',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',children:[
+    {id:'employees',label:'Employees',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
+    {id:'teams',label:'Teams',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'}
+    ]},
+    {dropdown:'Clients & Stores',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/></svg>',children:[
+    {id:'master-data',label:'Clients',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
+      /* -- STORE, not "site". The word was briefly changed on the argument that site travels to
+         a plant or a yard where store does not. It was the wrong trade: every other surface in
+         this product says store — the `stores` table, Store Code (STR-000112), the Store
+         Operations board, soPipelineStages, the Store Agent, and Bhaiyaa's own signup, which is
+         where these records come from. Renaming one nav row would have made the menu the only
+         place using a different noun for the same object. Loses its "All" qualifier only. -- */
+    {id:'stores',label:'Stores',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><line x1="9" y1="15" x2="15" y2="15"/></svg>'}
+    ]},
+    {dropdown:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>',children:[
+    {id:'contracts',label:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
+    {id:'contract-templates',label:'Templates',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'}
+    ]},
+    {dropdown:'Time & Pay',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',children:[
+    {id:'all-leaves',label:'Leaves',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>'},
+    {id:'timesheet',label:'Timesheet',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'},
+      // -- The register. The RUN that fills it is launched from Journeys > Payroll Creation. --
+    {id:'payroll',label:'Payroll',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'},
+    {id:'salary-view',label:'Salary view',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="13" y2="9"/><line x1="7" y1="13" x2="17" y2="13"/><line x1="7" y1="17" x2="11" y2="17"/></svg>'}
+    ]},
+    {dropdown:'Policies & Rates',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/><line x1="9" y1="4" x2="9" y2="10"/><line x1="15" y1="10" x2="15" y2="20"/></svg>',children:[
+    {id:'leave-policies',label:'Leave policies',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'},
+    {id:'payheads',label:'Payheads',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/><line x1="9" y1="4" x2="9" y2="10"/><line x1="15" y1="10" x2="15" y2="20"/></svg>'},
+      // -- Was under Compliance Hub. It is configuration, not compliance: compliance is what
+      // you prove, this is what you set it against. --
+    {id:'rates-rules',label:'Rates & rules',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>'}
+    ]},
+    {id:'compliance',label:'Compliance',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>'},
+    {id:'payments',label:'Payments',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M6 15h2"/></svg>'}
+  ]},
+  /* Below the line: things that belong to nobody's daily work. Support sat between Finance and
+     Payroll and competed for attention with the work; a helpdesk is not a business module. */
   {divider:true},
-  {section:'Workspace'},
-  {id:'dashboard',label:'Dashboard',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'},
-  /* == THE SAAS PRODUCT'S OWN MODULES =====================================================
-     Seven domain groups, each one an answer to "whose job is this". The previous shape grouped
-     by noun — an "Employee" dropdown holding two views of the same list, a "Leaves" dropdown —
-     which left the pages of pre-employment legal setup split across "Workforce Operations" and
-     "Compliance Hub" for no reason a user could name, and Payroll under a heading whose other
-     children were timesheets and contracts.
-
-     What changed, and why:
-       Workforce          Employees + Teams. Direct and Global were never two modules, only two
-                          filters over one list, so they are one nav item with the filter inside
-                          the page (see buildEmployeesPageHTML).
-       Client & Contracts The commercial chain, in the order it happens: create the client,
-                          browse clients, then their contracts, then the templates behind them.
-                          Client used to be a module of its own one row up, which put the record
-                          and the contract written against it in different places.
-       Compliance Hub     Its own module again. Compliance Items and Rates & Rules are reference
-                          data an entity maintains once and reads against many contracts — a
-                          different rhythm from the per-deal work above, and a different owner.
-       Time & Payroll     Everything that feeds a pay run. My/All Timesheet collapse the same
-                          way Employees did — one page, two tabs.
-       Finance            Payments alone, deliberately. Client billing has a different owner
-                          (Finance) than payroll (Ops/HR), and the domain map has it growing
-                          into invoices, vouchers and receivables — folding it into Payroll now
-                          to save one row would only have to be undone.
-       Administration     Company Settings + Users. "All Users" loses its qualifier; under an
-                          Administration heading, "Users" is unambiguous.
-       Support            Untouched, on purpose. == */
-  {dropdown:'Workforce',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',children:[
-    {id:'employees',label:'Employees',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
-    {id:'teams',label:'Teams',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'}
-  ]},
-  /* -- Who inside Entity User sees each of these is answered by personaModules, not by a
-     `personas:` array on the entry — Create Client and All Clients used to carry one and no
-     longer do. Only the Account Manager creates a client record; All Clients is a read for
-     every persona whose work is raised against one.
-     Create Client and Create Store are actions, not pages. Each opens an intake form — a
-     focused flow that hides the sidebar outright — so nothing marks them active. Super Admin
-     gets neither: it configures what the objects are (Data Foundation), it does not fill them
-     in, so it sees the listings alone. -- */
-  {dropdown:'Client & Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
-    {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],color:'amber',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
-    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
-    /* -- Bhaiyaa's store signup, beside the client actions because it is the same kind of thing:
-       a record being opened from a connected system's own form.
-
-       OPS MANAGER ONLY, inside Entity User. This reverses an earlier call that opening a store
-       was "entity-level onboarding, so every Entity User can reach it" — true when the store
-       journey had no owner in this portal, and no longer true now that it has one. Every stage
-       of soPipelineStages waits on the Ops Manager or on an agent, amOwnerDirectory routes both
-       'Ops Manager' and 'Store Agent' to that persona, and it is the only persona whose
-       dashboard carries the Store Operations board. An HR Manager opening a Bhaiyaa store is
-       not a thing this product does. See personaModules. -- */
-    {id:'create-store',label:'Create Store',roles:['entity-admin','entity-user'],color:'amber',action:()=>startStoreIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/></svg>'},
-    // -- Stores keep their own module. Create-then-browse, the same pair as Create Client /
-    // All Clients above it, and inside Entity User it travels with Create Store: a listing whose
-    // every row is worked by one persona belongs to that persona. --
-    {id:'stores',label:'All Stores',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><line x1="9" y1="15" x2="15" y2="15"/></svg>'},
-    {id:'contracts',label:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
-    {id:'contract-templates',label:'Contract Templates',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'}
-  ]},
-  // -- Compliance Hub carries the module name, so the child under it goes back to naming what it
-  // actually lists (Compliance Items) rather than repeating its parent. --
-  {dropdown:'Compliance Hub',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',children:[
-    {id:'compliance',label:'Compliance Items',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>'},
-    {id:'rates-rules',label:'Rates & Rules',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>'}
-  ]},
-  // -- Leave Policies is not in the module spec but is a live page, and it is the settings
-  // behind the row above it. Filing it anywhere else would separate the policy from the
-  // balances it governs, so it stays next to Leaves. --
-  {dropdown:'Time & Payroll',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',children:[
-    {id:'all-leaves',label:'Leaves',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>'},
-    {id:'leave-policies',label:'Leave Policies',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'},
-    {id:'timesheet',label:'Timesheet',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'},
-    {id:'payroll',label:'Payroll',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'},
-    {id:'payheads',label:'Payheads',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1V2l-2 1-2-1-2 1-2-1-2 1-2-1z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>'},
-    {id:'salary-view',label:'Salary View',roles:['super-admin','entity-admin','entity-user'],color:'teal',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="13" y2="9"/><line x1="7" y1="13" x2="17" y2="13"/><line x1="7" y1="17" x2="11" y2="17"/></svg>'}
-  ]},
-  {dropdown:'Finance',roles:['super-admin','entity-admin','entity-user'],color:'green',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M6 15h2"/><path d="M12 15h4"/></svg>',children:[
-    {id:'payments',label:'Payments',roles:['super-admin','entity-admin','entity-user'],color:'green',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M6 15h2"/></svg>'}
-  ]},
   {dropdown:'Support',roles:['super-admin','entity-admin','entity-user'],color:'indigo',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>',children:[
-    {id:'chats',label:'Chats',roles:['super-admin','entity-admin','entity-user'],color:'indigo',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 10h8"/><path d="M8 14h5"/></svg>'},
-    {id:'support-tickets',label:'Tickets',roles:['super-admin','entity-admin','entity-user'],color:'indigo',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9a3 3 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a3 3 0 0 0 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3z"/><path d="M13 5v14"/></svg>'},
+    {id:'chats',label:'Chats',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>'},
+    {id:'support-tickets',label:'Tickets',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9a3 3 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a3 3 0 0 0 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3z"/><path d="M13 5v14"/></svg>'},
     /* -- The frozen V1 snapshot of the contract-creation journey (js/contract-journey-v1.js).
        The live journey is being redesigned; this row is how the finished look it had before
        that stays reachable, unchanged, for as long as it is worth comparing against.
 
-       It is filed here because Support is where things that belong to nobody's daily work
-       end up, and this belongs to nobody's daily work — it is a reference view. Filing it
-       under Client & Contracts would have put a second "create a contract" beside the real
-       one, and the person who wants to create a contract would have had to choose.
-
-       An `action` rather than a page id, exactly like Create Client and Create Store above:
-       what it opens is a run, not a route the router knows. The typeof guard means a missing
-       contract-journey-v1.js degrades to a dead row rather than a console error on click. -- */
-    {id:'ccjv1-journey',label:'Contract Journey V1',roles:['super-admin','entity-admin','entity-user'],color:'indigo',action:()=>{if(typeof ccjv1StartNewRun==='function')ccjv1StartNewRun();},icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 16 10 18 13 14"/><circle cx="12" cy="12" r="10" opacity="0"/></svg>'}
+       An `action` rather than a page id, because what it opens is a run, not a route the
+       router knows. The typeof guard means a missing contract-journey-v1.js degrades to a
+       dead row rather than a console error on click. -- */
+    {id:'ccjv1-journey',label:'Contract Journey V1',roles:['super-admin','entity-admin','entity-user'],color:'indigo',action:()=>{if(typeof ccjv1StartNewRun==='function')ccjv1StartNewRun();},icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 16 10 18 13 14"/></svg>'}
   ]},
-  {dropdown:'Administration',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',children:[
-    {id:'settings',label:'Company Settings',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'},
-    {id:'all-users',label:'Users',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'}
+  {dropdown:'Administration',roles:['super-admin'],color:'slate',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.2 7.5l1.9 1.1M17.9 15.4l1.9 1.1M4.2 16.5l1.9-1.1M17.9 8.6l1.9-1.1"/></svg>',children:[
+    {id:'settings',label:'Company Settings',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.2 7.5l1.9 1.1M17.9 15.4l1.9 1.1M4.2 16.5l1.9-1.1M17.9 8.6l1.9-1.1"/></svg>'},
+    {id:'all-users',label:'Users',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'}
   ]}
 ];
 
@@ -1517,7 +1536,8 @@ function getPageMeta(pg){const ccjm=typeof ccjPageMeta==='function'?ccjPageMeta(
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
-function getSidebarActivePage(pg){if(typeof isCCJPage==='function'&&isCCJPage(pg))return 'contracts';if(typeof isCCJV1Page==='function'&&isCCJV1Page(pg))return 'contracts';if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return cfgUserIntakeBackPage;if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':'ai-executive';if(pg==='ai-analytics'||pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
+function getSidebarActivePage(pg){if(typeof isCCJPage==='function'&&isCCJPage(pg))return 'contracts';
+  if(typeof isCCJV1Page==='function'&&isCCJV1Page(pg))return 'contracts';if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return cfgUserIntakeBackPage;if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 /* Copy authored for HTML, reused somewhere HTML entities do not resolve — a title attribute, a
@@ -1629,10 +1649,15 @@ function buildSidebar(id,collapsed,activePg){
   // sidebar root either way, so grouped and ungrouped dropdowns stay mutually exclusive. --
   items.forEach(item=>{
     if(item.group){
-      const box=document.createElement('div');box.className='sb-group';
+      /* -- `box` and `dot` are per zone. The AI Execution Layer keeps the tinted panel and the
+         spinning dot because that block IS the product and should read as one object. Workspace
+         is the connected product's own modules and takes neither: giving every zone the same
+         treatment would have said they are the same kind of thing. Absent means plain, so a
+         zone added without an opinion gets the quieter of the two. -- */
+      const box=document.createElement('div');box.className='sb-group'+(item.box?'':' sb-group-plain');
       if(!collapsed){
         const lbl=document.createElement('div');lbl.className='sb-group-label';
-        lbl.innerHTML='<span class="sb-group-dot"></span><span>'+item.group+'</span>';
+        lbl.innerHTML=(item.dot?'<span class="sb-group-dot"></span>':'')+'<span>'+item.group+'</span>';
         box.appendChild(lbl);
       }
       el.appendChild(box);
