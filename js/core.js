@@ -3142,11 +3142,12 @@ const cfgModels=[
      which is exactly why a created store sits in Pending until an Ops Manager supplies them,
      the same contract the Client object has with its own intake form.
 
-     NO `identity` SECTION, unlike Client. This object still carries the same two ids — we mint
-     Store Code, Bhaiyaa minted Source Record ID, and `uq_stores_source_record` deduplicates on
-     theirs — but they are read off the mapped column, the sample record and the validation rule
-     rather than restated in a card of their own. Re-add an `identity` array here and the section
-     comes back; nothing else needs changing.
+     NO `identity` SECTION — same as Client, and no model declares one now. This object still
+     carries the same two ids: we mint Store Code, Bhaiyaa minted Source Record ID, and
+     `uq_stores_source_record` deduplicates on theirs. They are read off the mapped column, the
+     sample record and the validation rule rather than restated in a card of their own. The
+     renderer still supports it (buildCfgModelDetailHTML, js/pages.js) — re-add an `identity`
+     array to any model and the card comes back; nothing else needs changing.
 
      There is deliberately NO column for a full Aadhaar number anywhere in this object — the
      schema stores the masked form only, and an object description that listed the real one
@@ -3460,14 +3461,19 @@ const cockpitDepartmentDirectory=[
   {id:'admin',name:'Admin',summary:'Entity governance, activation requests, system setup, and operational ownership.',admin:{name:'Entity Admin',email:'entity.admin@dhi.com',title:'Entity Team Lead',journeys:['Hire and Onboard Journey','Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Rahul Mehta',email:'rahul.mehta@dhi.com',title:'Entity Coordinator',journeys:['Hire and Onboard Journey']},{name:'Deepak Joshi',email:'deepak.joshi@dhi.com',title:'Systems Coordinator',journeys:['Hire to Retire (H2R) Journey']}]}
 ];
 const manualJourneyStepCatalog={
-  // -- Every step agentCapable:false, which is what makes this journey read as Manual Mode with no
-  // Agent control: journeyModeLabel returns 'Manual Mode' when nothing is capable, and the
-  // Context & Journey detail hides the toggle on the same test. Turn one of these true and both
-  // come back on their own — the mode is derived from the steps, never set alongside them. --
+  // -- Every step agentCapable:true, so this journey reads Agent Enabled and carries the Agent
+  // control like the others. It used to be all-false, which made it the one journey on the board
+  // labelled Manual Mode — a description of the catalogue rather than of the journey, since the
+  // client intake, the push to NewForce and the read-back of the created record are the same
+  // agent work the store journey is credited for.
+  //
+  // `manualAction` stays on every step and is still the truth: it is what a person does when the
+  // Agent toggle is off. Mode is DERIVED from these flags, never stated beside them — turn one
+  // false and the badge drops to Hybrid on its own. --
   'user-master-data':[
-    {name:'Master Data Intake',ownerRole:'Account Manager',modulePage:'master-data',manualAction:"Capture the client's legal, contact, and billing details on the NewForce intake form.",sla:'2h',agentCapable:false},
-    {name:'Submission & Ingestion',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Submit the form to NewForce Solutions and wait for the submission to be read back.',sla:'2h',agentCapable:false},
-    {name:'Client Record Created',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Open the new client record in All Clients and confirm it carries both ids.',sla:'2h',agentCapable:false}
+    {name:'Master Data Intake',ownerRole:'Account Manager',modulePage:'master-data',manualAction:"Capture the client's legal, contact, and billing details on the NewForce intake form.",sla:'2h',agentCapable:true},
+    {name:'Submission & Ingestion',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Submit the form to NewForce Solutions and wait for the submission to be read back.',sla:'2h',agentCapable:true,exceptionType:'Submission rejected'},
+    {name:'Client Record Created',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Open the new client record in All Clients and confirm it carries both ids.',sla:'2h',agentCapable:true}
   ],
   /* -- Without an entry here manualJourneySteps returns [], journeyModeLabel finds nothing
      agent-capable and the card reads "Manual Mode" — on a journey where three of the four stages
