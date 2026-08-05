@@ -927,7 +927,7 @@ const soPipelineStages=[
      it clears. The journey is explicit that a failed match halts the run BEFORE a store is
      created, which is the whole reason KYC sits here rather than after provisioning. */
   {id:'kyc',           n:2,track:'ours',    tone:'red',  label:'KYC verification',short:'KYC',          plain:'We are checking the owner&rsquo;s Aadhaar with UIDAI before any store is opened.',      internal:'UIDAI demographic match and watchlist screen',     waitingOn:'KYC Agent',gate:true},
-  {id:'store-creation',n:3,track:'ours',    tone:'blue', label:'Store creation',  short:'Creating',     plain:'We are registering the store on Bhaiyaa and switching on the storefront or the ledger.',internal:'StoreIntake registration, then provisioning',      waitingOn:'Store Agent'},
+  {id:'store-creation',n:3,track:'ours',    tone:'blue', label:'Pending for activation',short:'Pending for activation',plain:'We are registering the store on Bhaiyaa and switching on the storefront or the ledger.',internal:'StoreIntake registration, then provisioning',      waitingOn:'Store Agent'},
   {id:'store-live',    n:4,track:'ours',    tone:'green',label:'Store created',   short:'Live',         plain:'The store exists in both systems. It stays Pending until its address, GST number and bank details are added.',internal:'Live in both systems, pending the remaining details',waitingOn:'Ops Manager',terminal:true}
 ];
 /* Two tracks, and the divider between them is the honest summary of this journey: the first
@@ -3084,19 +3084,10 @@ const cfgModels=[
   // state. Only the label changed — what this object holds was always a client.
   {id:'user',name:'Client',source:'NewForce Solutions',intakeFormPage:'cfg-user-intake',
     desc:'Client captured by the NewForce Solutions intake form, unified into the Executive Layer Client store.',
-    // -- The ids the object carries, and who mints each. Declared separately from mapped and
-    // enrichment because it is neither: a mapped field is copied from the source, an enrichment
-    // field is typed in afterwards, and an identifier is *issued* — by us or by the source — at
-    // the moment the record comes into existence. Filing them under either of the other two was
-    // what let the store carry a third id nobody could say the origin of.
-    //
-    // Only this object declares `identity`; the section does not render for models without it.
-    identity:[
-      {name:'Client ID',column:'employee_code',mintedBy:'Executive Layer',example:'CLI-000010',
-       note:'Issued by us when the client is created here. Unique across the whole Executive Layer — minted inside the insert transaction, not per browser.'},
-      {name:'Source Record ID',column:'source_record_id',mintedBy:'NewForce Solutions',example:'ADT-SUB-0011',
-       note:'The id the source system gave this same client in its own store. Recorded as received, never rewritten, and the key ingest deduplicates on.'}
-    ],
+    // -- NO `identity` array, so no Identity card. It carries the same two ids it always did:
+    // Client ID is minted here (`employee_code`) and Source Record ID arrives with the
+    // submission — the mapped row, the sample record and the validation rule below all still
+    // name them. See the note on the Store object for the same decision. --
     mapped:[
       // Arrives with the submission as `id` — the source system's own reference for it, which is
       // why it is mapped rather than minted.
@@ -3151,19 +3142,17 @@ const cfgModels=[
      which is exactly why a created store sits in Pending until an Ops Manager supplies them,
      the same contract the Client object has with its own intake form.
 
-     TWO IDS, SAME SPLIT AS CLIENT, and for the same reason: we mint one, Bhaiyaa minted the
-     other, and `uq_stores_source_record` deduplicates on theirs. There is deliberately NO
-     column for a full Aadhaar number anywhere in this object — the schema stores the masked
-     form only, and an object description that listed the real one would be describing a field
-     the database refuses to hold. == */
+     NO `identity` SECTION, unlike Client. This object still carries the same two ids — we mint
+     Store Code, Bhaiyaa minted Source Record ID, and `uq_stores_source_record` deduplicates on
+     theirs — but they are read off the mapped column, the sample record and the validation rule
+     rather than restated in a card of their own. Re-add an `identity` array here and the section
+     comes back; nothing else needs changing.
+
+     There is deliberately NO column for a full Aadhaar number anywhere in this object — the
+     schema stores the masked form only, and an object description that listed the real one
+     would be describing a field the database refuses to hold. == */
   {id:'store',name:'Store',source:'Bhaiyaa',
     desc:'Store opened on Bhaiyaa, mirrored into the Executive Layer store as the record the Store Operations board works.',
-    identity:[
-      {name:'Store Code',column:'store_code',mintedBy:'Executive Layer',example:'STR-000112',
-       note:'Issued by us the moment the store is mirrored in. Unique across the whole Executive Layer — minted inside the insert, not per browser.'},
-      {name:'Source Record ID',column:'source_record_id',mintedBy:'Bhaiyaa',example:'BHA-STR-0001',
-       note:'Bhaiyaa’s own reference for the same store. Recorded as received, never rewritten, and unique per source so two platforms may legitimately mint the same string.'}
-    ],
     mapped:[
       ['Source Record ID','source_record_id','string'],
       ['Store Name','store_name','string'],
