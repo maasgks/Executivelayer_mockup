@@ -5503,15 +5503,27 @@ function ccjMaybeAutoProceed(){
    repaints too, and threw the sheet to the top in exactly the same way.
 
    Restored synchronously, before the browser can paint the new subtree, so there is no frame where
-   the form is drawn at the top. */
+   the form is drawn at the top.
+
+   A LIST, because the form was never the only scroller this happens to. The employment contract
+   repaints once per clause as the audit applies each statutory rule, and its sheet was snapping to
+   the top and being glided all the way back down 620ms later — the same failure described above,
+   read as the document shuttling up and down rather than as one pass through it. Any screen whose
+   scroller must survive its own repaint belongs here; a screen left off the list simply keeps the
+   old behaviour, which is why this is an allowlist rather than "every scroller in the subtree". */
+const CCJ_KEEP_SCROLL=[
+  '.ccj-form-scroll',   // the contract form, following a document being read into it
+  '.ccj-ec-wrap'        // the employment contract, following the clause being audited
+];
 function ccjPaintScreen(){
   const el=document.getElementById('ccj-screen');
   if(!el)return;
-  const scroller=function(){return el.querySelector?el.querySelector('.ccj-form-scroll'):null;};
-  const was=scroller();
-  const keep=was?was.scrollTop:0;
+  const find=function(sel){return el.querySelector?el.querySelector(sel):null;};
+  const keep=CCJ_KEEP_SCROLL.map(function(sel){const n=find(sel);return n?n.scrollTop:0;});
   el.innerHTML=ccjScreenHTML(ccjRun.stage,ccjRun.screen);
-  if(keep>0){const now=scroller();if(now)now.scrollTop=keep;}
+  CCJ_KEEP_SCROLL.forEach(function(sel,i){
+    if(keep[i]>0){const n=find(sel);if(n)n.scrollTop=keep[i];}
+  });
 }
 /* Bring a field into view inside the form's own scroller — never the page, which does not
    scroll. Used whenever attention moves to a field the user did not move it to themselves:
