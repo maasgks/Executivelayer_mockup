@@ -927,7 +927,7 @@ const soPipelineStages=[
      it clears. The journey is explicit that a failed match halts the run BEFORE a store is
      created, which is the whole reason KYC sits here rather than after provisioning. */
   {id:'kyc',           n:2,track:'ours',    tone:'red',  label:'KYC verification',short:'KYC',          plain:'We are checking the owner&rsquo;s Aadhaar with UIDAI before any store is opened.',      internal:'UIDAI demographic match and watchlist screen',     waitingOn:'KYC Agent',gate:true},
-  {id:'store-creation',n:3,track:'ours',    tone:'blue', label:'Store creation',  short:'Creating',     plain:'We are registering the store on Bhaiyaa and switching on the storefront or the ledger.',internal:'StoreIntake registration, then provisioning',      waitingOn:'Store Agent'},
+  {id:'store-creation',n:3,track:'ours',    tone:'blue', label:'Pending for activation',short:'Pending for activation',plain:'We are registering the store on Bhaiyaa and switching on the storefront or the ledger.',internal:'StoreIntake registration, then provisioning',      waitingOn:'Store Agent'},
   {id:'store-live',    n:4,track:'ours',    tone:'green',label:'Store created',   short:'Live',         plain:'The store exists in both systems. It stays Pending until its address, GST number and bank details are added.',internal:'Live in both systems, pending the remaining details',waitingOn:'Ops Manager',terminal:true}
 ];
 /* Two tracks, and the divider between them is the honest summary of this journey: the first
@@ -3084,19 +3084,10 @@ const cfgModels=[
   // state. Only the label changed — what this object holds was always a client.
   {id:'user',name:'Client',source:'NewForce Solutions',intakeFormPage:'cfg-user-intake',
     desc:'Client captured by the NewForce Solutions intake form, unified into the Executive Layer Client store.',
-    // -- The ids the object carries, and who mints each. Declared separately from mapped and
-    // enrichment because it is neither: a mapped field is copied from the source, an enrichment
-    // field is typed in afterwards, and an identifier is *issued* — by us or by the source — at
-    // the moment the record comes into existence. Filing them under either of the other two was
-    // what let the store carry a third id nobody could say the origin of.
-    //
-    // Only this object declares `identity`; the section does not render for models without it.
-    identity:[
-      {name:'Client ID',column:'employee_code',mintedBy:'Executive Layer',example:'CLI-000010',
-       note:'Issued by us when the client is created here. Unique across the whole Executive Layer — minted inside the insert transaction, not per browser.'},
-      {name:'Source Record ID',column:'source_record_id',mintedBy:'NewForce Solutions',example:'ADT-SUB-0011',
-       note:'The id the source system gave this same client in its own store. Recorded as received, never rewritten, and the key ingest deduplicates on.'}
-    ],
+    // -- NO `identity` array, so no Identity card. It carries the same two ids it always did:
+    // Client ID is minted here (`employee_code`) and Source Record ID arrives with the
+    // submission — the mapped row, the sample record and the validation rule below all still
+    // name them. See the note on the Store object for the same decision. --
     mapped:[
       // Arrives with the submission as `id` — the source system's own reference for it, which is
       // why it is mapped rather than minted.
@@ -3150,19 +3141,18 @@ const cfgModels=[
      which is exactly why a created store sits in Pending until an Ops Manager supplies them,
      the same contract the Client object has with its own intake form.
 
-     TWO IDS, SAME SPLIT AS CLIENT, and for the same reason: we mint one, Bhaiyaa minted the
-     other, and `uq_stores_source_record` deduplicates on theirs. There is deliberately NO
-     column for a full Aadhaar number anywhere in this object — the schema stores the masked
-     form only, and an object description that listed the real one would be describing a field
-     the database refuses to hold. == */
+     NO `identity` SECTION — same as Client, and no model declares one now. This object still
+     carries the same two ids: we mint Store Code, Bhaiyaa minted Source Record ID, and
+     `uq_stores_source_record` deduplicates on theirs. They are read off the mapped column, the
+     sample record and the validation rule rather than restated in a card of their own. The
+     renderer still supports it (buildCfgModelDetailHTML, js/pages.js) — re-add an `identity`
+     array to any model and the card comes back; nothing else needs changing.
+
+     There is deliberately NO column for a full Aadhaar number anywhere in this object — the
+     schema stores the masked form only, and an object description that listed the real one
+     would be describing a field the database refuses to hold. == */
   {id:'store',name:'Store',source:'Bhaiyaa',
     desc:'Store opened on Bhaiyaa, mirrored into the Executive Layer store as the record the Store Operations board works.',
-    identity:[
-      {name:'Store Code',column:'store_code',mintedBy:'Executive Layer',example:'STR-000112',
-       note:'Issued by us the moment the store is mirrored in. Unique across the whole Executive Layer — minted inside the insert, not per browser.'},
-      {name:'Source Record ID',column:'source_record_id',mintedBy:'Bhaiyaa',example:'BHA-STR-0001',
-       note:'Bhaiyaa’s own reference for the same store. Recorded as received, never rewritten, and unique per source so two platforms may legitimately mint the same string.'}
-    ],
     mapped:[
       ['Source Record ID','source_record_id','string'],
       ['Store Name','store_name','string'],
@@ -3470,14 +3460,19 @@ const cockpitDepartmentDirectory=[
   {id:'admin',name:'Admin',summary:'Entity governance, activation requests, system setup, and operational ownership.',admin:{name:'Entity Admin',email:'entity.admin@dhi.com',title:'Entity Team Lead',journeys:['Hire and Onboard Journey','Payroll Creation Journey','Hire to Retire (H2R) Journey']},associates:[{name:'Rahul Mehta',email:'rahul.mehta@dhi.com',title:'Entity Coordinator',journeys:['Hire and Onboard Journey']},{name:'Deepak Joshi',email:'deepak.joshi@dhi.com',title:'Systems Coordinator',journeys:['Hire to Retire (H2R) Journey']}]}
 ];
 const manualJourneyStepCatalog={
-  // -- Every step agentCapable:false, which is what makes this journey read as Manual Mode with no
-  // Agent control: journeyModeLabel returns 'Manual Mode' when nothing is capable, and the
-  // Context & Journey detail hides the toggle on the same test. Turn one of these true and both
-  // come back on their own — the mode is derived from the steps, never set alongside them. --
+  // -- Every step agentCapable:true, so this journey reads Agent Enabled and carries the Agent
+  // control like the others. It used to be all-false, which made it the one journey on the board
+  // labelled Manual Mode — a description of the catalogue rather than of the journey, since the
+  // client intake, the push to NewForce and the read-back of the created record are the same
+  // agent work the store journey is credited for.
+  //
+  // `manualAction` stays on every step and is still the truth: it is what a person does when the
+  // Agent toggle is off. Mode is DERIVED from these flags, never stated beside them — turn one
+  // false and the badge drops to Hybrid on its own. --
   'user-master-data':[
-    {name:'Master Data Intake',ownerRole:'Account Manager',modulePage:'master-data',manualAction:"Capture the client's legal, contact, and billing details on the NewForce intake form.",sla:'2h',agentCapable:false},
-    {name:'Submission & Ingestion',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Submit the form to NewForce Solutions and wait for the submission to be read back.',sla:'2h',agentCapable:false},
-    {name:'Client Record Created',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Open the new client record in All Clients and confirm it carries both ids.',sla:'2h',agentCapable:false}
+    {name:'Master Data Intake',ownerRole:'Account Manager',modulePage:'master-data',manualAction:"Capture the client's legal, contact, and billing details on the NewForce intake form.",sla:'2h',agentCapable:true},
+    {name:'Submission & Ingestion',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Submit the form to NewForce Solutions and wait for the submission to be read back.',sla:'2h',agentCapable:true,exceptionType:'Submission rejected'},
+    {name:'Client Record Created',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Open the new client record in All Clients and confirm it carries both ids.',sla:'2h',agentCapable:true}
   ],
   /* -- Without an entry here manualJourneySteps returns [], journeyModeLabel finds nothing
      agent-capable and the card reads "Manual Mode" — on a journey where three of the four stages
