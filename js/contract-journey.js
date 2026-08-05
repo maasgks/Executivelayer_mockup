@@ -313,6 +313,8 @@ function ccjNewRun(){
     decisions:{},           // 'stageId/label' -> the option chosen
     reached:{},             // screens this run has arrived at — what releases a hold
     inspect:null,
+    exit:null,              // {page,tab,dealId} — the surface this run was entered from, so the
+                            // back arrow returns there rather than to a fixed page. See ccjExit
     timer:null,             // the runner's one live timer
     chatTimer:null          // the conversation's one live timer
   };
@@ -1312,7 +1314,7 @@ const CCJ_EVIDENCE={
      already on the books does not get a second tenant, and the run says so instead of pretending
      to create one it did not. */
   'quote-approved/Client tenant provisioned':{
-    system:'NFAdmin', systemId:'nfadmin', ref:'EntityRegistry',
+    system:'ADT SaaS', systemId:'nfadmin', ref:'EntityRegistry',
     call:function(c){return 'POST /tenants {client:"'+c.client+'", country:"'+c.country+'"}';},
     latency:'640ms',
     fetched:function(c){
@@ -1648,7 +1650,12 @@ function ccjHoldNoteHTML(hold){
 const CCJ_GATES={
   'request-received/Qualified / Rejected':{
     kind:'decision',
-    ask:'Qualify this request before it is priced.',
+    /* "Qualify this request before it is priced" was the process's word for the decision, not the
+       decision itself. Nobody outside a sales operating model says "qualify a request"; what is
+       actually being asked is whether this is a hire we will take on, and the one consequence
+       worth stating is that nothing gets costed until it is answered. The button then carries the
+       verb, so the reader never has to work out what Qualify does. */
+    ask:'Is this a hire we can take on? Nothing is priced until you say so.',
     // Its own halt sentence, because this one carries a fact — the intake is captured and routed —
     // that no other decision gate in the journey shares. See ccjOnHalt.
     // "…Qualify it to continue" came off the end: the card directly above already asks for exactly
@@ -1657,10 +1664,13 @@ const CCJ_GATES={
     // exists and has been put in front of someone.
     halt:'Request logged and routed.',
     options:[
-      {id:'qualified',   label:'Qualify',    tone:'go',  done:'Qualified'},
+      // The button says what happens next, the `done` chip keeps the record's word for it. Those
+      // are two different jobs: a control is read before the click and has to promise an outcome,
+      // a chip is read afterwards and has to match the sub-status it settled.
+      {id:'qualified',   label:'Accept and price it',    tone:'go',  done:'Qualified'},
       // `stop` is what the run says about itself afterwards. Authored per option because these
       // four sentences are the only record a reader gets of why a journey ended.
-      {id:'rejected',label:'Reject', tone:'stop',done:'Rejected',
+      {id:'rejected',label:'Reject the request', tone:'stop',done:'Rejected',
        stop:{title:'Request rejected',note:'No further steps ran on this request.'}}
     ]
   },
@@ -1670,10 +1680,15 @@ const CCJ_GATES={
      which is stage 1's decision and not this one. */
   'quote-prep/Quote QA':{
     kind:'approval',
-    ask:'Approve the quote before it goes to the client.',
+    // Says where the quote goes rather than instructing the reader to approve it — the buttons
+    // directly beneath are the instruction, and a card that both tells you to approve and offers
+    // you an Approve button is saying the same thing twice in two inches.
+    ask:'This quote goes to the client as soon as it is approved.',
     options:[
-      {id:'approved',label:'Approve',   tone:'go',  done:'Approved'},
-      {id:'rework',  label:'Send back', tone:'stop',done:'Sent back for rework'}
+      {id:'approved',label:'Approve the quote',   tone:'go',  done:'Approved'},
+      // Not a bare "Send back", which never said where to. It goes back to the cost engine to be
+      // rebuilt — see CCJ_REWORK, which returns the run to Cost calc built.
+      {id:'rework',  label:'Send back to be rebuilt', tone:'stop',done:'Sent back for rework'}
     ]
   }
 };
@@ -1685,10 +1700,15 @@ const CCJ_ANY_PERSONA=true;
    the 48h SLA in the operating model is a person's working time, not a system's. */
 CCJ_GATES['agreement-signature/Legal & compliance review']={
   kind:'approval',
-  ask:'Release the agreement to the client?',
+  /* "Release the agreement to the client?" used the word the record uses. Release is what the
+     system does; what a person is being asked is whether legal's read is good enough to let the
+     document leave, and the plain version of that says who has already looked at it and where it
+     goes next. */
+  ask:'Legal has read the agreement. Approve it and it goes to the client to sign.',
   options:[
-    {id:'released',label:'Approve',      tone:'go',  done:'Released'},
-    {id:'amend',   label:'Send to amend',tone:'stop',done:'Returned for amendment'}
+    {id:'released',label:'Approve the agreement',      tone:'go',  done:'Released'},
+    // "Send to amend" is not a sentence anyone says. It goes back to legal to be changed.
+    {id:'amend',   label:'Send back for changes',tone:'stop',done:'Returned for amendment'}
   ]
 };
 /* A possible sanctions match. Automatic screening, human adjudication — similar company names
@@ -1702,11 +1722,15 @@ CCJ_GATES['agreement-signature/Client entity + sanctions check']=function(){
     // went with it — screening vocabulary, not the word anyone uses out loud — and so did the
     // explanation of why screening cannot decide alone, which is the control arguing for itself.
     // What is left is the match and what it costs to get wrong.
-    ask:'A possible sanctions match needs checking.',
+    ask:'Screening flagged a possible sanctions match on this client.',
     why:m.hit+'. We cannot contract with a sanctioned entity.',
     options:[
-      {id:'dismiss',  label:'Not our client', tone:'go',  done:'Match dismissed'},
-      {id:'escalate', label:'Escalate',       tone:'stop',done:'Escalated to Compliance',
+      // "Not our client" was the shortest way to say it and the easiest to misread — it names the
+      // FLAGGED entity, not the one on the deal, so on a card about our client it read as if it
+      // were disowning them. What is being answered is whether the list entry is this company.
+      {id:'dismiss',  label:'Not a match &mdash; clear it', tone:'go',  done:'Match dismissed'},
+      // A bare "Escalate" never said to whom, on the one card where that is the entire decision.
+      {id:'escalate', label:'Send to Compliance',       tone:'stop',done:'Escalated to Compliance',
        stop:{title:'Escalated to Compliance',note:'The engagement is on hold until Compliance clears it.'}}
     ]
   };
@@ -1725,14 +1749,18 @@ const CCJ_POST_GATES={
     // ours, and this is the last point at which we can decline — a block crediting that decision
     // to the client would name the one party who cannot make it. See ccjGateOwner.
     owner:'Compliance',
-    ask:'Countersign the agreement?',
+    /* "Countersign the agreement?" is the correct legal word and the wrong first word — it asks
+       the reader to know what a countersignature is before it tells them anything. The fact that
+       makes the question answerable is that the other side has already signed, so that leads.
+       The record keeps the precise word: the sub-status is still ADT countersigned. */
+    ask:'The client has signed. Add our signature?',
     // Matched to the employment-contract countersign in stage 7 — same two facts, same shape.
     // These are the two cards in the journey that ask the identical question of the identical
     // person, and rewriting one and not the other would leave the demo speaking in two voices.
-    why:'The client has signed. Your signature makes the agreement live.',
+    why:'Ours is the second signature. It puts the agreement in force and lets the hire start.',
     options:[
-      {id:'countersign',label:'Approve and countersign',tone:'go',  done:'Executed'},
-      {id:'declineMsa', label:'Decline',                tone:'stop',done:'Declined',
+      {id:'countersign',label:'Sign and make it live',tone:'go',  done:'Executed'},
+      {id:'declineMsa', label:'Decline to sign',                tone:'stop',done:'Declined',
        stop:{title:'Agreement declined',note:'Nothing is in force and no placement can start.'}}
     ]
   }
@@ -1799,6 +1827,10 @@ function ccjEnterStep(){
   const run=ccjRun;if(!run)return;
   const steps=ccjSteps(run.stage);
   const step=steps[run.sub];
+  // The board's row for this deal moves with the run — see ccjSyncDealFromRun. Here, because
+  // arriving at a step is the one event every kind of movement passes through: a settle, a stage
+  // opening, a rework jumping back up its own stage.
+  ccjSyncDealFromRun(run);
   if(!step){ccjStageComplete();return;}
   // The block goes into the transcript before anything paints, so every paint below — the gate,
   // the pre-wait, the first action — has something to paint into. A skipped step gets one too:
@@ -2272,7 +2304,7 @@ const CCJ_STAGE_REST={
     next:'Next is the Master Services Agreement &mdash; the contract between us and the client, out for their signature.'},
   // The signed agreement coming back is what this stage produced. Walking past it in the half
   // second after the countersignature lands would be walking past the outcome.
-  'agreement-signature':{label:'Continue to deposit',
+  'agreement-signature':{label:'Continue to the deposit invoice',
     next:'Next is the deposit invoice. No hire can start until that money arrives.'}
 };
 /* THE WAY ON IS ASKED FOR IN THE CONVERSATION, NOT PRINTED ON THE ARTEFACT.
@@ -2895,7 +2927,9 @@ function ccjHeadInnerHTML(i){
   const wait=s.waitingOn&&s.waitingOn!=='&mdash;'
     ?'<span class="ccj-head-wait">Waiting on <b>'+s.waitingOn+'</b></span>':'';
   return ''
-    +'<button class="ccj-back" onclick="ccjExit()" title="Back to Contracts">'
+    // The tooltip names the place it actually goes — see ccjExitTarget. An arrow that said
+    // "Back to Contracts" on a run opened from the board was promising the wrong room.
+    +'<button class="ccj-back" onclick="ccjExit()" title="'+attrSafe(ccjExitLabel())+'">'
     +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<span class="ccj-head-step">Step '+(i+1)+' of '+ccjStages().length+'</span>'
     +'<span class="ccj-head-name">'+s.short+'</span>'
@@ -2915,7 +2949,67 @@ function ccjModelLabel(id){
   const t=(typeof AI_CT_TYPE_CARDS!=='undefined'?AI_CT_TYPE_CARDS:[]).find(function(x){return x.id===id;});
   return t?t.sub:id;
 }
-function ccjExit(){ccjReset();navigatePage('contracts');}
+/* == WHERE BACK GOES =======================================================================
+   A run is entered from three places — the + on the Contracts listing, the New request button on
+   the Account Manager's board, and a row on that board — and the back arrow sent all three to
+   Contracts. From the board that was a redirect rather than a back: it took a reader who had
+   never been on the Contracts listing and left them there, further from the row they came in on
+   than when they started, with the board's stage filter and page still set behind them.
+
+   Recorded on the RUN, not in a module variable, so it survives parking one run to open another
+   and coming back — and it is plain data, so ccjSaveRuns carries it through a reload with
+   everything else. == */
+function ccjMarkEntry(run,dealId){
+  if(!run)return;
+  // Never a journey page: leaving a run for a run is not a way out of the journey.
+  const from=(typeof page!=='undefined'&&!isCCJPage(page))?page:'';
+  // Crossed straight from another run, so there is no new answer to record and whatever this run
+  // already knew about its way out still stands.
+  if(!from&&run.exit)return;
+  run.exit={page:from,
+    tab:typeof dashboardTab!=='undefined'?dashboardTab:'',
+    dealId:(dealId===undefined?null:dealId)};
+}
+/* Resolved rather than stored, so the arrow's tooltip and the arrow's behaviour cannot disagree —
+   they are two readings of this one answer. A run opened from a deal belongs to the board whether
+   or not the entry was recorded: a reload drops the record but not the fact. Contracts is the
+   fallback for everything else, because that is where the create action lives. */
+function ccjExitTarget(){
+  const run=ccjRun,exit=(run&&run.exit)||null;
+  const dealId=exit&&exit.dealId!==null&&exit.dealId!==undefined?exit.dealId
+    :(run&&run.dealId!==undefined&&run.dealId!==null?run.dealId:null);
+  return {page:(exit&&exit.page)||(dealId!==null?'dashboard':'contracts'),
+          tab:(exit&&exit.tab)||'',dealId:dealId};
+}
+function ccjExitLabel(){
+  return ccjExitTarget().page==='dashboard'?'Back to your dashboard':'Back to Contracts';
+}
+function ccjExit(){
+  const to=ccjExitTarget();
+  ccjReset();
+  if(to.page==='dashboard'){
+    if(to.tab&&typeof dashboardTab!=='undefined')dashboardTab=to.tab;
+    if(to.dealId!==null)ccjRestoreBoardTo(to.dealId);
+  }
+  navigatePage(to.page);
+}
+/* Back to the board with the row you left from in front of you and its drawer open — the same
+   round trip soKycReturnToBoard makes for the store journey. Landing on a board with nothing
+   selected asks a reader to find their row again in a table of nineteen, having just spent the
+   trip looking at that one record. */
+function ccjRestoreBoardTo(dealId){
+  if(typeof amDeals==='undefined')return;
+  const d=amDeals.find(function(x){return x.id===dealId;});if(!d)return;
+  // The run is usually what moved this record out of the stage that was filtered for, so a filter
+  // that no longer holds it would drop the row — and the selection with it, since the listing
+  // validates the open drawer against the rows actually on screen.
+  if(typeof amPipelineStage!=='undefined'&&amPipelineStage&&amPipelineStage!==d.stage)amPipelineStage='';
+  if(typeof amPage!=='undefined'&&typeof AM_PAGE_SIZE!=='undefined'&&typeof amFilteredDeals==='function'){
+    const at=amFilteredDeals().findIndex(function(x){return x.id===dealId;});
+    if(at>-1)amPage=Math.floor(at/AM_PAGE_SIZE)+1;
+  }
+  if(typeof amSelectedDealId!=='undefined')amSelectedDealId=dealId;
+}
 
 /* ---- THE RAIL --------------------------------------------------------------------------
    Numbered dots, because at nine stages an unlabelled circle gives no sense of position and
@@ -5522,7 +5616,7 @@ function buildCCJModelHTML(){
   const run=ccjEnsureRun();
   const cards=(typeof AI_CT_TYPE_CARDS!=='undefined'?AI_CT_TYPE_CARDS:[]);
   return '<div class="ccj-model-page">'
-    +'<button class="ccj-back ccj-model-back" onclick="ccjExit()" title="Back to Contracts">'
+    +'<button class="ccj-back ccj-model-back" onclick="ccjExit()" title="'+attrSafe(ccjExitLabel())+'">'
     +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>'
     +'<div class="ccj-model-screen">'
     +'<div class="ccj-model-head">'
@@ -6774,8 +6868,10 @@ CCJ_GATES['deposit-due/Part-paid']=function(){
     // cover"), which was drafting, not product copy.
     why:'Work cannot start until this is paid. If you release it anyway, we cover the payroll and your approval is recorded.',
     options:[
-      {id:'holdBalance', label:'Hold for the balance',tone:'go',  done:'Held for the balance'},
-      {id:'releaseShort',label:'Release anyway',      tone:'stop',done:'Released against a shortfall'}
+      // "Release anyway" named the mechanism — a gate being lifted — and not the thing the reader
+      // is deciding, which is whether a person starts work on money we have not been paid.
+      {id:'holdBalance', label:'Wait for the balance',tone:'go',  done:'Held for the balance'},
+      {id:'releaseShort',label:'Start the hire anyway',      tone:'stop',done:'Released against a shortfall'}
     ]
   };
 };
@@ -7336,8 +7432,10 @@ function buildCCJWorkerSimHTML(){
 }
 
 /* ---- WIRING STAGE 7 INTO THE RUNNER ------------------------------------------------------ */
+/* "The statutory filings" is the phrase an operating model uses; nobody reading this knows which
+   filings, or who they go to. Naming the two authorities says the same thing and can be pictured. */
 CCJ_STAGE_REST['employment-contract']={label:'Continue to onboarding',
-  next:'Next is onboarding &mdash; identity, documents, the statutory filings and a bank account to be paid into.'};
+  next:'Next is onboarding &mdash; ID checks, documents, registering them with the tax and social security offices, and a bank account to pay into.'};
 
 CCJ_PURPOSE['employment-contract/Draft generated']='Generates the contract from the approved quote and the contract details.';
 CCJ_PURPOSE['employment-contract/Clause compliance check']='Checks every clause against the country statutory set, and adjusts what falls short.';
@@ -7399,7 +7497,7 @@ CCJ_GATES['employment-contract/Internal approval']=function(){
      statutory check moved, and whether the contract can be issued at all. What it no longer does
      is append "the employee signs whatever this says, and we carry the employment liability" —
      true, but an argument for the control rather than a fact about this contract, and the ask
-     ("approve before it goes to the employee") already carries the weight.
+     ("goes to the employee to sign once approved") already carries the weight.
 
      Verb agreement is per branch. It previously read "1 clause were rewritten": the noun was
      pluralised and the verb was not, so every single-clause run — the common one — printed a
@@ -7412,11 +7510,16 @@ CCJ_GATES['employment-contract/Internal approval']=function(){
       :'No clauses needed changing for local law.';
   return {
     kind:'approval',
-    ask:'Approve '+e.id+' before it goes to the employee.',
+    // Same shape as the quote QA card in stage 2: state where the document goes on approval and
+    // let the buttons carry the verbs, rather than instructing the reader to press the button
+    // sitting an inch below the sentence telling them to press it.
+    ask:e.id+' goes to the employee to sign as soon as it is approved.',
     why:why,
     options:[
-      {id:'ecApprove',label:'Approve and issue',tone:'go',  done:'Approved'},
-      {id:'ecRedraft',label:'Send back',        tone:'stop',done:'Sent back to redraft'}
+      // "Issue" is the word the record uses for sending a contract out. The button says what the
+      // reader can picture happening: it is sent to the person who has to sign it.
+      {id:'ecApprove',label:'Approve and send it',tone:'go',  done:'Approved'},
+      {id:'ecRedraft',label:'Send back to redraft',        tone:'stop',done:'Sent back to redraft'}
     ]
   };
 };
@@ -7428,15 +7531,15 @@ CCJ_GATES['employment-contract/ADT countersigned']=function(){
   const e=ccjEmp();
   return {
     kind:'approval',
-    ask:'Countersign '+e.id+'?',
+    ask:'The employee has signed '+e.id+'. Add our signature?',
     // Two facts, and only two: they have signed, and this click is what makes it real. "The last
     // point at which we can decline" is said by the Decline button sitting directly beneath it.
     // Deliberately the same shape as the client-agreement countersign in stage 5 — two cards that
     // ask the same thing of the same person must not speak in two voices.
-    why:'The employee has signed. Your signature makes the contract live.',
+    why:'Ours is the second signature. It puts the contract in force and lets them start.',
     options:[
-      {id:'ecCountersign',label:'Approve and countersign',tone:'go',  done:'Executed'},
-      {id:'ecDecline',    label:'Decline',                tone:'stop',done:'Declined',
+      {id:'ecCountersign',label:'Sign and make it live',tone:'go',  done:'Executed'},
+      {id:'ecDecline',    label:'Decline to sign',                tone:'stop',done:'Declined',
        stop:{title:'Contract declined',note:'Nothing is in force and the employee cannot start.'}}
     ]
   };
@@ -8327,8 +8430,12 @@ function buildCCJPayrollHTML(){
 }
 
 /* ---- WIRING STAGE 8 INTO THE RUNNER ------------------------------------------------------- */
-CCJ_STAGE_REST['onboarding']={label:'Continue to active',
-  next:'Last is going live &mdash; payroll readiness, the first run, and the placement on the books.'};
+/* "Continue to active" named the STATUS the run ends in, which is the one thing a button must not
+   do — a control is read as a promise about what happens when it is pressed, and what happens is
+   the first payroll. "Payroll readiness" and "the placement on the books" went the same way: both
+   are the record's words for work that is easier to say than to name. */
+CCJ_STAGE_REST['onboarding']={label:'Continue to the first payroll',
+  next:'Last is going live &mdash; we check they can be paid, run their first payroll, and the hire is live.'};
 
 CCJ_PURPOSE['onboarding/Worker KYC']='Verifies who they are, and that they may work here.';
 CCJ_PURPOSE['onboarding/Documents']='Collects the documents this country requires, and checks each one.';
@@ -8412,11 +8519,17 @@ CCJ_POST_GATES['onboarding/Worker KYC']=function(){
   if(ccjKycDecision().id!=='consider')return null;   // cleared on its own — no decision to make
   return {
     kind:'decision',
-    ask:'Identity verification came back CONSIDER.',
+    /* CONSIDER is the identity provider's word, printed in their capitals, and it means nothing
+       to anyone who has not read their documentation — it is neither a pass nor a fail. The ask
+       now says what that actually amounts to; the provider's verdict is still on the console
+       beside this card, which is where a vendor's vocabulary belongs. */
+    ask:'The ID check could not clear this on its own.',
     why:ccjKycDecision().note+' A machine may not decide this on its own.',
     options:[
       {id:'kycConfirm',label:'Confirm identity',tone:'go',  done:'Identity confirmed'},
-      {id:'kycReject', label:'Reject',          tone:'stop',done:'Verification rejected'}
+      // Paired with the option above it: confirm the identity, or reject the verification. A bare
+      // "Reject" beside "Confirm identity" left the reader to guess what was being rejected.
+      {id:'kycReject', label:'Reject verification',          tone:'stop',done:'Verification rejected'}
     ]
   };
 };
@@ -9637,7 +9750,11 @@ function buildCCJStartHTML(){
 /* ---- ENTRY ------------------------------------------------------------------------------ */
 function ccjStartNewRun(){
   ccjReset();
-  ccjNewRun();
+  const run=ccjNewRun();
+  // Before the page moves, or the entry recorded would be the journey itself. New request on the
+  // Account Manager's board and + on the Contracts listing both come through here, and back has
+  // to answer for whichever one it was — see ccjExit.
+  ccjMarkEntry(run,null);
   page='ccj-model';        // the engagement model is chosen before the run frame appears
   renderADTPage();
 }
@@ -9671,7 +9788,13 @@ function ccjResumeRun(){
 function ccjOpenDealRun(dealId){
   const deal=(typeof amDeals!=='undefined'?amDeals:[]).find(function(d){return d.id===dealId;});
   if(!deal)return;
-  if(ccjActiveDealId===dealId&&ccjRun){ccjGoRunPage();return;}
+  // Already the run on screen. It still has to be checked against the board, because the row can
+  // have been advanced from the drawer in between — see ccjCatchUpRunToDeal.
+  if(ccjActiveDealId===dealId&&ccjRun&&ccjRuns[dealId]===ccjRun){
+    ccjMarkEntry(ccjRun,dealId);
+    if(ccjCatchUpRunToDeal(ccjRun,deal)){ccjLandOnLiveStep();return;}
+    ccjGoRunPage();return;
+  }
   ccjStopTimers(ccjRun);                       // park whatever was on screen; its state is kept
   ccjActiveDealId=dealId;
   let run=ccjRuns[dealId];
@@ -9680,18 +9803,15 @@ function ccjOpenDealRun(dealId){
     ccjRun=null;
     run=ccjNewRun();
     run.dealId=dealId;
+    ccjMarkEntry(run,dealId);                  // before anything navigates — see ccjExit
     ccjRuns[dealId]=run;
     ccjRun=run;
-    // A deal already mid-journey opens ON its stage, with everything before it settled and its
-    // artefacts built from the deal — see ccjSeedRunToDeal. A deal still in stage 1 starts at
-    // the composer with its request written for you: written, not sent, because stage 1 IS the
-    // conversation and there is nothing before it to settle.
-    if(ccjSeedRunToDeal(run,deal)){
-      page=ccjPageId(run.stage);
-      renderADTPage();
-      ccjEnterStep();                          // the live step runs for real — gate, wait or work
-      return;
-    }
+    // A deal that has moved at all opens ON the step the board says it is on, with everything
+    // before it settled and its artefacts built from the deal — see ccjSeedRunToDeal. Only a
+    // record still on the very first step of the very first stage starts at the composer, with
+    // its request written for you: written, not sent, because stage 1 IS the conversation and
+    // there is nothing before it to settle.
+    if(ccjSeedRunToDeal(run,deal)){ccjLandOnLiveStep();return;}
     run.seedPrompt=ccjDealPrompt(deal);
     page='ccj-model';
     renderADTPage();
@@ -9699,8 +9819,131 @@ function ccjOpenDealRun(dealId){
   }
   ccjGen++;
   ccjRun=run;
+  // Re-recorded on reopen rather than only on the first open: the same run can be entered from the
+  // board this time and from the Contracts listing the next, and back answers for THIS visit.
+  ccjMarkEntry(run,dealId);
+  // A parked run can be BEHIND its row: Mark done in the listing and the simulated handoffs in the
+  // drawer both advance the record whether the run is open or not. Reopening three steps back from
+  // the row that was just clicked would have the two surfaces contradicting each other at the exact
+  // moment the reader crossed between them.
+  if(ccjCatchUpRunToDeal(run,deal)){ccjLandOnLiveStep();return;}
   ccjGoRunPage();
   ccjResumeRun();
+}
+/* Draw the run's stage and then run its live step for real — gate, wait, hold or work. Shared by
+   every path that has just rebuilt a run to a position, because a rebuilt run that is painted but
+   never entered sits on a step that looks live and does nothing. */
+function ccjLandOnLiveStep(){
+  const run=ccjRun;if(!run)return;
+  page=ccjPageId(run.stage);
+  renderADTPage();
+  ccjEnterStep();
+}
+/* == WHERE A DEAL'S RUN BELONGS ============================================================
+   The board's position for a record, expressed in the run's own coordinates. Null means nothing
+   has happened yet — stage 1, first step — and that run genuinely begins at the composer.
+
+   This is also what the listing's Open / Start wording is decided on (see ccjOpenRunBtnHTML):
+   "is there work behind this record" and "is there a step to open it at" are the same question,
+   and answering it in one place is what keeps the button's promise and the run's behaviour from
+   drifting apart. == */
+function ccjDealPos(deal){
+  if(!deal)return null;
+  const stage=typeof amStageIndex==='function'?amStageIndex(deal.stage):-1;
+  if(stage<0)return null;
+  const steps=ccjSteps(stage);
+  const sub=Math.max(0,Math.min(deal.sub||0,Math.max(0,steps.length-1)));
+  if(stage===0&&sub===0)return null;
+  return {stage:stage,sub:sub};
+}
+/* An engagement has no person yet, and inventing one would put a fictional name on a real quote.
+   "<Role> hire" is what that stage of the deal actually knows. */
+function ccjDealPerson(deal){
+  return deal.kind==='placement'?String(deal.subject):String(deal.role)+' hire';
+}
+/* Which screen a rebuilt run opens on. Eight of the nine stages have exactly one, so the answer
+   is that one. Stage 1 has four, and they are the intake being assembled: a run rebuilt at the
+   qualification decision has already written the request, filled the form and compiled the
+   proposal, so opening it on the empty composer would show the reader a form they had already
+   completed and ask again for a request they had already sent. */
+function ccjSeedScreen(run,i,sub){
+  const s=ccjStage(i);
+  if(s&&s.id==='request-received'&&sub>0)return 'proposal';
+  const list=ccjScreensFor(i).filter(function(sc){return !sc.when||sc.when(run);});
+  return (list[0]||{}).id||'prompt';
+}
+/* Settle everything between where a run IS and where the board says it should be. Shared by the
+   first seed, which starts from nothing, and by the catch-up, which starts from wherever the run
+   was parked — two copies of this loop is how one of them stops writing a stage's outcome. */
+function ccjSeedForward(run,from,pos,person){
+  const stages=ccjStages();
+  let i=from.stage,n=Math.max(0,from.sub);
+  while(i<pos.stage){
+    run.stage=i;                          // so each block stamps its stage's own lane mode
+    const steps=ccjSteps(i);
+    for(;n<steps.length;n++)ccjSeedStep(run,i,steps[n],n);
+    ccjSeedStageOutcome(stages[i]&&stages[i].id,run,person);
+    i++;n=0;
+  }
+  run.stage=pos.stage;
+  // The live stage's OWN earlier steps settled too. A deal at Deposit due sub 1 has already
+  // raised its invoice at sub 0 — leaving that step unseeded had the wait block saying "invoice
+  // is with the client" beside an invoice panel saying "not raised yet": two surfaces, one fact,
+  // two answers, which is the exact drift the settled keys exist to prevent.
+  const liveSteps=ccjSteps(pos.stage);
+  for(;n<pos.sub;n++)ccjSeedStep(run,pos.stage,liveSteps[n],n);
+  ccjSeedMidStage(stages[pos.stage]&&stages[pos.stage].id,run,pos.sub);
+  run.sub=pos.sub;
+  run.screen=ccjSeedScreen(run,pos.stage,pos.sub);
+  run.phase='idle';run.act=0;
+}
+/* A run the board has moved on without. Returns whether anything was rebuilt, so the caller knows
+   whether the live step has to be re-entered or the parked one simply resumed. A run that is AHEAD
+   of its row is left alone: it is the run that moved it there, and the row catches up on the next
+   step the run arrives at — see ccjSyncDealFromRun. */
+function ccjCatchUpRunToDeal(run,deal){
+  if(!run||!run.started)return false;
+  // A rejected request ENDED. Reopening it shows why it ended, and quietly walking it forward
+  // because a row somewhere moved would be the run overwriting its own outcome.
+  if(run.stopped)return false;
+  const pos=ccjDealPos(deal);
+  if(!pos)return false;
+  const at={stage:run.stage,sub:Math.max(0,run.sub)};
+  if(pos.stage<at.stage||(pos.stage===at.stage&&pos.sub<=at.sub))return false;
+  ccjStopTimers(run);
+  // Said out loud, because the reader left this run on one step and is being handed another. A
+  // conversation that silently grew four settled blocks while nobody was looking is the kind of
+  // thing that makes someone stop trusting the transcript.
+  const liveStep=ccjSteps(pos.stage)[pos.sub];
+  ccjPush({who:'agent',
+    text:'This moved on the board while the run was closed. Caught up to stage '+(pos.stage+1)
+      +' of '+ccjStages().length+' &mdash; '+(ccjStage(pos.stage)||{}).short
+      +', on <b>'+(liveStep?liveStep.label:'the first step')+'</b>.'});
+  ccjSeedForward(run,at,pos,ccjDealPerson(deal));
+  return true;
+}
+/* == THE BOARD FOLLOWS THE RUN =============================================================
+   A deal and its run are one piece of work seen twice: the row on the Account Manager's board
+   says where it is, the run is where it happens. They drifted the moment anyone walked a run —
+   the row went on saying "Quote in preparation · step 5 of 6" while the run had reached the
+   deposit invoice, and Open run then opened something the row had just denied.
+
+   So the run writes its position back, from the ONE place a run ever arrives at a step. That is
+   why a stage completing forwards and a re-issued quote jumping backwards both land here without
+   either of them knowing this exists. A run with no deal behind it — a request started from the
+   New request button — syncs nothing, because there is no row to keep honest. == */
+function ccjSyncDealFromRun(run){
+  if(!run||run.dealId===undefined||run.dealId===null)return;
+  if(typeof amDeals==='undefined')return;
+  const d=amDeals.find(function(x){return x.id===run.dealId;});if(!d)return;
+  const s=ccjStage(run.stage);if(!s)return;
+  const steps=ccjSteps(run.stage);
+  const sub=Math.max(0,Math.min(run.sub,Math.max(0,steps.length-1)));
+  if(d.stage===s.id&&d.sub===sub)return;      // nothing moved, so nothing is re-stamped
+  d.stage=s.id;d.sub=sub;
+  // The record has just moved, so it is not late on the step it has only now arrived at.
+  d.breach=false;
+  if(typeof amStampToday==='function')amStampToday(d);
 }
 /* The request this deal would have been raised with.
 
@@ -9735,13 +9978,15 @@ function ccjDealPrompt(d){
    role, so monthly gross is value / roles / 12, rounded to the hundred. Inventing a number when
    the deal states one would put two figures for the same engagement on one screen. */
 function ccjSeedRunToDeal(run,deal){
-  const target=typeof amStageIndex==='function'?amStageIndex(deal.stage):-1;
-  if(target<1)return false;              // stage-1 deals start at the composer, as before
-  const stages=ccjStages();
+  const pos=ccjDealPos(deal);
+  // Only a record still on the first step of stage 1 has nothing to rebuild. Every other one
+  // does, INCLUDING the rest of stage 1: a request sitting on its qualification decision has had
+  // its intake logged and its CSM assigned, and dropping that reader on the model chooser asked
+  // them to describe a hire the row in front of them had already described.
+  if(!pos)return false;
+  const target=pos.stage;
   const placement=deal.kind==='placement';
-  // An engagement has no person yet, and inventing one would put a fictional name on a real
-  // quote. "<Role> hire" is what that stage of the deal actually knows.
-  const person=placement?String(deal.subject):String(deal.role)+' hire';
+  const person=ccjDealPerson(deal);
   const roles=placement?1:(parseInt(deal.subject,10)||1);
   const annual=parseFloat(String(deal.value||'').replace(/[^0-9.]/g,''))||0;
   const monthly=annual?Math.max(1500,Math.round(annual/roles/12/100)*100):5700;
@@ -9763,25 +10008,35 @@ function ccjSeedRunToDeal(run,deal){
     // re-asks for them, and a blank is more honest than an invented answer.
   });
 
-  for(let i=0;i<target;i++){
-    run.stage=i;                          // so each block stamps its stage's own lane mode
-    const steps=ccjSteps(i);
-    for(let n=0;n<steps.length;n++)ccjSeedStep(run,i,steps[n],n);
-    ccjSeedStageOutcome(stages[i]&&stages[i].id,run,person);
-  }
+  /* The request itself opens the transcript. Every seeded stage below pushes its own step blocks
+     into a conversation that otherwise began with nobody having said anything — and on stage 1,
+     where the conversation IS the work, that read as a decision waiting on a question that had
+     never been asked. */
+  ccjPush({who:'user',text:run.intake.raw});
+  /* THE PROPOSAL IS WHAT STAGE 1 PRODUCES, so a run rebuilt past it has produced one. Left null,
+     the Proposal screen drew its whole grid as em-dashes and the journey trail reported stage 1
+     as having made nothing — on every seeded run, including the ones that open six stages later.
+     Same shape and the same id sequence as ccjCreateProposal writes on a walked run. */
+  run.proposal={
+    id:'PRO-'+String(4400+(run.gen||0)),
+    name:person,country:deal.country,jobTitle:deal.role,
+    type:ccjModelLabel(run.model),pay:ccjCurrency()+' '+(run.form.pay||'—'),
+    term:run.form.term,from:run.form.fromDate
+  };
+  run.reached.proposal=true;                 // the milestone that releases the intake hold
 
-  run.stage=target;
-  const liveSub=Math.min(deal.sub||0,Math.max(0,ccjSteps(target).length-1));
-  // The live stage's OWN earlier steps settled too. A deal at Deposit due sub 1 has already
-  // raised its invoice at sub 0 — leaving that step unseeded had the wait block saying "invoice
-  // is with the client" beside an invoice panel saying "not raised yet": two surfaces, one fact,
-  // two answers, which is the exact drift the settled keys exist to prevent.
-  const liveSteps=ccjSteps(target);
-  for(let n=0;n<liveSub;n++)ccjSeedStep(run,target,liveSteps[n],n);
-  ccjSeedMidStage(stages[target]&&stages[target].id,run,liveSub);
-  run.sub=liveSub;
-  run.screen=(ccjScreensFor(target)[0]||{}).id||'prompt';
-  run.phase='idle';run.act=0;
+  /* AND ONE LINE SAYING WHAT THIS IS. Everything below this message is history being rebuilt, and
+     a reader dropped into the middle of a conversation they never had has no way to tell that
+     from a run they walked and forgot. It names the record, the position, and the step they are
+     being handed — the same three facts the row they clicked was showing them a second ago, so
+     crossing from the board into the run reads as continuing rather than as arriving somewhere. */
+  const liveStep=ccjSteps(pos.stage)[pos.sub];
+  ccjPush({who:'agent',
+    text:'Picking up <b>'+deal.ref+'</b> where it stands. Stage '+(pos.stage+1)+' of '+ccjStages().length
+      +' &mdash; '+(ccjStage(pos.stage)||{}).short+', on <b>'+(liveStep?liveStep.label:'the first step')+'</b>.'
+      +' What follows is what has already been settled.'});
+
+  ccjSeedForward(run,{stage:0,sub:0},pos,person);
   return true;
 }
 /* One step of history: settled through the same keys the runner writes, its gate answered with
@@ -9803,9 +10058,17 @@ function ccjSeedStep(run,i,step,n){
     let summary='Done';try{summary=ccjSummary(i,step);}catch(e){}
     run.settled[key]={summary:summary};
   }
-  const m={who:'agent',kind:'step',stage:i,sub:n,pass:1};
-  run.stepMsgs[key+'#1']=m;
-  ccjPush(m);
+  /* Per pass, and only if this pass has no block yet — the same guard ccjOpenStepBlock uses, and
+     for the same reason. A catch-up settles the step the run was PARKED on, which already opened
+     its block when the runner arrived at it; pushing a second one would put the step in the
+     conversation twice, once live and once settled. */
+  const pass=(run.pass&&run.pass[key])||1;
+  const pkey=key+'#'+pass;
+  if(!run.stepMsgs[pkey]){
+    const m={who:'agent',kind:'step',stage:i,sub:n,pass:pass};
+    run.stepMsgs[pkey]=m;
+    ccjPush(m);
+  }
 }
 /* What the live stage's completed steps have already produced, by how far in it is. Only the
    flips a mid-stage surface actually reads — the stage is not done, so its outcome must not be. */
@@ -9829,26 +10092,41 @@ function ccjSeedMidStage(stageId,run,sub){
 }
 /* What a stage leaves behind once it is done — the artefact flips, made after that stage's steps
    settle, in journey order so each builds on the one before. Timestamps are simulated minutes on
-   the client clock, spaced so the trail reads as days of work rather than one burst. */
+   the client clock, spaced so the trail reads as days of work rather than one burst.
+
+   WRITTEN TO BE RUN OVER A STAGE THAT WAS PARTLY WALKED. The catch-up reaches this for a stage
+   the reader may have watched half of, so anything that APPENDS is guarded on what is already
+   there — the flips themselves are settings and can safely be re-asserted, but a client thread
+   that grew a second "Quote accepted" every time the run was reopened would be reporting an
+   event that happened once as if it had happened twice. */
 function ccjSeedStageOutcome(stageId,run,person){
   if(!stageId)return;
   const c=ccjClient();
   if(stageId==='quote-review'){
-    c.mins=620;c.state='accepted';c.version=1;
-    c.msgs.push({who:'us',text:'Quote v1 sent for review.',at:15});
-    c.msgs.push({who:'client',text:'Quote accepted.',at:600});
+    if(c.state!=='accepted'){
+      c.msgs.push({who:'us',text:'Quote v1 sent for review.',at:15});
+      c.msgs.push({who:'client',text:'Quote accepted.',at:600});
+    }
+    c.mins=Math.max(c.mins,620);c.state='accepted';
   }
   if(stageId==='agreement-signature'){
     const m=ccjMsa();
-    c.mins=1330;
-    m.screening='clean';m.clientSignedAt=1200;m.adtSignedAt=1295;
+    c.mins=Math.max(c.mins,1330);
+    // A screening that was actually run and cleared by hand keeps its own verdict; only an
+    // unscreened one is asserted clean here.
+    if(m.screening!=='hit')m.screening='clean';
+    m.clientSignedAt=m.clientSignedAt||1200;m.adtSignedAt=m.adtSignedAt||1295;
   }
   if(stageId==='deposit-due'){
     const p=ccjPay();
-    c.mins=2100;
-    p.issuedAt=1400;p.dueAt=1400+14*1440;p.state='cleared';p.clearedAt=2050;
+    c.mins=Math.max(c.mins,2100);
+    if(!p.issuedAt){p.issuedAt=1400;p.dueAt=1400+14*1440;}
+    p.state='cleared';p.clearedAt=p.clearedAt||2050;
     let due=0;try{due=ccjAmountDue();}catch(e){}
-    if(due){p.receipts.push({at:2050,amount:due,kind:'full',method:'Bank transfer',payer:ccjParties().client.name});
+    // A part-payment already banked is a receipt; topping the balance up here would report the
+    // money twice. Only a stage nobody watched has no receipts at all.
+    if(due&&!p.receipts.length){
+      p.receipts.push({at:2050,amount:due,kind:'full',method:'Bank transfer',payer:ccjParties().client.name});
       c.msgs.push({who:'client',text:'Deposit paid &mdash; '+ccjMoney(due)+'.',at:2050});}
   }
   if(stageId==='employment-contract'){

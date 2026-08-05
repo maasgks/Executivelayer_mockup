@@ -446,7 +446,7 @@ const aicjEvidence={
 
   /* ---- 4 · Quote accepted -------------------------------------------------------------- */
   'quote-approved/Client tenant provisioned':{
-    system:'NFAdmin', systemId:'nfadmin', ref:'EntityRegistry',
+    system:'ADT SaaS', systemId:'nfadmin', ref:'EntityRegistry',
     call:function(c){return 'POST /tenants {client:"'+c.client+'", country:"'+c.country+'"}';},
     latency:'640ms',
     fetched:function(c){return [
@@ -467,7 +467,7 @@ const aicjEvidence={
 
   /* ---- 5 · Client signing --------------------------------------------------------------- */
   'agreement-signature/Client entity + sanctions check':{
-    system:'NFAdmin', systemId:'nfadmin', ref:'EntityRegistry + ComplianceFiling',
+    system:'ADT SaaS', systemId:'nfadmin', ref:'EntityRegistry + ComplianceFiling',
     call:function(c){return 'POST /screening {entity:"'+c.client+'", country:"'+c.country+'"}';},
     latency:'820ms',
     fetched:function(c){return [
@@ -728,6 +728,36 @@ const amDeals=[
 ];
 function amCurrentSub(d){const steps=amSubSteps(d.stage);return steps[Math.min(d.sub||0,steps.length-1)]||null;}
 function amSubIndex(d){const steps=amSubSteps(d.stage);return Math.min(d.sub||0,Math.max(0,steps.length-1));}
+/* == HOW FAR IN, AGAINST THE WHOLE JOURNEY ================================================
+   A record's position is two numbers, and the listing only ever printed the second one. "Step
+   3 of 3" is true of the stage and a lie about the work: a request sitting on its qualification
+   decision — the first stage of nine, nothing priced, nothing signed — read as a finished piece
+   of work, and a placement genuinely finishing read exactly the same way.
+
+   The stage count leads because nine stages is the unit the reader already has in front of them:
+   the rail above the table IS those nine, in that order. `n` is the stage's own number from
+   amPipelineStages rather than a derived index, so the rail, this line and the drawer's log all
+   count the stages the same way. == */
+function amJourneyPos(d){
+  const st=amStageById(d.stage);
+  const steps=amSubSteps(d.stage);
+  return {
+    stageNo:st?st.n:amStageIndex(d.stage)+1,
+    stages:amPipelineStages.length,
+    stepNo:amSubIndex(d)+1,
+    steps:steps.length,
+    terminal:!!(st&&st.terminal)
+  };
+}
+/* One line, two facts, smaller word for the smaller unit — "Stage 2 of 9" is the journey and
+   "step 5 of 6" is the stage, and the case difference is what stops the two numbers reading as
+   one broken sentence. A stage with no sub-steps prints the journey position alone rather than
+   "step 1 of 0". */
+function amProgressText(d){
+  const p=amJourneyPos(d);
+  return 'Stage '+p.stageNo+' of '+p.stages
+    +(p.steps?' &middot; step '+p.stepNo+' of '+p.steps:'');
+}
 /* == THE NEXT ACTION =====================================================================
    `d.sub` is the step IN PROGRESS, so the next action is always "finish the step you are on".
    That one sentence replaced a fiddlier model where the action was the step *after* the
@@ -1178,6 +1208,84 @@ function soLoadLiveRuns(){
 
 let openDropdowns=new Set();
 let activeSidebarItem='dashboard';
+/* == WHAT EACH PERSONA'S SIDEBAR HOLDS ====================================================
+   Entity User is one portal role standing in for nine enterprise personas, and until now all
+   nine saw the same twenty-four modules. A Deal Manager whose entire job is approving a price
+   was given Payheads, Salary View, Leave Policies and Bhaiyaa store creation; an IT Systems
+   Admin who provisions access was given Contract Templates and Payments. That is not a nav, it
+   is a directory of everything the product can do, and it made the one question a sidebar
+   exists to answer — what am I here to do — unanswerable from the sidebar.
+
+   THREE TIERS, AND THE MIDDLE ONE IS THE ONE PEOPLE FORGET.
+
+     the spine    Dashboard, AI Executive, My Runs, My Tasks, Support. Everyone, because
+                  everyone runs journeys through this layer and everyone gets work handed back.
+     self-service Leaves and Timesheet. Everyone, because everyone is ALSO an employee. This is
+                  load-bearing, not a courtesy: dashboardTabsForRole drops the employee tab for
+                  the Account Manager and the Ops Manager explicitly ON THE GROUNDS that these
+                  rows stay one click away in the sidebar. Trimming them by ownership would
+                  quietly take back what that decision spent.
+     the work     Everything else, per persona, derived from the `focus` and `journeys` each
+                  persona already declares in enterprisePersonas. Nothing here is invented; if
+                  a module is not in a persona's list it is because that persona's own
+                  description does not reach it.
+
+   A TABLE, NOT `personas:` ON EVERY ENTRY. The per-entry gate that create-client and
+   master-data used to carry is gone, folded in here. Two mechanisms answering "who sees this"
+   is how one of them stops being updated — and more practically, a rule spread across twenty
+   entries cannot be read, while this can be read top to bottom and checked against the persona
+   list beside it. ccj-harness asserts both directions: every entity-user module is accounted
+   for by some persona, and every id named here still exists in the sidebar.
+
+   THIS IS CURATION, NOT AUTHORISATION, and canAccessPage is deliberately left alone. My Tasks,
+   dashboard tiles and journey handoffs all legitimately land a persona on a record outside
+   their own modules — a compliance officer opening the contract they just cleared, a finance
+   approver opening the deal behind an invoice. Wiring this table into the router would break
+   every one of those crossings, which are the operating model this app exists to show. == */
+const PERSONA_SHARED_MODULES=[
+  'dashboard','ai-executive','my-runs','my-tasks',      // the spine
+  'all-leaves','timesheet',                             // everyone is also an employee
+  'chats','support-tickets','ccjv1-journey'             // Support: belongs to nobody's daily work
+];
+const personaModules={
+  // Owns the client relationship and the commercial half of the journey: creates the record,
+  // raises the request, carries the quote. No workforce, no payroll — a placement becomes an
+  // employee under someone else's hands, and the deal board already names the person on each row.
+  'account-manager':['create-client','master-data','contracts'],
+  // An approver, not a browser. Two reads — the deal in front of them and the rules a price is
+  // checked against — and nothing else. The queue arrives through My Tasks.
+  'deal-manager':['master-data','contracts','rates-rules'],
+  // Owns the Compliance Hub outright, plus what it is applied to: the client being screened, the
+  // contract being checked, the template the MSA is drafted from, the people behind J3-S4.
+  'compliance-officer':['master-data','contracts','contract-templates','compliance','rates-rules','employees'],
+  // Generates contracts and tracks signature. Templates are this persona's instrument; Compliance
+  // Items are what a legal correction is usually answering.
+  'legal-contracts-manager':['master-data','contracts','contract-templates','compliance'],
+  /* Two journeys, one persona. Signed-contract verification and operational readiness on the
+     contract side; the whole Bhaiyaa store journey on the other — every stage of which names
+     Ops Manager or an agent, and this is the only persona with the Store Operations board. */
+  'ops-manager':['master-data','contracts','create-store','stores','employees','teams','compliance'],
+  // The widest of the nine, and legitimately so: onboarding, payroll, benefits, attendance and
+  // lifecycle are one persona's execution. Contracts because onboarding runs against one.
+  'hr':['employees','teams','contracts','compliance','leave-policies','payroll','payheads','salary-view'],
+  // The approver above HR. Same surfaces minus the contract: a policy deviation, a role change
+  // and a salary revision are all decided against the employee record, not the client's paper.
+  'hr-manager':['employees','teams','compliance','leave-policies','payroll','payheads','salary-view'],
+  // Provisions and revokes access, so it needs to know who and which team — and nothing else in
+  // this product. Integrations live under Configure, which is an admin role rather than a persona.
+  'it-systems-admin':['employees','teams'],
+  // Approves what is calculated and authorises what leaves. Payments is its own; the deal and the
+  // client are what an invoice is raised against; Employees is who is being paid.
+  'finance-approver':['master-data','contracts','employees','payroll','payheads','salary-view','payments']
+};
+/* Unlisted means hidden, on purpose: a module added without a line in the table above disappears
+   for every persona, which is loud, immediate and caught by the harness — where the old default
+   silently showed it to all nine and nobody noticed for twenty-four modules. */
+function personaSeesModule(id){
+  if(PERSONA_SHARED_MODULES.indexOf(id)>-1)return true;
+  const own=personaModules[activePersonaId];
+  return !!own&&own.indexOf(id)>-1;
+}
 // -- The sidebar is split in two. The `group` entry at the top holds the Executive Layer's OWN
 // modules — the AI execution layer: AI Executive (run journeys), Configure (define what it can
 // run), Client (the records it owns). Everything after the group belongs to the connected SaaS
@@ -1185,7 +1293,7 @@ let activeSidebarItem='dashboard';
 const sidebarItems=[
   {group:'AI Execution Layer',roles:['super-admin','entity-admin','entity-user'],items:[
     {id:'ai-executive',label:'AI Executive',roles:['super-admin','entity-admin','entity-user'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v2a3 3 0 0 0 3 3M18 9v2a3 3 0 0 1-3 3"/></svg>'},
-    {id:'ai-analytics',label:'Agent & Model Analytics',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="13" rx="1"/></svg>'},
+    {id:'ai-analytics',label:'Analytics',roles:['super-admin'],color:'orange',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="13" rx="1"/></svg>'},
     // -- My Runs is the history of what this user started; My Tasks is what is waiting on them.
     // Both belong to the AI layer and sit under the module that fills them, in that order:
     // what I set in motion, then what has come back to me. Same roles as My Tasks — Super Admin
@@ -1245,24 +1353,31 @@ const sidebarItems=[
     {id:'employees',label:'Employees',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'},
     {id:'teams',label:'Teams',roles:['super-admin','entity-admin','entity-user'],color:'blue',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'}
   ]},
-  /* -- Create Client and All Clients keep the `personas` gate they carried as their own module:
-     inside Entity User only the Account Manager owns the User Master Data Creation Journey, so
-     only that persona has business creating or browsing client records. The gate stays on the
-     two children rather than moving to the group — a group-level gate would have taken Contracts
-     and Contract Templates away from every other persona along with them.
-     Create Client is an action, not a page. It opens the NewForce Solutions intake form, a
-     focused flow that hides the sidebar outright, so nothing marks it active. Super Admin does
-     not get it: it configures what the objects are (Data Foundation), it does not fill them in,
-     so it sees All Clients alone. -- */
+  /* -- Who inside Entity User sees each of these is answered by personaModules, not by a
+     `personas:` array on the entry — Create Client and All Clients used to carry one and no
+     longer do. Only the Account Manager creates a client record; All Clients is a read for
+     every persona whose work is raised against one.
+     Create Client and Create Store are actions, not pages. Each opens an intake form — a
+     focused flow that hides the sidebar outright — so nothing marks them active. Super Admin
+     gets neither: it configures what the objects are (Data Foundation), it does not fill them
+     in, so it sees the listings alone. -- */
   {dropdown:'Client & Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',children:[
-    {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],personas:['account-manager'],color:'amber',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
-    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],personas:['account-manager'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
-    // -- Bhaiyaa's store signup, beside the client actions because it is the same kind of thing:
-    // a record being opened from a connected system's own form. An action rather than a route,
-    // like Create Client — what it opens is a focused flow that hides the sidebar. --
+    {id:'create-client',label:'Create Client',roles:['entity-admin','entity-user'],color:'amber',action:()=>startContractIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M18 14.5v6M15 17.5h6"/></svg>'},
+    {id:'master-data',label:'All Clients',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'},
+    /* -- Bhaiyaa's store signup, beside the client actions because it is the same kind of thing:
+       a record being opened from a connected system's own form.
+
+       OPS MANAGER ONLY, inside Entity User. This reverses an earlier call that opening a store
+       was "entity-level onboarding, so every Entity User can reach it" — true when the store
+       journey had no owner in this portal, and no longer true now that it has one. Every stage
+       of soPipelineStages waits on the Ops Manager or on an agent, amOwnerDirectory routes both
+       'Ops Manager' and 'Store Agent' to that persona, and it is the only persona whose
+       dashboard carries the Store Operations board. An HR Manager opening a Bhaiyaa store is
+       not a thing this product does. See personaModules. -- */
     {id:'create-store',label:'Create Store',roles:['entity-admin','entity-user'],color:'amber',action:()=>startStoreIntake(),icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/></svg>'},
     // -- Stores keep their own module. Create-then-browse, the same pair as Create Client /
-    // All Clients above it. --
+    // All Clients above it, and inside Entity User it travels with Create Store: a listing whose
+    // every row is worked by one persona belongs to that persona. --
     {id:'stores',label:'All Stores',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><line x1="9" y1="15" x2="15" y2="15"/></svg>'},
     {id:'contracts',label:'Contracts',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>'},
     {id:'contract-templates',label:'Contract Templates',roles:['super-admin','entity-admin','entity-user'],color:'amber',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>'}
@@ -1311,12 +1426,13 @@ const sidebarItems=[
 ];
 
 
-// -- `roles` gates by portal role. `personas` narrows further inside Entity User, which is one role
-// standing in for nine enterprise personas: an entry with `personas` is shown only to the personas
-// that actually own that work, and is left alone for every other role. --
+/* -- `roles` gates by portal role. Inside Entity User — one role standing in for nine enterprise
+   personas — personaModules narrows it further, per module. Only entries with an `id` are gated:
+   a group, a dropdown, a divider and a section heading are containers, and whether one survives
+   is decided by whether any child did, which sidebarEntryKept already answers. -- */
 function sidebarRoleAllows(it){
   if(it.roles&&!it.roles.includes(portalRole))return false;
-  if(it.personas&&portalRole==='entity-user'&&!it.personas.includes(activePersonaId))return false;
+  if(portalRole==='entity-user'&&it.id&&!personaSeesModule(it.id))return false;
   return true;
 }
 // -- Drops the children this role cannot see; a dropdown left with none is filtered out by the caller. --
@@ -1397,7 +1513,7 @@ function ccjv1PageMeta(pg){
   const s=amPipelineStages[i]||{};
   return{title:s.short||'Contract Creation',context:'Contracts',filters:[],columns:[],rows:[]};
 }
-function getPageMeta(pg){const ccjm=typeof ccjPageMeta==='function'?ccjPageMeta(pg):null;if(ccjm)return ccjm;const ccjv1m=typeof ccjv1PageMeta==='function'?ccjv1PageMeta(pg):null;if(ccjv1m)return ccjv1m;if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Agent & Model Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='create-store')return{title:'Create Store',context:'Bhaiyaa',filters:[],columns:[],rows:[]};if(pg==='stores')return{title:'All Stores',context:'Stores',filters:[],columns:[],rows:[]};if(pg==='employees')return{title:'Employees',context:'Employees',filters:[],columns:[],rows:[]};if(pg==='timesheet')return{title:'Timesheet',context:'Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
+function getPageMeta(pg){const ccjm=typeof ccjPageMeta==='function'?ccjPageMeta(pg):null;if(ccjm)return ccjm;const ccjv1m=typeof ccjv1PageMeta==='function'?ccjv1PageMeta(pg):null;if(ccjv1m)return ccjv1m;if(pg==='cfg-overview')return{title:'Overview',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-systems')return{title:'Systems',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-system-detail'){const s=cfgSystems.find(x=>x.id===selectedCfgSystemId);return{title:s?s.name:'System',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-system-add')return{title:'Add Custom System',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-user-intake'){const m=cfgModels.find(x=>x.id===cfgUserIntakeModelId);return{title:m?m.name:'USER',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-data-foundation')return{title:'Data Foundation',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-model-detail'){const m=cfgModels.find(x=>x.id===selectedCfgModelId);return{title:m?m.name:'Model',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-model-add')return{title:'New Model',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-context-journey')return{title:'Context & Journey',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='cfg-journey-detail'){const j=cfgJourneys.find(x=>x.id===selectedCfgJourneyId);return{title:j?j.name:'Journey',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='journey-simulation'){const j=cfgJourneys.find(x=>x.id===selectedSimulationJourneyId);return{title:j?j.name+' Simulation':'Journey Simulation',context:'Configure',filters:[],columns:[],rows:[]};}if(pg==='cfg-agents')return{title:'Agents',context:'Configure',filters:[],columns:[],rows:[]};if(pg==='ai-analytics')return{title:'Analytics',context:'AI Execution Layer',filters:[],columns:[],rows:[]};if(pg==='ai-executive')return{title:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='my-tasks')return{title:'My Tasks',context:'My Tasks',filters:[],columns:[],rows:[]};if(pg==='my-runs')return{title:'My Runs',context:'My Runs',filters:[],columns:[],rows:[]};if(pg==='manual-journey-run'){const r=getManualRun(selectedManualRunId);return{title:r?r.runId:'Manual Journey Run',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-journey-detail'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name:'Journey Detail',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-automate-form'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:'Automate Journey',context:j?j.name:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-contract-assistant')return{title:'AI Contract Assistant',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-created')return{title:'Proposal Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-proposal-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='contract-eor'||pg==='contract-peo'||pg==='contract-type-select')return{title:'Create a Contract',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-employee-created')return{title:'Employee Created',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-document')return{title:'Contract Document',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-contract-waiting-approval')return{title:'Waiting for Approval',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-onboarding-run')return{title:'Onboarding',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-journey-complete')return{title:'Journey Complete',context:'Contracts',filters:[],columns:[],rows:[]};if(pg==='ai-active-automation'){const j=aiJourneys.find(x=>x.id===selectedAIJourneyId);return{title:j?j.name+' Automation':'Active Automation',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='ai-run-detail')return{title:'Run '+selectedAIRunId,context:'AI Executive',filters:[],columns:[],rows:[]};if(pg==='ai-journey-run'){const flow=aiRunFlows[aiRunFlowJourneyId];return{title:flow?flow.entryLabel:'AI Executive',context:'AI Executive',filters:[],columns:[],rows:[]};}if(pg==='cost-calculator')return{title:'Cost Calculator',context:'Cost Calculator',filters:[],columns:[],rows:[]};if(pg==='leave-policies')return{title:'Leave Policies',context:'Leave Policies',filters:[],columns:[],rows:[]};if(pg==='leave-policy-edit')return{title:'Edit Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='leave-policy-add')return{title:'Add Leave Policy',context:'Leave Policy',filters:[],columns:[],rows:[]};if(pg==='team-add')return{title:'Create New Team',context:'Teams',filters:[],columns:[],rows:[]};if(pg==='master-data')return{title:'Client',context:'Client',filters:[],columns:[],rows:[]};if(pg==='create-store')return{title:'Create Store',context:'Bhaiyaa',filters:[],columns:[],rows:[]};if(pg==='stores')return{title:'All Stores',context:'Stores',filters:[],columns:[],rows:[]};if(pg==='employees')return{title:'Employees',context:'Employees',filters:[],columns:[],rows:[]};if(pg==='timesheet')return{title:'Timesheet',context:'Timesheet',filters:[],columns:[],rows:[]};if(pg==='my-profile')return{title:'My Profile',context:'My Profile',filters:[],columns:[],rows:[]};if(pg==='support-tickets')return{title:'Tickets',context:'Tickets',filters:[],columns:[],rows:[]};if(pg==='chats')return{title:'Chats',context:'Chats',filters:[],columns:[],rows:[]};if(pg==='switch-entity')return{title:'Switch Entity',context:'Switch Entity',filters:[],columns:[],rows:[]};return supportPageMeta[pg]||supportPageMeta.dashboard;}
 function getPageTitle(pg){return getPageMeta(pg).title;}
 function statusClass(v){return String(v).toLowerCase().replace(/[^a-z0-9]+/g,'-');}
 function titleForAdd(pg){return pg==='dashboard'?'Dashboard':getPageTitle(pg);}
@@ -1870,13 +1986,17 @@ const pageRoleMap={
   // make the page a dead end. --
   'cfg-data-foundation':['super-admin','entity-admin'],'cfg-model-detail':['super-admin','entity-admin'],'cfg-model-add':['super-admin'],
   'cfg-systems':['super-admin','entity-admin'],'cfg-system-detail':['super-admin','entity-admin'],
-  // -- Entity User is allowed through so the Account Manager can run the User Master Data Creation
-  // Journey end to end: Create Client opens the intake form, and submitting it lands on All Clients.
-  // Which personas actually see the entries is decided by the sidebar (`personas`), not here. --
+  /* -- Entity User is allowed through so the Account Manager can run the User Master Data Creation
+     Journey end to end: Create Client opens the intake form, and submitting it lands on All Clients.
+
+     WHICH PERSONAS SEE A MODULE IS THE SIDEBAR'S QUESTION (personaModules), NOT THIS MAP'S. This
+     map is the portal-role guard and stays that way. A persona routinely lands on a record
+     outside its own modules by following something it was handed — a task, a dashboard tile, a
+     journey handoff — and bouncing those crossings would break the operating model rather than
+     enforce it. Read personaModules' header before wiring the two together. -- */
   'cfg-user-intake':['super-admin','entity-admin','entity-user'],
-  // -- Create Store is not persona-gated the way Create Client is. Opening a store on Bhaiyaa is
-  // not the Account Manager's contract journey; it is entity-level onboarding, so every Entity
-  // User can reach it. Super Admin cannot: it configures what a store is, it does not open one. --
+  // -- Super Admin cannot open a store: it configures what a store is, it does not open one.
+  // Inside Entity User this is the Ops Manager's alone — see the sidebar entry. --
   'create-store':['entity-admin','entity-user'],
   'stores':['super-admin','entity-admin','entity-user'],
   'master-data':['super-admin','entity-admin','entity-user'],
@@ -2818,7 +2938,7 @@ let aiClientJourneySeq=6;
 // -- "Store Management" is Bhaiyaa's category, not a rename of Order to Cash everywhere. The
 // list is shared across systems but a system only ever shows the categories its own APIs are
 // tagged with (see buildCfgSystemDetailHTML, which groups off apiList), so adding one here costs
-// nothing to SAP/Infor/NFAdmin and keeps Bhaiyaa's grouping true to what Bhaiyaa is: a storefront
+// nothing to SAP/Infor/ADT SaaS and keeps Bhaiyaa's grouping true to what Bhaiyaa is: a storefront
 // platform whose objects are stores, not sales orders against a staffing contract. --
 const cfgApiCategories=['Procure to Pay','Order to Cash','Store Management','Finance & Payroll Postings','Others'];
 const cfgApiSubcats={
@@ -2830,7 +2950,7 @@ const cfgApiSubcats={
 };
 const cfgApiTypes=['Transactional','Transformational'];
 const cfgSystems=[
-  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.vyoma.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+  {id:'sap',name:'SAP S/4HANA',type:'SAP',method:'REST / OData',endpoint:'https://lnt-s4.adt.local/sap/odata/',auth:'OAuth 2.0',apis:142,lastTested:'3 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'API_BUSINESS_PARTNER · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'API_PRODUCT_SRV · Service Item Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
@@ -2840,7 +2960,7 @@ const cfgSystems=[
       {name:'API_COSTCENTER · Cost Center Master',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
       {name:'API_GLACCOUNTLINEITEM · GL Posting',dir:'r',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
     ]},
-  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.vyoma.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:true,
+  {id:'infor',name:'Infor ERP',type:'Infor',method:'Web Network',endpoint:'https://infor-wn.adt.local/',auth:'API Key',apis:38,lastTested:'yesterday',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'SupplierMaster · Vendor Master',dir:'rw',cat:'Procure to Pay',sub:'Vendor & Service Master',type:'Transformational'},
       {name:'PurchaseOrder · Staffing PO',dir:'r',cat:'Procure to Pay',sub:'Purchasing',type:'Transactional'},
@@ -2875,23 +2995,65 @@ const cfgSystems=[
     apiList:[
       {name:'EmployeeIntake · Client Master Data',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'}
     ]},
-  // -- Bhaiyaa is a storefront platform: the thing it owns is a store, and everything else it
-  // gives us hangs off one. StoreIntake is the write side of that — the API behind Create Store
-  // (buildCreateStoreHTML, js/pages.js) — and it is `rw` for the same reason ADT's EmployeeIntake
-  // is: we post a signup to it and read the store back with the id Bhaiyaa minted. --
-  {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.vyoma.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+  /* == BHAIYAA ============================================================================
+     Three calls, because three calls is what this integration makes. It used to list five, and
+     the two extra were the problem this page exists to prevent: WorkforceRoster, AttendanceFeed
+     and PayoutBatch described a field-workforce and contractor-payout integration that nothing
+     in this build ever calls — no route in backend/connectors/bhaiyaa.js, no screen, no journey
+     step. A system page that lists capabilities nobody wired up is a brochure, and it makes the
+     three that ARE real impossible to pick out.
+
+     What is left is what the connector actually does:
+       StoreIntake   Create Store posts a signup and reads the store back with Bhaiyaa's own id.
+                     `rw` for the same reason ADT's EmployeeIntake is.
+       StoreRegistry the poll. connectors/bhaiyaa.js pollSince() reads the store list and then
+                     each store's detail — one capability, two round trips.
+       OwnerKyc      the Aadhaar check the KYC Agent runs before any store is opened. It is a
+                     read against Bhaiyaa's KYC service, which is what fronts UIDAI here: we
+                     never hold the full number, which is why the store object has no column for
+                     one and this row is read-only.
+     If one of the dropped three is ever built, it goes back on this list at that point. == */
+  {id:'bhaiyaa',name:'Bhaiyaa',type:'Bhaiyaa',method:'REST',endpoint:'https://bhaiyaa.adt.local/api/',auth:'API Key',apis:12,lastTested:'2 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
       {name:'StoreIntake · Store Signup',dir:'rw',cat:'Store Management',sub:'Store Onboarding',type:'Transactional'},
-      {name:'StoreRegistry · Store Master',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'},
-      {name:'WorkforceRoster · Field Workforce',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'},
-      {name:'AttendanceFeed · Daily Attendance',dir:'r',cat:'Store Management',sub:'Time & Attendance',type:'Transactional'},
-      {name:'PayoutBatch · Contractor Payouts',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'}
+      {name:'OwnerKyc · Aadhaar Verification',dir:'r',cat:'Store Management',sub:'Store Onboarding',type:'Transactional'},
+      {name:'StoreRegistry · Store Master',dir:'r',cat:'Store Management',sub:'Master Data Creation',type:'Transformational'}
     ]},
-  {id:'nfadmin',name:'NFAdmin',type:'NFAdmin',method:'REST / SOAP',endpoint:'https://nfadmin.vyoma.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
+  /* == ADT SaaS ============================================================================
+     The product this Execution Layer is built on top of — the one whose modules the sidebar
+     below the divider mirrors, and the system every journey ultimately writes its outcome into.
+     It was called NFAdmin, which named an admin console rather than the platform, and left the
+     biggest system in the estate looking like a back-office tool with three endpoints.
+
+     THE API LIST IS THE POINT. Three entries against an `apis: 24` count said almost nothing
+     about what this system holds, on the one system a reader of this page already knows: every
+     object listed here has a module in the nav. They are grouped the way the rest of the estate
+     is — by the process the call belongs to, not by the screen it is reached from. == */
+  // `internal` is the flag that says we are both ends of this one: no Connection block, no
+  // endpoint or credentials on show, no Test connection button. Endpoint and auth stay on the
+  // record because the edit form still writes them and a future split could need them; they are
+  // simply not an integration contract anyone reviews here.
+  {id:'nfadmin',name:'ADT SaaS',type:'ADT SaaS',internal:true,method:'REST / SOAP',endpoint:'https://saas.adt.local/services/',auth:'OAuth 2.0',apis:24,lastTested:'6 hrs ago',status:'Connected',isDefault:true,activatedForEntity:true,
     apiList:[
+      // Who the entity is, and who may act inside it.
       {name:'EntityRegistry · Legal Entity Master',dir:'r',cat:'Others',sub:'General',type:'Transformational'},
+      {name:'UserDirectory · Admin Users',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      // The commercial chain: a client, the contract raised against it, the paper behind it.
+      {name:'ClientMaster · Client Records',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      {name:'ContractRegistry · Contracts',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transactional'},
+      {name:'ContractTemplate · Document Templates',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      // The workforce the contracts produce.
+      {name:'EmployeeMaster · Workforce Records',dir:'rw',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      {name:'TeamStructure · Teams & Reporting',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'},
+      // Time in, money out.
+      {name:'TimesheetFeed · Attendance & Hours',dir:'rw',cat:'Order to Cash',sub:'Time & Attendance',type:'Transactional'},
+      {name:'LeaveLedger · Balances & Requests',dir:'rw',cat:'Order to Cash',sub:'Time & Attendance',type:'Transactional'},
+      {name:'PayrollRun · Salary Calculation',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'},
+      {name:'PayheadMaster · Earnings & Deductions',dir:'r',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transformational'},
+      {name:'PaymentLedger · Client Billing',dir:'rw',cat:'Finance & Payroll Postings',sub:'GL Postings',type:'Transactional'},
+      // What keeps all of the above legal.
       {name:'ComplianceFiling · Statutory Filings',dir:'rw',cat:'Others',sub:'General',type:'Transactional'},
-      {name:'UserDirectory · Admin Users',dir:'r',cat:'Order to Cash',sub:'Master Data Creation',type:'Transformational'}
+      {name:'RatesAndRules · Country Rule Set',dir:'r',cat:'Others',sub:'Compliance & Documentation',type:'Transformational'}
     ]}
 ];
 
@@ -2976,7 +3138,62 @@ const cfgModels=[
       {name:'Billing Currency',type:'string'}
     ],
     rules:{makerChecker:true,validation:'Full name and work email are required. Client ID is minted here and unique; Source Record ID must be unique too — a repeat resolves to the existing client instead of creating a second one. Record enters as Pending until enrichment fields are supplied'},
-    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Client Tier','Mid-market'],['Lead Stage','Qualified'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contract Start Date','2026-09-01'],['Billing Currency','EUR']]}
+    sample:[['Client ID','CLI-000010'],['Source Record ID','ADT-SUB-0011'],['Full Name','Kavita Rao'],['Work Email','kavita@helioworks.com'],['Phone Number','+91 9765432100'],['Company Name','Helioworks'],['Country Hiring In','Netherlands'],['Looking For','Entity Setup'],['Heard About Us','Referral (Client/Partner)'],['Heard About Us Detail','—'],['Demo Slot','12 Aug 2026, 15:00 IST'],['Account Owner','Priya Nair'],['Client Tier','Mid-market'],['Lead Stage','Qualified'],['Expected Headcount','24'],['Service Line Confirmed','EOR — Netherlands'],['Contract Start Date','2026-09-01'],['Billing Currency','EUR']]},
+  /* == STORE ===============================================================================
+     The second live object, and the one Data Foundation was missing entirely: Bhaiyaa's store
+     signup lands in a real `stores` table (sql/schema_direct_employees.sql), the Store
+     Operations board works those records every day, and the object describing them existed
+     nowhere. A page whose job is "here is every object the layer owns" was omitting one of the
+     two it actually owns.
+
+     EVERY FIELD BELOW IS A COLUMN. Mapped fields are the `stores` columns Bhaiyaa's signup
+     fills; the enrichment set is the three the schema comments call out as arriving empty —
+     which is exactly why a created store sits in Pending until an Ops Manager supplies them,
+     the same contract the Client object has with its own intake form.
+
+     TWO IDS, SAME SPLIT AS CLIENT, and for the same reason: we mint one, Bhaiyaa minted the
+     other, and `uq_stores_source_record` deduplicates on theirs. There is deliberately NO
+     column for a full Aadhaar number anywhere in this object — the schema stores the masked
+     form only, and an object description that listed the real one would be describing a field
+     the database refuses to hold. == */
+  {id:'store',name:'Store',source:'Bhaiyaa',
+    desc:'Store opened on Bhaiyaa, mirrored into the Executive Layer store as the record the Store Operations board works.',
+    identity:[
+      {name:'Store Code',column:'store_code',mintedBy:'Executive Layer',example:'STR-000112',
+       note:'Issued by us the moment the store is mirrored in. Unique across the whole Executive Layer — minted inside the insert, not per browser.'},
+      {name:'Source Record ID',column:'source_record_id',mintedBy:'Bhaiyaa',example:'BHA-STR-0001',
+       note:'Bhaiyaa’s own reference for the same store. Recorded as received, never rewritten, and unique per source so two platforms may legitimately mint the same string.'}
+    ],
+    mapped:[
+      ['Source Record ID','source_record_id','string'],
+      ['Store Name','store_name','string'],
+      ['Role','role','string'],
+      ['Category','category','string'],
+      ['Business Tier','store_type','string'],
+      ['Owner First Name','first_name','string'],
+      ['Owner Last Name','last_name','string'],
+      ['Email','email','string'],
+      ['Mobile','mobile','string'],
+      ['Mobile Verified','mobile_verified','boolean'],
+      // Masked on arrival and stored masked. The full number never crosses into this store.
+      ['Aadhaar (masked)','aadhaar_masked','string'],
+      ['KYC Status','kyc_status','string'],
+      ['KYC Verified By','kyc_verified_by','string'],
+      ['KYC Verified At','kyc_verified_at','date'],
+      // The whole submission, verbatim, so nothing the merchant entered is lost while dedicated
+      // columns are still being added — bank, address, GST, PAN, MSME and the document list all
+      // live in here today.
+      ['Full Signup','raw_signup','object'],
+      ['Mirror State','mirror_state','string']
+    ],
+    enrichment:[
+      {name:'Plan',type:'string'},
+      {name:'GST Position',type:'string'},
+      {name:'Credit Line',type:'string'},
+      {name:'Payment Terms',type:'string'}
+    ],
+    rules:{makerChecker:true,validation:'Store name, owner name and email are required. Store Code is minted here and unique; Source Record ID must be unique per source — a repeat resolves to the existing store instead of opening a second one. KYC must read Verified before the store leaves Pending, and the full Aadhaar number is never stored.'},
+    sample:[['Store Code','STR-000112'],['Source Record ID','BHA-STR-0001'],['Store Name','Sharma Kirana Mart'],['Role','seller'],['Category','Grocery & Kirana'],['Business Tier','MSME: Micro, Small, and Medium Enterprises'],['Owner First Name','Ravi'],['Owner Last Name','Sharma'],['Email','ravi@sharmakirana.in'],['Mobile','+91 98220 41176'],['Mobile Verified','true'],['Aadhaar (masked)','XXXX XXXX 9012'],['KYC Status','Verified'],['KYC Verified By','KYC Agent'],['KYC Verified At','01 Aug 2026, 11:20'],['Full Signup','{ bank, address, GST, PAN, documents… }'],['Mirror State','mirrored'],['Plan','Standard'],['GST Position','Registered — Regular'],['Credit Line','₹50,000'],['Payment Terms','Net 15']]}
 ];
 let cfgModelTested={};
 let cfgModelEditing=false;
@@ -2990,6 +3207,10 @@ let cfgModelDraft=null;
 const cfgJourneyCategories=[
   {id:'O2C',name:'Order to Cash',short:'Order to fulfilment, invoice, payment',desc:"From customer order through fulfillment, invoicing, and payment collection."},
   {id:'P2P',name:'Procure to Pay',short:'Requisition to PO, receipt, payment',desc:'From requisitioning through purchase order, receipt, and invoice payment.'},
+  /* Contract Creation lives here, not under Order to Cash. It was filed as O2C because it ends
+     in a signed contract, but what it actually does is hire a named person and put them on
+     payroll — the first half of this category's own sentence. Order to Cash is the client
+     record and the store signup: opening an account. This is hiring into one. */
   {id:'H2R',name:'Hire to Retire',short:'Hiring to payroll, leave, offboarding',desc:'Full employee lifecycle: hiring, payroll, benefits, leave, offboarding.'},
   {id:'F2A',name:'Finance to Accounting',short:'Ledger to reconciliation, close, reporting',desc:'Financial transactions into the ledger — reconciliation, close, reporting.'}
 ];
@@ -3956,10 +4177,79 @@ All offboarding checklist items are marked complete.
 A pending final settlement raises an exception for finance.
 
 ## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`},
+  /* == THE TWO THAT DO THE WORK AND WERE NEVER LISTED =======================================
+     The Bhaiyaa Store Creation Journey runs three automated steps, and until now not one of
+     them had an agent record. Its steps name 'KYC Agent' and 'Store Agent' as their source,
+     amOwnerDirectory routes both to the Ops Manager persona, the store board reports what they
+     did — and the Agents catalogue, the page whose entire job is "what can this layer run",
+     showed neither. That is the opposite failure to a dead agent nobody wired up: work being
+     performed by something the governance surface cannot see.
+
+     GUARDRAILS ARE NOT COSMETIC HERE. The KYC agent halts the run on a failed match rather than
+     deciding — the journey is explicit that a mismatch stops before a store is created, which
+     is a human-adjudicated outcome and is why this one is not "Fully automated". == */
+  {name:'KYC Agent',type:'Verification agent',desc:'Matches the owner’s Aadhaar against UIDAI demographics and screens the result before any store is opened.',model:'Bharat GPT',usedIn:'Bhaiyaa Store Creation Journey',guardrail:'Human approves on deviation',
+    skillMd:`# KYC Agent — skill.md
+
+Model: Bharat GPT
+Type: Verification agent
+Used in: Bhaiyaa Store Creation Journey
+Guardrail: Human approves on deviation
+
+## Role
+Verifies the store owner's identity with UIDAI before a store exists. This runs as a gate, not
+as a formality: the journey halts here on a failed match rather than opening a store and
+correcting it later.
+
+## Step
+KYC Verification
+
+## Fields read
+Owner Name, Aadhaar Number, PAN Number, Business KYC Entity
+
+## Validation
+UIDAI demographic match returns a score above threshold and the owner clears the watchlist screen.
+
+## On failure
+The run halts before store creation and the record is routed to the Ops Manager for adjudication.
+No store is registered on Bhaiyaa and nothing downstream is provisioned.
+
+## Audit
+Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.
+The full Aadhaar number is never written to the store record — only the masked form is kept.`},
+  {name:'Store Agent',type:'Transaction agent',desc:'Registers the store on Bhaiyaa once KYC clears, then provisions the storefront or the ledger and mirrors the record back.',model:'Bharat GPT',usedIn:'Bhaiyaa Store Creation Journey',guardrail:'Fully automated',
+    skillMd:`# Store Agent — skill.md
+
+Model: Bharat GPT
+Type: Transaction agent
+Used in: Bhaiyaa Store Creation Journey
+Guardrail: Fully automated
+
+## Role
+Registers the store on Bhaiyaa through StoreIntake, provisions it, and mirrors the created record
+back into the Executive Layer store with the reference Bhaiyaa minted.
+
+## Step
+Store Creation, Store Created
+
+## Fields read
+Store Name, Category, Business Tier, Owner Contact, Bank Details, Address
+
+## Validation
+Bhaiyaa returns a store reference and the mirrored record carries both identifiers.
+
+## On failure
+The mirror is marked failed and retried; the store exists on Bhaiyaa either way, so the run never
+re-registers it.
+
+## Audit
 Every action this agent takes is logged with timestamp, data source, and outcome for compliance audit.`}
 ];
 const cfgAgentsOriginalSkill=cfgAgents.map(function(a){return a.skillMd;});
 let cfgAgentSkillModalIdx=-1;
+// '' = every journey. Which journey's agents the catalogue is scoped to — see buildCfgAgentsHTML.
+let cfgAgentJourneyFilter='';
 let cfgAgentSkillEditing=false;
 // -- Which agent's detail modal is open. Doubles as "did skill.md get opened from a detail
 // modal", which is what decides whether skill.md offers Back or only Close. --

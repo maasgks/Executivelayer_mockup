@@ -546,8 +546,15 @@ function buildAmDealsListingHTML(){
   // that is not in the table under it reads as a bug.
   if(amSelectedDealId&&!rows.some(function(d){return d.id===amSelectedDealId;}))amSelectedDealId=null;
   const title=stage?stage.short:'All your work';
-  const sub=stage?String(stage.plain).replace(/&mdash;/g,'—')+' &nbsp;·&nbsp; Should take: '+(amStageSla[stage.id]||'&mdash;')
-    :'Everything you own, in one list. Click a step above to narrow it down.';
+  /* "Click a step above" pointed at the rail, and the rail is nine STAGES — the steps are the
+     three-to-six sub-statuses inside each one, which live in this table and in the drawer. One
+     word, but it was the word that taught a new reader the wrong name for the thing they were
+     about to click, and the same reader then met "Stage 2 of 9 · step 5 of 6" in every row. */
+  const sub=stage
+    ?String(stage.plain).replace(/&mdash;/g,'—')
+      +' &nbsp;·&nbsp; Stage '+stage.n+' of '+amPipelineStages.length
+      +' &nbsp;·&nbsp; Should take: '+(amStageSla[stage.id]||'&mdash;')
+    :'Everything you own, in one list. Pick a stage above to narrow it down.';
   /* One list defines the columns, and the colgroup, the header row and every cell are all
      generated from it. That is the fix for a real bug: the drawer-open view used to hide two
      columns with `display:none` while leaving all six <col> elements in place, and under
@@ -559,9 +566,13 @@ function buildAmDealsListingHTML(){
   const columns=[
     {w:'19%',cw:'32%',th:'Client',
      cell:function(d){return '<div class="cell-primary am-c-client">'+d.client+'</div><div class="cell-sub">'+d.ref+'</div>';}},
-    {w:'18%',hideWhenCompact:true,th:'Who we are placing',
+    /* "Who we are placing" asked for a person and got "4 roles" on more than half the rows —
+       an engagement has no named hire yet, which is the whole reason it is an engagement. "The
+       hire" holds both: a headcount being quoted and a person being onboarded are the same
+       column answering "what is being hired", and the line under it says the job and where. */
+    {w:'18%',hideWhenCompact:true,th:'The hire',thTitle:'The headcount on a client request, or the person on a placement',
      cell:function(d){return '<div class="cell-primary am-c-client">'+d.subject+'</div><div class="cell-sub">'+d.role+' &middot; '+d.country+'</div>';}},
-    {w:'27%',cw:'36%',th:'Where it is now',cell:amSubCellHTML},
+    {w:'27%',cw:'36%',th:'Where it is now',thTitle:'The stage the client sees, the step being worked, and how far in that is',cell:amSubCellHTML},
     {w:'9%',hideWhenCompact:true,th:'Days',thTitle:'Days sitting on the current step',
      cell:function(d){return '<span class="am-c-age'+(d.breach?' breach':'')+'">'+d.age+'d</span>'
        +(d.breach?'<div class="cell-sub am-c-late">Too long</div>':'');}},
@@ -586,11 +597,17 @@ function buildAmDealsListingHTML(){
       +columns.map(function(c){return '<td>'+c.cell(d)+'</td>';}).join('')
       +'</tr>';
   }).join('')
-    :'<tr><td colspan="'+columns.length+'" style="padding:34px;text-align:center;color:var(--gray);font-size:12.5px">Nothing here right now.</td></tr>';
+    // An empty table under a stage filter is not the same fact as an empty queue, and one
+    // sentence for both left the reader checking the rail to find out which they were looking at.
+    :'<tr><td colspan="'+columns.length+'" style="padding:34px;text-align:center;color:var(--gray);font-size:12.5px">'
+      +(stage?'Nothing is sitting at &ldquo;'+stage.short+'&rdquo; right now.':'Nothing here right now.')
+      +'</td></tr>';
   return '<div class="am-list-block">'
     +'<div class="am-list-head">'
       +'<div><div class="am-list-title">'+title+'</div><div class="am-list-sub">'+sub+'</div></div>'
-      +'<div class="am-list-right"><span class="am-list-count">'+total+' of '+amDeals.length+'</span>'
+      // "3 of 19" on its own never said of what. The tooltip says it once rather than spending
+      // table width on the words.
+      +'<div class="am-list-right"><span class="am-list-count" title="'+attrSafe(total+' shown of the '+amDeals.length+' pieces of work you own')+'">'+total+' of '+amDeals.length+'</span>'
       +(stage?'<button class="lp-pill-reset" onclick="amClearPipelineStage()">Show all</button>':'')+'</div>'
     +'</div>'
     +'<div class="lp-split-wrap"><div class="lp-split-main">'
@@ -636,6 +653,9 @@ function amSubCellHTML(d){
       +'<span class="am-where-step am-where-done">'
       +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
       +'Employed and on payroll</span>'
+      // The one row where "of 9" is the whole point: this is the ninth, and saying so is what
+      // separates a journey that finished from a stage that happens to have run out of steps.
+      +'<span class="am-where-prog">Stage '+amJourneyPos(d).stageNo+' of '+amPipelineStages.length+' &middot; all done</span>'
       +'</div>';
   }
   const idx=amSubIndex(d);
@@ -644,7 +664,9 @@ function amSubCellHTML(d){
     +' title="'+attrSafe(String(s.plain).replace(/&mdash;/g,'—'))+'">'
     +'<span class="am-sub-pill '+amBadgeClass(d.stage)+'">'+s.short+'</span>'
     +'<span class="am-where-step">'+cur.label+(cur.auto?'<span class="am-sub-tag auto">'+amBoltSvg+' auto</span>':'')+(cur.cond?'<i class="am-sub-cond">'+cur.cond+'</i>':'')+'</span>'
-    +'<span class="am-where-prog">Step '+(idx+1)+' of '+steps.length+'</span>'
+    // Journey first, stage second — see amProgressText. "Step 3 of 3" alone had a brand new
+    // request reading as a completed one.
+    +'<span class="am-where-prog">'+amProgressText(d)+'</span>'
     +'</div>';
 }
 /* The one column a new user should be able to act from without reading anything else. */
@@ -1942,13 +1964,32 @@ function saAgentUsage(){
   });
   return used;
 }
-/* Sequential ink ramp, light-on-dark ordered, for parts-of-a-whole bars on this page. The bands
-   it colours are ordinal (how much human involvement a guardrail demands), so one hue stepped by
-   lightness is the correct encoding — a categorical rainbow would imply the bands are unrelated
-   identities, and would fight the monochrome language the rest of the app uses.
-   Steps are validated, not eyeballed: adjacent CVD separation 17.6 (target >= 8), normal-vision
-   17.7 (floor 15), and every step clears 3:1 against the white card. */
+/* Sequential ink ramp, light-on-dark ordered, for parts-of-a-whole bars on this page. Every band
+   it colours is ordinal — how much human involvement a guardrail demands, how far from automation
+   a step sits — so one hue stepped by lightness is the correct encoding. A categorical rainbow
+   would imply the bands are unrelated identities, and would fight the monochrome language the
+   rest of the app uses.
+
+   Validated, not eyeballed, against the white card this page draws on: lightness monotone,
+   every adjacent gap over the 0.06 floor, hue spread 9° (one hue), and the light end at 3.60:1
+   on #fff. The app ships no dark mode — there is no prefers-color-scheme rule anywhere in css/ —
+   so there is one surface to clear and this ramp clears it. */
 const SA_RAMP=['#0f172a','#475569','#7c8899'];
+/* == WHO RUNS A STEP ======================================================================
+   The three bands every chart on this page splits by, in the order they are read: furthest
+   inside the machine first, furthest outside it last. That order is what makes the ramp
+   ordinal rather than decorative — dark is work nobody touches, pale is work we cannot even
+   schedule.
+
+   `other` in saStepSplit is not a leftover. It is a step carrying `Client Action` WITHOUT
+   `Human Required` — Client signing, Deposit due — work that belongs to the counterparty. A
+   band called "Other" would have hidden the one fact those steps carry, which is that no
+   amount of configuration will ever automate them. == */
+const SA_BANDS=[
+  {k:'ai',    label:'Agent',    note:'runs unattended'},
+  {k:'human', label:'Our team', note:'someone here has to act'},
+  {k:'other', label:'Client',   note:'waiting on the counterparty'}
+];
 function saRampStep(i){return SA_RAMP[Math.min(i,SA_RAMP.length-1)];}
 // 2px surface gaps between segments and rounded ends, so neighbouring bands stay separable
 // without a border; min-width keeps a one-of-twelve segment from collapsing to nothing.
@@ -1971,6 +2012,119 @@ function saLegendHTML(parts,total){
       +'</div>';
   }).join('')+'</div>';
 }
+/* == THE HEADLINE CHART: COVERAGE BY JOURNEY ==============================================
+   The estate's 27 steps, split by who runs them, one row per journey. A horizontal stacked bar
+   because the split is part-to-whole and the category names are long sentences — columns would
+   have turned five journey names into five rotated labels nobody reads.
+
+   SORTED BY COVERAGE, not by the order journeys happen to be declared in. The question this
+   answers is "which journeys still need people", and an answer you have to scan for is not an
+   answer. The fully-manual journey landing at the bottom is the point of the chart.
+
+   EVERY VALUE IS READABLE WITHOUT HOVERING. The coverage percentage is direct-labelled on each
+   row, the step count sits beside it, the legend above carries the estate totals per band, and
+   the row itself opens the journey — where all nine steps are listed with their owners. The
+   tooltip adds precision; it never holds the only copy of a number. */
+function saCoverageChartHTML(){
+  const rows=(aiJourneys||[]).map(function(j){
+    const s=saStepSplit(j.id);
+    return {j:j,s:s,pct:s.total?Math.round(s.ai/s.total*100):0};
+  }).sort(function(a,b){return b.pct-a.pct||b.s.total-a.s.total;});
+  const max=rows.reduce(function(n,r){return Math.max(n,r.s.total);},0)||1;
+  /* Three series, so a legend is not optional — but LABELS ONLY. The hero card a few inches
+     above already carries the same three bands with their estate totals, and repeating those
+     numbers here made the reader check whether the two sets agreed instead of reading either.
+     Identity is what this legend owes the chart; the totals belong to the figure they total. */
+  const legend='<div class="sa-key">'+SA_BANDS.map(function(b,i){
+    return '<span class="sa-key-item" title="'+attrSafe(b.label+' — '+b.note)+'">'
+      +'<span class="sa-key-dot" style="background:'+saRampStep(i)+'"></span>'
+      +b.label+'</span>';
+  }).join('')
+    +'<span class="sa-key-note">'+rows.length+' journeys, longest bar is '+max+' steps</span>'
+    +'</div>';
+  const body=rows.map(function(r){
+    // Bars share ONE scale across the rows — a nine-step journey draws wider than a three-step
+    // one. Normalising each row to full width would have made a three-step journey and a
+    // nine-step journey look like the same amount of work, which is the lie a percentage on its
+    // own already tells and the reason this chart exists beside the percentage.
+    const segs=SA_BANDS.map(function(b,i){
+      const n=r.s[b.k];if(!n)return '';
+      return '<span class="sa-cv-seg" style="width:'+(n/r.s.total*100)+'%;background:'+saRampStep(i)+'"'
+        +' title="'+attrSafe(r.j.name+' — '+n+' of '+r.s.total+' steps: '+b.label+', '+b.note)+'"></span>';
+    }).join('');
+    const name=String(r.j.name).replace(/\s*Journey$/,'');
+    return '<div class="sa-cv-row" onclick="selectedAIJourneyId=\''+r.j.id+'\';navigatePage(\'ai-journey-detail\')"'
+      +' title="'+attrSafe('Open '+r.j.name)+'">'
+      +'<div class="sa-cv-name">'+name+'</div>'
+      +'<div class="sa-cv-track"><div class="sa-cv-bar" style="width:'+(r.s.total/max*100)+'%">'+segs+'</div></div>'
+      // The percentage is the label; the step count under it is what stops the percentage being
+      // read as a volume. "0% · 3 steps" and "0% · 30 steps" are very different problems.
+      +'<div class="sa-cv-val"><b>'+r.pct+'%</b><i>'+r.s.total+' step'+(r.s.total===1?'':'s')+'</i></div>'
+      +'</div>';
+  }).join('');
+  return '<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Automation coverage by journey</div>'
+    +'<span onclick="navigatePage(\'cfg-context-journey\')">Context &amp; Journey</span></div>'
+    +legend
+    +'<div class="sa-cv">'+body+'</div>'
+    +'</div>';
+}
+/* == WHERE THE HOURS GO ===================================================================
+   A dumbbell, because the data is before-and-after per item: what a run actually cost a person
+   against what the same run was estimated to cost an agent. Two bars per row would have made
+   the reader measure the gap; a dumbbell draws the gap itself, which is the number the page is
+   about.
+
+   One hue, two shades, from the same ramp as everything else above — the two ends are the same
+   quantity measured twice, not two identities, so a second hue would be inventing a distinction
+   that is not in the data. */
+function saHoursChartHTML(){
+  const runs=(typeof saManualRuns==='function'?saManualRuns():[])
+    .filter(function(r){return (r.manualHours||0)>0;})
+    .sort(function(a,b){return (b.manualHours||0)-(a.manualHours||0);});
+  if(!runs.length)return '';
+  // Rounded up to a whole hour so the axis reads in clean numbers and the longest bar keeps a
+  // little air at the end for its label.
+  const max=Math.ceil(runs.reduce(function(n,r){return Math.max(n,r.manualHours||0);},0))||1;
+  const ticks=[0,max/2,max];
+  const body=runs.map(function(r){
+    const a=Math.min(r.agentEstimateHours||0,r.manualHours||0);
+    const b=r.manualHours||0;
+    const saved=Math.round((b-a)*10)/10;
+    return '<div class="sa-hr-row" title="'+attrSafe(r.subject+' &mdash; '+saJourneyName(r.journeyId)
+        +': '+b+'h by hand against an agent estimate of '+a+'h')+'">'
+      +'<div class="sa-hr-name">'+r.subject+'<i>'+String(saJourneyName(r.journeyId)).replace(/\s*Journey$/,'')+'</i></div>'
+      +'<div class="sa-hr-track">'
+        +'<span class="sa-hr-grid"></span>'
+        // The connector is drawn first and the dots over it, each with a 2px ring in the card
+        // colour so they stay separable where a small gap brings them close.
+        +'<span class="sa-hr-link" style="left:'+(a/max*100)+'%;width:'+((b-a)/max*100)+'%"></span>'
+        +'<span class="sa-hr-dot agent" style="left:'+(a/max*100)+'%" title="'+attrSafe('Agent estimate '+a+'h')+'"></span>'
+        +'<span class="sa-hr-dot human" style="left:'+(b/max*100)+'%" title="'+attrSafe('By hand '+b+'h')+'"></span>'
+      +'</div>'
+      +'<div class="sa-hr-val"><b>'+saved+'h</b><i>saved</i></div>'
+      +'</div>';
+  }).join('');
+  // A row of the same grid, so the ticks land on the track without either side knowing the
+  // other's width. The empty cells are the label and value columns.
+  const axis='<div class="sa-hr-axis-row"><div></div><div class="sa-hr-axis">'+ticks.map(function(t,i){
+    return '<span style="left:'+(t/max*100)+'%"'+(i===ticks.length-1?' class="end"':'')+'>'
+      +(Math.round(t*10)/10)+(i===ticks.length-1?'h':'')+'</span>';
+  }).join('')+'</div><div></div></div>';
+  const total=runs.reduce(function(n,r){return n+((r.manualHours||0)-Math.min(r.agentEstimateHours||0,r.manualHours||0));},0);
+  return '<div class="listing-card dash-panel">'
+    +'<div class="dash-panel-head"><div>Hours per run &mdash; by hand against agent estimate</div>'
+    +'<span onclick="navigatePage(\'my-runs\')">All runs</span></div>'
+    // Two series, so a legend, and it names which end is which rather than leaving the reader to
+    // infer it from "the dark one must be the slow one".
+    +'<div class="sa-key">'
+      +'<span class="sa-key-item"><span class="sa-key-dot" style="background:'+SA_RAMP[0]+'"></span>By hand</span>'
+      +'<span class="sa-key-item"><span class="sa-key-dot" style="background:'+SA_RAMP[2]+'"></span>Agent estimate</span>'
+      +'<span class="sa-key-note">'+(Math.round(total*10)/10)+'h across '+runs.length+' run'+(runs.length===1?'':'s')+'</span>'
+    +'</div>'
+    +'<div class="sa-hr">'+body+axis+'</div>'
+    +'</div>';
+}
 function buildAgentModelAnalyticsHTML(){
   const agents=typeof cfgAgents!=='undefined'?cfgAgents:[];
   const used=saAgentUsage();
@@ -1988,10 +2142,50 @@ function buildAgentModelAnalyticsHTML(){
   const totalApis=systems.reduce(function(n,s){return n+(s.apis||0);},0);
   const m=saMetrics();
 
+  /* == THE HERO ===========================================================================
+     One number, once, at the top: the share of the estate that runs without a person. It is the
+     figure every other card on this page is a breakdown of, and it used to be the third of four
+     equal tiles — which is the standard way a dashboard buries its own headline.
+
+     A METER RATHER THAN A BAR CHART, because this is one ratio against a limit. The track is a
+     lighter step of the same ramp the fill comes from, so the whole width reads as one quantity
+     divided, and the two segments beyond the fill are the honest remainder: our team, then the
+     client. Proportional figures, not tabular — 63% at 46px would sit loose on equal-width
+     digits, and there is no column here to align to. */
+  const bandTot={ai:0,human:0,other:0};
+  (aiJourneys||[]).forEach(function(j){const s=saStepSplit(j.id);bandTot.ai+=s.ai;bandTot.human+=s.human;bandTot.other+=s.other;});
+  const meter=m.totalSteps?'<div class="sa-meter">'+SA_BANDS.map(function(b,i){
+    const n=bandTot[b.k];if(!n)return '';
+    return '<span class="sa-meter-seg" style="width:'+(n/m.totalSteps*100)+'%;background:'+saRampStep(i)+'"'
+      +' title="'+attrSafe(n+' of '+m.totalSteps+' steps: '+b.label+', '+b.note)+'"></span>';
+  }).join('')+'</div>':'';
+  const hero='<div class="sa-hero">'
+    +'<div class="sa-hero-main">'
+      +'<div class="sa-hero-fig">'+m.coverage+'%</div>'
+      +'<div class="sa-hero-lab">of journey steps run without a person</div>'
+      +meter
+      +'<div class="sa-hero-legend">'+SA_BANDS.map(function(b,i){
+        return '<span class="sa-key-item" title="'+attrSafe(b.label+' — '+b.note)+'">'
+          +'<span class="sa-key-dot" style="background:'+saRampStep(i)+'"></span>'
+          +b.label+'<b>'+bandTot[b.k]+'</b></span>';
+      }).join('')+'</div>'
+    +'</div>'
+    /* The right-hand column is the sentence the number does not say: how many steps, spread over
+       how many journeys, and — the fact a coverage figure hides — that two of those steps sit
+       with the client and are not automatable at any coverage. */
+    +'<div class="sa-hero-side">'
+      +'<div class="sa-hero-row"><span>Steps in the estate</span><b>'+m.totalSteps+'</b></div>'
+      +'<div class="sa-hero-row"><span>Live journeys</span><b>'+m.liveJourneys+'</b></div>'
+      +'<div class="sa-hero-row"><span>Runs in flight</span><b>'+m.running+'</b></div>'
+      +'<div class="sa-hero-row'+(m.attention?' warn':'')+'"><span>Needing attention</span><b>'+m.attention+'</b></div>'
+      +'<div class="sa-hero-foot">'+bandTot.other+' of the remaining steps wait on the client &mdash; no configuration automates those.</div>'
+    +'</div>'
+    +'</div>';
+
   const tiles='<div class="stat-grid dash-stat-grid">'
     +dashStatNav('Agents configured',String(agents.length),wired.length+' wired into a journey'+(idle?' &middot; '+idle+' idle':''),idle?'orange':'green',dashIcoShield,'cfg-agents')
-    +dashStatNav('Steps run by agents',String(m.aiSteps),'Of '+m.totalSteps+' journey steps','teal',dashIcoDoc)
-    +dashStatNav('Unattended',agents.length?Math.round(auto/agents.length*100)+'%':'0%',auto+' of '+agents.length+' need no human','blue',dashIcoUser)
+    +dashStatNav('Unattended agents',agents.length?Math.round(auto/agents.length*100)+'%':'0%',auto+' of '+agents.length+' need no human','blue',dashIcoUser)
+    +dashStatNav('Hours saved',m.saved+'h',m.manualHours+'h by hand vs '+m.agentHours+'h estimated','teal',dashIcoDoc,'my-runs')
     +dashStatNav('Systems connected',connected+'/'+String(systems.length),totalApis+' APIs available','green',dashIcoShield,'cfg-systems')
     +'</div>';
 
@@ -2058,11 +2252,18 @@ function buildAgentModelAnalyticsHTML(){
     +'<th>System</th><th class="sa-col-apis">APIs available</th><th>Last tested</th>'
     +'</tr></thead><tbody>'+sysRows+'</tbody></table></div>';
 
+  /* Charts before tables, and the charts in the order a reader's questions arrive: how much of
+     the estate is automated (hero), how that is spread (coverage), what it is worth (hours),
+     what governs it (guardrails and models), then the two registers underneath for anyone who
+     came for a specific agent or system. */
   return '<div class="dash-ref">'
-    +'<div class="dash-ref-title">Agent &amp; Model Analytics</div>'
+    +'<div class="dash-ref-title">Analytics</div>'
     +'<div class="dash-ref-sub">What the agent estate is doing across all '+((aiJourneys||[]).length)+' journeys, and how much of it runs without a person.</div>'
     +'</div>'
-    +tiles+agentTable+mix+sysTable;
+    +hero+tiles
+    +saCoverageChartHTML()
+    +saHoursChartHTML()
+    +mix+agentTable+sysTable;
 }
 function buildEntityAdminDashboardHTML(){
   const sysTotal=cfgSystems.filter(s=>s.isDefault).length;
@@ -7819,7 +8020,7 @@ function buildCfgSystemDetailHTML(){
     :'<p style="font-size:17px;font-weight:700;margin-bottom:6px">'+s.name+(s.domain?' <span style="font-weight:500;color:var(--gray)">('+s.domain+')</span>':'')+'</p>'
       +'<p style="font-size:12.5px;color:var(--gray);margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +(internal
-        ?'<span class="badge" style="color:#475569;background:#f1f5f9;border-color:#cbd5e1">Internal platform</span>'
+        ?'<span class="badge" style="color:#475569;background:#f1f5f9;border-color:#cbd5e1">Internal system</span>'
           +'<span class="status-pill '+(s.status==='Connected'?'active':'inactive')+'">'+s.status+'</span>'
         :s.type+' &middot; connected via released APIs')
       +'</p>';
@@ -7931,7 +8132,32 @@ function buildCfgSystemDetailHTML(){
   return '<div class="ai-exec-page">'
     +cfgBackBtn('cfg-systems','Systems')
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap"><div>'+heading+'</div>'+actionBtns+'</div>'
-    +(internal?'':'<div class="review-title" style="margin-bottom:12px">Connection</div>'+connectionBlock)
+    /* An internal platform gets one sentence and nothing else. Every other block on this page
+       exists to answer a question about an integration — what is the endpoint, does it still
+       respond, which APIs has the vendor released to us — and not one of those questions has a
+       meaning when we own both ends. The record keeps its apiList and its counts; they are the
+       inventory, not an integration contract, and this page is only ever the contract. */
+    /* The whole page, so it is sized like the whole page rather than like a footnote. It was
+       borrowing .sa-note — an eleven-pixel annotation meant to sit under a chart — which left
+       the one thing this route has to say set smaller than the thing it replaced.
+
+       Two short paragraphs, not one long one: the first says what this system IS, the second
+       says what follows from that, and those are the two separate facts a reader came for. */
+    +(internal
+      ?'<div class="cfg-sys-internal">'
+        +'<span class="cfg-sys-internal-ico">'
+        +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+        +'<path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg></span>'
+        +'<div class="cfg-sys-internal-body">'
+          +'<p class="cfg-sys-internal-lead">'+s.name+' is an internal system.</p>'
+          // The second line is not decoration: it is why this page has nothing else on it. State
+          // "internal" without it and the empty route reads as a page that failed to load.
+          +'<p class="cfg-sys-internal-sub">It runs inside the organisation rather than being a '
+          +'third party we integrate with &mdash; so there is no endpoint to configure, no '
+          +'credentials to hold and no connection to test.</p>'
+        +'</div>'
+      +'</div>'
+      :'<div class="review-title" style="margin-bottom:12px">Connection</div>'+connectionBlock)
     +dataFoundationBlock
     +(internal?'':'<div class="review-title" style="margin-bottom:12px">Available APIs'+(editing?'':' &middot; released')+'</div>'
       +'<div class="ep-form-card" style="padding:0">'+apiRows+addApiForm+'</div>')
@@ -9729,11 +9955,26 @@ function buildCfgDataFoundationHTML(){
    same either way makes the first click feel destructive. `row` is the cell-sized cut of the same
    design; stopPropagation because the whole row is itself a click that opens the drawer. */
 function ccjOpenRunBtnHTML(d,row){
-  const has=typeof ccjRuns!=='undefined'&&ccjRuns[d.id];
+  /* "Start run" on a deal already sitting at the deposit invoice was wrong in the only way that
+     matters: clicking it starts nothing, it rebuilds five settled stages and lands on the live
+     step. What the two words distinguish is whether there is work behind this record — not
+     whether a run OBJECT happens to have been minted yet, which is an implementation detail the
+     reader has no way of knowing and no reason to care about. ccjDealPos answers the real
+     question: it returns null only for a record that has not moved off its first step. */
+  const live=typeof ccjRuns!=='undefined'&&!!ccjRuns[d.id];
+  const has=live||(typeof ccjDealPos==='function'&&!!ccjDealPos(d));
   const ico='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
     +'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
-  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="event.stopPropagation();ccjOpenDealRun('+d.id+')" title="'
-    +(has?'Open this deal&rsquo;s run from here':'Start this deal&rsquo;s run from here')+'">'+ico
+  // The tooltip names the step it will land on, so the button can be trusted before it is
+  // pressed — the whole point of the run opening where the row says it is.
+  const cur=typeof amCurrentSub==='function'?amCurrentSub(d):null;
+  const pos=typeof amJourneyPos==='function'?amJourneyPos(d):null;
+  const where=cur&&pos
+    ?' — stage '+pos.stageNo+' of '+pos.stages+', '+String(cur.label).replace(/&mdash;/g,'—')
+    :'';
+  const title=(has?'Opens where this run was left off':'Starts this run')+where;
+  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="event.stopPropagation();ccjOpenDealRun('+d.id+')"'
+    +' title="'+attrSafe(title)+'">'+ico
     +(has?'Open run':'Start run')+'</button>';
 }
 function cfgMapRow(unified,source,type){
@@ -9917,7 +10158,10 @@ function buildCfgModelDetailHTML(){
       +'<div class="ep-form-title">Identity &middot; the ids this object carries</div>'
       +m.identity.map(cfgIdentityRow).join('')
       +'<div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin-top:12px">'
-      +'Two ids, because two systems each name this client in their own store &mdash; so they never match, and neither can be derived from the other. Holding both is what lets a record here be traced back to the submission it came from.'
+      // "this client" was hardcoded here from when Client was the only object with identity.
+      // Store carries two ids for exactly the same reason, and the sentence has to name the
+      // object it is under or it describes the wrong record on every page but one.
+      +'Two ids, because two systems each name this '+(m.name||'record').toLowerCase()+' in their own store &mdash; so they never match, and neither can be derived from the other. Holding both is what lets a record here be traced back to the submission it came from.'
       +'</div>'
       +'</div>'
     :'';
@@ -10114,7 +10358,19 @@ function buildCfgContextJourneyHTML(){
        nothing about the journey itself is removed. -- */
     const locked=portalRole!=='super-admin'&&(isRoadmap||!entityJourneyActivation[j.id]);
     const clickAttr=locked?'':(superAdminUnconfigured?' style="cursor:pointer" onclick="openLockedJourneyModal(\''+j.id+'\')"':' onclick="viewCfgJourney(\''+j.id+'\')"');
-    return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+clickAttr+'>'
+    /* A roadmap journey reads as a roadmap journey. It used to render at exactly the same weight
+       as a live one — same ink, same arrow — so a list of eleven rows gave a reader no way to
+       tell the four that exist from the six that are only named yet, and the "Not Configured"
+       pill was doing that work alone in eleven-pixel grey.
+
+       Muted rather than disabled, and the distinction matters: for Super Admin this row is still
+       a control — it opens the modal that configures the journey. `ai-journey-card-locked` is
+       the other case (no click at all), which is why it can afford a blanket opacity; fading a
+       live control at .55 is how a page teaches people not to press it. Here the content drops
+       to a recessive weight and hover brings it back, which says "nothing here yet" without
+       saying "nothing here". */
+    return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')
+      +(superAdminUnconfigured?' cfg-journey-card-unconfigured':'')+'" '+clickAttr+'>'
       +'<div class="cfg-journey-main">'
       // roadmapLocked, not locked: the badge keeps its own ladder, so a journey with a pending
       // activation request still reads "Requested" rather than being flattened to "Locked".
@@ -10426,7 +10682,12 @@ const agentIconPaths={
   'AI Payroll Archive':'<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="13" x2="14" y2="13"/>',
   'AI Compliance Hub Sync':'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   'AI Leave Policy Engine':'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-  'AI Offboarding Engine':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
+  'AI Offboarding Engine':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  // The two Bhaiyaa agents. A person against a verified badge, and a storefront — the same two
+  // objects their journey is about, so neither falls through to the generic sparkle every
+  // uncatalogued agent used to wear.
+  'KYC Agent':'<circle cx="10" cy="8" r="3.6"/><path d="M3.5 20a6.5 6.5 0 0 1 10-5.5"/><circle cx="17.5" cy="16.5" r="4.5"/><path d="m15.6 16.6 1.4 1.4 2.6-2.7"/>',
+  'Store Agent':'<path d="M3 9.5 4.8 4h14.4L21 9.5"/><path d="M3 9.5h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 11.8V20h14v-8.2"/><path d="M10 20v-4.5h4V20"/>'
 };
 function agentIconSvg(name){
   const path=agentIconPaths[name]||'<path d="M12 3c.3 3.6 1.4 4.7 5 5-3.6.3-4.7 1.4-5 5-.3-3.6-1.4-4.7-5-5 3.6-.3 4.7-1.4 5-5Z"/>';
@@ -10437,28 +10698,110 @@ function agentIconSvg(name){
    its description, guardrail, model and every journey it appears in — so three agents filled
    the screen and finding one meant scrolling past the detail of the others. Cards now carry
    only what you scan by; the rest moves into a modal opened by the card you cared about. == */
-function agentJourneyCount(a){return a.usedIn.split(', ').filter(Boolean).length;}
+/* == WHICH JOURNEYS AN AGENT IS ACTUALLY IN ===============================================
+   Read off the journey STEPS, not off the agent's own `usedIn` sentence. Those two disagree
+   today and there is no way to tell from the sentence: the prompt parser says "H2R Lifecycle"
+   where the journey is named "Hire to Retire (H2R) Journey", and "Contract Creation" where the
+   journey is "Contract Creation Journey". Grouping a catalogue by prose files agents under
+   journeys that do not exist and leaves real ones looking empty.
+
+   The step's `source` is the wiring — it is what the journey actually runs, what the run
+   surfaces name, and what Analytics already counts. `usedIn` is documentation, and it stays on
+   the detail modal where a sentence belongs. == */
+function agentJourneyIds(a){
+  const out=[];
+  Object.keys((typeof aiJourneyEvents!=='undefined'&&aiJourneyEvents)||{}).forEach(function(jid){
+    if((aiJourneyEvents[jid]||[]).some(function(e){return e.source===a.name;}))out.push(jid);
+  });
+  return out;
+}
+function agentJourneyCount(a){return agentJourneyIds(a).length;}
+function setCfgAgentJourney(id){cfgAgentJourneyFilter=id===cfgAgentJourneyFilter?'':id;renderADTPage();}
+function cfgAgentTileHTML(a,i){
+  const n=agentJourneyCount(a);
+  const shared=n>1;
+  return '<button type="button" class="agent-tile" onclick="openCfgAgentDetail('+i+')">'
+    +'<div class="agent-tile-top">'
+    +'<span class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</span>'
+    // A guardrail is the fact that decides whether this agent may act alone. The tile said
+    // "Active" on all fourteen — a pill whose every value is identical is a pill nobody reads.
+    +'<span class="status-pill '+(a.guardrail==='Fully automated'?'active':'draft')+'"'
+      +' style="min-width:0;height:auto;padding:1.5px 8px;font-size:9.5px"'
+      +' title="'+attrSafe('Guardrail — '+a.guardrail)+'">'
+      +(a.guardrail==='Fully automated'?'Unattended':'Human in loop')+'</span>'
+    +'</div>'
+    +'<div class="agent-tile-name">'+a.name+'</div>'
+    +'<div class="agent-tile-type">'+a.type+'</div>'
+    // -- The one figure worth keeping on the face of the card: "how much depends on this
+    // agent" is the question being asked while scanning the list. --
+    +'<div class="agent-tile-foot"><span'+(shared?' class="agent-tile-shared"':'')+'>'
+      +(n?n+' journey'+(n===1?'':'s'):'Not wired in')+'</span>'
+    +'<span class="agent-tile-open">View details'
+    +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
+    +'</span></div>'
+    +'</button>';
+}
+/* == THE CATALOGUE, BY WHAT USES IT =======================================================
+   Fourteen tiles in one undifferentiated grid answered "what agents exist" and nothing else.
+   The question actually being asked here is "what runs the journey I am working on", and the
+   flat grid made a reader open tiles one at a time to find out.
+
+   SHARED AGENTS COME FIRST, in their own group, because an agent three journeys depend on is a
+   different kind of object from one that serves a single step — it is the one whose guardrail
+   change reaches furthest, and the catalogue should say so before it says anything else. Every
+   other agent then sits under the single journey that uses it, so nothing is listed twice.
+
+   The journey being built leads the rest. One filter row above everything, and selecting a
+   journey flattens the page to that journey's agents — shared ones included, since they run in
+   it too. == */
 function buildCfgAgentsHTML(){
-  const cards=cfgAgents.map(function(a,i){
-    const n=agentJourneyCount(a);
-    return '<button type="button" class="agent-tile" onclick="openCfgAgentDetail('+i+')">'
-      +'<div class="agent-tile-top">'
-      +'<span class="agent-card-icon" style="background:var(--ol)">'+agentIconSvg(a.name)+'</span>'
-      +'<span class="status-pill active" style="min-width:0;height:auto;padding:1.5px 8px;font-size:9.5px">Active</span>'
-      +'</div>'
-      +'<div class="agent-tile-name">'+a.name+'</div>'
-      +'<div class="agent-tile-type">'+a.type+'</div>'
-      // -- The one figure worth keeping on the face of the card: "how much depends on this
-      // agent" is the question being asked while scanning the list. --
-      +'<div class="agent-tile-foot"><span>'+n+' journey'+(n===1?'':'s')+'</span>'
-      +'<span class="agent-tile-open">View details'
-      +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>'
-      +'</span></div>'
-      +'</button>';
-  }).join('');
+  const agents=cfgAgents.map(function(a,i){return {a:a,i:i,jids:agentJourneyIds(a)};});
+  const journeys=(typeof aiJourneys!=='undefined'?aiJourneys:[]).slice()
+    // The journey this layer is being built around goes first; the rest keep catalogue order.
+    .sort(function(x,y){return (x.id==='contract-creation'?0:1)-(y.id==='contract-creation'?0:1);});
+  const filter=cfgAgentJourneyFilter;
+  const chip=function(id,label,n){
+    return '<button type="button" class="cfg-agf'+(filter===id?' on':'')+'" onclick="setCfgAgentJourney(\''+id+'\')">'
+      +label+'<b>'+n+'</b></button>';
+  };
+  const bar='<div class="cfg-agf-row">'
+    +'<button type="button" class="cfg-agf'+(filter?'':' on')+'" onclick="setCfgAgentJourney(\'\')">All journeys<b>'+agents.length+'</b></button>'
+    +journeys.map(function(j){
+      return chip(j.id,String(j.name).replace(/\s*Journey$/,''),
+        agents.filter(function(x){return x.jids.indexOf(j.id)>-1;}).length);
+    }).join('')
+    +'</div>';
+  const grid=function(list){return '<div class="agent-grid">'+list.map(function(x){return cfgAgentTileHTML(x.a,x.i);}).join('')+'</div>';};
+  const group=function(title,note,list){
+    if(!list.length)return '';
+    return '<div class="cfg-aggrp">'
+      +'<div class="cfg-aggrp-head"><span>'+title+'</span><i>'+list.length+'</i>'
+      +(note?'<em>'+note+'</em>':'')+'</div>'+grid(list)+'</div>';
+  };
+  let body;
+  if(filter){
+    const j=journeys.find(function(x){return x.id===filter;});
+    const list=agents.filter(function(x){return x.jids.indexOf(filter)>-1;});
+    body=list.length
+      ?group(String((j||{}).name||'Journey').replace(/\s*Journey$/,''),
+             'every agent this journey runs, shared ones included',list)
+      :'<div class="ep-form-card" style="text-align:center;color:var(--gray);font-size:12.5px;padding:32px">'
+        +'No agent is wired into this journey &mdash; every step of it is performed by a person.</div>';
+  }else{
+    const shared=agents.filter(function(x){return x.jids.length>1;});
+    const idle=agents.filter(function(x){return !x.jids.length;});
+    body=group('Shared across journeys','a guardrail change here reaches every one of them',shared)
+      +journeys.map(function(j){
+        return group(String(j.name).replace(/\s*Journey$/,''),'',
+          agents.filter(function(x){return x.jids.length===1&&x.jids[0]===j.id;}));
+      }).join('')
+      // Dead config, and named as such. An agent nobody wired in is the one thing this page can
+      // report that no other surface can.
+      +group('Not wired into any journey','configured, but nothing runs it',idle);
+  }
   return '<div class="ai-exec-page">'
     +cfgPageHead('Agents','The agents that read, draft and act — always inside your rules.')
-    +'<div class="agent-grid">'+cards+'</div>'
+    +bar+body
     +'</div>';
 }
 /* -- Detail modal. Shares the one overlay with the skill.md view, so opening skill.md from here

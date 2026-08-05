@@ -185,7 +185,7 @@ function steps() {
 function panel() { return steps(); }
 /* JUST THE BLOCK THE RUNNER IS ON. `panel()` is the whole append-only conversation on a rebuilt
    stage, which makes it the wrong instrument for "what does the current step show" — every choice
-   ever made is still in there as a user message, so `indexOf('Hold for the balance') === -1` is
+   ever made is still in there as a user message, so `indexOf('Wait for the balance') === -1` is
    false the moment somebody clicked that button, whatever the live block says. Slices from the
    live block's id to the start of the next block. */
 function liveBlock() {
@@ -1121,7 +1121,8 @@ check('and the conversation says the intake is logged, which only this gate can 
   run("(function(){var m=ccjRun.msgs.filter(function(x){return x.who==='agent'&&x.text;}).pop();"
     + "return m?m.text:'';})()").indexOf('Request logged and routed') > -1);
 check('gate rendered in the row it belongs to', p2.indexOf('ccj-gate') > -1);
-check('gate offers both answers', p2.indexOf('>Qualify<') > -1 && p2.indexOf('>Reject<') > -1);
+check('gate offers both answers',
+  p2.indexOf('Accept and price it') > -1 && p2.indexOf('Reject the request') > -1);
 // The whole point of the rename was that one decision stopped being called two things. Asserted
 // as an absence, because a half-finished rename shows up as the old word surviving somewhere
 // rather than as anything failing.
@@ -1129,7 +1130,10 @@ check('and the retired word survives nowhere on the card',
   p2.indexOf('Disqualif') === -1, p2.slice(p2.indexOf('Disqualif') - 60, p2.indexOf('Disqualif') + 60));
 check('gate names who owns it', (p2.split('ccj-gate-who')[1] || '').indexOf('Arjun Vaidya') > -1);
 check('nothing is still spinning', p2.indexOf('ccj-spin') === -1);
-check('the conversation asked for the decision', stream().toLowerCase().indexOf('qualify') > -1);
+// Asserted on the ask's own words rather than on the word "qualify", which was the process's name
+// for this decision and is exactly what the card stopped saying.
+check('the conversation asked for the decision',
+  stream().indexOf('Is this a hire we can take on') > -1);
 const stageBefore = run('ccjRun.stage');
 advance(Math.round(20000*PACE));
 check('the machine does not advance itself past a human gate',
@@ -1157,7 +1161,7 @@ advance(Math.round(20000*PACE));
 check('a stopped run stays stopped', run('ccjRun.stage') === 0 && run('ccjRun.stopped') === true);
 run('ccjReopen()');
 check('reopening restores the decision', run('ccjRun.stopped') === false && run('ccjRun.phase') === 'halt');
-check('the decision is answerable again', panel().indexOf('>Qualify<') > -1);
+check('the decision is answerable again', panel().indexOf('Accept and price it') > -1);
 
 section('QUALIFY — THE STAGE COMPLETES AND THE JOURNEY MOVES');
 run("ccjChooseGate('qualified')");
@@ -1282,14 +1286,14 @@ check('it is owned by Pricing', (panel().split('ccj-gate-who')[1] || '').indexOf
 // CCJ_ANY_PERSONA is on, so a non-owner can answer it — but the owner is still named and the
 // row is marked, so the record of WHO owns the decision never gets lost.
 check('a non-owner can still answer it',
-  panel().indexOf('>Approve<') > -1 && panel().indexOf('>Send back<') > -1);
+  panel().indexOf('Approve the quote') > -1 && panel().indexOf('Send back to be rebuilt') > -1);
 check('and is told they are acting for someone else',
   panel().indexOf('ccj-gate-behalf') > -1 && panel().indexOf('ccj-gate-locked') === -1);
 // Switch to the persona that owns the step. Same gate, same run — only who is looking changes.
 run("activePersonaId='deal-manager';");
 run('ccjPaint()');
 check('the owner sees no acting-as marker',
-  panel().indexOf('>Approve<') > -1 && panel().indexOf('ccj-gate-behalf') === -1);
+  panel().indexOf('Approve the quote') > -1 && panel().indexOf('ccj-gate-behalf') === -1);
 advance(Math.round(30000*PACE));
 check('it does not approve itself', run('ccjRun.phase') === 'halt' && run('ccjRun.stage') === 1);
 
@@ -1637,7 +1641,7 @@ check('the agreement screen states what governs instead of pretending to draft o
    page. The harness never caught it because driveTo() calls ccjContinueStage() directly whenever
    it sees a rest, which walks past the surface a person actually meets. */
 check('the way on is asked for in the conversation here too',
-  stream().indexOf('Continue to deposit') > -1 && stream().indexOf('ccj-ask-block') > -1);
+  stream().indexOf('Continue to the deposit invoice') > -1 && stream().indexOf('ccj-ask-block') > -1);
 check('and the agreement screen carries no control of its own',
   screen().indexOf('<button') === -1, screen().slice(0, 200));
 const msaAsk = run("(function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})()");
@@ -1740,7 +1744,7 @@ section('STAGE 5 — THE MASTER SERVICES AGREEMENT');
     shell().indexOf(run('ccjMsa().id'))>-1 && shell().indexOf('&middot; quote v')===-1);
   // Legal reads it before anything is sent. That gate is the point of the 48h SLA.
   check('legal has to release it before it goes anywhere',
-    until(()=>run("ccjRun.phase==='halt'")) && panel().indexOf('Release the agreement')>-1, run('ccjRun.phase'));
+    until(()=>run("ccjRun.phase==='halt'")) && panel().indexOf('Legal has read the agreement')>-1, run('ccjRun.phase'));
   /* THE FIRST INTERNAL DECISION INSIDE A COUNTERPARTY'S COLUMN. Stages 3 and 4 shared the column
      with the client but every control on them was the client's own doing; this one is OURS — a
      lawyer deciding whether to release the paper — and it now renders one scroll from messages the
@@ -1802,7 +1806,7 @@ section('STAGE 5 — THE MASTER SERVICES AGREEMENT');
   // Countersigning is a POST gate: the work ran first and the decision is about its result. On the
   // transcript that lands in the same block the signature evidence is in.
   check('countersigning is asked for in the conversation, not on the document',
-    panel().indexOf('Countersign the agreement')>-1 && screen().indexOf('Countersign the agreement')===-1);
+    panel().indexOf('Add our signature')>-1 && screen().indexOf('Add our signature')===-1);
   // The step is the CLIENT's — they are who signs — but ours is the second signature and the last
   // point at which we can decline. The block credited that to the client.
   check('and it is credited to us, not to the client whose signature the step tracks',
@@ -1916,7 +1920,7 @@ section('THE SIGNED AGREEMENT COMES BACK');
   // produced and it keeps saying so — it just no longer carries the button.
   check('the executed agreement states that it is done', screen().indexOf('Agreement executed')>-1);
   check('and the way on is asked for in the conversation',
-    stream().indexOf('Continue to deposit')>-1 && screen().indexOf('<button')===-1);
+    stream().indexOf('Continue to the deposit invoice')>-1 && screen().indexOf('<button')===-1);
   run("ccjAnswerAsk((function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})())");
   check('continuing reaches stage 6', until(()=>run('ccjRun.stage')===5), 'stage '+run('ccjRun.stage'));
 })();
@@ -1936,8 +1940,9 @@ section('THE AGREEMENT COMES BACK AND WAITS FOR APPROVAL');
   check('the run stops for approval',
     until(()=>run("ccjRun.phase==='halt'") && !!run('ccjPostGateFor(ccjRun.stage,ccjSteps(ccjRun.stage)[ccjRun.sub])')),
     run('ccjRun.phase'));
-  check('the panel asks for the countersignature', panel().indexOf('Countersign the agreement')>-1);
-  check('with an approve and a decline', panel().indexOf('Approve and countersign')>-1 && panel().indexOf('>Decline<')>-1);
+  check('the panel asks for the countersignature', panel().indexOf('The client has signed. Add our signature?')>-1);
+  check('with an approve and a decline',
+    panel().indexOf('Sign and make it live')>-1 && panel().indexOf('Decline to sign')>-1);
   advance(60000);
   check('and it will not countersign itself', run('ccjMsa().adtSignedAt')===0 && run('ccjRun.stage')===4);
   // Declining is terminal — an agreement nobody countersigned is not in force.
@@ -2108,8 +2113,8 @@ section('THE MONEY ARRIVES SHORT, AND SOMEBODY HAS TO DECIDE');
   check('the panel states the shortfall against the total',
     panel().indexOf(run('ccjOutstanding().toLocaleString()')) > -1
     && panel().indexOf(run('ccjAmountDue().toLocaleString()')) > -1);
-  check('with a hold and a release', panel().indexOf('Hold for the balance') > -1
-    && panel().indexOf('Release anyway') > -1);
+  check('with a hold and a release', panel().indexOf('Wait for the balance') > -1
+    && panel().indexOf('Start the hire anyway') > -1);
   /* WHAT THE CONVERSATION SAYS WHEN IT STOPS. "Request logged and routed. Qualify it to continue."
      is stage 1's sentence, and it was being pushed on EVERY arrival decision gate in the journey —
      here, where there is no request to log and nothing to qualify, and on stage 5's sanctions
@@ -2159,7 +2164,7 @@ section('THE MONEY ARRIVES SHORT, AND SOMEBODY HAS TO DECIDE');
     && liveBlock().indexOf('ccj-gate-btn') === -1,
     liveBlock().slice(0, 240));
   check('and what was decided is still in the record above it',
-    stream().indexOf('Hold for the balance') > -1
+    stream().indexOf('Wait for the balance') > -1
     && run("ccjRun.decisions['deposit-due/Part-paid'].id") === 'holdBalance');
   // What the wait reports while it holds — read from ccjPay(), the same store the ledger reads.
   check('the wait says what came in, what has not, and what that costs',
@@ -2513,7 +2518,7 @@ section('IT GOES TO THE EMPLOYEE, IN THE EMPLOYEE\'S OWN THREAD');
     until(() => run("ccjRun.phase==='halt'")
       && run('ccjSteps(6)[ccjRun.sub].label') === 'ADT countersigned'), run('ccjRun.phase'));
   check('with an approve and a decline',
-    panel().indexOf('Approve and countersign') > -1 && panel().indexOf('>Decline<') > -1);
+    panel().indexOf('Sign and make it live') > -1 && panel().indexOf('Decline to sign') > -1);
   advance(60000);
   check('and it will not countersign itself', run('ccjEmp().adtSignedAt') === 0);
   run("ccjChooseGate('ecDecline','Right-to-work evidence has expired.')");
@@ -2645,9 +2650,9 @@ section('A VERIFICATION THAT CANNOT CLEAR ITSELF GOES TO A PERSON');
     'done=' + run('ccjOnb().kyc.done') + ' reviewed=' + run("'"+"'+ccjOnb().kyc.reviewed")
       + ' state=' + run("ccjOnbState('Worker KYC')"));
   check('the panel asks a person, and says why',
-    panel().indexOf('came back CONSIDER') > -1 && panel().indexOf('may not decide this on its own') > -1);
+    panel().indexOf('could not clear this on its own') > -1 && panel().indexOf('may not decide this on its own') > -1);
   check('with a confirm and a reject',
-    panel().indexOf('Confirm identity') > -1 && panel().indexOf('>Reject<') > -1);
+    panel().indexOf('Confirm identity') > -1 && panel().indexOf('Reject verification') > -1);
   advance(60000);
   check('and it will not decide for itself', run("ccjRun.phase==='halt'"));
   run("ccjChooseGate('kycReject','Document is illegible.')");
@@ -2757,7 +2762,7 @@ section('THE BANK, THE PAYSLIP, AND WHAT THE STAGE IS FOR');
   check('the file states that onboarding is complete',
     screen().indexOf('Onboarding complete') > -1);
   check('and the way on is asked for in the conversation',
-    stream().indexOf('Continue to active') > -1 && screen().indexOf('<button') === -1,
+    stream().indexOf('Continue to the first payroll') > -1 && screen().indexOf('<button') === -1,
     screen().slice(screen().indexOf('ccj-onb-next'), screen().indexOf('ccj-onb-next') + 200));
   run("ccjAnswerAsk((function(){var m=ccjRun.msgs.filter(function(x){return x.kind==='ask'&&!x.done;}).pop();return m?m._id:0;})())");
   check('continuing reaches stage 9', until(() => run('ccjRun.stage') === 8), 'stage ' + run('ccjRun.stage'));
@@ -3427,6 +3432,590 @@ section('EVERY DECISION IS PUT TO SOMEBODY WHO CAN ACTUALLY MAKE IT');
     + "});return n;})()");
   check('and it looked at every gate the journey authors', seen >= 8, seen + ' gates resolved');
 })();
+
+/* == THE ROW AND THE RUN ARE ONE PIECE OF WORK ============================================
+   Everything below is about the crossing between the Account Manager's board and the journey.
+   Both directions, because both were broken in the same way — each surface knew a position the
+   other did not, and the reader met the contradiction at the exact moment they clicked across.
+
+   Deliberately LAST in the file: these mutate amDeals, ccjRuns and ccjActiveDealId, which every
+   earlier section reads as fixture data. == */
+section('WHERE IN THE JOURNEY, NOT JUST WHERE IN THE STAGE');
+check('a brand new request no longer reads as a finished one',
+  run("amSubCellHTML({stage:'request-received',sub:2})").indexOf('Stage 1 of 9 &middot; step 3 of 3') > -1,
+  run("amSubCellHTML({stage:'request-received',sub:2})"));
+check('a stage in the middle counts from the journey too',
+  run("amSubCellHTML({stage:'quote-prep',sub:4})").indexOf('Stage 2 of 9 &middot; step 5 of 6') > -1,
+  run("amSubCellHTML({stage:'quote-prep',sub:4})"));
+// The one row where "of 9" carries the whole meaning: nine of nine is done, three of three is not.
+check('a finished placement says nine of nine',
+  run("amSubCellHTML({stage:'active',sub:2})").indexOf('Stage 9 of 9') > -1,
+  run("amSubCellHTML({stage:'active',sub:2})"));
+check('the stage numbers come from the rail, not from a second count of the same thing',
+  run("amPipelineStages.every(function(s,i){return amJourneyPos({stage:s.id,sub:0}).stageNo===i+1;})") === true);
+check('the listing no longer calls the rail above it a row of steps',
+  run('buildAmDealsListingHTML()').indexOf('Pick a stage above') > -1);
+
+section('OPENING A RUN LANDS ON THE STEP THE ROW NAMES');
+run('Object.keys(ccjRuns).forEach(function(k){delete ccjRuns[k];});ccjActiveDealId=null;');
+run("portalRole='entity-user';activePersonaId='account-manager';");
+// The board's own invariant: a record rests on a human step, so every stage-1 deal has already
+// cleared its two automated ones. That is precisely the case the composer used to swallow.
+check('the fixture is where this test needs it to be',
+  run("(function(){var d=amDeals.find(function(x){return x.id===1;});return d.stage+'/'+d.sub;})()") === 'request-received/2');
+run('ccjOpenDealRun(1)');
+check('a New request deal opens inside the journey rather than on the model chooser',
+  run('page') !== 'ccj-model', run('page'));
+check('and on the exact step its row names',
+  run("ccjStage(ccjRun.stage).id") === 'request-received'
+  && run("ccjSteps(ccjRun.stage)[ccjRun.sub].label") === 'Qualified / Rejected',
+  run("ccjStage(ccjRun.stage).id+' sub '+ccjRun.sub"));
+check('it halts on that decision instead of replaying the intake', run('ccjRun.phase') === 'halt', run('ccjRun.phase'));
+check('the two automated steps behind it are settled, not skipped over silently',
+  run('Object.keys(ccjRun.settled).length') === 2, run('JSON.stringify(Object.keys(ccjRun.settled))'));
+// Landing on `prompt` was the bug in its plainest form: an empty "describe the hire" box in front
+// of a reader whose hire had already been described, priced and turned into a proposal.
+check('the screen is the proposal it already produced, not the empty composer',
+  run('ccjRun.screen') === 'proposal', run('ccjRun.screen'));
+check('and that proposal is a real record rather than a grid of dashes',
+  run('!!(ccjRun.proposal && ccjRun.proposal.id && ccjRun.proposal.country)') === true,
+  run('JSON.stringify(ccjRun.proposal)'));
+check('the request that started it opens the conversation',
+  stream().indexOf('Vantage Freight') > -1, stream().slice(0, 200));
+// A reader dropped into the middle of a conversation they never had cannot tell rebuilt history
+// from a run they walked and forgot, so the run says which it is before the history starts.
+check('and the run says what it picked up and where it stands',
+  stream().indexOf('Picking up') > -1 && stream().indexOf('Stage 1 of 9') > -1
+  && stream().indexOf('Qualified / Rejected</b>') > -1,
+  stream().slice(0, 600));
+
+run('ccjOpenDealRun(11)');
+check('a mid-journey deal opens on its own stage', run("ccjStage(ccjRun.stage).id") === 'deposit-due',
+  run("ccjStage(ccjRun.stage).id"));
+check('and on its own step inside it', run("ccjSteps(ccjRun.stage)[ccjRun.sub].label") === 'Awaiting funds',
+  run("ccjSteps(ccjRun.stage)[ccjRun.sub].label"));
+check('every stage before it is settled in full',
+  run("(function(){var n=0;for(var i=0;i<5;i++){ccjSteps(i).forEach(function(s){if(ccjRun.settled[ccjKey(i,s)])n++;});}return n;})()")
+  === run("(function(){var n=0;for(var i=0;i<5;i++)n+=ccjSteps(i).length;return n;})()"));
+check('a record that has not moved off its first step has nothing to rebuild',
+  run("ccjDealPos({stage:'request-received',sub:0})") === null);
+check('and one that has, resolves to the position the row shows',
+  run("JSON.stringify(ccjDealPos({stage:'quote-prep',sub:4}))") === '{"stage":1,"sub":4}',
+  run("JSON.stringify(ccjDealPos({stage:'quote-prep',sub:4}))"));
+check('the button promises to OPEN a run for a deal already mid-journey, not start one',
+  run("ccjOpenRunBtnHTML(amDeals.find(function(x){return x.id===11;}),true)").indexOf('>Open run<') > -1,
+  run("ccjOpenRunBtnHTML(amDeals.find(function(x){return x.id===11;}),true)"));
+check('and its tooltip names the step it will land on',
+  run("ccjOpenRunBtnHTML(amDeals.find(function(x){return x.id===11;}),true)").indexOf('Awaiting funds') > -1);
+
+section('A RUN THE BOARD MOVED ON WITHOUT');
+// Mark done in the listing, and the simulated handoffs in the drawer, advance a record whether
+// its run is open or not. Reopening three steps behind the row that was just clicked is the
+// contradiction this catches.
+run("(function(){var d=amDeals.find(function(x){return x.id===11;});d.sub=3;})()");
+run('ccjOpenDealRun(11)');
+check('reopening catches the run up to its row',
+  run("ccjSteps(ccjRun.stage)[ccjRun.sub].label") === 'Cleared',
+  run("ccjSteps(ccjRun.stage)[ccjRun.sub].label"));
+check('the steps it was moved past are settled, not left as holes in the history',
+  run("!!ccjRun.settled[ccjKey(ccjRun.stage,ccjSteps(ccjRun.stage)[2])]") === true);
+check('and it says so rather than growing settled blocks while nobody was looking',
+  stream().indexOf('moved on the board while the run was closed') > -1
+  && stream().indexOf('Cleared</b>') > -1, stream().slice(-500));
+check('and the step it was parked on is in the conversation once, not twice',
+  count(stream(), 'id="' + run("ccjStepBlockId(5,1,1)") + '"') === 1,
+  count(stream(), 'id="' + run("ccjStepBlockId(5,1,1)") + '"'));
+// The client thread is a record of events, and an event that happened once must not grow a
+// second copy every time the run is reopened — see ccjSeedStageOutcome.
+const acceptedOnce = run("ccjRun.client.msgs.filter(function(m){return m.text==='Quote accepted.';}).length");
+run('ccjOpenDealRun(1)');
+run('ccjOpenDealRun(11)');
+check('a second catch-up does not replay the client thread',
+  run("ccjRun.client.msgs.filter(function(m){return m.text==='Quote accepted.';}).length") === acceptedOnce,
+  'was ' + acceptedOnce + ', now ' + run("ccjRun.client.msgs.filter(function(m){return m.text==='Quote accepted.';}).length"));
+
+section('THE ROW FOLLOWS THE RUN');
+run('ccjOpenDealRun(1)');
+check('the run is back on stage 1’s decision', run('ccjRun.phase') === 'halt', run('ccjRun.phase'));
+answerGate();                                   // qualify it, exactly as the account manager would
+// Until it has ARRIVED, not until it has left. A stage change parks on sub -1 for the beat it
+// takes the rail to land, and a record's position is a step it is on rather than one it is
+// between — which is exactly why the sync hangs off ccjEnterStep and not off ccjStageComplete.
+until(() => run('ccjRun.stage') === 1 && run('ccjRun.sub') >= 0);
+check('answering it moved the run on', run('ccjRun.stage') === 1, 'stage ' + run('ccjRun.stage'));
+check('and the board row moved with it',
+  run("(amDeals.find(function(x){return x.id===1;})).stage") === 'quote-prep',
+  run("(amDeals.find(function(x){return x.id===1;})).stage"));
+check('the row is not still reporting days of age on a step it just reached',
+  run("(amDeals.find(function(x){return x.id===1;})).age") === 0);
+check('a run with no deal behind it syncs nothing',
+  run("(function(){ccjStartNewRun();ccjSyncDealFromRun(ccjRun);return amDeals.length;})()") === 19);
+
+section('BACK GOES WHERE YOU CAME FROM');
+// The arrow used to send every run to Contracts. From the board that is a redirect, not a back:
+// it leaves a reader on a listing they were never on, further from their row than they started.
+run("page='dashboard';dashboardTab='sales';amPipelineStage='';amPage=1;amSelectedDealId=null;");
+run('Object.keys(ccjRuns).forEach(function(k){delete ccjRuns[k];});ccjActiveDealId=null;');
+run('ccjOpenDealRun(13)');                                    // a row on the Account Manager's board
+check('the run records the surface it was opened from',
+  run('ccjRun.exit.page') === 'dashboard' && run('ccjRun.exit.dealId') === 13,
+  run('JSON.stringify(ccjRun.exit)'));
+check('and the arrow says so before it is pressed', run('ccjExitLabel()') === 'Back to your dashboard',
+  run('ccjExitLabel()'));
+// Filtered to a stage the run has since moved the record out of, and paged away from it — both
+// would drop the row, and the drawer with it, on the way back.
+run("amPipelineStage='request-received';amPage=3;");
+run('ccjExit()');
+check('back lands on the dashboard, not the contracts listing', run('page') === 'dashboard', run('page'));
+check('on the tab it was opened from', run('dashboardTab') === 'sales', run('dashboardTab'));
+check('with a stale stage filter cleared so the row is actually there',
+  run('amPipelineStage') === '', run('amPipelineStage'));
+check('on the page that holds it', run('amPage') === 2, 'page ' + run('amPage'));
+check('and the drawer open on the record just left',
+  run('amSelectedDealId') === 13, run('amSelectedDealId'));
+check('the row survives the round trip into the rendered table',
+  run('buildAmDealsListingHTML()').indexOf('id="am-row-13"') > -1);
+
+// Not a blanket redirect the other way either: the create action lives on Contracts, and a run
+// started there still goes back there.
+run("page='contracts';");
+run('ccjStartNewRun()');
+check('a run started from Contracts still says Contracts', run('ccjExitLabel()') === 'Back to Contracts',
+  run('ccjExitLabel()'));
+run('ccjExit()');
+check('and goes there', run('page') === 'contracts', run('page'));
+// The New request button sits on the board, so its run belongs to the board too.
+run("page='dashboard';dashboardTab='sales';");
+run('ccjStartNewRun()');
+check('a run started from the board’s own New request button comes back to the board',
+  run('ccjExitTarget().page') === 'dashboard', run('JSON.stringify(ccjExitTarget())'));
+check('and it has no row to reopen, so it asks for none', run('ccjExitTarget().dealId') === null);
+
+/* == THE CATALOGUE: SYSTEMS, OBJECTS, JOURNEYS, AGENTS ====================================
+   Four registers that describe the estate to itself, and every one of them fails silently when
+   it drifts: a system whose endpoint still names a host nobody uses, an object the layer owns
+   with no entry, a journey filed under the wrong process, an agent doing real work that the
+   governance page cannot see. None of it throws. == */
+section('THE CATALOGUE');
+run("portalRole='super-admin';");
+check('no endpoint still points at the old host',
+  run("JSON.stringify(cfgSystems.map(function(s){return s.endpoint;}))").indexOf('vyoma') === -1,
+  run("JSON.stringify(cfgSystems.map(function(s){return s.endpoint;}))"));
+check('the platform system is ADT SaaS, by name and by type',
+  run("(function(){var s=cfgSystems.find(function(x){return x.id==='nfadmin';});return s.name+'|'+s.type;})()") === 'ADT SaaS|ADT SaaS');
+// The id stays 'nfadmin' on purpose: four evidence descriptors resolve a system by it, and
+// runner-harness asserts every systemId matches a real record. A rename is not a re-key.
+check('and its id is unchanged, so every evidence descriptor still resolves',
+  run("!!cfgSystems.find(function(x){return x.id==='nfadmin';})") === true
+  && run("JSON.stringify(Object.keys(aicjEvidence).filter(function(k){var d=aicjEvidence[k];return d.systemId&&!cfgSystems.find(function(s){return s.id===d.systemId;});}))") === '[]');
+check('nothing still shows the old system name to a reader',
+  run("JSON.stringify(Object.keys(aicjEvidence).map(function(k){return aicjEvidence[k].system||'';}))").indexOf('NFAdmin') === -1);
+// Three endpoints was not a description of the product every module in the nav belongs to.
+check('it describes what it actually holds rather than three endpoints',
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") >= 12,
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") + ' apis listed');
+// We are both ends of this one, so it carries no integration contract to review.
+check('and it is marked internal, so no endpoint or credentials are put on show',
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).internal") === true);
+const adtPage = run("(function(){selectedCfgSystemId='nfadmin';var h=buildCfgSystemDetailHTML();selectedCfgSystemId='sap';return h;})()");
+// Asserted structurally — the panel, the badge, and what must NOT be on the page. Pinning the
+// sentence itself made this fail on a copy edit that changed nothing it cares about.
+check('its page says internal system and drops the connection block',
+  adtPage.indexOf('Internal system') > -1
+  && adtPage.indexOf('cfg-sys-internal') > -1
+  && adtPage.indexOf('saas.adt.local') === -1
+  && adtPage.indexOf('OAuth') === -1
+  && adtPage.indexOf('Test connection') === -1);
+/* The panel is the whole route, so it has to say something rather than render empty. Both lines
+   are checked for content and nothing is checked for length: the headline is deliberately short
+   ("<name> is an internal system.") and a floor tuned to the previous, longer wording was the
+   test dictating copy rather than guarding it. */
+check('and the panel carries a real statement, not a bare heading',
+  /cfg-sys-internal-lead">[^<]{10,}</.test(adtPage)
+  && /cfg-sys-internal-sub">[^<]{10,}/.test(adtPage));
+// It says internal in words, not only in a badge a reader has to interpret.
+check('and says so in a sentence, not just in the badge',
+  /cfg-sys-internal-lead">[^<]*internal system/.test(adtPage));
+// One sentence and nothing else. Every other block on that page answers a question about an
+// integration, and none of those questions mean anything when we own both ends.
+check('and shows no API inventory at all — the page is the integration contract, and there is none',
+  adtPage.indexOf('Available APIs') === -1
+  && adtPage.indexOf('What this platform holds') === -1
+  && adtPage.indexOf('ContractRegistry') === -1
+  && adtPage.indexOf('EmployeeMaster') === -1);
+// The list stays on the RECORD — it is the inventory, not a contract — so nothing was deleted
+// to achieve the above and flipping `internal` brings it straight back.
+check('though the record keeps its inventory, so the flag is the only switch',
+  run("cfgSystems.find(function(x){return x.id==='nfadmin';}).apiList.length") >= 12);
+// An external system still reads as an integration contract.
+check('an external system is untouched by that branch',
+  run("(function(){selectedCfgSystemId='bhaiyaa';var h=buildCfgSystemDetailHTML();selectedCfgSystemId='sap';return h;})()")
+    .indexOf('Available APIs') > -1);
+
+/* A system page listing capabilities nobody wired up is a brochure, and it makes the ones that
+   are real impossible to pick out. Every Bhaiyaa row must correspond to something the connector
+   or a screen actually calls. */
+check('Bhaiyaa lists only the calls this build actually makes',
+  run("JSON.stringify(cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList.map(function(a){return a.name.split(' · ')[0];}))")
+    === '["StoreIntake","OwnerKyc","StoreRegistry"]',
+  run("JSON.stringify(cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList.map(function(a){return a.name.split(' · ')[0];}))"));
+check('the field-workforce and payout integrations nothing calls are gone',
+  ['WorkforceRoster', 'AttendanceFeed', 'PayoutBatch'].every((n) =>
+    run("JSON.stringify(cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList)").indexOf(n) === -1));
+// We never hold the full number — the store object has no column for one, so the row is a read.
+check('and the Aadhaar check is read-only, matching the object that has no column for it',
+  run("cfgSystems.find(function(x){return x.id==='bhaiyaa';}).apiList.find(function(a){return a.name.indexOf('OwnerKyc')===0;}).dir") === 'r');
+
+check('Data Foundation carries the Store object',
+  run("!!cfgModels.find(function(m){return m.id==='store';})") === true);
+// The stores table is the source of truth; a field named here that has no column is fiction.
+check('and every mapped field names a real stores column',
+  run(`(function(){var cols=['source_record_id','store_name','role','category','store_type',
+        'first_name','last_name','email','mobile','mobile_verified','aadhaar_masked','kyc_status',
+        'kyc_verified_by','kyc_verified_at','raw_signup','mirror_state','store_code','plan',
+        'gst_position','credit_line','payment_terms'];
+      var m=cfgModels.find(function(x){return x.id==='store';});
+      var bad=m.mapped.filter(function(r){return cols.indexOf(r[1])===-1;}).map(function(r){return r[1];});
+      return JSON.stringify(bad);})()`) === '[]',
+  run(`(function(){var m=cfgModels.find(function(x){return x.id==='store';});
+       return JSON.stringify(m.mapped.map(function(r){return r[1];}));})()`));
+check('it carries both ids, ours and Bhaiyaa’s',
+  run("cfgModels.find(function(m){return m.id==='store';}).identity.length") === 2
+  && run("JSON.stringify(cfgModels.find(function(m){return m.id==='store';}).identity.map(function(i){return i.mintedBy;}))")
+     === '["Executive Layer","Bhaiyaa"]');
+// The schema is explicit that no column holds the real number. An object description that
+// listed one would be describing a field the database refuses to accept.
+check('and never claims to hold a full Aadhaar number',
+  run(`(function(){var m=cfgModels.find(function(x){return x.id==='store';});
+       return m.mapped.some(function(r){return r[1]==='aadhaar_masked';})
+         && !m.mapped.some(function(r){return r[1]==='aadhaar_number'||r[0]==='Aadhaar';});})()`) === true);
+check('the identity note names the object it sits under, not always “client”',
+  run("(function(){selectedCfgModelId='store';var h=buildCfgModelDetailHTML();selectedCfgModelId='user';return h;})()")
+    .indexOf('each name this store in their own store') > -1);
+
+// It hires a named person and puts them on payroll — the first half of Hire to Retire's own
+// sentence. Order to Cash is opening an account, which is what the other two O2C journeys do.
+check('Contract Creation is filed under Hire to Retire, in both journey registers',
+  run("aiJourneys.find(function(j){return j.id==='contract-creation';}).category") === 'H2R'
+  && run("cfgJourneys.find(function(j){return j.id==='contract-creation';}).category") === 'H2R');
+check('and its category is one the catalogue actually declares',
+  run(`(function(){var bad=aiJourneys.filter(function(j){
+        return !cfgJourneyCategories.some(function(c){return c.id===j.category;});});
+      return JSON.stringify(bad.map(function(j){return j.name+':'+j.category;}));})()`) === '[]');
+check('the two H2R journeys stay distinct records',
+  run("aiJourneys.filter(function(j){return j.category==='H2R';}).length") === 3
+  && run("new Set(aiJourneys.map(function(j){return j.name;})).size") === run('aiJourneys.length'));
+
+/* An agent performing steps that the governance page cannot see is the opposite failure to a
+   dead agent nobody wired up, and the more dangerous of the two. */
+check('every agent a journey step names exists in the catalogue',
+  run(`(function(){var names={};cfgAgents.forEach(function(a){names[a.name]=1;});
+      var missing={};Object.keys(aiJourneyEvents).forEach(function(jid){
+        (aiJourneyEvents[jid]||[]).forEach(function(e){
+          if(e.source&&/agent|ai /i.test(e.source)&&!names[e.source])missing[e.source]=1;});});
+      return JSON.stringify(Object.keys(missing));})()`) === '[]',
+  'uncatalogued: ' + run(`(function(){var names={};cfgAgents.forEach(function(a){names[a.name]=1;});
+      var missing={};Object.keys(aiJourneyEvents).forEach(function(jid){
+        (aiJourneyEvents[jid]||[]).forEach(function(e){
+          if(e.source&&/agent|ai /i.test(e.source)&&!names[e.source])missing[e.source]=1;});});
+      return JSON.stringify(Object.keys(missing));})()`));
+check('the store journey’s two agents are among them',
+  run("!!cfgAgents.find(function(a){return a.name==='KYC Agent';})") === true
+  && run("!!cfgAgents.find(function(a){return a.name==='Store Agent';})") === true);
+// The KYC gate halts on a failed match rather than deciding — the journey is explicit that a
+// mismatch stops the run before a store exists, so "Fully automated" would misreport it.
+check('and the KYC gate is not described as unattended',
+  run("cfgAgents.find(function(a){return a.name==='KYC Agent';}).guardrail") !== 'Fully automated',
+  run("cfgAgents.find(function(a){return a.name==='KYC Agent';}).guardrail"));
+check('every agent gets its own icon rather than the fallback sparkle',
+  run("cfgAgents.every(function(a){return !!agentIconPaths[a.name];})") === true,
+  run("JSON.stringify(cfgAgents.filter(function(a){return !agentIconPaths[a.name];}).map(function(a){return a.name;}))"));
+// usedIn is prose and disagrees with the wiring; the count on the tile must come from the steps.
+check('the journey count on a tile is derived from the wiring, not from the usedIn sentence',
+  run("agentJourneyCount(cfgAgents.find(function(a){return a.name==='AI Prompt Parser';}))") === 3
+  && run("agentJourneyIds(cfgAgents.find(function(a){return a.name==='Store Agent';})).join(',')") === 'bhaiyaa-store-creation');
+
+/* A roadmap journey used to render at exactly the weight of a live one, leaving an
+   eleven-pixel grey pill to carry the whole distinction. */
+const cjHtml = run("(function(){portalRole='super-admin';cfgJourneyCategoryFilter='';return buildCfgContextJourneyHTML();})()");
+const cjRows = cjHtml.split('cfg-journey-card').slice(1);
+check('every unconfigured journey is greyed, and only those',
+  run(`(function(){portalRole='super-admin';cfgJourneyCategoryFilter='';
+      var h=buildCfgContextJourneyHTML();
+      return cfgJourneys.every(function(j){
+        var at=h.indexOf('>'+j.name+'<');
+        if(at<0)return false;
+        var card=h.lastIndexOf('ai-journey-card',at);
+        var cls=h.slice(card,at);
+        return !!j.locked===(cls.indexOf('cfg-journey-card-unconfigured')>-1);});})()`) === true);
+check('the number greyed matches the number the badge calls Not Configured',
+  (cjHtml.match(/cfg-journey-card-unconfigured/g) || []).length
+    === (cjHtml.match(/Not Configured/g) || []).length,
+  (cjHtml.match(/cfg-journey-card-unconfigured/g) || []).length + ' greyed vs '
+    + (cjHtml.match(/Not Configured/g) || []).length + ' badged');
+// Muted, not disabled: Super Admin configures the journey FROM this row, so it keeps its click.
+// Fading a live control is how a page teaches people not to press it.
+check('and a greyed row is still the control that configures it',
+  cjRows.filter((r) => r.indexOf('cfg-journey-card-unconfigured') > -1)
+    .every((r) => r.indexOf('openLockedJourneyModal') > -1));
+// For anyone below Super Admin these rows genuinely do nothing, which is a different class with
+// a blanket opacity — the two states must not both be applied to one card.
+check('the non-clickable locked state is a separate treatment, never both at once',
+  run(`(function(){portalRole='entity-admin';var h=buildCfgContextJourneyHTML();portalRole='super-admin';
+      return h.indexOf('ai-journey-card-locked')>-1
+        && h.indexOf('cfg-journey-card-unconfigured')===-1;})()`) === true);
+
+const agHtml = run("(function(){cfgAgentJourneyFilter='';return buildCfgAgentsHTML();})()");
+// Read the GROUP HEADINGS, not the raw string — every journey name also appears above as a
+// filter chip, so a plain indexOf finds the bar and reports the groups in the wrong order.
+const agGroups = (agHtml.match(/cfg-aggrp-head"><span>([^<]+)</g) || []).map((s) => s.slice(22, -1));
+// 'Hire and Onboard', not 'Contract Creation'. The journey was renamed when it grew its ninth
+// stage — the work is Hire to Retire, not Order to Cash — and this assertion was written against
+// the old name on a branch that never saw the rename. What it is actually guarding is the ORDER:
+// shared agents first, then the journey that is actually built. That still holds.
+check('the catalogue groups by journey with the built one leading',
+  agGroups[0] === 'Shared across journeys' && agGroups[1] === 'Hire and Onboard'
+  && agGroups.indexOf('Payroll Creation') > 1, agGroups.join(' | '));
+check('no agent is listed twice',
+  run(`(function(){cfgAgentJourneyFilter='';var h=buildCfgAgentsHTML();
+      return cfgAgents.every(function(a){
+        return h.split('>'+a.name+'<').length===2;});})()`) === true);
+check('filtering to a journey shows its agents, shared ones included',
+  run(`(function(){cfgAgentJourneyFilter='contract-creation';var h=buildCfgAgentsHTML();
+      cfgAgentJourneyFilter='';
+      return h.indexOf('AI Prompt Parser')>-1&&h.indexOf('AI Contract Assistant')>-1
+        &&h.indexOf('AI Payroll Engine')===-1;})()`) === true);
+check('a journey no agent runs says so rather than rendering an empty grid',
+  run(`(function(){cfgAgentJourneyFilter='user-master-data';var h=buildCfgAgentsHTML();
+      cfgAgentJourneyFilter='';return h.indexOf('performed by a person')>-1;})()`) === true);
+
+/* == THE ANALYTICS CHARTS =================================================================
+   Two charts drawn as positioned HTML, which means their geometry is arithmetic and arithmetic
+   can be wrong silently: a bar whose segments sum to 103%, a dot plotted past the end of its
+   own track, an axis whose maximum is under the largest value it has to hold. None of that
+   throws, and all of it renders as a chart that looks fine and reports the wrong number.
+
+   So the assertions here read the emitted percentages back out of the markup and check them
+   against the data they were derived from. == */
+section('THE ANALYTICS CHARTS');
+run("portalRole='super-admin';");
+const cvHtml = run('saCoverageChartHTML()');
+const hrHtml = run('saHoursChartHTML()');
+const anHtml = run('buildAgentModelAnalyticsHTML()');
+
+check('the module and the page both say Analytics, not the old catalogue name',
+  run("(sidebarItems.find(function(g){return g.group;}).items.find(function(i){return i.id==='ai-analytics';})||{}).label") === 'Analytics'
+  && run("getPageMeta('ai-analytics').title") === 'Analytics'
+  && anHtml.indexOf('Agent &amp; Model Analytics') === -1);
+
+// Every segment of a stacked bar is a share of its own row, so each row must sum to 100.
+const cvRows = cvHtml.split('sa-cv-row').slice(1);
+check('the coverage chart draws one row per journey',
+  cvRows.length === run('aiJourneys.length'), cvRows.length + ' rows');
+const segSums = cvRows.map((r) => {
+  const seg = r.split('sa-cv-seg').slice(1);
+  return Math.round(seg.reduce((n, s) => n + parseFloat((/width:([\d.]+)%/.exec(s) || [0, 0])[1]), 0));
+});
+check('every stacked row sums to exactly 100% of itself',
+  segSums.every((n) => n === 100), segSums.join(', '));
+// One scale across the rows is the whole reason a 3-step journey must not draw as wide as a
+// 9-step one — normalising each row would make "0% of 3" and "0% of 30" look identical.
+const barWidths = cvRows.map((r) => parseFloat((/sa-cv-bar" style="width:([\d.]+)%/.exec(r) || [0, 0])[1]));
+check('and the bars share one scale, so width still reports volume',
+  Math.max(...barWidths) === 100 && barWidths.every((w) => w > 0 && w <= 100),
+  barWidths.map((w) => Math.round(w)).join(', '));
+check('the widest bar belongs to the journey with the most steps',
+  run(`(function(){var m=0,id='';aiJourneys.forEach(function(j){var t=saStepSplit(j.id).total;if(t>m){m=t;id=j.name;}});return id;})()`)
+    .replace(/\s*Journey$/, '').indexOf(
+      cvRows[barWidths.indexOf(100)].split('sa-cv-name">')[1].split('<')[0]) > -1);
+// The label a reader actually reads, checked against the data rather than against itself.
+const cvPcts = cvRows.map((r) => parseInt((/<b>(\d+)%<\/b>/.exec(r) || [0, -1])[1], 10));
+check('each row is direct-labelled with its own coverage, computed from the step split',
+  cvPcts.every((p) => p >= 0 && p <= 100)
+  && cvPcts.join(',') === run(`JSON.stringify(aiJourneys.map(function(j){var s=saStepSplit(j.id);
+       return s.total?Math.round(s.ai/s.total*100):0;}).sort(function(a,b){return b-a;}))`)
+    .replace(/[\[\]]/g, ''), cvPcts.join(',') );
+check('rows are ordered worst-covered last, so the manual journey is the one you land on',
+  cvPcts.slice(1).every((p, i) => p <= cvPcts[i]), cvPcts.join(' > '));
+check('the three bands are the validated ramp, in order',
+  SA_ORDER(cvHtml), 'ramp out of order or recoloured');
+function SA_ORDER(html) {
+  const ramp = JSON.parse(run('JSON.stringify(SA_RAMP)'));
+  const used = (html.match(/background:(#[0-9a-f]{6})/g) || []).map((s) => s.slice(11));
+  return used.every((c) => ramp.indexOf(c) > -1);
+}
+
+// A dot outside 0..100% is a value plotted off its own track — invisible in a screenshot,
+// obvious here.
+const hrDots = (hrHtml.match(/sa-hr-dot (?:agent|human)" style="left:([\d.]+)%/g) || [])
+  .map((s) => parseFloat(/([\d.]+)%/.exec(s)[1]));
+check('every dumbbell dot lands inside its track',
+  hrDots.length > 0 && hrDots.every((p) => p >= 0 && p <= 100), hrDots.join(', '));
+check('and the axis maximum is never under a value it has to hold',
+  run(`(function(){var mx=0;saManualRuns().forEach(function(r){mx=Math.max(mx,r.manualHours||0);});
+       return Math.ceil(mx)>=mx;})()`) === true);
+const hrRows = hrHtml.split('sa-hr-row').slice(1).filter((r) => r.indexOf('sa-hr-dot') > -1);
+check('the agent estimate never draws to the right of the hours actually spent',
+  hrRows.every((r) => {
+    const a = parseFloat(/sa-hr-dot agent" style="left:([\d.]+)%/.exec(r)[1]);
+    const h = parseFloat(/sa-hr-dot human" style="left:([\d.]+)%/.exec(r)[1]);
+    return a <= h;
+  }));
+check('the connector spans exactly the gap between the two dots',
+  hrRows.every((r) => {
+    const link = /sa-hr-link" style="left:([\d.]+)%;width:([\d.]+)%/.exec(r);
+    const a = parseFloat(/sa-hr-dot agent" style="left:([\d.]+)%/.exec(r)[1]);
+    const h = parseFloat(/sa-hr-dot human" style="left:([\d.]+)%/.exec(r)[1]);
+    return Math.abs(parseFloat(link[1]) - a) < 0.01 && Math.abs(parseFloat(link[2]) - (h - a)) < 0.01;
+  }));
+// The axis is a row of the same grid as the plot; reproducing the offset with a calc() put the
+// last tick about thirty pixels off the track it labels.
+check('the axis is a row of the plot’s own grid rather than a guess at its offset',
+  hrHtml.indexOf('sa-hr-axis-row') > -1
+  && run("(function(){return typeof document!=='undefined';})()") === true);
+
+check('both charts carry a legend, because both draw more than one series',
+  (cvHtml.match(/sa-key-dot/g) || []).length === 3
+  && (hrHtml.match(/sa-key-dot/g) || []).length === 2);
+// The hero is the one figure the page leads with. Two would be two headlines.
+check('the page leads with exactly one hero figure',
+  (anHtml.match(/sa-hero-fig/g) || []).length === 1);
+check('and it agrees with the coverage the metrics compute',
+  anHtml.indexOf('>' + run('saMetrics().coverage') + '%</div>') > -1,
+  run('saMetrics().coverage'));
+// Colour is never the only channel: each band is named in text beside its swatch.
+check('every band is named in text, not left to its colour',
+  run('JSON.stringify(SA_BANDS.map(function(b){return b.label;}))')
+    .replace(/[\[\]"]/g, '').split(',').every((l) => cvHtml.indexOf('>' + l + '</span>') > -1
+      || cvHtml.indexOf(l + '</span>') > -1));
+
+/* == THE SIDEBAR IS PER PERSONA ============================================================
+   Entity User is one portal role standing in for nine personas, and all nine used to see the
+   same twenty-four modules. The table that fixes that (personaModules, js/core.js) is only worth
+   having if it cannot rot, and it rots in three ways: a module is added and nobody decides who
+   owns it, a module is renamed and the table keeps pointing at the old id, or a persona is added
+   and gets no entry. All three are silent in a browser — you would have to sign in as each of
+   nine people to notice. All three fail here instead.
+
+   Last in the file: it drives portalRole and activePersonaId through every combination. == */
+section('THE SIDEBAR IS PER PERSONA');
+// Every leaf the sidebar can draw, with the roles it declares — read off the source table rather
+// than off a rendered sidebar, so a module hidden from EVERY role is still seen by these checks.
+const navLeaves = JSON.parse(run(`(function(){var out=[];
+  function walk(l){l.forEach(function(it){
+    if(it.group)return walk(it.items||[]);
+    if(it.dropdown)return walk(it.children||[]);
+    if(it.id)out.push({id:it.id,roles:it.roles||null});});}
+  walk(sidebarItems);return JSON.stringify(out);})()`));
+const navShared = JSON.parse(run('JSON.stringify(PERSONA_SHARED_MODULES)'));
+const navTable = JSON.parse(run('JSON.stringify(personaModules)'));
+const navPersonas = JSON.parse(run('JSON.stringify(enterprisePersonas.map(function(p){return p.id;}))'));
+const navOwned = new Set(navShared.concat(...Object.values(navTable)));
+const navIds = new Set(navLeaves.map((l) => l.id));
+
+// The one that catches a module added six months from now with no decision recorded about it.
+const orphans = navLeaves
+  .filter((l) => !l.roles || l.roles.indexOf('entity-user') > -1)
+  .filter((l) => !navOwned.has(l.id)).map((l) => l.id);
+check('every module an Entity User can see is claimed by the shared spine or by a persona',
+  orphans.length === 0, 'unclaimed: ' + orphans.join(', '));
+// And the reverse, which is what a rename breaks: the table would keep hiding a module that no
+// longer exists under that id, and showing nothing where the new id is.
+const ghosts = [...navOwned].filter((id) => !navIds.has(id));
+check('and every id the table names still exists in the sidebar', ghosts.length === 0,
+  'named but absent: ' + ghosts.join(', '));
+check('every persona has an entry', navPersonas.every((p) => !!navTable[p]),
+  navPersonas.filter((p) => !navTable[p]).join(', '));
+check('and every entry is a real persona',
+  Object.keys(navTable).every((k) => navPersonas.indexOf(k) > -1),
+  Object.keys(navTable).filter((k) => navPersonas.indexOf(k) === -1).join(', '));
+
+// What each persona actually ends up with, resolved through the real filter.
+function navFor(personaId) {
+  run("portalRole='entity-user';activePersonaId='" + personaId + "';");
+  return JSON.parse(run(`(function(){var out=[];
+    function walk(l){l.forEach(function(it){
+      if(it.group)return walk(it.items||[]);
+      if(it.dropdown)return walk(it.children||[]);
+      if(it.id)out.push(it.id);});}
+    walk(getSidebarItems());return JSON.stringify(out);})()`));
+}
+const navByPersona = {};
+navPersonas.forEach((p) => { navByPersona[p] = navFor(p); });
+
+check('nobody is left with an empty sidebar',
+  navPersonas.every((p) => navByPersona[p].length > 5),
+  navPersonas.map((p) => p + '=' + navByPersona[p].length).join(' '));
+// Load-bearing, not a courtesy: dashboardTabsForRole drops the employee self-service tab for the
+// Account Manager and the Ops Manager on the stated grounds that these rows stay in the sidebar.
+check('everyone keeps the spine and their own leave and timesheet',
+  navPersonas.every((p) => navShared.every((m) => navByPersona[p].indexOf(m) > -1)),
+  navPersonas.filter((p) => !navShared.every((m) => navByPersona[p].indexOf(m) > -1)).join(', '));
+check('and everyone can reach the page their role lands on cold',
+  navPersonas.every((p) => navByPersona[p].indexOf(run("defaultPageForRole('entity-user')")) > -1));
+
+// The concrete reads. Each one is a sentence from a persona's own `focus` line, asserted.
+check('the Account Manager creates client records; nobody else does',
+  navPersonas.filter((p) => navByPersona[p].indexOf('create-client') > -1).join(',') === 'account-manager',
+  navPersonas.filter((p) => navByPersona[p].indexOf('create-client') > -1).join(','));
+check('the Ops Manager owns the store journey; nobody else opens a store',
+  navPersonas.filter((p) => navByPersona[p].indexOf('create-store') > -1).join(',') === 'ops-manager',
+  navPersonas.filter((p) => navByPersona[p].indexOf('create-store') > -1).join(','));
+check('only Finance sees Payments',
+  navPersonas.filter((p) => navByPersona[p].indexOf('payments') > -1).join(',') === 'finance-approver',
+  navPersonas.filter((p) => navByPersona[p].indexOf('payments') > -1).join(','));
+check('a Deal Manager approves a price and is not handed payroll',
+  ['payroll', 'payheads', 'salary-view', 'leave-policies', 'employees', 'teams', 'stores']
+    .every((m) => navByPersona['deal-manager'].indexOf(m) === -1),
+  navByPersona['deal-manager'].join(', '));
+check('but does get the rules a price is checked against',
+  navByPersona['deal-manager'].indexOf('rates-rules') > -1);
+check('an IT Systems Admin provisions people, not contracts',
+  navByPersona['it-systems-admin'].indexOf('employees') > -1
+  && ['contracts', 'contract-templates', 'compliance', 'payments', 'payroll']
+    .every((m) => navByPersona['it-systems-admin'].indexOf(m) === -1),
+  navByPersona['it-systems-admin'].join(', '));
+check('HR keeps the whole of Time & Payroll',
+  ['all-leaves', 'leave-policies', 'timesheet', 'payroll', 'payheads', 'salary-view']
+    .every((m) => navByPersona['hr'].indexOf(m) > -1), navByPersona['hr'].join(', '));
+check('and Compliance keeps the whole of the Compliance Hub',
+  ['compliance', 'rates-rules'].every((m) => navByPersona['compliance-officer'].indexOf(m) > -1));
+
+// A dropdown whose every child was filtered out must not render as an empty heading.
+const dropdownsFor = (personaId) => {
+  run("portalRole='entity-user';activePersonaId='" + personaId + "';");
+  return JSON.parse(run(`(function(){var out=[];
+    function walk(l){l.forEach(function(it){
+      if(it.group)return walk(it.items||[]);
+      if(it.dropdown){out.push(it.dropdown);return walk(it.children||[]);}});}
+    walk(getSidebarItems());return JSON.stringify(out);})()`));
+};
+check('a group with nothing left in it disappears rather than rendering as a bare heading',
+  dropdownsFor('deal-manager').indexOf('Workforce') === -1
+  && dropdownsFor('deal-manager').indexOf('Finance') === -1
+  && dropdownsFor('finance-approver').indexOf('Finance') > -1,
+  dropdownsFor('deal-manager').join(', '));
+
+// The two portal roles are not personas and must come through untouched — the gate only narrows
+// inside Entity User, and a filter that leaked upward would quietly strip an admin's nav.
+const adminNav = (role) => {
+  run("portalRole='" + role + "';");
+  return JSON.parse(run(`(function(){var out=[];
+    function walk(l){l.forEach(function(it){
+      if(it.group)return walk(it.items||[]);
+      if(it.dropdown)return walk(it.children||[]);
+      if(it.id)out.push(it.id);});}
+    walk(getSidebarItems());return JSON.stringify(out);})()`));
+};
+check('Super Admin still sees every module its role allows',
+  adminNav('super-admin').indexOf('cfg-agents') > -1 && adminNav('super-admin').indexOf('all-users') > -1
+  && adminNav('super-admin').indexOf('payments') > -1, adminNav('super-admin').length + ' modules');
+check('Entity Admin too', adminNav('entity-admin').indexOf('create-store') > -1
+  && adminNav('entity-admin').indexOf('contract-templates') > -1
+  && adminNav('entity-admin').indexOf('my-tasks') > -1, adminNav('entity-admin').length + ' modules');
+check('and neither of them is narrowed by a persona that happens to be selected',
+  adminNav('super-admin').length > 20 && adminNav('entity-admin').length > 20);
+run("portalRole='entity-user';activePersonaId='account-manager';");
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);
