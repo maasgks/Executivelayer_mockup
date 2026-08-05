@@ -7028,14 +7028,27 @@ const AI_EXEC_CARD_COPY={
   'user-master-data':{name:'Create Client',
     desc:'Capture a new client on the NewForce intake form and register them here as a client record.'},
   'contract-creation':{name:'Hire and Onboard',
-    desc:'Take a hire from quote and approval through signing, deposit and onboarding to payroll ready.'}
+    desc:'Take a hire from quote and approval through signing, deposit and onboarding to payroll ready.'},
+  // -- Same rule as the two above, and the card had been the odd one out: it carried the
+  // catalogue's noun while its own button said "Create Store", so the title and the action on a
+  // single card disagreed about what the reader was there to do. The name matches the sidebar's
+  // Client & Contracts > Create Store, which opens the same flow. --
+  'bhaiyaa-store-creation':{name:'Create Store',
+    desc:'Open a new store — the merchant signup, Aadhaar KYC run by the agent, then registration on Bhaiyaa.'}
 };
 function buildAIExecutiveDashboardHTML(){
   const persona=portalRole==='entity-user'?getActivePersona():null;
   const visibleJourneyIds=portalRole==='entity-user'?activePersonaJourneyIds():null;
   const lockedRoadmapJourneys=cfgJourneys.filter(function(j){return j.locked;});
+  /* -- Mapped over the persona's own list rather than filtered out of aiJourneys, so the ORDER of
+     that list is the order of this role's cards. Filtering kept the catalogue's order, which is
+     the sequence journeys were built in and means nothing to somebody standing in a single role:
+     the Ops Manager's day starts on store openings, and the catalogue put Hire and Onboard first
+     because it was written first. A persona now says both which journeys it works and which one
+     it leads with, in one list, and .filter(Boolean) drops any id with no journey behind it. --
+     Entity Admin and Super Admin are not role-scoped, so they keep the catalogue order. -- */
   const allAIJourneys=portalRole==='entity-user'
-    ?aiJourneys.filter(function(j){return visibleJourneyIds.indexOf(j.id)>=0;})
+    ?visibleJourneyIds.map(function(id){return aiJourneys.find(function(j){return j.id===id;});}).filter(Boolean)
     :aiJourneys.concat(lockedRoadmapJourneys);
   const visibleCategories=cfgJourneyCategories.filter(function(c){
     return allAIJourneys.some(function(j){return j.category===c.id;});
@@ -10089,12 +10102,23 @@ function buildCfgContextJourneyHTML(){
   const catInfo=activeCat?'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px;display:flex;align-items:center;gap:10px">Showing <b style="color:var(--navy)">'+activeCat.name+'</b> journeys only<button class="cfg-cat-clear" onclick="cfgSetJourneyCategoryFilter(\'\')">Clear filter</button></div>':'<div style="font-size:12.5px;color:var(--gray);margin:2px 0 16px">Showing all journeys &mdash; click a category above to filter.</div>';
   const cards=filteredJourneys.length?filteredJourneys.map(function(j){
     const isRoadmap=!!j.locked;
-    const locked=isRoadmap&&portalRole!=='super-admin';
+    const roadmapLocked=isRoadmap&&portalRole!=='super-admin';
     const superAdminUnconfigured=isRoadmap&&portalRole==='super-admin';
+    /* -- What the CARD looks like, which is a wider test than what the BADGE says. It is the same
+       one the AI Executive cards apply (buildAIExecutiveDashboardHTML): a roadmap journey is shut
+       to everyone but Super Admin, and a built journey is shut to an entity that has not had it
+       switched on. Availability was already reported correctly here — the badge has read
+       entityJourneyActivation all along — but the card stayed white, clickable and wearing an
+       Agent Enabled chip, so Payroll Creation and Hire to Retire read "Locked" while looking and
+       behaving exactly like the journeys that are open. Activating one brings it straight back;
+       nothing about the journey itself is removed. -- */
+    const locked=portalRole!=='super-admin'&&(isRoadmap||!entityJourneyActivation[j.id]);
     const clickAttr=locked?'':(superAdminUnconfigured?' style="cursor:pointer" onclick="openLockedJourneyModal(\''+j.id+'\')"':' onclick="viewCfgJourney(\''+j.id+'\')"');
     return '<div class="ai-journey-card cfg-journey-card'+(locked?' ai-journey-card-locked':'')+'" '+clickAttr+'>'
       +'<div class="cfg-journey-main">'
-      +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,locked,superAdminUnconfigured)+(!locked&&portalRole!=='super-admin'?journeyModeBadgeHTML(j.id):'')+'</div></div>'
+      // roadmapLocked, not locked: the badge keeps its own ladder, so a journey with a pending
+      // activation request still reads "Requested" rather than being flattened to "Locked".
+      +'<div class="cfg-journey-title-row"><div class="ai-journey-name">'+j.name+'</div><div class="cfg-journey-statuses">'+cfgCategoryBadge(j.category)+journeyActivationBadgeHTML(j.id,roadmapLocked,superAdminUnconfigured)+(!locked&&portalRole!=='super-admin'?journeyModeBadgeHTML(j.id):'')+'</div></div>'
       // -- One line, ellipsised, with the full text on hover. Journeys are picked by name and
       // category; the description is orientation, not the deciding factor, and at three or four
       // lines apiece it was what pushed the list down to two rows a screen. --
@@ -10935,9 +10959,15 @@ function aiJourneyCTA(j){
   // -- Same entry point as the sidebar's Client > Create Client: the journey's first step *is* the
   // intake form, so the card opens that form rather than a placeholder-subject manual run. --
   if(j.id==='user-master-data')return {label:'Create Client',action:"startContractIntake()"};
-  // -- Same reason again: the store journey's first stage IS the role choice, so the card opens
-  // the journey itself. Without this it fell through to the generic manual-run starter, which
-  // looks up manualJourneySteps['bhaiyaa-store-creation'] — an entry that does not exist. --
+  /* -- Same reason again: the store journey's first stage IS the merchant signup, so the card
+     opens that form rather than a placeholder-subject manual run. Same entry point as the
+     sidebar's Client & Contracts > Create Store.
+
+     This line used to be load-bearing for a second reason — without it the store journey fell
+     through to the generic manual-run starter and read a manualJourneySteps entry that did not
+     exist. That entry exists now, so the fallback would no longer break; it would just start a
+     manual run of a journey whose first stage is a form the merchant fills in. Still wrong, and
+     still the reason this stays above the mode check. -- */
   if(j.id==='bhaiyaa-store-creation')return {label:'Create Store',action:"startStoreIntake()"};
   if(mode==='Manual Mode'||mode==='Hybrid')return {label:(mode==='Hybrid'?'Start Hybrid Run':'Start Manual Run'),action:"startManualJourneyRun('"+j.id+"')"};
   if(aiRunFlows[j.id])return {label:aiRunFlows[j.id].entryLabel,action:"startAIJourneyRun('"+j.id+"')"};

@@ -36,7 +36,19 @@ const enterprisePersonas=[
   {id:'deal-manager',name:'Karan Mehta',label:'Deal Manager',department:'Sales / Deal Desk',function:'Approver',initials:'KM',email:'karan.mehta@adt.com',focus:'Internal proposal approvals and sales escalations.',journeys:['contract-creation'],steps:['J1-S4'],approvals:1,owned:1,kpis:[['Approval Queue','2'],['SLA Breaches','0'],['Rework Loops','1'],['Team Tasks','9']]},
   {id:'compliance-officer',name:'Kavya Iyer',label:'Compliance Officer',department:'Compliance',function:'Executor + Consultant',initials:'KI',email:'kavya.iyer@adt.com',focus:'Country compliance checks, statutory rules, and compliance exceptions.',journeys:['contract-creation','h2r-lifecycle'],steps:['J1-S2','J3-S4'],approvals:0,owned:2,kpis:[['Country Checks','14'],['Missing Configs','1'],['Payroll Blocks','2'],['Resolved Today','6']]},
   {id:'legal-contracts-manager',name:'Devendra Rao',label:'Legal / Contracts Manager',department:'Legal / Contracts',function:'Executor',initials:'DR',email:'devendra.rao@adt.com',focus:'Contract generation, signature tracking, and legal document corrections.',journeys:['contract-creation'],steps:['J1-S6'],approvals:0,owned:1,kpis:[['Contracts Sent','6'],['Signature Pending','4'],['Bounced Requests','1'],['Templates Used','3']]},
-  {id:'ops-manager',name:'Sunita Kulkarni',label:'Ops Manager',department:'Operations',function:'Approver',initials:'SK',email:'sunita.kulkarni@adt.com',focus:'Signed-contract verification and operational readiness approval.',journeys:['contract-creation'],steps:['J1-S7'],approvals:1,owned:1,kpis:[['Contract Reviews','3'],['Discrepancies','1'],['Ready for HR','5'],['SLA Risk','0']]},
+  /* -- Two journeys, not one. The Ops Manager already OWNS store work everywhere else in the
+     build — they lead Store Operations (sidebarForPersona), they are the owner on the KYC
+     verification sub-status, and they are who a created store waits on for its remaining details
+     — but AI Executive is filtered by this list alone for an Entity User, so the one page that is
+     supposed to be where they start work was the one page the store journey was missing from.
+     They could open a store from the sidebar and watch every store on their board, and had no way
+     to begin one from their own cockpit.
+
+     Store first, and the order is the point: this list is what AI Executive lays the role's cards
+     out in (buildAIExecutiveDashboardHTML), and store openings are the work this role leads on —
+     they own the KYC sign-off and the board. On Hire and Onboard they own one approval late in
+     the run. The card they came for goes first. -- */
+  {id:'ops-manager',name:'Sunita Kulkarni',label:'Ops Manager',department:'Operations',function:'Approver',initials:'SK',email:'sunita.kulkarni@adt.com',focus:'Signed-contract verification and operational readiness approval.',journeys:['bhaiyaa-store-creation','contract-creation'],steps:['J1-S7'],approvals:1,owned:1,kpis:[['Contract Reviews','3'],['Discrepancies','1'],['Ready for HR','5'],['SLA Risk','0']]},
   {id:'hr',name:'Priyanka Bhatt',label:'HR',department:'HR',function:'Executor',initials:'PB',email:'priyanka.bhatt@adt.com',focus:'Onboarding, payroll runs, benefits, attendance capture, and employee lifecycle execution.',journeys:['contract-creation','payroll-creation','h2r-lifecycle'],steps:['J1-S8','J1-S9','J2-S1','J2-S2','J2-S3','J2-S5','J2-S7','J2-S8','J3-S1','J3-S2','J3-S3','J3-S5','J3-S6','J3-S7','J3-S9','J3-S10','J3-S11','J3-S12'],approvals:0,owned:18,kpis:[['Onboarding Pending','7'],['Payroll Runs','4'],['Docs to Verify','12'],['Exceptions','3']]},
   {id:'hr-manager',name:'Pallavi Parate',label:'HR Manager',department:'HR',function:'Approver + Escalation Owner',initials:'PP',email:'pallavi.parate@adt.com',focus:'HR approvals, policy deviations, role changes, salary revisions, and HR escalations.',journeys:['h2r-lifecycle','payroll-creation'],steps:['J3-S8','Sub-J A4','Sub-J C4'],approvals:3,owned:3,kpis:[['Approvals','3'],['Escalations','4'],['Deviation Reviews','2'],['SLA Breaches','1']]},
   {id:'it-systems-admin',name:'Rohit Menon',label:'IT / Systems Admin',department:'IT / Systems Admin',function:'Executor',initials:'RM',email:'rohit.menon@adt.com',focus:'Access provisioning, revocation, integrations, and system-account exceptions.',journeys:['h2r-lifecycle'],steps:['J3-S3','J3-S10'],approvals:0,owned:2,kpis:[['Access Requests','9'],['Revocations','2'],['Provisioning SLA','96%'],['Blocked','1']]},
@@ -3111,11 +3123,40 @@ const cfgJourneys=[
   // -- Mirrors the aiJourneys entry above: three steps, all type 'rule' (human-run), no agent
   // sources. buildAIResponsibilitySplitHTML pairs these names with aiJourneyEvents positionally
   // and only when the two lengths match, so these must stay the same length as that array. --
-  {id:'user-master-data',name:'User Master Data Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',status:'Active',tags:['3 steps','Client, NewForce Solutions'],
+  /* NAME. "Client Creation Journey" in the catalogue, because that is what a reader picking a
+     journey off this list is choosing to do — create a client. "User Master Data Creation" named
+     the record it writes rather than the work it does, and said "user" for what everything else
+     on the platform calls a client.
+
+     Scoped to this array on purpose. aiJourneys keeps the formal name, and the AI Executive card
+     has always overridden both with its own launcher copy ("Create Client", AI_EXEC_CARD_COPY) —
+     so nothing the reader sees on that page changes, and nothing downstream is renamed. The id
+     is untouched: it is wired through routing, RBAC, activation state and run records. */
+  {id:'user-master-data',name:'Client Creation Journey',category:'O2C',desc:'Captures a new client on the NewForce intake form, submits it to NewForce, and ingests the registered submission back as a client record.',status:'Active',tags:['3 steps','Client, NewForce Solutions'],
     steps:[
       {name:'Master Data Intake',src:'Account Manager',type:'rule'},
       {name:'Submission & Ingestion',src:'Account Manager',type:'rule'},
       {name:'Client Record Created',src:'Account Manager',type:'rule'}
+    ]},
+  /* -- The store journey the AI Executive has been running all along, finally listed in the
+     catalogue that is supposed to hold every journey. It existed everywhere else — aiJourneys,
+     aiJourneyEvents, the Store Operations board, entityJourneyActivation, a backend endpoint —
+     and was absent from here alone, so Context & Journey was quietly one journey short of the
+     truth. Same id, so the two surfaces are the same journey and not a copy of it.
+
+     Four steps, and they are the four aiJourneyEvents['bhaiyaa-store-creation'] stages verbatim.
+     That is not cosmetic: buildAIResponsibilitySplitHTML pairs the two POSITIONALLY and only when
+     the lengths match, so a fifth step here would silently drop the configured names.
+
+     The name loses "Bhaiyaa". The catalogue names journeys by the work, and Bhaiyaa is the system
+     the work is done in — the way NewForce is for Client Creation above, which does not carry it
+     in its name either. -- */
+  {id:'bhaiyaa-store-creation',name:'Store Creation Journey',category:'O2C',desc:'Opens a store end to end — the merchant signup, Aadhaar KYC run by the agent, then registration on Bhaiyaa and provisioning.',status:'Active',tags:['4 steps','Stores, Bhaiyaa'],
+    steps:[
+      {name:'Store Details',src:'Merchant',type:'rule'},
+      {name:'KYC Verification',src:'KYC Agent',type:'src'},
+      {name:'Store Creation',src:'Store Agent',type:'src'},
+      {name:'Store Created',src:'Store Agent',type:'src'}
     ]},
   /* -- Nine steps, and they are the nine amPipelineStages `short` labels verbatim — the same
      vocabulary the pipeline board, the journey bar and aiJourneyEvents already use. The eight
@@ -3218,6 +3259,18 @@ const manualJourneyStepCatalog={
     {name:'Submission & Ingestion',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Submit the form to NewForce Solutions and wait for the submission to be read back.',sla:'2h',agentCapable:false},
     {name:'Client Record Created',ownerRole:'Account Manager',modulePage:'master-data',manualAction:'Open the new client record in All Clients and confirm it carries both ids.',sla:'2h',agentCapable:false}
   ],
+  /* -- Without an entry here manualJourneySteps returns [], journeyModeLabel finds nothing
+     agent-capable and the card reads "Manual Mode" — on a journey where three of the four stages
+     are run by agents. The mode is always DERIVED from these steps, never stated beside them, so
+     a journey with no catalogue entry does not read as unconfigured, it reads as manual. --
+     Owners are the internal ones. Stage 1 is filled in by the merchant, but the Account Manager
+     is who owns it inside the platform and whose board it lands on. -- */
+  'bhaiyaa-store-creation':[
+    {name:'Store Details',ownerRole:'Account Manager',modulePage:'stores',manualAction:"Capture the merchant's signup — owner and contact, store, business KYC, documents, bank details and address.",sla:'2h',agentCapable:false},
+    {name:'KYC Verification',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Check the Aadhaar against UIDAI, match the name and mobile on record, and screen the merchant.',sla:'4h',agentCapable:true,exceptionType:'KYC mismatch'},
+    {name:'Store Creation',ownerRole:'Account Manager',modulePage:'stores',manualAction:'Derive the plan and GST position from the turnover band, mint the Store ID, register on Bhaiyaa and provision.',sla:'4h',agentCapable:true,exceptionType:'Registration failure'},
+    {name:'Store Created',ownerRole:'Account Manager',modulePage:'stores',manualAction:'Open the new store in All Stores and confirm it carries both ids.',sla:'2h',agentCapable:true}
+  ],
   'contract-creation':[
     {name:'Deal & Employee Record',ownerRole:'Account Manager',modulePage:'contracts',manualAction:'Create or match the employee record and capture deal basics manually.',sla:'4h',agentCapable:true},
     {name:'Compliance Check',ownerRole:'Compliance Officer',modulePage:'compliance',manualAction:'Open Compliance Hub, check country rules, statutory obligations, tax rates, and work permit rules.',sla:'4h',agentCapable:true,exceptionType:'Missing compliance rule'},
@@ -3263,6 +3316,8 @@ const manualJourneyStepCatalog={
 };
 const cfgToManualStepIndexMap={
   'user-master-data':[0,1,2],
+  // One catalogue step per journey step, in the same order — the store journey grew in one piece.
+  'bhaiyaa-store-creation':[0,1,2,3],
   /* Nine config steps now, so nine entries. Not in ascending order, and it should not be: this
      maps journey position -> catalogue position, and the catalogue is stored in the order it grew
      in. Deposit due is the appended step 10; Client signing is 5 and lands before it. Catalogue
