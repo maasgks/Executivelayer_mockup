@@ -156,26 +156,28 @@ function fieldForError(message) {
   return null;
 }
 
-// Shared request plumbing for both calls below — same key, same self-signed token, same headers.
+// Shared request plumbing for both calls below — same key, same headers. The token is optional
+// for the same reason it is optional in submit(): see the note above submit(). These two are the
+// duplicate checks, and the PHP client calls /adtUserExist/v1 with outhKey alone as well.
 async function callMiddleware(pathname, body, cfg) {
   const deviceId = 'web_' + crypto.randomBytes(5).toString('hex');
-  const jwt = signHs256(
-    { data: { id: 1, role: 'web', device_id: deviceId, device_type: 'web' } },
-    cfg.jwtSecret
-  );
+  const jwt = cfg.jwtSecret
+    ? signHs256({ data: { id: 1, role: 'web', device_id: deviceId, device_type: 'web' } }, cfg.jwtSecret)
+    : null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), cfg.timeoutMs || 30000);
   try {
+    const headers = {
+      'outhKey': cfg.outhKey,
+      'auth_validate': '1',
+      'device_id': deviceId,
+      'device_type': 'web',
+      'Content-Type': 'application/x-www-form-urlencoded'
+    };
+    if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
     const res = await fetch(cfg.baseUrl + pathname, {
       method: 'POST',
-      headers: {
-        'outhKey': cfg.outhKey,
-        'auth_validate': '1',
-        'Authorization': 'Bearer ' + jwt,
-        'device_id': deviceId,
-        'device_type': 'web',
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
+      headers: headers,
       body,
       signal: controller.signal
     });
@@ -266,28 +268,49 @@ async function precheck(intake, cfg) {
   return { ok: true };
 }
 
+/* == THE JWT IS OPTIONAL, AND THAT IS NOT AN ASSUMPTION ===================================
+   This connector used to sign an HS256 JWT unconditionally, which made NF_MW_JWT_SECRET a hard
+   requirement: with it unset, signHs256 threw "a secret is required" and the lead was never
+   sent. The secret is not in this repository and the plan doc redacts it, so the integration
+   simply could not run.
+
+   The live PHP client says otherwise. htdocs/ADT_Static_Web/submit_user.php — the form behind
+   the real adtsolution.com modal, and the implementation NEWFORCE_MW_CLIENT_SYNC_PLAN.md cites
+   as the contract — builds exactly two auth headers:
+
+       $headers = array('outhKey:'.$header, 'auth_validate:1');
+       // $jwt=$autDetails['jwt_token'];
+       // if ($jwt) { $headers[] = 'Authorization: Bearer ' . $jwt; }
+
+   The Authorization line is commented out. Production has been creating leads with outhKey
+   alone. The plan doc recorded the JWT because an older revision of that client sent one, and
+   we copied the stricter shape.
+
+   So: sign only when a secret is configured, and send the header only when we signed. With a
+   secret this is byte-identical to what it sent before; without one it is byte-identical to
+   the PHP client. Nothing about the request changes for an existing working deployment. == */
 async function submit(intake, cfg) {
   const payload = buildLeadPayload(intake, cfg);
   const deviceId = 'web_' + crypto.randomBytes(5).toString('hex');
-  const jwt = signHs256(
-    { data: { id: 1, role: 'web', device_id: deviceId, device_type: 'web' } },
-    cfg.jwtSecret
-  );
+  const jwt = cfg.jwtSecret
+    ? signHs256({ data: { id: 1, role: 'web', device_id: deviceId, device_type: 'web' } }, cfg.jwtSecret)
+    : null;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), cfg.timeoutMs || 30000);
   let res;
   try {
+    const headers = {
+      'outhKey': cfg.outhKey,
+      'auth_validate': '1',
+      'device_id': deviceId,
+      'device_type': 'web',
+      'Content-Type': 'application/x-www-form-urlencoded'
+    };
+    if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
     res = await fetch(cfg.baseUrl + SUBMIT_PATH, {
       method: 'POST',
-      headers: {
-        'outhKey': cfg.outhKey,
-        'auth_validate': '1',
-        'Authorization': 'Bearer ' + jwt,
-        'device_id': deviceId,
-        'device_type': 'web',
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
+      headers: headers,
       body: encodeForm(payload),
       signal: controller.signal
     });
