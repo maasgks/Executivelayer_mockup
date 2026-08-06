@@ -5513,7 +5513,8 @@ function ccjMaybeAutoProceed(){
    old behaviour, which is why this is an allowlist rather than "every scroller in the subtree". */
 const CCJ_KEEP_SCROLL=[
   '.ccj-form-scroll',   // the contract form, following a document being read into it
-  '.ccj-ec-wrap'        // the employment contract, following the clause being audited
+  '.ccj-ec-wrap',       // the employment contract, following the clause being audited
+  '.ccj-rdy-wrap'       // the readiness certificate, following the control being cleared
 ];
 function ccjPaintScreen(){
   const el=document.getElementById('ccj-screen');
