@@ -85,7 +85,9 @@ const total = run('Object.keys(amSubStatuses).reduce(function(s,k){return s+amSu
 check('9 stages, 9 journey events, 9 sub-status groups',
   stages === 9 && events === 9 && groups === 9,
   'stages=' + stages + ' events=' + events + ' groups=' + groups);
-check('41 sub-statuses in total', total === 41, 'found ' + total);
+// 40 since the follow-up sub-status came out of quote-review: chasing a client moves nothing,
+// so it is an action on the record rather than a position in the work. See amSubStatuses.
+check('40 sub-statuses in total', total === 40, 'found ' + total);
 check('every stage index resolves to its own sub-status group',
   run(`(function(){for(let i=0;i<9;i++){if(aicjStageId(i)!==amPipelineStages[i].id)return false;
         if(aicjSteps(i)!==amSubStatuses[amPipelineStages[i].id])return false;}return true;})()`));

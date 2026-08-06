@@ -13,6 +13,38 @@
       per STAGE. Screens change inside .ccj-work beside it; the panel is never remounted, so
       it keeps its scroll position, its spinner and its place for the whole stage.        == */
 
+/* == COLOUR MEANS ONE THING EACH ==========================================================
+   This file used to spend amber four different ways. "The agent is working", "we are waiting on
+   the client", "you have to decide" and "this amount is short" all arrived as some shade of
+   orange, and a coral accent sat on top of them for the live verb. Four states, one hue: the
+   colour carried no information, so a reader had to read every card to find the one that wanted
+   something from them — which is precisely the job colour is supposed to do first.
+
+   Five families now, and each answers a different question about WHO IS HOLDING THIS:
+
+     auto    violet   the execution layer is doing it — nothing to do
+     them    sky      somebody outside the building has it — nothing to do, but you can chase
+     you     amber    your move, and it is the only warm thing on the page
+     ok      green    settled
+     stop    red      ended, and nothing downstream ran
+
+   Violet was not invented for this: the AUTO owner chip has been violet since the panel existed,
+   so automation already had a colour and the live verb was simply not using it. Amber is left
+   meaning exactly one thing, which is why it can afford to be the loudest — every amber element
+   on screen is something a person has to act on. The artefact cautions (a short payment, a KYC
+   "consider") keep amber too, and that is consistent rather than a clash: each of them IS a
+   decision waiting for someone.
+
+   `-bg` is the fill, `-line` the border, the bare name the text and marks, `-deep` the darker
+   text used on top of `-bg` where 4.5:1 needs it. == */
+:root{
+  --ccj-auto:#6d28d9;--ccj-auto-bg:#f5f3ff;--ccj-auto-line:#ddd6fe;--ccj-auto-deep:#5b21b6;
+  --ccj-them:#0369a1;--ccj-them-bg:#f0f9ff;--ccj-them-line:#bae6fd;--ccj-them-deep:#075985;
+  --ccj-you:#b45309;--ccj-you-bg:#fffbeb;--ccj-you-line:#fcd34d;--ccj-you-deep:#92400e;--ccj-you-chip:#fef3c7;
+  --ccj-ok:#15803d;--ccj-ok-bg:#f0fdf4;--ccj-ok-line:#bbf7d0;
+  --ccj-stop:#b91c1c;--ccj-stop-bg:#fef2f2;--ccj-stop-line:#fecaca;
+}
+
 /* ---- WAYS IN -----------------------------------------------------------------------------
    Three, and they all land on the same rebuilt journey: the topbar + on Contracts, the
    "New request" action on the Account Manager's own page, and the pill on the Contracts
@@ -386,9 +418,79 @@
 .ccj-doc-absent{margin-top:10px;padding:8px 10px;border-radius:7px;background:var(--light);border:1px solid var(--border);font-size:10.5px;color:var(--gray);line-height:1.5}
 .ccj-doc-absent b{display:block;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--navy);margin-bottom:2px}
 
+/* ---- THE ACTION AREA — pinned between the record and the input ----------------------------
+   Sits in the same pinned band as the composer, directly above it, with ONE hairline separating
+   it from the conversation. The conversation scrolls behind it; this does not. That is the whole
+   design: whatever the run is waiting on you for is always in the same place, at the bottom of
+   the reading, next to the box you would otherwise type into.
+
+   `:empty` is what makes it free when nothing is pending — no border, no padding, no height —
+   so a run that is simply working shows a conversation sitting straight on its composer exactly
+   as it did before this element existed. The bar is emitted on every chat, always; whether it is
+   THERE is decided by whether it has anything in it.
+
+   The card inside keeps its own look — a decision is still amber, a stop is still red — but loses
+   the block's indent and width cap: pinned to the full width of the column, it is the width of
+   the thing it is asking about rather than a card floating inside another card. */
+.ccj-actionbar{flex-shrink:0;background:var(--card);border-top:1px solid var(--border);padding:11px 12px 0}
+.ccj-actionbar:empty{display:none}
+.ccj-chat.full .ccj-actionbar{padding:14px 26px 0}
+.ccj-actionbar .ccj-gate{margin:0;max-width:none}
+.ccj-actionbar .ccj-ask-block{max-width:none;margin-left:0}
+/* ---- WHAT TO DO NOW ------------------------------------------------------------------------
+   One line, and it only exists when there is something to do. The first version was a card with
+   a heading, a tag and an explanatory second sentence, shown on every step including the ones
+   where the honest answer was "nothing" — which made it a permanent panel narrating a run the
+   transcript was already narrating, and buried the instruction inside a paragraph. An instruction
+   you have to read past is not an instruction, and a bar that is always there is one nobody
+   reads.
+
+   So: the mark, the sentence, and nothing else. Amber, because it is the reader's move — the same
+   colour every decision in the journey wears, one line above the box they would type into. */
+.ccj-todo{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;
+  border:1px solid var(--ccj-you-line);background:var(--ccj-you-bg)}
+.ccj-todo-ico{flex-shrink:0;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;background:var(--ccj-you-chip);color:var(--ccj-you-deep)}
+.ccj-todo-ico svg{width:12px;height:12px}
+.ccj-todo-do{min-width:0;font-size:12px;font-weight:600;line-height:1.45;color:var(--ccj-you-deep)}
+.ccj-todo-do b{font-weight:700}
+/* The one line the step block keeps once its decision has moved to the bar: it still says which
+   step stopped and where the answer is, so a reader scrolled back up to it is not looking at a
+   step that visibly halted for no stated reason. */
+.ccj-sb-await{padding:0 11px 11px 39px;font-size:11px;color:var(--gray);line-height:1.5}
+.ccj-sb-await b{font-weight:600;color:var(--navy)}
+/* == WHILE SOMEBODY IS BEING ASKED, NOTHING SPINS =========================================
+   Set on #ccj-body by ccjPaintAwaiting. A spinner claims the machine is busy; halted on a person
+   it is busy with nothing, and the motion competes with the question for the only attention that
+   matters. Everything animated freezes in place rather than being hidden — the spinner is still a
+   spinner, the wait bar is still an amber rail, they are simply not moving, which is the honest
+   picture of a run that has stopped.
+
+   The action bar is exempt on purpose: it has nothing animated in it today, and anything added
+   there later is by definition part of the thing the reader is being asked to act on. */
+.ccj-awaiting .ccj-spin,
+.ccj-awaiting .ccj-spark,
+.ccj-awaiting .ccj-sb-verb,
+.ccj-awaiting .ccj-wait-pulse,
+.ccj-awaiting .ccj-hold-bar,
+.ccj-awaiting .ccj-skel-av,
+.ccj-awaiting .ccj-skel-l,
+.ccj-awaiting .ccj-q-skel,
+.ccj-awaiting .ccj-cbubble.draft,
+.ccj-awaiting .ccj-doc-bar-dot,
+.ccj-awaiting .ccj-sb-dots{animation:none!important}
+/* The sheen is painted with a moving gradient rather than by moving the element, so stopping the
+   animation alone would leave the verb frozen mid-wipe — half of it the sheen colour and half of
+   it not. It gets the flat colour instead, which is what the reduced-motion rule already does. */
+.ccj-awaiting .ccj-sb-verb{background:none;color:var(--ccj-auto)}
+
 /* ---- COMPOSER — pinned, never scrolls away ----------------------------------------------- */
 .ccj-composer{flex-shrink:0;border-top:1px solid var(--border);padding:10px 12px 12px;background:var(--card)}
 .ccj-chat.full .ccj-composer{padding:12px 26px 16px}
+/* ONE line, not two. The bar's own hairline is the boundary between the record and the pinned
+   band; a second rule between the action and the input would cut the band in half and make the
+   question read as belonging to the transcript rather than to the thing you are about to do. */
+.ccj-actionbar:not(:empty)+.ccj-composer{border-top:none}
 /* Directly above the input, not up in the header. Uploading a document is an alternative way of
    answering the same thing the input asks for, so it belongs in the band the eye is already on
    when it decides how to reply. Dashed, because it is a drop target in spirit. */
@@ -441,7 +543,7 @@
 .ccj-row-cond{display:block;font-size:9.5px;font-style:italic;color:#94a3b8;margin-top:1px}
 .ccj-row-sum{font-size:11px;color:var(--gray);margin-top:2px;line-height:1.4}
 .ccj-row-owner{flex-shrink:0;min-width:30px;text-align:center;padding:2px 6px;border-radius:5px;background:var(--ol);font-size:9px;font-weight:700;letter-spacing:.3px;color:var(--gray);margin-top:2px}
-.ccj-row-owner.auto{background:#f5f3ff;color:#7c3aed}
+.ccj-row-owner.auto{background:var(--ccj-auto-bg);color:var(--ccj-auto)}
 
 /* ---- A SUB-STATUS AS A BLOCK IN THE TRANSCRIPT -------------------------------------------
    The panel's row, in the conversation instead of beside it.
@@ -473,7 +575,7 @@
 .ccj-sb.closed.skipped{opacity:.72}
 /* OPEN */
 .ccj-sb.open{border-color:var(--border)}
-.ccj-sb.open.asking{border-color:#fbbf24;background:#fffbeb}
+.ccj-sb.open.asking{border-color:var(--ccj-you-line);background:var(--ccj-you-bg)}
 .ccj-sb-head{display:flex;align-items:center;gap:9px;padding:10px 11px;font-size:12px}
 .ccj-sb-head.clickable{cursor:pointer}
 .ccj-sb-head.clickable:hover{background:var(--light)}
@@ -497,12 +599,12 @@
 .ccj-sb.open .ccj-sb-tick{background:#dcfce7}
 .ccj-sb-ask{width:16px;height:16px;border-radius:50%;background:var(--light);border:1px solid var(--border);
   display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:var(--gray)}
-.ccj-sb.open.asking .ccj-sb-ask{background:#fef3c7;border-color:#fbbf24;color:#92400e}
+.ccj-sb.open.asking .ccj-sb-ask{background:var(--ccj-you-chip);border-color:var(--ccj-you-line);color:var(--ccj-you-deep)}
 .ccj-sb-skip{width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--gray);font-weight:700}
 /* Parked on a person. The same slow pulse the wait panel uses, so the mark and the explanation
    underneath it read as one state rather than two — and unmistakably not the spinner, which
    would be claiming work nobody is doing. */
-.ccj-sb-wait{width:9px;height:9px;border-radius:50%;background:#f59e0b;
+.ccj-sb-wait{width:9px;height:9px;border-radius:50%;background:var(--ccj-them);
   animation:ccjWaitPulse 1.9s ease-in-out infinite}
 .ccj-sb-body{padding:0 11px 10px 36px}
 .ccj-sb-why{font-size:11px;color:var(--gray);line-height:1.5}
@@ -517,24 +619,34 @@
    This rule is where the gate's margin actually comes from — it outranks the one on .ccj-gate
    itself, which is why setting it there alone moved nothing. */
 .ccj-sb .ccj-gate{margin:0 11px 11px 11px;max-width:none}
-/* WAITING ON YOU ⇒ YOUR SIDE. `asking` is set on the step block whenever it carries a gate or has
-   stopped — precisely "this one is yours" — so it is the correct hook, and it means the stopped
-   card travels with it rather than needing its own rule. */
-.ccj-sb.asking{max-width:var(--ccj-act-w);margin-left:auto}
+/* `asking` used to pull the block over to the reader's own side of the chat and narrow it to
+   --ccj-act-w, on the rule that what is waiting on you belongs where your own messages are. That
+   was right while the block CARRIED the decision. It no longer does — the card is pinned above the
+   composer — so a block floated right and cut to 62% would be a step in the record wearing the
+   shape of a control that is not in it, breaking the left rail every other step block sits on.
+   The class stays: it still means "this one is yours", it is what marks the block while the run is
+   stopped, and it is the hook for the highlight below. */
+.ccj-sb.asking{border-color:var(--ccj-you-line);background:var(--ccj-you-bg)}
 .ccj-sb .ccj-hold{margin-top:8px}
 .ccj-sb .ccj-ev-more{margin-top:8px}
 
 /* ---- THE LIVE BLOCK: SPARK, VERB AND THE SCROLLING WINDOW -----------------------------------
    While the runner is on a step the block holds still instead of growing a line per action.
-   The head carries the claim of activity — an eight-ray coral spark and one shimmering word
-   naming the action actually underway — and under a single rule, the finished work scrolls
-   through a window a few lines tall, oldest sliding out of the top. Coral is Claude's colour
-   and appears nowhere else in the journey, which is exactly why it is right here: it marks
-   "the agent is doing this now", a state nothing else on screen is allowed to claim. */
+   The head carries the claim of activity — an eight-ray spark and one shimmering word naming the
+   action actually underway — and under a single rule, the finished work scrolls through a window
+   a few lines tall, oldest sliding out of the top.
+
+   IT IS VIOLET BECAUSE AUTOMATION ALREADY WAS. This was coral, on the reasoning that a colour used
+   nowhere else marks "the agent is doing this now" unmistakably. The reasoning was right and the
+   colour was wrong: the AUTO owner chip has been violet since the panel existed, so automation
+   already HAD a colour and the loudest expression of it was refusing to use it — while coral, a
+   near-orange, sat one card away from the amber that means "you have to act". Two warm hues, two
+   opposite meanings, an inch apart. Violet says the same thing coral was trying to say and says it
+   in the word the rest of the product already uses. */
 /* Beside the NAME, not parked at the card's far edge — the user moved it: the claim of activity
    reads as part of the step's own line, the way Claude Code's spinner sits against its label.
    The owner chip keeps the right corner so the head still has a far anchor. */
-.ccj-sb-live{flex-shrink:0;display:flex;align-items:center;gap:6px;color:#d97757}
+.ccj-sb-live{flex-shrink:0;display:flex;align-items:center;gap:6px;color:var(--ccj-auto)}
 .ccj-sb-head .ccj-row-owner{margin-left:auto}
 .ccj-spark{width:13px;height:13px;flex-shrink:0;animation:ccjSparkTurn 2.6s linear infinite}
 @keyframes ccjSparkTurn{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(180deg) scale(.8)}
@@ -542,7 +654,7 @@
 /* The word shimmers the way Claude's own status line does — a light band sweeping through the
    coral. Background-clip text, so the sweep is IN the letters rather than behind them. */
 .ccj-sb-verb{font-size:11px;font-weight:600;white-space:nowrap;color:transparent;
-  background:linear-gradient(90deg,#c2410c 0%,#d97757 38%,#f7cdb5 50%,#d97757 62%,#c2410c 100%);
+  background:linear-gradient(90deg,#5b21b6 0%,#6d28d9 38%,#c4b5fd 50%,#6d28d9 62%,#5b21b6 100%);
   background-size:220% 100%;-webkit-background-clip:text;background-clip:text;
   animation:ccjVerbSheen 1.7s linear infinite}
 @keyframes ccjVerbSheen{from{background-position:120% 0}to{background-position:-120% 0}}
@@ -554,7 +666,7 @@
 .ccj-sb-dots{letter-spacing:1px;color:#94a3b8}
 @media(prefers-reduced-motion:reduce){
   .ccj-spark{animation:none}
-  .ccj-sb-verb{animation:none;background:none;color:#d97757}
+  .ccj-sb-verb{animation:none;background:none;color:var(--ccj-auto)}
 }
 
 /* ---- WAITING ON A PERSON --------------------------------------------------------------------
@@ -562,16 +674,16 @@
    mistaken for a hang. A slow pulse rather than a spinner: a spinner claims the machine is
    working, and it is not — it has handed the work to someone outside the product and is holding
    the door. The pulse says "live, and deliberately still", which is the honest signal. */
-.ccj-wait{margin-top:9px;border:1px solid #fde68a;border-radius:9px;background:#fffbeb;padding:8px 10px}
+.ccj-wait{margin-top:9px;border:1px solid var(--ccj-them-line);border-radius:9px;background:var(--ccj-them-bg);padding:8px 10px}
 .ccj-wait-top{display:flex;align-items:flex-start;gap:8px}
-.ccj-wait-pulse{flex-shrink:0;width:7px;height:7px;margin-top:4px;border-radius:50%;background:#f59e0b;
+.ccj-wait-pulse{flex-shrink:0;width:7px;height:7px;margin-top:4px;border-radius:50%;background:var(--ccj-them);
   animation:ccjWaitPulse 1.9s ease-in-out infinite}
 @keyframes ccjWaitPulse{0%,100%{opacity:.25;transform:scale(.82)}50%{opacity:1;transform:scale(1)}}
-.ccj-wait-note{font-size:11px;line-height:1.5;color:#92400e}
-.ccj-wait-rows{margin-top:7px;padding-top:7px;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:3px}
+.ccj-wait-note{font-size:11px;line-height:1.5;color:var(--ccj-them-deep)}
+.ccj-wait-rows{margin-top:7px;padding-top:7px;border-top:1px dashed var(--ccj-them-line);display:flex;flex-direction:column;gap:3px}
 .ccj-wait-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:10px}
-.ccj-wait-k{color:#a16207}
-.ccj-wait-v{color:#92400e;font-weight:600;text-align:right}
+.ccj-wait-k{color:var(--ccj-you-deep)}
+.ccj-wait-v{color:var(--ccj-them-deep);font-weight:600;text-align:right}
 .ccj-wait-on{color:#15803d;font-weight:700}
 /* The counterpart to .ccj-wait-on. A wait note is already amber, so "overdue" and a shortfall need
    to read as worse than the surface they sit on rather than the same as it. */
@@ -580,7 +692,7 @@
 
 /* Who the composer is addressing. Sits directly above the input rather than in the header,
    because it has to be read at the moment of typing, not at the moment of arriving. */
-.ccj-to{display:flex;align-items:center;gap:6px;padding:0 2px 7px;font-size:10.5px;color:#b45309}
+.ccj-to{display:flex;align-items:center;gap:6px;padding:0 2px 7px;font-size:10.5px;color:var(--ccj-them)}
 .ccj-to b{font-weight:700}
 .ccj-to-arrow{font-size:9px}
 .ccj-to-note{margin-left:auto;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;
@@ -597,14 +709,16 @@
    what a reader learns to skip — at which point the marking that made this safe stops working. */
 .ccj-lane{position:relative;padding-left:14px;display:flex;flex-direction:column;gap:6px}
 .ccj-lane::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:2px;border-radius:2px}
-/* Outbound is the product's own navy — this is us speaking. Inbound is a warmer tone, so a reply
-   is findable when scrolling a long thread. */
+/* Outbound is the product's own navy — this is us speaking. Inbound is the counterparty colour, so
+   a reply is findable when scrolling a long thread AND is the same hue as every other place the
+   product says "somebody outside the building has this": the wait card, the parked mark, the
+   chase. One colour, one meaning, wherever it appears. */
 .ccj-lane.out::before{background:var(--navy);opacity:.28}
-.ccj-lane.in::before{background:#f59e0b;opacity:.55}
+.ccj-lane.in::before{background:var(--ccj-them);opacity:.6}
 .ccj-lane-head{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase;color:var(--gray)}
 .ccj-lane-arrow{font-size:9px;line-height:1}
-.ccj-lane.in .ccj-lane-head{color:#b45309}
+.ccj-lane.in .ccj-lane-head{color:var(--ccj-them)}
 /* The bubbles inside keep their own alignment — the lane groups them, it does not restyle them. */
 .ccj-lane .ccj-cmsg{margin:0}
 
@@ -720,11 +834,11 @@
 .ccj-ev-more:hover{border-color:var(--navy);background:var(--card)}
 
 /* ---- HELD — done its part, waiting on the rest of the stage --------------------------------- */
-.ccj-hold{position:relative;margin-top:8px;padding:8px 10px 8px 12px;border-radius:7px;background:#fffbeb;border:1px solid #fde68a;font-size:10.5px;line-height:1.55;color:#78350f;overflow:hidden}
-.ccj-hold-bar{position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#f59e0b,#fbbf24);animation:ccjHoldPulse 1.8s ease-in-out infinite}
+.ccj-hold{position:relative;margin-top:8px;padding:8px 10px 8px 12px;border-radius:7px;background:var(--ccj-auto-bg);border:1px solid var(--ccj-auto-line);font-size:10.5px;line-height:1.55;color:var(--ccj-auto-deep);overflow:hidden}
+.ccj-hold-bar{position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--ccj-auto),#a78bfa);animation:ccjHoldPulse 1.8s ease-in-out infinite}
 /* Progress under the sentence, in the same shape a wait uses — a held step and a waiting one are
    the same thing to a reader (parked on somebody else) and should not need two layouts learnt. */
-.ccj-hold-rows{margin-top:6px;padding-top:6px;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:3px}
+.ccj-hold-rows{margin-top:6px;padding-top:6px;border-top:1px dashed var(--ccj-auto-line);display:flex;flex-direction:column;gap:3px}
 @keyframes ccjHoldPulse{0%,100%{opacity:.35}50%{opacity:1}}
 
 /* ---- THE GATE — where a person is asked ------------------------------------------------------
@@ -741,7 +855,7 @@
    something to act on — and two numbers that drifted apart would put them on visibly different
    margins in the same column. */
 :root{--ccj-act-w:62%}
-.ccj-gate{margin:7px 0 0 28px;padding:11px 12px;border-radius:9px;border:1px solid #fde68a;background:#fffbeb}
+.ccj-gate{margin:7px 0 0 28px;padding:11px 12px;border-radius:9px;border:1px solid var(--ccj-you-line);background:var(--ccj-you-bg)}
 .ccj-gate.external{border-color:#bfdbfe;background:#eff6ff}
 .ccj-gate.stopped{border-color:#fecaca;background:#fef2f2}
 .ccj-gate-ask{font-size:12px;font-weight:700;color:var(--navy);line-height:1.45;margin-bottom:5px}
@@ -763,7 +877,7 @@
 .ccj-gate-av{width:19px;height:19px;flex-shrink:0;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;color:var(--navy)}
 /* The reason a negative decision was taken. Reads as evidence rather than as more of the card's
    own voice: left rule, quieter text, and the actor's name in front of it on the stopped card. */
-.ccj-gate-reason{margin-top:8px;padding:7px 10px;border-left:2px solid #d4a373;border-radius:0 6px 6px 0;background:rgba(255,255,255,.72);font-size:10.5px;line-height:1.55;color:var(--navy);white-space:pre-wrap;word-wrap:break-word}
+.ccj-gate-reason{margin-top:8px;padding:7px 10px;border-left:2px solid var(--ccj-you-line);border-radius:0 6px 6px 0;background:rgba(255,255,255,.72);font-size:10.5px;line-height:1.55;color:var(--navy);white-space:pre-wrap;word-wrap:break-word}
 .ccj-gate-reason b{font-weight:700;color:var(--gray);font-weight:600}
 /* Asking for it. Same card, same footprint — only the buttons are swapped for the question, so
    the transcript does not jump while the user is deciding. */
@@ -882,7 +996,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-q-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
 .ccj-q-title{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
 .ccj-q-sub{font-size:12px;color:var(--gray);margin-top:2px}
-.ccj-q-status{flex-shrink:0;padding:4px 11px;border-radius:20px;background:#fef3c7;color:#92400e;font-size:10.5px;font-weight:700;letter-spacing:.3px}
+.ccj-q-status{flex-shrink:0;padding:4px 11px;border-radius:20px;background:var(--ccj-you-chip);color:var(--ccj-you-deep);font-size:10.5px;font-weight:700;letter-spacing:.3px}
 .ccj-q-status.ok{background:#dcfce7;color:#15803d}
 .ccj-q-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
 .ccj-q-sec{padding:11px 15px;background:#fafbfc;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray)}
@@ -925,7 +1039,14 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-cmsg.us .ccj-cbubble.accept{background:#f0fdf4;color:#15803d}
 .ccj-cmsg.note{align-items:center;flex-direction:row;justify-content:center;gap:7px;padding:2px 0}
 .ccj-cmsg.note span{font-size:10px;color:#94a3b8}
-.ccj-cmsg.note.chase span{color:#b45309;font-weight:600}
+.ccj-cmsg.note.chase span{color:var(--ccj-them);font-weight:600}
+/* WHAT WE ACTUALLY SAID. A hand-sent follow-up carries the Account Manager's own words, and they
+   are the part of the event worth reading — so they get their own line under the centred note
+   rather than being run into it, and they are left-aligned because a sentence someone typed is
+   not a system stamp. `display:block` inside the centred flex row is what breaks it onto that
+   line without the note above having to become a different shape. */
+.ccj-chase-note{display:block;margin-top:3px;font-size:11px;font-weight:500;font-style:normal;
+  color:var(--navy);line-height:1.5;text-align:left;white-space:pre-wrap;word-wrap:break-word}
 /* A reminder on its way out. Quieter than the sent record — it is not a fact yet — and the spinner
    sits on the same baseline as the text rather than above it. */
 .ccj-cmsg.note.chase.sending span{color:#94a3b8;font-weight:500}
@@ -933,7 +1054,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 /* The waiting beat between client events — the same spark and shimmer the live blocks use, so
    "the agent is on this" reads identically everywhere it appears. */
 .ccj-cmsg.note.await{gap:6px}
-.ccj-cmsg.note.await .ccj-spark{width:12px;height:12px;color:#d97757}
+.ccj-cmsg.note.await .ccj-spark{width:12px;height:12px;color:var(--ccj-auto)}
 .ccj-cmsg.note.await .ccj-sb-verb{font-size:10.5px}
 .ccj-cmsg.note i{font-size:9.5px;color:#cbd5e1}
 
@@ -990,7 +1111,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-sent-title{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.2px}
 .ccj-sent-sub{font-size:12px;color:var(--gray);margin-top:2px}
 .ccj-sent-state{flex-shrink:0;padding:4px 11px;border-radius:20px;background:var(--ol);color:var(--gray);font-size:10.5px;font-weight:700;letter-spacing:.3px}
-.ccj-sent-state.warn{background:#fef3c7;color:#92400e}
+.ccj-sent-state.warn{background:var(--ccj-you-chip);color:var(--ccj-you-deep)}
 .ccj-sent-state.ok{background:#dcfce7;color:#15803d}
 
 .ccj-tl{position:relative;padding-left:2px;margin-bottom:22px}
@@ -1040,7 +1161,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 
 .ccj-pv{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
 .ccj-pv-head{display:flex;align-items:center;gap:9px;padding:11px 15px;background:#fafbfc;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray)}
-.ccj-pv-note{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:500;font-size:10.5px;color:#b45309}
+.ccj-pv-note{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:500;font-size:10.5px;color:var(--ccj-you)}
 .ccj-pv-note.new{color:#15803d}
 .ccj-pv-row{display:flex;align-items:center;gap:10px;padding:10px 15px;border-bottom:1px solid var(--border)}
 .ccj-pv-row:last-child{border-bottom:none}
@@ -1155,7 +1276,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-inv-fig span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray);margin-bottom:3px}
 .ccj-inv-fig b{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.4px;font-variant-numeric:tabular-nums}
 .ccj-inv-fig.got b{color:#15803d}
-.ccj-inv-fig.out b{color:#b45309}
+.ccj-inv-fig.out b{color:var(--ccj-you)}
 .ccj-inv-bar{height:5px;border-radius:99px;background:var(--ol);overflow:hidden}
 .ccj-inv-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#15803d,#22c55e);transition:width .5s cubic-bezier(.4,0,.2,1)}
 .ccj-inv-when{font-size:11.5px;color:var(--gray);margin-top:9px;line-height:1.5}
@@ -1209,7 +1330,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 
 .ccj-inv-sec{margin-top:22px}
 .ccj-inv-sec-t{font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--navy);padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:9px}
-.ccj-inv-warn{margin-top:10px;padding:9px 11px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#78350f;line-height:1.6}
+.ccj-inv-warn{margin-top:10px;padding:9px 11px;border-radius:6px;background:var(--ccj-you-bg);border:1px solid var(--ccj-you-line);font-size:11px;color:var(--ccj-you-deep);line-height:1.6}
 .ccj-inv-foot{margin-top:20px;padding-top:13px;border-top:1px dashed var(--border);font-size:10.5px;color:var(--gray);line-height:1.7;font-family:Georgia,'Times New Roman',serif}
 
 /* Band 3 — the ledger. A record of what happened, in the order it happened. */
@@ -1232,12 +1353,12 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 
 /* The gate lifting. It is the outcome of the stage, so it gets the weight of one. */
 .ccj-inv-rel{max-width:720px;margin:16px auto 0;display:flex;align-items:flex-start;gap:13px;padding:15px 17px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;animation:ccjIn .3s ease both}
-.ccj-inv-rel.short{background:#fffbeb;border-color:#fde68a}
+.ccj-inv-rel.short{background:var(--ccj-you-bg);border-color:var(--ccj-you-line)}
 .ccj-inv-rel-ico{flex-shrink:0;width:34px;height:34px;border-radius:10px;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center}
-.ccj-inv-rel.short .ccj-inv-rel-ico{background:#fef3c7;color:#b45309}
+.ccj-inv-rel.short .ccj-inv-rel-ico{background:var(--ccj-you-chip);color:var(--ccj-you)}
 .ccj-inv-rel-ico svg{width:17px;height:17px}
 .ccj-inv-rel-t{font-size:13px;font-weight:700;color:#15803d}
-.ccj-inv-rel.short .ccj-inv-rel-t{color:#b45309}
+.ccj-inv-rel.short .ccj-inv-rel-t{color:var(--ccj-you)}
 .ccj-inv-rel-s{font-size:11.5px;color:var(--gray);line-height:1.6;margin-top:3px}
 
 .ccj-inv-next{max-width:720px;margin:14px auto 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;animation:ccjIn .3s ease both}
@@ -1441,7 +1562,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-kyc-cmp-h i{flex:0 0 18px}
 .ccj-kyc-vd{flex:0 0 16px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800}
 .ccj-kyc-vd.pass{background:#dcfce7;color:#16a34a}
-.ccj-kyc-vd.consider{background:#fef3c7;color:#b45309}
+.ccj-kyc-vd.consider{background:var(--ccj-you-chip);color:var(--ccj-you)}
 .ccj-kyc-vd.fail{background:#fee2e2;color:#b91c1c}
 .ccj-kyc-vd.na{background:var(--ol);color:var(--gray)}
 
@@ -1494,19 +1615,19 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-kyc-link{font-size:17px;color:#16a34a}
 
 .ccj-kyc-rtw{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0}
-.ccj-kyc-rtw.consider{background:#fffbeb;border-color:#fde68a}
+.ccj-kyc-rtw.consider{background:var(--ccj-you-bg);border-color:var(--ccj-you-line)}
 .ccj-kyc-rtw b{display:block;font-size:11.5px;font-weight:700;color:var(--navy);line-height:1.4}
 .ccj-kyc-rtw span{display:block;font-size:10.5px;color:var(--gray);line-height:1.55;margin-top:2px}
 
 .ccj-kyc-dec{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0}
-.ccj-kyc-dec.consider{background:#fffbeb;border-color:#fde68a}
+.ccj-kyc-dec.consider{background:var(--ccj-you-bg);border-color:var(--ccj-you-line)}
 .ccj-kyc-dec.reject{background:#fef2f2;border-color:#fecaca}
 .ccj-kyc-score{flex-shrink:0;text-align:center;padding-right:14px;border-right:1px solid rgba(0,0,0,.09)}
 .ccj-kyc-score span{display:block;font-size:8.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gray)}
 .ccj-kyc-score b{font-size:22px;font-weight:800;color:var(--navy);letter-spacing:-.6px;font-variant-numeric:tabular-nums}
 .ccj-kyc-score i{font-style:normal;font-size:10px;color:var(--gray)}
 .ccj-kyc-dec-t{font-size:13px;font-weight:800;letter-spacing:1px;color:#15803d}
-.ccj-kyc-dec.consider .ccj-kyc-dec-t{color:#b45309}
+.ccj-kyc-dec.consider .ccj-kyc-dec-t{color:var(--ccj-you)}
 .ccj-kyc-dec.reject .ccj-kyc-dec-t{color:#b91c1c}
 .ccj-kyc-dec-s{font-size:11px;color:var(--gray);line-height:1.55;margin-top:3px}
 .ccj-onb-card-b .ccj-sim{margin-top:12px}
@@ -1618,7 +1739,7 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-rdy-row:last-child{border-bottom:none}
 .ccj-rdy-v{flex:0 0 17px;width:17px;height:17px;margin-top:1px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800}
 .ccj-rdy-v.pass{background:#dcfce7;color:#16a34a}
-.ccj-rdy-v.consider{background:#fef3c7;color:#b45309}
+.ccj-rdy-v.consider{background:var(--ccj-you-chip);color:var(--ccj-you)}
 .ccj-rdy-v.fail{background:#fee2e2;color:#b91c1c}
 .ccj-rdy-v.na{background:var(--ol);color:var(--gray)}
 .ccj-rdy-b{flex:1;min-width:0}
@@ -1676,12 +1797,12 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-pr-tbl th:last-child,.ccj-pr-tbl td:last-child{min-width:104px}
 .ccj-pr-tbl td b{display:block;font-size:12px;font-weight:700;color:var(--navy)}
 .ccj-pr-tbl td span{display:block;font-size:10.5px;font-weight:400;color:var(--gray);line-height:1.55;margin-top:2px}
-.ccj-pr-neg{color:#b45309}
+.ccj-pr-neg{color:var(--gray)}
 .ccj-pr-sum td{border-top:1.5px solid var(--navy);border-bottom:none;font-weight:700}
 .ccj-pr-sum.net td{color:#15803d}
 .ccj-pr-sum.net td b{color:#15803d;font-size:13.5px}
 
-.ccj-pr-rec{margin:2px 0 12px;padding:9px 11px;border-radius:7px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#78350f;line-height:1.65}
+.ccj-pr-rec{margin:2px 0 12px;padding:9px 11px;border-radius:7px;background:var(--ccj-you-bg);border:1px solid var(--ccj-you-line);font-size:11px;color:var(--ccj-you-deep);line-height:1.65}
 .ccj-pr-rec.ok{background:var(--light);border-color:var(--border);color:var(--gray)}
 .ccj-pr-rec b{font-weight:700;font-variant-numeric:tabular-nums}
 
@@ -1704,12 +1825,12 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 /* The release. It is the only moment in the journey where money leaves us for a person, so it
    gets the weight the countersignature and the deposit release get. */
 .ccj-pr-rel{max-width:760px;margin:0 auto 12px;display:flex;align-items:flex-start;gap:13px;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px}
-.ccj-pr-rel.held{background:#fffbeb;border-color:#fde68a}
+.ccj-pr-rel.held{background:var(--ccj-you-bg);border-color:var(--ccj-you-line)}
 .ccj-pr-rel-i{flex-shrink:0;width:32px;height:32px;border-radius:10px;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800}
-.ccj-pr-rel.held .ccj-pr-rel-i{background:#fef3c7;color:#b45309}
+.ccj-pr-rel.held .ccj-pr-rel-i{background:var(--ccj-you-chip);color:var(--ccj-you)}
 .ccj-pr-rel-i svg{width:16px;height:16px}
 .ccj-pr-rel-t{font-size:12.5px;font-weight:700;color:#15803d}
-.ccj-pr-rel.held .ccj-pr-rel-t{color:#b45309}
+.ccj-pr-rel.held .ccj-pr-rel-t{color:var(--ccj-you)}
 .ccj-pr-rel-s{font-size:11px;color:var(--gray);line-height:1.6;margin-top:2px}
 .ccj-pr-next{max-width:760px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px}
 .ccj-pr-next-t{font-size:12.5px;font-weight:600;color:var(--navy)}
@@ -1737,6 +1858,77 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
 .ccj-ps-l.net b{font-size:13px;font-weight:800}
 .ccj-ps-l.net i{font-size:17px;font-weight:800;color:#15803d;letter-spacing:-.3px}
 .ccj-ps-foot{margin-top:16px;padding-top:12px;border-top:1px dashed var(--border);font-size:10.5px;color:var(--gray);line-height:1.75;font-family:Georgia,'Times New Roman',serif}
+
+/* == THE SUCCESS PANEL ====================================================================
+   The one screen in the product that gets to say a hire was made, and until now it said so with a
+   status dot going green and a sentence at the bottom of three cards. This is the outcome, so it
+   leads: centred, the only centred block in the journey, because centring is what separates a
+   result from a record. Green all the way through — the settled colour — and the only place that
+   colour is ever used at this size.
+
+   Deliberately NOT confetti. What a person needs at the end of a nine-stage journey is the four
+   facts that identify what was just made and the two things they will do next with it; a
+   celebration that does not hand over the contract is a celebration of the software rather than
+   of the work. */
+.ccj-done{max-width:640px;margin:0 auto 18px;padding:26px 26px 22px;text-align:center;
+  background:linear-gradient(180deg,var(--ccj-ok-bg) 0%,var(--card) 62%);
+  border:1px solid var(--ccj-ok-line);border-radius:16px;box-shadow:0 6px 26px rgba(21,128,61,.08)}
+.ccj-done-mark{width:46px;height:46px;margin:0 auto 13px;border-radius:50%;background:#dcfce7;
+  color:var(--ccj-ok);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 6px rgba(34,197,94,.10)}
+.ccj-done-mark svg{width:22px;height:22px}
+/* The status, above the event. Small and green because it is a fact that continues rather than a
+   thing that happened, and it carries the live dot the old header used so the one signal a reader
+   had learned to look for survives the redesign. */
+.ccj-done-chip{display:inline-flex;align-items:center;gap:7px;padding:3px 11px;margin-bottom:9px;
+  border-radius:20px;background:#dcfce7;color:var(--ccj-ok);
+  font-size:10.5px;font-weight:700;letter-spacing:.3px}
+.ccj-done-t{font-size:20px;font-weight:800;color:var(--navy);letter-spacing:-.4px}
+.ccj-done-s{max-width:460px;margin:6px auto 0;font-size:12.5px;line-height:1.65;color:var(--gray)}
+.ccj-done-s b{font-weight:700;color:var(--navy)}
+/* The four facts that identify THIS placement, on one rule, in the order they are asked for. Wraps
+   to two rows on a narrow pane rather than shrinking — a reference number that has to be squinted
+   at is not a reference number. */
+.ccj-done-facts{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 26px;
+  margin:18px 0 0;padding:14px 0 0;border-top:1px solid var(--ccj-ok-line)}
+.ccj-done-fact{display:flex;flex-direction:column;gap:2px;min-width:96px}
+.ccj-done-fact b{font-size:12.5px;font-weight:700;color:var(--navy);white-space:nowrap}
+.ccj-done-fact span{font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray)}
+.ccj-done-btns{display:flex;justify-content:center;gap:9px;flex-wrap:wrap;margin-top:18px}
+.ccj-done-go{padding:10px 18px;border:none;border-radius:9px;background:var(--navy);color:#fff;
+  font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-done-go:hover{background:#1e293b;transform:translateY(-1px);box-shadow:0 5px 16px rgba(15,23,42,.18)}
+.ccj-done-dl{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border:1px solid var(--border);
+  border-radius:9px;background:var(--card);color:var(--navy);font-size:12.5px;font-weight:600;
+  font-family:inherit;cursor:pointer;transition:.15s}
+.ccj-done-dl:hover{border-color:var(--navy);background:var(--light)}
+.ccj-done-dl svg{width:13px;height:13px;opacity:.7}
+.ccj-done-stats{margin-top:15px;font-size:10.5px;color:var(--gray);letter-spacing:.2px}
+
+/* == DOWNLOAD, IN THE SAME CORNER OF EVERY DOCUMENT ========================================
+   Five artefacts, one control, one position — top right of the paper, sticky so it does not
+   scroll away from a nine-clause agreement. "Where is the download" is a question a person should
+   have to answer once in a product, not once per document.
+
+   Sticky needs a row it can stick INSIDE, and that row must not eat clicks meant for the document
+   underneath it: the strip is `pointer-events:none` and only the button takes them back. Zero
+   height, so it costs the document no space and the paper starts where it always did — the button
+   is pulled up into the wrap's own padding rather than pushing the first line down. */
+.ccj-doc-tools{position:sticky;top:0;z-index:6;height:0;display:flex;justify-content:flex-end;
+  pointer-events:none;max-width:760px;margin:0 auto}
+.ccj-doc-dl{pointer-events:auto;position:relative;top:-6px;display:inline-flex;align-items:center;gap:6px;
+  padding:6px 11px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.94);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  color:var(--navy);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;
+  box-shadow:0 2px 8px rgba(15,23,42,.07);transition:.15s}
+.ccj-doc-dl:hover{border-color:var(--navy);background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.12)}
+.ccj-doc-dl svg{width:12px;height:12px;opacity:.7}
+/* The quote's scroller IS `.ccj-q`, and it is a card rather than a sheet on a grey ground, so the
+   button sits inside its own padding rather than over a margin. */
+.ccj-q>.ccj-doc-tools{max-width:none}
+/* Never in the printed copy — it is a control, and a control in a PDF is a mistake somebody made.
+   Belt and braces with the frame's own inline rule, because this file is the one the frame loads. */
+@media print{.ccj-doc-tools{display:none!important}}
 
 /* -- The record. The end of the journey, and the only screen that looks back across all nine. -- */
 .ccj-act-hero{max-width:760px;margin:0 auto 14px;display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:12px;padding:15px 18px}

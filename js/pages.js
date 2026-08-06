@@ -10711,6 +10711,195 @@ function buildCfgDataFoundationHTML(){
     +'<div class="ai-journey-grid">'+cards+'</div>'
     +'</div>';
 }
+/* == THE RUN MENU: TWO THINGS YOU CAN DO ABOUT A PIECE OF WORK ==============================
+   The button used to do exactly one thing — open the run — and that was right while opening the
+   run was the only thing you could do about a row from here. Removing the follow-up sub-status
+   changed that: chasing a client is no longer a step the run walks through, so it needs a place
+   of its own, and the honest place is beside the other thing you can do about the same record.
+
+   THE TWO ARE NOT VARIANTS OF EACH OTHER, which is why they are a menu rather than a split
+   button with a default. One MOVES the work — it opens the run at the step it is sitting on and
+   carries on from there. The other moves nothing at all: it sends the counterparty a message and
+   writes down what was said. A person picking between them is picking between "I am going to do
+   the next thing" and "I am waiting on someone and want that on the record", and those are the
+   two states every row in this table is in.
+
+   THE COMMENT IS NOT OPTIONAL. A follow-up with no words is a timestamp — it records that we
+   chased and loses what we chased WITH, which is the only part the next reader needs and the
+   part they cannot reconstruct. See amSendFollowUp, which refuses a blank one.               == */
+let amRunMenuDeal=null;
+let amRunMenuView='menu';      // 'menu' | 'followup'
+let amRunMenuBound=false;
+function amRunMenuHost(){
+  if(typeof document==='undefined'||typeof document.createElement!=='function')return null;
+  let el=document.getElementById('am-runmenu');
+  if(el)return el;
+  el=document.createElement('div');
+  el.id='am-runmenu';
+  el.className='am-runmenu';
+  // Clicks inside the menu are not clicks outside it. Without this the document listener below
+  // closes the panel the moment the textarea is focused, which is the classic way a popover with
+  // a form in it becomes unusable.
+  if(typeof el.addEventListener==='function')el.addEventListener('click',function(e){e.stopPropagation();});
+  document.body.appendChild(el);
+  return el;
+}
+/* Bound on first open rather than at load, for the same reason ccjBindStream guards itself: the
+   headless harness has a document without listeners, and a top-level addEventListener there is a
+   crash on require. Nothing opens a menu in the harness, so nothing binds. */
+function amBindRunMenu(){
+  if(amRunMenuBound||typeof document==='undefined'||typeof document.addEventListener!=='function')return;
+  amRunMenuBound=true;
+  document.addEventListener('click',function(e){
+    if(amRunMenuDeal===null)return;
+    if(e.target&&typeof e.target.closest==='function'&&e.target.closest('#am-runmenu'))return;
+    amCloseRunMenu();
+  });
+  document.addEventListener('keydown',function(e){
+    if(amRunMenuDeal!==null&&e.key==='Escape')amCloseRunMenu();
+  });
+}
+function amCloseRunMenu(){
+  amRunMenuDeal=null;amRunMenuView='menu';
+  const el=document.getElementById('am-runmenu');
+  if(el){el.classList.remove('open');el.innerHTML='';}
+}
+/* Opened from the button, and closed by a second click on it — a control that only opens leaves
+   the reader looking for the way out of something they opened by accident. */
+function amToggleRunMenu(ev,dealId){
+  if(ev&&typeof ev.stopPropagation==='function')ev.stopPropagation();
+  if(amRunMenuDeal===dealId){amCloseRunMenu();return;}
+  amBindRunMenu();
+  amRunMenuDeal=dealId;amRunMenuView='menu';
+  amPaintRunMenu(ev&&ev.currentTarget);
+}
+function amRunMenuFollowUp(){
+  amRunMenuView='followup';
+  amPaintRunMenu();
+  const box=document.getElementById('am-followup-note');
+  if(box&&typeof box.focus==='function')box.focus();
+}
+function amRunMenuBack(){amRunMenuView='menu';amPaintRunMenu();}
+/* Painted and positioned in one place, so the follow-up panel — which is taller than the menu it
+   replaces — is re-anchored rather than left hanging off the bottom of the window. The anchor is
+   remembered from the opening click, because a repaint has no event to read it from. */
+function amPaintRunMenu(anchorEl){
+  const el=amRunMenuHost();
+  if(!el)return;
+  const d=(typeof amDeals!=='undefined'?amDeals:[]).find(function(x){return x.id===amRunMenuDeal;});
+  if(!d){amCloseRunMenu();return;}
+  if(anchorEl)el._anchor=anchorEl;
+  el.innerHTML=amRunMenuHTML(d);
+  el.classList.add('open');
+  const a=el._anchor;
+  if(!a||typeof a.getBoundingClientRect!=='function')return;
+  const r=a.getBoundingClientRect();
+  if(!r.width&&!r.height)return;                 // no layout — nothing to anchor to
+  const h=el.offsetHeight||0,w=el.offsetWidth||0;
+  const below=window.innerHeight-r.bottom-10;
+  el.style.left='auto';
+  el.style.right=Math.max(10,window.innerWidth-r.right)+'px';
+  if(below>=h){el.style.top=(r.bottom+6)+'px';el.style.bottom='auto';}
+  else{el.style.bottom=(window.innerHeight-r.top+6)+'px';el.style.top='auto';}
+  // A menu wider than the space to its left would run off the other edge of the window.
+  if(w&&r.right-w<8){el.style.right='auto';el.style.left='8px';}
+}
+function amRunMenuHTML(d){
+  const cur=typeof amCurrentSub==='function'?amCurrentSub(d):null;
+  const pos=typeof amJourneyPos==='function'?amJourneyPos(d):null;
+  const step=cur?String(cur.label).replace(/&mdash;/g,'—'):'the first step';
+  const live=typeof ccjRuns!=='undefined'&&!!ccjRuns[d.id];
+  const has=live||(typeof ccjDealPos==='function'&&!!ccjDealPos(d));
+  const where=pos?'Stage '+pos.stageNo+' of '+pos.stages+' &middot; step '+pos.stepNo+' of '+pos.steps:'';
+  /* WHO IS BEING CHASED, in a sentence rather than as a role token. `owner` is a column value —
+     Client, Worker, Compliance — and three of them are common nouns that read as a proper name
+     when dropped into prose ("Chase Client with a comment"). The parties get an article; the
+     internal teams keep their names, because "the compliance" is not a thing anyone says. */
+  const owner=cur?cur.owner:'';
+  const who=/^(Client|Worker|System)$/.test(owner)?'the '+owner.toLowerCase():(owner||'the owner');
+  const head='<div class="am-runmenu-head"><b>'+d.ref+'</b><span>'+d.client+'</span>'
+    +(where?'<i>'+where+'</i>':'')+'</div>';
+  if(amRunMenuView==='followup'){
+    const sent=(amFollowUps[d.id]||[]).length;
+    return head
+      +'<div class="am-runmenu-panel">'
+      +'<div class="am-runmenu-panel-title">Ask for a follow-up</div>'
+      // Names who it goes to. A chase sent to nobody in particular is the one thing this control
+      // must not look like — the owner of the step IS the person being chased.
+      +'<div class="am-runmenu-panel-sub">Goes to <b>'+who+'</b> against &ldquo;'+step+'&rdquo;. '
+      +'It does not move the record.</div>'
+      +'<textarea class="am-runmenu-input" id="am-followup-note" rows="3" placeholder="What are you chasing them for?"></textarea>'
+      +'<div class="am-runmenu-err" id="am-followup-err"></div>'
+      +'<div class="am-runmenu-btns">'
+      +'<button class="am-runmenu-send" onclick="amSendFollowUp('+d.id+')">Send follow-up</button>'
+      +'<button class="am-runmenu-ghost" onclick="amRunMenuBack()">Back</button>'
+      +'</div>'
+      +(sent?'<div class="am-runmenu-foot">'+sent+' follow-up'+(sent===1?'':'s')+' already sent on this record.</div>':'')
+      +'</div>';
+  }
+  const iNext='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
+  const iChase='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  return head
+    +'<button type="button" class="am-runmenu-item" onclick="amRunMenuGo('+d.id+')">'
+    +'<span class="am-runmenu-ico">'+iNext+'</span>'
+    +'<span class="am-runmenu-txt"><b>Move to the next step</b>'
+    +'<i>'+(has?'Opens the run at &ldquo;'+step+'&rdquo;':'Starts the run and takes it from the top')+'</i></span>'
+    +'</button>'
+    +'<button type="button" class="am-runmenu-item" onclick="amRunMenuFollowUp()">'
+    +'<span class="am-runmenu-ico">'+iChase+'</span>'
+    +'<span class="am-runmenu-txt"><b>Ask for a follow-up</b>'
+    +'<i>Chase '+who+' with a comment. Moves nothing.</i></span>'
+    +'</button>';
+}
+function amRunMenuGo(dealId){
+  amCloseRunMenu();
+  if(typeof ccjOpenDealRun==='function')ccjOpenDealRun(dealId);
+}
+/* Every follow-up ever sent on a record, newest last. Held beside the deal rather than on it so
+   the seed data stays a description of where work HAS REACHED and this stays a description of
+   what we DID about it — the same split amExtraLog already makes against the derived log. */
+const amFollowUps={};
+function amSendFollowUp(dealId){
+  const d=(typeof amDeals!=='undefined'?amDeals:[]).find(function(x){return x.id===dealId;});
+  if(!d)return;
+  const box=document.getElementById('am-followup-note');
+  const note=box?String(box.value||'').trim():'';
+  if(!note){
+    const err=document.getElementById('am-followup-err');
+    if(err)err.textContent='Say what you are chasing them for — a follow-up with no words is just a timestamp.';
+    if(box&&typeof box.focus==='function')box.focus();
+    return;
+  }
+  const cur=amCurrentSub(d)||{};
+  (amFollowUps[d.id]=amFollowUps[d.id]||[]).push({note:note,step:cur.label||'',by:actorLabel(currentActorId())});
+  // Into the record's own trail, through the one writer every non-moving event goes through, so a
+  // follow-up reads beside the reassignments and the reminders rather than in a format of its own.
+  amPushNote(d,'Follow-up sent',
+    'Chased &ldquo;'+(cur.label||'this step')+'&rdquo; with '+(cur.owner||'the owner')+'.'
+    +'<div class="am-log-quote">&ldquo;'+textSafe(note)+'&rdquo;</div>',
+    {reminder:true});
+  /* And into the RUN's client thread, when this deal has one open ON A CLIENT STAGE. The two
+     surfaces are one piece of work seen twice — see ccjSyncDealFromRun — so a chase that appeared
+     on the board and not in the conversation would have the transcript missing a message that was
+     genuinely sent.
+
+     Three guards, and each one is a different way of getting it wrong. The run must be the ACTIVE
+     one, because ccjClientEvent writes through `ccjRun` and would otherwise post this into
+     whichever run happens to be loaded. It must have STARTED, or there is no thread to write to.
+     And the stage must be a client stage: stages 7 and 8 are a conversation with the WORKER, and
+     ccjClientPush stamps a message with the mode of the stage it is pushed on — so a client chase
+     posted there would be filed against the wrong counterparty in the one record that has to keep
+     the two apart. A run that fails any of them still has the board's entry, which is the record;
+     the thread picks it up the next time the two are in the same place. */
+  if(typeof ccjRuns!=='undefined'&&ccjRuns[dealId]&&typeof ccjRun!=='undefined'
+     &&ccjRun===ccjRuns[dealId]&&ccjRun.started
+     &&typeof ccjClientEvent==='function'&&typeof ccjChatMode==='function'&&ccjChatMode()==='client'){
+    ccjClientEvent('chase',undefined,note);
+  }
+  amCloseRunMenu();
+  showAiToast('Follow-up sent',d.client+' &middot; chased &ldquo;'+(cur.label||'this step')+'&rdquo;.');
+  renderADTPage();
+}
 /* The way into a deal's own run of the Hire and Onboard journey. Says which of the two it is —
    opening a run that exists is a different act from starting one, and a control that reads the
    same either way makes the first click feel destructive. `row` is the cell-sized cut of the same
@@ -10733,10 +10922,15 @@ function ccjOpenRunBtnHTML(d,row){
   const where=cur&&pos
     ?' — stage '+pos.stageNo+' of '+pos.stages+', '+String(cur.label).replace(/&mdash;/g,'—')
     :'';
-  const title=(has?'Opens where this run was left off':'Starts this run')+where;
-  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="event.stopPropagation();ccjOpenDealRun('+d.id+')"'
-    +' title="'+attrSafe(title)+'">'+ico
-    +(has?'Open run':'Start run')+'</button>';
+  /* IT IS A MENU NOW, so the tooltip has to describe the menu rather than the navigation — a
+     control whose hover promises one thing and whose click offers two is the small dishonesty
+     that makes people stop reading tooltips. The step it would open at is still named, because
+     that is the fact the first item is decided on. */
+  const title=(has?'Open this run or chase it':'Start this run or chase it')+where;
+  const chev='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="opacity:.55"><polyline points="6 9 12 15 18 9"/></svg>';
+  return '<button class="am-sb-openrun'+(row?' row':'')+'" onclick="amToggleRunMenu(event,'+d.id+')"'
+    +' aria-haspopup="menu" title="'+attrSafe(title)+'">'+ico
+    +(has?'Open run':'Start run')+chev+'</button>';
 }
 function cfgMapRow(unified,source,type){
   return '<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed var(--border)">'
