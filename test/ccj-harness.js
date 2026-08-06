@@ -962,6 +962,19 @@ check('the bar names the action, in one line',
 check('and counts what is actually still missing',
   actionBar().indexOf('<b>' + run('ccjMissingFields().length') + ' field') > -1,
   run('ccjMissingFields().length') + ' missing');
+/* BOTH WAYS OF ANSWERING THE STEP. Attaching the candidate's completed form fills the whole sheet
+   at once and is what happens on most hires, but it existed only as a paperclip in the composer —
+   an icon whose meaning has to be guessed is a route most people never try. The instruction names
+   it, and the words ARE the control. */
+check('the line offers the upload as well as the typing',
+  actionBar().indexOf('or upload a completed form') > -1, actionBar().slice(0, 240));
+check('and those words are the way to do it, not a description of one',
+  actionBar().indexOf('class="ccj-todo-alt" onclick="ccjUpload()"') > -1);
+// The handler is only as good as the input it clicks, and that input lives in index.html rather
+// than in any builder — so nothing in this file would notice it being renamed.
+check('and the file input it reaches for is really on the page',
+  require('fs').readFileSync(require('path').join(ROOT, 'index.html'), 'utf8')
+    .indexOf('id="ccj-upload-input"') > -1);
 // One line means one line: no heading, no state tag, no second sentence explaining the step.
 check('and explains nothing beyond it',
   actionBar().indexOf('ccj-todo-note') === -1 && actionBar().indexOf('ccj-todo-tag') === -1

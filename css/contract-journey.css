@@ -454,6 +454,15 @@
 .ccj-todo-ico svg{width:12px;height:12px}
 .ccj-todo-do{min-width:0;font-size:12px;font-weight:600;line-height:1.45;color:var(--ccj-you-deep)}
 .ccj-todo-do b{font-weight:700}
+/* THE OTHER WAY OF ANSWERING THE SAME STEP, and it is a control rather than a description of one.
+   Set in the sentence rather than beside it: the line stays one line, and the words a reader has
+   just decided to act on are the ones under their cursor. Underlined because a button that looks
+   like running text is a button nobody presses — the underline is the only affordance it gets,
+   and it is enough at this size. */
+.ccj-todo-alt{padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;
+  text-decoration:underline;text-decoration-color:rgba(180,83,9,.4);text-underline-offset:2px;
+  transition:.15s}
+.ccj-todo-alt:hover{color:var(--ccj-you);text-decoration-color:currentColor}
 /* The one line the step block keeps once its decision has moved to the bar: it still says which
    step stopped and where the answer is, so a reader scrolled back up to it is not looking at a
    step that visibly halted for no stated reason. */

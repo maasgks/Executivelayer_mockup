@@ -3933,7 +3933,18 @@ const CCJ_TODO={
     if(s==='goto')return 'Open the contract details and fill them in.';
     if(s!=='fill')return '';                       // reading, or compiling — the layer is working
     const miss=ccjMissingFields().length;
-    return 'Fill in the contract details &mdash; <b>'+miss+' field'+(miss===1?'':'s')+'</b> to go.';
+    /* TWO ROUTES, AND THE SECOND ONE WAS INVISIBLE. Typing the fields in is not the only way to
+       answer this step — the candidate's completed information form can be attached and read
+       into the whole sheet at once, which is faster and is what actually happens on most hires.
+       That route existed only as a paperclip in the composer, and a control whose meaning has to
+       be guessed from an icon is a control most people never try.
+
+       So the instruction names both, and the second one is the button: the words that describe
+       the action ARE the way to take it, so nobody has to go looking for the icon after reading
+       about it. */
+    return 'Fill in the contract details '
+      +'<button type="button" class="ccj-todo-alt" onclick="ccjUpload()">or upload a completed form</button>'
+      +' &mdash; <b>'+miss+' field'+(miss===1?'':'s')+'</b> to go.';
   },
   'quote-review/Change requested':function(){
     // Only once there IS a draft. While it is being written there is nothing to send.
