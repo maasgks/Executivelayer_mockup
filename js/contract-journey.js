@@ -5688,7 +5688,15 @@ function ccjMsa(){
   const run=ccjRun||{};
   if(!run.msa)run.msa={id:'MSA-'+String(4020+(run.gen||0)),screening:'clean',hit:null,
     clientSignedAt:0,adtSignedAt:0,version:1};
-  return run.msa;
+  const m=run.msa;
+  // The three negotiable terms, previously written into the clause text as literals. Defaulted on
+  // every read rather than only at creation, so a run restored from localStorage from before they
+  // existed still reads numbers instead of "undefined days net". Values are unchanged from the
+  // prose they replace, so an untouched agreement reads exactly as it did.
+  if(m.paymentDays===undefined)m.paymentDays=14;
+  if(m.noticeDays===undefined)m.noticeDays=60;
+  if(m.liabilityMonths===undefined)m.liabilityMonths=12;
+  return m;
 }
 /* Does this client already have a signed agreement? Everything on this stage hangs off it. The
    demo clients that ship with the app are treated as established relationships, which is what
@@ -5839,6 +5847,249 @@ function buildCCJAccountHTML(){
     +'</div>';
 }
 
+/* ---- EDITING A DRAFT -------------------------------------------------------------------------
+   A drafted agreement and a drafted contract are both documents a person is expected to READ
+   before approving, and reading one is how you find the term you want changed. Until now the only
+   answers were approve it or send it back, so the reviewer had no way to make the change they had
+   just decided on.
+
+   Editable only while the document is still a draft. Once it has been approved, issued or signed
+   it is a record of what was agreed, and a record that can be edited is not a record — the gates
+   are ccjMsaEditable/ccjEmpEditable below and they are the only thing that puts the button on the
+   page.
+
+   TERMS, NOT PROSE. What is edited is the small set of values the document is GENERATED from, not
+   its clause text. Every clause already interpolates these (ccjEmpClauses reads t.probation,
+   t.notice, t.gross, t.holiday; the agreement's 3.3, 3.5 and 3.8 read the three below), so a saved
+   change rewrites the sentences that quote it and the document cannot end up disagreeing with
+   itself. Free-text clause editing would have made that guarantee impossible to keep.
+
+   WHAT IS DELIBERATELY NOT EDITABLE: the agreement's service fee and deposit. ccjMsaFee() derives
+   both from the quote the client approved in stage 3. Letting stage 5 overwrite them would put a
+   number in the signed agreement that contradicts the quote it came from, silently, with no trail
+   — the quote is the place to change a price, and changing it there is a different stage's work.
+
+   A STAGING COPY, not live mutation. Edits land on obj.edit and only reach the document on save,
+   so Cancel is a real cancel. It also survives a repaint: keystrokes write to run state rather
+   than living in the DOM, so if anything repaints the screen mid-edit the typed values are still
+   there — the same reasoning as CCJ_KEEP_SCROLL, one level up. */
+const CCJ_DOC_EDIT={
+  msa:{
+    get:function(){return ccjMsa();},
+    can:function(){
+      const run=ccjRun;if(!run||!run.settled)return false;
+      const done=function(l){return !!run.settled['agreement-signature/'+l];};
+      return done('MSA drafted')&&!done('Sent')&&!done('Signed');
+    },
+    noun:'agreement',
+    fields:[
+      {key:'paymentDays',    label:'Payment terms',  suf:'days net',            min:1,max:120},
+      {key:'noticeDays',     label:'Termination notice', suf:'days written notice', min:1,max:365},
+      {key:'liabilityMonths',label:'Liability cap',  suf:'months of fees',      min:1,max:60}
+    ]
+  },
+  emp:{
+    get:function(){return ccjEmp().terms||{};},
+    can:function(){
+      const e=ccjEmp();
+      return !!e.terms&&!e.approvedBy&&!e.sentAt&&!e.workerSignedAt&&!e.adtSignedAt&&!e.declined;
+    },
+    noun:'contract',
+    fields:[
+      {key:'gross',    label:'Gross salary', pre:function(){return ccjCurrency();}, suf:'a month', min:0,max:9999999},
+      {key:'probation',label:'Probation',    suf:'months', min:0,max:24},
+      {key:'notice',   label:'Notice',       suf:'days',   min:0,max:365},
+      {key:'holiday',  label:'Annual leave', suf:'days',   min:0,max:60}
+    ]
+  }
+};
+// The editing flag lives beside the document it belongs to rather than in a module global, so two
+// runs held in ccjRuns cannot share one editor state.
+function ccjDocEditHost(kind){
+  return kind==='msa'?ccjMsa():ccjEmp();
+}
+function ccjDocEditing(kind){
+  const h=ccjDocEditHost(kind);
+  return !!(h&&h.editing&&CCJ_DOC_EDIT[kind].can());
+}
+function ccjDocEdit(kind){
+  const spec=CCJ_DOC_EDIT[kind];if(!spec||!spec.can())return;
+  const host=ccjDocEditHost(kind),src=spec.get();
+  host.edit={};
+  spec.fields.forEach(function(f){host.edit[f.key]=src[f.key];});
+  host.editing=true;
+  ccjPaintScreen();
+}
+function ccjDocEditSet(kind,key,v){
+  const host=ccjDocEditHost(kind);
+  if(host&&host.edit)host.edit[key]=v;    // no repaint: the input keeps focus and the caret
+}
+
+/* ---- EDITING THE WHOLE DOCUMENT --------------------------------------------------------------
+   The terms above regenerate the sentences that quote them. This is the other half: any line of
+   the document can be rewritten directly, because a reviewer's change is not always a number —
+   it is usually a sentence.
+
+   OVERRIDES, NOT A REWRITE OF THE SOURCE. Each region is addressed by a stable path ('t:cl.3.3.b')
+   and a person's text is stored against it. The generator keeps running underneath: a clause
+   nobody has touched is still generated, so changing the notice period still rewrites clause 10 —
+   it just stops doing that for a clause somebody has taken over, which is the only behaviour that
+   respects both edits. Reset clears the overrides and hands the document back to the generator.
+
+   Overrides render ESCAPED. Generated clause bodies carry their own <b> markup and are trusted
+   because this file wrote them; typed text is not, and a document that executes what was typed
+   into it is a hole rather than a feature. The visible cost is that a rewritten clause loses its
+   bold — the honest trade, and the reason .set marks which regions are no longer generated. */
+function ccjDocOv(kind){
+  const h=ccjDocEditHost(kind);
+  if(h&&!h.ov)h.ov={};
+  return (h&&h.ov)||{};
+}
+function ccjDocEsc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+// Seeds an editor from generated markup: tags out, the entities this file actually emits back to
+// the characters they stand for, so the box shows the sentence rather than its source.
+function ccjDocPlain(html){
+  return String(html==null?'':html).replace(/<[^>]*>/g,'')
+    .replace(/&middot;/g,'·').replace(/&mdash;/g,'—').replace(/&ndash;/g,'–')
+    .replace(/&rsquo;/g,'’').replace(/&lsquo;/g,'‘').replace(/&minus;/g,'−')
+    .replace(/&nbsp;/g,' ').replace(/&quot;/g,'"')
+    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+}
+function ccjDocSetText(kind,path,v){
+  const h=ccjDocEditHost(kind);
+  if(h&&h.edit)h.edit[path]=v;
+}
+function ccjDocGrow(el){
+  if(!el||!el.style)return;
+  el.style.height='auto';
+  el.style.height=(el.scrollHeight+2)+'px';
+}
+/* One editable region. Outside edit mode it returns exactly what the document always returned,
+   so nothing about the finished page depends on this being here. */
+function ccjDocF(kind,path,generated,opts){
+  opts=opts||{};
+  const ov=ccjDocOv(kind);
+  const has=Object.prototype.hasOwnProperty.call(ov,path);
+  if(!ccjDocEditing(kind))return has?ccjDocEsc(ov[path]):generated;
+  const h=ccjDocEditHost(kind),st=(h&&h.edit)||{};
+  const val=st[path]!==undefined?st[path]:(has?ov[path]:ccjDocPlain(generated));
+  const cls='ccj-doc-fx'+(opts.multiline?' ml':'')+(has?' set':'');
+  const set='ccjDocSetText(\''+kind+'\',\''+path+'\',this.value)';
+  if(opts.multiline){
+    // rows from the content rather than measured after paint: a repaint would drop a measured
+    // height, and every textarea here re-renders whenever anything on the screen does.
+    const rows=Math.max(2,Math.min(14,Math.ceil(String(val).length/58)));
+    return '<textarea class="'+cls+'" rows="'+rows+'" spellcheck="false" '
+      +'oninput="ccjDocGrow(this);'+set+'">'+ccjDocEsc(val)+'</textarea>';
+  }
+  return '<input class="'+cls+'" type="text" spellcheck="false" value="'+attrSafe(val)+'" oninput="'+set+'">';
+}
+// Hands the document back to the generator. Only offered while editing, and only once something
+// has actually been overridden.
+function ccjDocEditReset(kind){
+  const spec=CCJ_DOC_EDIT[kind];if(!spec||!spec.can())return;
+  const h=ccjDocEditHost(kind);if(!h)return;
+  h.ov={};
+  if(h.edit)Object.keys(h.edit).forEach(function(k){if(k.indexOf('t:')===0)delete h.edit[k];});
+  ccjPaintScreen();
+  if(typeof showAiToast==='function')showAiToast('Document reset','Every clause is generated again from the terms.');
+}
+function ccjDocEditCancel(kind){
+  const host=ccjDocEditHost(kind);
+  if(!host)return;
+  host.editing=false;delete host.edit;
+  ccjPaintScreen();
+}
+/* Saved values are clamped rather than rejected. A reviewer who types 400 into a probation field
+   has made a typing mistake, not a request, and a document that silently refuses the save leaves
+   them staring at a button that does nothing. A blank field keeps what was there. */
+function ccjDocEditSave(kind){
+  const spec=CCJ_DOC_EDIT[kind];if(!spec||!spec.can())return;
+  const host=ccjDocEditHost(kind),dst=spec.get(),edit=host.edit||{};
+  let changed=0;
+  spec.fields.forEach(function(f){
+    const raw=String(edit[f.key]===undefined?'':edit[f.key]).replace(/[^0-9.\-]/g,'');
+    if(raw==='')return;
+    let n=Number(raw);
+    if(!isFinite(n))return;
+    n=Math.min(f.max,Math.max(f.min,Math.round(n)));
+    if(n!==Number(dst[f.key])){dst[f.key]=n;changed++;}
+  });
+  // Rewritten regions. Only touched ones are staged, so an untouched clause is never frozen into
+  // an override and goes on being generated. Blanking one hands that region back to the generator
+  // rather than leaving a hole in the document.
+  const ov=ccjDocOv(kind);
+  Object.keys(edit).forEach(function(k){
+    if(k.indexOf('t:')!==0)return;
+    const v=String(edit[k]).replace(/\s+$/,'');
+    if(v===''){if(Object.prototype.hasOwnProperty.call(ov,k)){delete ov[k];changed++;}return;}
+    if(ov[k]!==v){ov[k]=v;changed++;}
+  });
+  host.editing=false;delete host.edit;
+  // Marks the paper so the change is something you SEE land, not something you have to go looking
+  // for. Cleared by the next repaint that is not this one.
+  if(changed)host.editFlash=true;
+  ccjPaintScreen();
+  if(changed&&typeof requestAnimationFrame==='function')requestAnimationFrame(function(){
+    setTimeout(function(){
+      const h=ccjDocEditHost(kind);
+      if(h&&h.editFlash){h.editFlash=false;ccjPaintScreen();}
+    },900);
+  });
+  if(typeof ccjToast==='function'||typeof showAiToast==='function'){
+    const msg=changed
+      ?changed+' term'+(changed===1?'':'s')+' updated. The '+spec.noun+' has been redrawn.'
+      :'No changes to save.';
+    if(typeof showAiToast==='function')showAiToast(changed?'Draft updated':'Nothing changed',msg);
+  }
+}
+/* The bar above the paper. Two states in one strip so the swap is a cross-fade in place rather
+   than one control vanishing and another appearing somewhere else. */
+function ccjDocEditBarHTML(kind){
+  const spec=CCJ_DOC_EDIT[kind];
+  if(!spec||!spec.can())return '';
+  const host=ccjDocEditHost(kind);
+  if(!ccjDocEditing(kind)){
+    return '<div class="ccj-doc-bar">'
+      +'<span class="ccj-doc-bar-n">Draft &middot; not yet approved</span>'
+      +'<button type="button" class="ccj-doc-edit-btn" onclick="ccjDocEdit(\''+kind+'\')">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'
+      +'Edit '+spec.noun+'</button>'
+      +'</div>';
+  }
+  const edit=host.edit||{};
+  const fields=spec.fields.map(function(f,i){
+    const pre=f.pre?'<span class="ccj-doc-ef-a">'+f.pre()+'</span>':'';
+    const val=edit[f.key]===undefined?'':edit[f.key];
+    return '<label class="ccj-doc-ef" style="--i:'+i+'">'
+      +'<span class="ccj-doc-ef-l">'+f.label+'</span>'
+      +'<span class="ccj-doc-ef-in">'+pre
+      +'<input type="number" inputmode="numeric" min="'+f.min+'" max="'+f.max+'" value="'+attrSafe(val)+'" '
+      +'oninput="ccjDocEditSet(\''+kind+'\',\''+f.key+'\',this.value)" '
+      +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();ccjDocEditSave(\''+kind+'\');}'
+      +'else if(event.key===\'Escape\'){event.preventDefault();ccjDocEditCancel(\''+kind+'\');}">'
+      +'<span class="ccj-doc-ef-a suf">'+f.suf+'</span></span>'
+      +'</label>';
+  }).join('');
+  const overridden=Object.keys(ccjDocOv(kind)).length;
+  return '<div class="ccj-doc-bar editing">'
+    +'<span class="ccj-doc-bar-n"><span class="ccj-doc-bar-dot"></span>Editing the whole '+spec.noun
+    +(overridden?' &middot; '+overridden+' rewritten':'')+'</span>'
+    +'<span class="ccj-doc-bar-a">'
+    +(overridden?'<button type="button" class="ccj-doc-reset-btn" onclick="ccjDocEditReset(\''+kind+'\')" '
+      +'title="Discard every rewritten line and generate the document again">Reset</button>':'')
+    +'<button type="button" class="ccj-doc-cancel-btn" onclick="ccjDocEditCancel(\''+kind+'\')">Cancel</button>'
+    +'<button type="button" class="ccj-doc-save-btn" onclick="ccjDocEditSave(\''+kind+'\')">Save changes</button>'
+    +'</span>'
+    +'</div>'
+    +'<div class="ccj-doc-editor">'
+    +'<div class="ccj-doc-editor-h">Every field and clause below is editable &mdash; click into the document itself to rewrite a line. These terms are what the '+spec.noun+' is generated from, so changing one redraws each clause that quotes it.</div>'
+    +'<div class="ccj-doc-efs">'+fields+'</div>'
+    +'</div>';
+}
+
 /* ---- THE AGREEMENT ITSELF --------------------------------------------------------------------
    A real document: parties, a commercial schedule pulled live from the accepted quote, readable
    clause text, and signature blocks that fill in as each party signs. Long enough to read as a
@@ -5849,13 +6100,19 @@ function buildCCJMsaHTML(){
   const done=function(l){return !!run.settled['agreement-signature/'+l];};
   if(ccjMsaExists()&&done('Signed'))return buildCCJMsaExistingHTML(p);
   const drafted=done('MSA drafted'),sent=done('Sent'),signed=done('Signed');
+  // Every region carries a path so it can be rewritten in place. The paths are the clause numbers
+  // and the row labels, which is what makes an override survive a redraft of the surrounding text.
   const clause=function(n,t,body){
-    return '<div class="ccj-msa-cl"><div class="ccj-msa-cl-h"><span>'+n+'</span>'+t+'</div>'
-      +'<p>'+body+'</p></div>';
+    return '<div class="ccj-msa-cl"><div class="ccj-msa-cl-h"><span>'+n+'</span>'
+      +ccjDocF('msa','t:cl.'+n+'.t',t)+'</div>'
+      +'<p>'+ccjDocF('msa','t:cl.'+n+'.b',body,{multiline:true})+'</p></div>';
   };
-  const kv=function(k,v){return '<div class="ccj-msa-kv"><span>'+k+'</span><b>'+v+'</b></div>';};
+  const kv=function(k,v){return '<div class="ccj-msa-kv"><span>'+k+'</span><b>'
+    +ccjDocF('msa','t:kv.'+k,v)+'</b></div>';};
   return '<div class="ccj-msa-wrap">'
-    +'<div class="ccj-msa'+(drafted?'':' pending')+'">'
+    +ccjDocEditBarHTML('msa')
+    +'<div class="ccj-msa'+(drafted?'':' pending')
+      +(ccjDocEditing('msa')?' ccj-doc-behind':'')+(m.editFlash?' ccj-doc-flash':'')+'">'
     +'<div class="ccj-msa-head">'
     +'<div><div class="ccj-msa-brand">ADT</div><div class="ccj-msa-brandsub">Global Employment Platform</div></div>'
     +'<div class="ccj-msa-ref"><div class="ccj-msa-kind">MASTER SERVICES AGREEMENT</div>'
@@ -5874,19 +6131,19 @@ function buildCCJMsaHTML(){
     +kv('Employer cost, per placement',money(q.base)+' a month')
     +kv('Total, per placement',money(q.total)+' a month')
     +kv('Deposit',money(fee.deposit)+' &middot; '+fee.depositLabel)
-    +kv('Invoicing','Monthly in advance &middot; 14 days net')
-    +'<div class="ccj-msa-sched">Rates apply per placement made under this Agreement. Additional placements are made by Work Order and do not require a new Agreement.</div>'
+    +kv('Invoicing','Monthly in advance &middot; '+m.paymentDays+' days net')
+    +'<div class="ccj-msa-sched">'+ccjDocF('msa','t:sched','Rates apply per placement made under this Agreement. Additional placements are made by Work Order and do not require a new Agreement.',{multiline:true})+'</div>'
     +'</div>'
 
     +'<div class="ccj-msa-sec"><div class="ccj-msa-sec-t">3 &middot; Terms</div>'
     +clause('3.1','Appointment','The Client appoints '+p.adt.name+' ("the Provider") as employer of record for personnel engaged under this Agreement in '+p.worker.country+'. The Provider shall enter into a compliant local employment contract with each such person, operate payroll, and remit all statutory employer contributions.')
     +clause('3.2','Direction of work','The Client directs the day-to-day work of each placement. The Provider carries the employment relationship, and neither party shall represent the arrangement otherwise to the personnel concerned or to any authority.')
-    +clause('3.3','Fees and payment','The Client shall pay the employer cost together with the service fee stated above, invoiced monthly in advance and payable within fourteen days. Statutory employer contributions are passed through at cost and are not marked up.')
+    +clause('3.3','Fees and payment','The Client shall pay the employer cost together with the service fee stated above, invoiced monthly in advance and payable within <b>'+m.paymentDays+' days</b>. Statutory employer contributions are passed through at cost and are not marked up.')
     +clause('3.4','Deposit','A deposit equal to '+fee.depositLabel+' is payable before any placement commences. The Provider funds payroll ahead of invoice settlement and the deposit is held as security against that exposure. It is refundable on termination once all liabilities are discharged.')
-    +clause('3.5','Liability and indemnity','The Provider indemnifies the Client against employment claims arising from the Provider\'s performance as employer of record. The Client indemnifies the Provider against claims arising from the Client\'s direction of the work, including discrimination and unsafe working conditions. Neither party\'s aggregate liability shall exceed the fees paid in the preceding twelve months.')
+    +clause('3.5','Liability and indemnity','The Provider indemnifies the Client against employment claims arising from the Provider\'s performance as employer of record. The Client indemnifies the Provider against claims arising from the Client\'s direction of the work, including discrimination and unsafe working conditions. Neither party\'s aggregate liability shall exceed the fees paid in the preceding <b>'+m.liabilityMonths+' months</b>.')
     +clause('3.6','Intellectual property','All work product created by personnel placed under this Agreement vests in the Provider on creation and is assigned to the Client in full, free of encumbrance, on payment of the invoice covering the period in which it was created.')
     +clause('3.7','Data protection','Each party is an independent controller of personal data it determines the purposes of. The Provider processes personnel data as controller for employment and payroll administration. Transfers outside the EEA are made under Standard Contractual Clauses.')
-    +clause('3.8','Term and termination','This Agreement continues until terminated on sixty days written notice. On termination the Provider shall give each placement the statutory notice required in '+p.worker.country+', and the Client remains liable for the employer cost and fees over that notice period.')
+    +clause('3.8','Term and termination','This Agreement continues until terminated on <b>'+m.noticeDays+' days</b> written notice. On termination the Provider shall give each placement the statutory notice required in '+p.worker.country+', and the Client remains liable for the employer cost and fees over that notice period.')
     +clause('3.9','Governing law','This Agreement is governed by the laws of '+p.client.country+' and the parties submit to the exclusive jurisdiction of its courts.')
     +'</div>'
 
@@ -7289,7 +7546,8 @@ function buildCCJEmpHTML(){
   const reg=ccjReg(p.worker.country);
   const state=ccjEmpStateLabel();
   const adj=ccjAuditAdjusted().length,bad=ccjAuditFailed().length;
-  const kv=function(k,v){return '<div class="ccj-ec-kv"><span>'+k+'</span><b>'+(v||'&mdash;')+'</b></div>';};
+  const kv=function(k,v){return '<div class="ccj-ec-kv"><span>'+k+'</span><b>'
+    +ccjDocF('emp','t:kv.'+k,v||'&mdash;')+'</b></div>';};
   const t=e.terms||{};
   const sym=ccjCurrency();
   // The band above the paper: what this document is, and where the check has got to.
@@ -7326,8 +7584,8 @@ function buildCCJEmpHTML(){
         :row.verdict==='fail'?'&#10007; Breach':'&ndash; Not checked')+'</span>'
       :live?'<span class="ccj-ec-mark checking"><span class="ccj-spin sm"></span>Checking</span>':'';
     return '<div class="ccj-ec-cl'+(row?' '+row.verdict:'')+(live?' live':'')+'" id="ccj-ec-cl-'+cl.n+'">'
-      +'<div class="ccj-ec-cl-h"><span>'+cl.n+'</span>'+cl.title+mark+'</div>'
-      +'<p>'+cl.body+'</p>'
+      +'<div class="ccj-ec-cl-h"><span>'+cl.n+'</span>'+ccjDocF('emp','t:cl.'+cl.n+'.t',cl.title)+mark+'</div>'
+      +'<p>'+ccjDocF('emp','t:cl.'+cl.n+'.b',cl.body,{multiline:true})+'</p>'
       +(row?'<div class="ccj-ec-rule '+row.verdict+'">'
         +'<div class="ccj-ec-rule-h">'+row.rule+'<i>'+row.source+'</i></div>'
         +'<div class="ccj-ec-rule-cmp"><span>Required</span><b>'+row.expected+'</b></div>'
@@ -7338,7 +7596,9 @@ function buildCCJEmpHTML(){
   };
   return '<div class="ccj-ec-wrap">'
     +band()
-    +'<div class="ccj-ec'+(drafted?'':' pending')+'">'
+    +ccjDocEditBarHTML('emp')
+    +'<div class="ccj-ec'+(drafted?'':' pending')
+      +(ccjDocEditing('emp')?' ccj-doc-behind':'')+(e.editFlash?' ccj-doc-flash':'')+'">'
     +'<div class="ccj-ec-head">'
     +'<div><div class="ccj-ec-brand">ADT</div>'
     +'<div class="ccj-ec-brandsub">Global Employment Platform</div></div>'
@@ -7348,14 +7608,14 @@ function buildCCJEmpHTML(){
 
     +'<div class="ccj-ec-parties">'
     +'<div class="ccj-ec-party"><div class="ccj-ec-party-t">Employer</div>'
-    +'<div class="ccj-ec-party-n">'+p.adt.name+'</div>'
-    +'<div class="ccj-ec-party-a">'+reg.adt.join('<br>')+'</div>'
-    +'<div class="ccj-ec-party-v">'+reg.reg+'</div></div>'
+    +'<div class="ccj-ec-party-n">'+ccjDocF('emp','t:party.er.n',p.adt.name)+'</div>'
+    +'<div class="ccj-ec-party-a">'+ccjDocF('emp','t:party.er.a',reg.adt.join('<br>'),{multiline:true})+'</div>'
+    +'<div class="ccj-ec-party-v">'+ccjDocF('emp','t:party.er.v',reg.reg)+'</div></div>'
     +'<div class="ccj-ec-party"><div class="ccj-ec-party-t">Employee</div>'
-    +'<div class="ccj-ec-party-n">'+p.worker.name+'</div>'
-    +'<div class="ccj-ec-party-a">'+(f.address||'&mdash;')+'</div>'
-    +'<div class="ccj-ec-party-v">'+(f.dob?'Born '+ccjPrettyDate(f.dob)+' &middot; ':'')
-      +(f.nationality||p.worker.country)+' national</div></div>'
+    +'<div class="ccj-ec-party-n">'+ccjDocF('emp','t:party.ee.n',p.worker.name)+'</div>'
+    +'<div class="ccj-ec-party-a">'+ccjDocF('emp','t:party.ee.a',(f.address||'&mdash;'),{multiline:true})+'</div>'
+    +'<div class="ccj-ec-party-v">'+ccjDocF('emp','t:party.ee.v',(f.dob?'Born '+ccjPrettyDate(f.dob)+' &middot; ':'')
+      +(f.nationality||p.worker.country)+' national')+'</div></div>'
     +'</div>'
 
     +'<div class="ccj-ec-meta">'

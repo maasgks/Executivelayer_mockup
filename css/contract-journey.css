@@ -1987,3 +1987,102 @@ select.ccj-inp{cursor:pointer;appearance:none;background-image:url("data:image/s
    ccjPaintWork, which is why this is a class test and not a build-time decision. */
 .ccj-body.solo .ccj-split{display:none}
 @media(prefers-reduced-motion:reduce){.ccj-split-grip{transition:none}}
+
+/* == EDITING A DRAFT ==========================================================================
+   Sits above the paper in both artifact panels — the agreement and the employment contract share
+   one component, so the gesture is the same wherever a draft can still be changed.
+
+   The motion has a job: the bar cross-fades in place so the Edit button becomes the Save/Cancel
+   pair rather than being replaced by them, the editor unrolls from behind it, and the paper drops
+   back a step so it reads as the thing being edited rather than a second thing competing for
+   attention. Every duration is under 300ms — this is a mode change, not a scene change.
+   ============================================================================================ */
+.ccj-doc-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  max-width:720px;margin:0 auto 12px;padding:9px 12px;background:var(--card);
+  border:1px solid var(--border);border-radius:10px;animation:ccjDocBarIn .22s cubic-bezier(.16,1,.3,1)}
+.ccj-doc-bar.editing{border-color:var(--navy);background:var(--ol)}
+.ccj-doc-bar-n{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--gray)}
+.ccj-doc-bar.editing .ccj-doc-bar-n{color:var(--navy)}
+.ccj-doc-bar-dot{width:6px;height:6px;border-radius:50%;background:var(--navy);
+  animation:ccjDocPulse 1.7s ease-in-out infinite}
+.ccj-doc-bar-a{display:inline-flex;align-items:center;gap:8px}
+@keyframes ccjDocBarIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@keyframes ccjDocPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
+
+.ccj-doc-edit-btn,.ccj-doc-save-btn,.ccj-doc-cancel-btn{display:inline-flex;align-items:center;gap:6px;
+  padding:6px 13px;border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:var(--card);color:var(--navy);
+  transition:background .15s,border-color .15s,color .15s,transform .12s,box-shadow .15s}
+.ccj-doc-edit-btn svg{width:13px;height:13px;flex-shrink:0}
+.ccj-doc-edit-btn:hover{border-color:var(--navy);color:var(--navy);background:var(--ol)}
+.ccj-doc-edit-btn:active,.ccj-doc-save-btn:active,.ccj-doc-cancel-btn:active{transform:translateY(1px)}
+.ccj-doc-save-btn{background:var(--navy);border-color:var(--navy);color:#fff}
+.ccj-doc-save-btn:hover{background:#1e293b;border-color:#1e293b;box-shadow:0 3px 12px rgba(15,23,42,.22)}
+.ccj-doc-cancel-btn:hover,.ccj-doc-reset-btn:hover{border-color:var(--gray);background:var(--ol)}
+.ccj-doc-reset-btn{padding:6px 13px;border-radius:8px;border:1px solid var(--border);background:var(--card);
+  font-family:inherit;font-size:12px;font-weight:600;color:var(--gray);cursor:pointer;transition:.15s}
+
+/* Unrolls rather than appears. grid-template-rows 0fr->1fr animates a height the content decides,
+   which max-height guessing cannot do without either clipping a long panel or easing through dead
+   space on a short one. */
+.ccj-doc-editor{max-width:720px;margin:0 auto 14px;display:grid;grid-template-rows:0fr;
+  animation:ccjDocEditorIn .26s cubic-bezier(.16,1,.3,1) forwards}
+.ccj-doc-editor>*{overflow:hidden}
+@keyframes ccjDocEditorIn{from{grid-template-rows:0fr;opacity:0}to{grid-template-rows:1fr;opacity:1}}
+.ccj-doc-editor-h{font-size:11.5px;line-height:1.55;color:var(--gray);padding:0 2px 10px}
+.ccj-doc-efs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;
+  padding:12px;background:var(--card);border:1px solid var(--border);border-radius:10px}
+
+/* Staggered, so the fields read as a list arriving in order rather than a block switching on. */
+.ccj-doc-ef{display:flex;flex-direction:column;gap:5px;opacity:0;
+  animation:ccjDocFieldIn .3s cubic-bezier(.16,1,.3,1) forwards;
+  animation-delay:calc(var(--i,0) * 45ms + 60ms)}
+@keyframes ccjDocFieldIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.ccj-doc-ef-l{font-size:11px;font-weight:600;color:var(--gray)}
+.ccj-doc-ef-in{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--light);
+  border:1px solid var(--border);border-radius:8px;transition:border-color .15s,box-shadow .15s,background .15s}
+.ccj-doc-ef-in:focus-within{border-color:var(--navy);background:var(--card);box-shadow:0 0 0 3px rgba(15,23,42,.10)}
+.ccj-doc-ef-in input{flex:1;min-width:0;width:100%;border:none;background:none;outline:none;
+  font-family:inherit;font-size:13px;font-weight:700;color:var(--navy);padding:0;
+  -moz-appearance:textfield}
+.ccj-doc-ef-in input::-webkit-outer-spin-button,
+.ccj-doc-ef-in input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.ccj-doc-ef-a{font-size:11.5px;font-weight:600;color:var(--gray);flex-shrink:0;white-space:nowrap}
+.ccj-doc-ef-a.suf{font-weight:500}
+
+/* The paper while its terms are being edited: one step back, not greyed out — it is still the
+   thing you are reading the numbers against. */
+.ccj-doc-behind{transform:scale(.988);opacity:.72;transition:transform .26s cubic-bezier(.16,1,.3,1),opacity .26s ease}
+/* And the moment a save lands on it. */
+.ccj-doc-flash{animation:ccjDocFlash .9s ease-out}
+@keyframes ccjDocFlash{
+  0%{box-shadow:0 0 0 0 rgba(15,23,42,.35)}
+  35%{box-shadow:0 0 0 4px rgba(15,23,42,.14)}
+  100%{box-shadow:0 0 0 0 rgba(15,23,42,0)}
+}
+
+/* -- The document's own fields while it is being edited. They have to sit INSIDE the paper without
+   turning it into a form: no boxes at rest, the document's own type and colour kept, and only a
+   dotted rule underneath to say a line can be taken hold of. The box appears on hover and focus,
+   which is where it earns its keep. -- */
+.ccj-doc-fx{width:100%;font-family:inherit;font-size:inherit;font-weight:inherit;color:inherit;
+  line-height:inherit;text-align:inherit;background:transparent;padding:1px 4px;margin:-1px -4px;
+  border:1px solid transparent;border-bottom:1px dashed #cbd5e1;border-radius:5px;outline:none;
+  transition:background .14s,border-color .14s,box-shadow .14s}
+.ccj-doc-fx:hover{background:var(--ol);border-bottom-color:var(--gray)}
+.ccj-doc-fx:focus{background:var(--card);border-color:var(--navy);border-bottom-style:solid;
+  box-shadow:0 0 0 3px rgba(15,23,42,.10)}
+/* A region that is no longer generated — someone's words are in it now. */
+.ccj-doc-fx.set{border-bottom-color:var(--navy);background:rgba(15,23,42,.035)}
+.ccj-doc-fx.ml{display:block;resize:vertical;min-height:2.4em;overflow:hidden;white-space:pre-wrap}
+.ccj-doc-fx::placeholder{color:#9ca3af}
+/* The key/value rows right-align their value; an input inheriting that would put the caret in a
+   strange place, so those get their own alignment back. */
+.ccj-msa-kv .ccj-doc-fx,.ccj-ec-kv .ccj-doc-fx{text-align:right}
+.ccj-msa-cl-h .ccj-doc-fx,.ccj-ec-cl-h .ccj-doc-fx{flex:1;min-width:0}
+@media(prefers-reduced-motion:reduce){
+  .ccj-doc-bar,.ccj-doc-editor,.ccj-doc-ef,.ccj-doc-flash,.ccj-doc-bar-dot{animation:none}
+  .ccj-doc-editor{grid-template-rows:1fr}
+  .ccj-doc-ef{opacity:1}
+  .ccj-doc-behind{transform:none;opacity:1;transition:none}
+}
