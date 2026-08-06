@@ -212,7 +212,15 @@ const amSubStatuses={
   'quote-review':[
     {label:'Sent',owner:'Account Manager',auto:true,autoNote:'on QA pass'},
     {label:'Viewed',owner:'Client',auto:true,autoNote:'tracked on open'},
-    {label:'Follow-up 1 / 2 / 3',owner:'Account Manager',loop:true,auto:true,autoNote:'scheduled reminders'},
+    /* "Follow-up 1 / 2 / 3" used to sit here, and it was the one sub-status that was not a
+       position the work reaches — it was a thing the Account Manager DOES while the work stands
+       still, on their own judgement, as many times as the deal deserves. Modelling it as a step
+       meant the run had to walk through chasing before it could reach the client's answer, and a
+       deal the client answered on first read still had to pass a row about reminders nobody sent.
+
+       A chase moves nothing, so it is not a step. It is an action on the record, offered from the
+       listing's run menu (see ccjRunMenuHTML) and written to the deal's log with the comment that
+       was sent. The journey is what happened; a follow-up is something we did about it. */
     {label:'Change requested',owner:'Client',decision:true},
     {label:'Re-issued v2',owner:'Account Manager',loop:true}
   ],
@@ -823,10 +831,14 @@ function amReassignCsm(dealId,name){
 }
 /* Shared "something happened without the record moving" entry — reminders, completion notes,
    reassignments. One writer, so every note carries the same shape and stamps. */
-function amPushNote(d,label,note){
+/* `flags` is merged over the entry, so a caller can mark WHAT KIND of non-moving event this was
+   without a second writer appearing. Follow-ups use it to carry `reminder:true`, which is what
+   gives them the trail's reminder tag — the tag exists precisely to say "this changed nothing",
+   and a chase that did not wear it would read as a step somebody completed. */
+function amPushNote(d,label,note,flags){
   const stage=amStageById(d.stage)||{};
   const now=new Date();const h=now.getHours();
-  (amExtraLog[d.id]=amExtraLog[d.id]||[]).unshift({
+  (amExtraLog[d.id]=amExtraLog[d.id]||[]).unshift(Object.assign({
     stage:stage,stageNo:stage.n,subNo:amSubIndex(d)+1,
     sub:{label:label},
     owner:amOwnerInfo('Account Manager'),ownerRole:'Account Manager',
@@ -834,7 +846,7 @@ function amPushNote(d,label,note){
     date:now.getDate()+' '+amMonths[now.getMonth()]+' '+now.getFullYear(),
     time:(h%12||12)+':'+String(now.getMinutes()).padStart(2,'0')+' '+(h>=12?'PM':'AM'),
     note:note
-  });
+  },flags||{}));
 }
 /* Reminders are the one event the derived log cannot infer, because they do not move the
    record — they are a thing the Account Manager did while standing still. Kept separately so
@@ -1540,6 +1552,11 @@ function getSidebarActivePage(pg){if(typeof isCCJPage==='function'&&isCCJPage(pg
   if(typeof isCCJV1Page==='function'&&isCCJV1Page(pg))return 'contracts';if(pg==='cfg-journey-detail'||pg==='journey-simulation')return 'cfg-context-journey';if(pg==='cfg-system-detail'||pg==='cfg-system-add')return 'cfg-systems';if(pg==='cfg-user-intake')return cfgUserIntakeBackPage;if(pg==='cfg-model-detail')return cfgModelBackPage==='cfg-system-detail'?'cfg-systems':'cfg-data-foundation';if(pg==='cfg-model-add')return 'cfg-data-foundation';if(pg==='team-add')return 'teams';if(pg==='leave-policy-add'||pg==='leave-policy-edit')return 'leave-policies';if(pg==='manual-journey-run')return manualJourneyBackPage==='cfg-context-journey'?'cfg-context-journey':'ai-executive';if(pg==='ai-journey-detail'||pg==='ai-automate-form'||pg==='ai-active-automation'||pg==='ai-run-detail'||pg==='ai-journey-run')return 'ai-executive';if(pg==='ai-contract-assistant'||pg==='ai-proposal-created'||pg==='ai-proposal-waiting-approval'||pg==='contract-type-select'||pg==='contract-eor'||pg==='contract-peo'||pg==='ai-employee-created'||pg==='ai-contract-document'||pg==='ai-contract-waiting-approval'||pg==='ai-onboarding-run'||pg==='ai-journey-complete')return 'contracts';return pg;}
 
 function attrSafe(v){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
+/* attrSafe is for an ATTRIBUTE and leaves angle brackets alone, which is correct there and wrong
+   anywhere a user's own words are dropped into markup. Everything this app renders is authored
+   copy except the handful of places somebody types free text — a follow-up comment, a stop
+   reason — and those need the brackets closed too or a typed "<b>" changes the page. */
+function textSafe(v){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 /* Copy authored for HTML, reused somewhere HTML entities do not resolve — a title attribute, a
    toast body. Only the entities this app actually authors are handled; anything else would be a
    half-built HTML decoder, and the fix for that case is to stop authoring the entity. */

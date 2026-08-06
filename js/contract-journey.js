@@ -177,13 +177,26 @@ function ccjClient(){
    answering it, most of that spent on nothing happening. Halved. The beats that carry meaning —
    a reminder visibly leaving, a reply arriving — are still separated enough to be read as separate
    events, which is the only thing these numbers have to protect. */
+/* THE TWO SCRIPTED CHASES ARE GONE, and that is the behavioural half of removing the follow-up
+   step. A reminder is no longer something the run performs on its way past — it is the Account
+   Manager's move, made from the listing's run menu when they judge the deal needs it. Scripting
+   it would put the product back to chasing on its own while claiming a person decided to.
+
+   So the client goes from opened to answering on their own time, and `changed` accepts BOTH
+   states before it: 'viewed' when nobody chased, 'chased' when somebody did. Without the second,
+   a hand-sent follow-up would move the client past the only state the script was watching for
+   and the demo would sit at the quote forever — the failure being that helping should never
+   stall the thing you were helping. */
 const CCJ_CLIENT_SCRIPT=[
   {ev:'viewed',   in:1800, at:128,  when:function(c){return c.state==='sent';}},
-  // 2000, the user's number: each gap is filled by the "Waiting for confirmation" beat, and two
-  // seconds is long enough to read the word and see the spark move before the reminder lands.
-  {ev:'chase',    in:2000, at:4320, when:function(c){return c.state==='viewed'&&c.chases===0;}},
-  {ev:'chase',    in:2000, at:7200, when:function(c){return c.state==='chased'&&c.chases===1;}},
-  {ev:'changed',  in:2000, at:7620, kind:'price', when:function(c){return c.state==='chased'&&c.chases>=2;}},
+  /* SEVEN SECONDS, and the number is doing a job. It used to be two — but it was two on the far
+     side of two scripted chases, so what the reader actually experienced between the open and the
+     answer was closer to eight. Removing the chases without moving this would have collapsed the
+     whole of stage 3's silence into the time it takes the Viewed step to finish recording the
+     open, and a client who answers before we have noticed they looked is not a negotiation, it is
+     a cutscene. It is also the window the follow-up control exists to be used in. */
+  {ev:'changed',  in:7000, at:7620, kind:'price',
+   when:function(c){return c.state==='viewed'||c.state==='chased';}},
   {ev:'agreed',   in:4200, at:7900, when:function(c){return c.state==='negotiating';}},
   {ev:'viewed2',  in:2600, at:9020, when:function(c){return c.state==='reissued';}},
   {ev:'accepted', in:2600, at:9300, when:function(c){return c.state==='viewed2';}}
@@ -587,27 +600,11 @@ const CCJ_EVIDENCE={
     summary:function(c){return 'Opened '+ccjStamp(ccjClient().openedAt);},
     note:'Tracked on open, which is why this is automatic and not something anyone has to record.'
   },
-  'quote-review/Follow-up 1 / 2 / 3':{
-    system:'Reminder scheduler', ref:'chase cadence',
-    call:function(c){return 'schedule(quote="'+c.contractId+'", at=[day 3, day 5, day 8])';},
-    latency:'31ms',
-    fetched:function(c){const cl=ccjClient();return [
-      {k:'Reminder 1',sub:'Day 3',v:cl.chases>=1?'sent '+ccjStamp(4320):'scheduled',state:cl.chases>=1?'active':'inactive'},
-      {k:'Reminder 2',sub:'Day 5',v:cl.chases>=2?'sent '+ccjStamp(7200):'scheduled',state:cl.chases>=2?'active':'inactive'},
-      {k:'Reminder 3',sub:'Day 8',v:cl.chases>=3?'sent '+ccjStamp(11520):'scheduled',state:cl.chases>=3?'active':'inactive'}
-    ];},
-    checks:function(c){return [
-      {rule:'Reminders stop the moment the client replies',expected:'cancel on reply',
-       actual:ccjClient().state==='viewed'||ccjClient().state==='chased'?'still chasing':'cancelled on reply',verdict:'pass'},
-      {rule:'No more than three reminders are sent',expected:'at most 3',
-       actual:ccjClient().chases+' sent',verdict:'pass'}
-    ];},
-    captured:function(c){return [{k:'Reminders sent',v:String(ccjClient().chases)}];},
-    summary:function(c){const n=ccjClient().chases;
-      return n?'Client replied after '+n+' reminder'+(n===1?'':'s'):'No reminder needed';},
-    note:'Three chases and no further. A fourth is not persistence, it is a client who has decided and an Account Manager who needs to hear it.',
-    failure:'Three reminders with no reply stalls the quote and flags it to the Account Manager.'
-  },
+  /* The evidence entry for 'quote-review/Follow-up 1 / 2 / 3' went with the sub-status itself.
+     A chase is now an action taken on the record from the listing, not a row the run walks
+     through — see the note beside amSubStatuses['quote-review'] in js/core.js. The chase
+     MACHINERY is untouched: ccjClientEvent('chase') still sends one and still writes it into the
+     thread, because a follow-up asked for by hand is the same event the demo used to script. */
   /* Overridden so stage 1 and stage 4 name the SAME CSM. The shared entry routes on
      ctx.country — the country the work happens in — while the handover in stage 4 routes on the
      client's. On a cross-border placement those are different people, and the run would assign
@@ -1836,12 +1833,39 @@ function ccjEnterStep(){
   // the pre-wait, the first action — has something to paint into. A skipped step gets one too:
   // a step that did not need to run says so, and saying so needs somewhere to say it.
   ccjOpenStepBlock();
+  /* == A STEP THAT IS STILL WAITING HAS NOT BEEN RULED OUT ==================================
+     Applicability used to be decided first, and that is wrong for any step whose condition is
+     about the very thing its pre-wait is waiting for. "Change requested" applies only if the
+     client asked for a change, and it parks until they answer — so asking "does this apply?"
+     before the wait is asking a question the answer to which has not arrived, and getting `no`
+     every time.
+
+     It survived unnoticed because a step above it happened to absorb the delay: the follow-up
+     sub-status waited on the same event, so by the time the run got here the client had always
+     already replied. Removing that step removed the accident, and the run walked straight past
+     the negotiation, skipped it as not applicable and re-issued a quote nobody had asked to
+     change. A behaviour that depends on the step in front of it taking long enough is not a
+     behaviour, it is a coincidence.
+
+     So a wait may DECLARE that the question has to wait for it: `decideAfter`. Where it is set,
+     applicability is asked once the wait resolves (in ccjResolveWait) instead of on arrival.
+
+     DECLARED PER WAIT RATHER THAN APPLIED TO ALL OF THEM, and that distinction is load-bearing.
+     Stage 5's "Signed" also parks on a pre-wait — for the countersigned copy to come back — and
+     it is skipped outright when the client already has an agreement in force. Deferring its
+     question too would park that run on a milestone that, by its own condition, is never going to
+     arrive. A wait knows whether it is the answer to its step's condition; nothing else does.
+
+     The accept-first path here is unaffected either way: ccjWaitMet is a POSITION on the client's
+     progression, so a client who accepts without negotiating is already past 'changed', the wait
+     is met on arrival, and the step is skipped exactly as it always was. == */
+  const pre=ccjWaitFor(run.stage,step);
+  const parked=!!(pre&&pre.pre&&!ccjWaitMet(pre));
   // A conditional step that does not apply is answered, not performed.
-  if(!ccjStepApplies(run.stage,step)){ccjSkipStep();return;}
+  if(!(parked&&pre.decideAfter)&&!ccjStepApplies(run.stage,step)){ccjSkipStep();return;}
   const gate=ccjGateFor(run.stage,step);
   if(gate){run.phase='halt';ccjPaint();ccjScrollPanelToCurrent();ccjOnHalt(gate,step);return;}
-  const pre=ccjWaitFor(run.stage,step);
-  if(pre&&pre.pre&&!ccjWaitMet(pre)){run.phase='wait';run.act=0;ccjPaint();ccjScrollPanelToCurrent();return;}
+  if(parked){run.phase='wait';run.act=0;ccjPaint();ccjScrollPanelToCurrent();return;}
   // A full paint on arrival, because the row that is current has changed. Every action after it
   // repaints the action list ALONE — see ccjPaintBeat. Replacing the whole panel on each action
   // would restart the spinner and re-run every entry animation on it.
@@ -2299,12 +2323,28 @@ function ccjReopen(){
    the label it belongs with, rather than pulled from the rail's `plain` copy — which is written
    in the present tense about a stage you are ON ("The contract is waiting for their signature")
    and claims something that has not happened yet when it is read from the stage before. */
+/* == A BUTTON SAYS WHAT PRESSING IT DOES ==================================================
+   All five of these read "Continue to <the next stage>". Five buttons, one verb, and the verb was
+   the weakest one available — Continue names the reader's own act of carrying on rather than the
+   work it starts, so the label carried no information the rail three inches above it was not
+   already carrying better. "Continue to client signing" also described the WHOLE of stage 5, most
+   of which is not signing: pressing it drafts an agreement and sends it to legal, and the
+   signature is three sub-statuses later.
+
+   Each one now names the FIRST thing that happens when it is pressed, in the words the product
+   uses for that thing elsewhere. That is the promise a control is read as making, and it is the
+   one that can be checked against what the next stage actually does — see the sub-statuses of
+   each: stage 5 opens on "MSA drafted", stage 6 on "Invoice raised", stage 7 on "Draft
+   generated", stage 8 on "Worker KYC", stage 9 on "Ready for payroll".
+
+   `next` is the sentence beside the button, and it keeps the wider answer — where this is going
+   and why — because that is the thing a label has no room for. */
 const CCJ_STAGE_REST={
-  'quote-approved':{label:'Continue to client signing',
-    next:'Next is the Master Services Agreement &mdash; the contract between us and the client, out for their signature.'},
+  'quote-approved':{label:'Draft the agreement',
+    next:'Next is the Master Services Agreement &mdash; the contract between us and the client, drafted from their country template and read by legal before it goes anywhere.'},
   // The signed agreement coming back is what this stage produced. Walking past it in the half
   // second after the countersignature lands would be walking past the outcome.
-  'agreement-signature':{label:'Continue to the deposit invoice',
+  'agreement-signature':{label:'Raise the deposit invoice',
     next:'Next is the deposit invoice. No hire can start until that money arrives.'}
 };
 /* THE WAY ON IS ASKED FOR IN THE CONVERSATION, NOT PRINTED ON THE ARTEFACT.
@@ -2350,9 +2390,13 @@ function ccjDoneAsk(){
   const run=ccjRun;if(!run||run.restAsked['__done'])return;
   run.restAsked['__done']=true;
   const p=ccjParties();
+  /* "View contract" described a page, and the page is not what the button does — pressing it
+     WRITES the contract into the contracts list and takes you there (see ccjOpenContractRecord),
+     which is the run being filed and closed. Naming the destination made the last control in the
+     journey the vaguest one in it. */
   ccjAsk('That is the whole journey. '+p.worker.name+' is employed by '+p.adt.name
-    +' and on payroll &mdash; the contract is in your contracts list.',
-    'View contract','record');
+    +' and on payroll. Filing this puts the contract in your contracts list and closes the run.',
+    'File it in contracts','record');
 }
 function ccjContinueStage(){
   const run=ccjRun;if(!run||run.phase!=='rest')return;
@@ -2442,10 +2486,15 @@ function ccjClientEvent(ev,at,kind){
        seconds later. The count and the log are only written at that point, because until the thing
        has gone out it has not gone out — writing them up front would have the timeline claiming a
        reminder the thread was still sending. */
+    /* NO CAP ANY MORE. "At most three" was the scheduler's rule, and the scheduler is gone with the
+       sub-status it belonged to — a person deciding to chase a fourth time is not the product
+       failing a check, it is a deal that needs chasing a fourth time. The one guard that survives
+       is the honest one: a reminder still in flight is not a second reminder. */
     // `at` is this function's own PARAMETER (the simulated minute), not ccjPayEvent's helper of the
-    // same name — the clock has already been advanced from it at the top.
-    if(c.chases>=3||c.sending)return;              // one in flight at a time
-    const m={who:'us',kind:'chase',n:c.chases+1,at:c.mins,sending:true};
+    // same name — the clock has already been advanced from it at the top. `kind` carries the
+    // Account Manager's own words on a hand-sent follow-up; a scripted one has none.
+    if(c.sending)return;                           // one in flight at a time
+    const m={who:'us',kind:'chase',n:c.chases+1,at:c.mins,sending:true,note:kind||''};
     c.sending=true;
     ccjClientPush(m);
     ccjPaint();
@@ -2456,10 +2505,11 @@ function ccjClientEvent(ev,at,kind){
       c.sendTimer=null;c.sending=false;
       c.chases++;c.state='chased';
       m.sending=false;
-      // The detail the timeline carries, on the message too — "which reminder is this, and is it
-      // the last one" is the whole of what distinguishes them.
-      m.detail=c.chases>=3?'Final reminder':'Scheduled reminder';
-      ccjClientLog('chase'+c.chases,'Follow-up '+c.chases+' of 3',m.detail);
+      // The detail the timeline carries, on the message too. It used to say which of three this
+      // was; now it says who decided to send it, which is the fact that actually distinguishes
+      // one follow-up from another once nothing is on a cadence.
+      m.detail=m.note?'Sent by '+ccjActor():'Follow-up sent';
+      ccjClientLog('chase'+c.chases,'Follow-up '+c.chases,m.detail);
       ccjRenderChat();
       // Sent, and now we are waiting again — for a reply, or for the next reminder to become
       // due. The loader re-arms the moment the reminder has actually gone out, never before.
@@ -2577,16 +2627,22 @@ const CCJ_WAITS={
   // agreed to it is not preparation, it is guessing.
   'quote-review/Viewed':{on:function(){return ccjClient().version>1?'viewed2':'viewed';},pre:true,
     note:'Waiting for the client to open the quote.'},
-  'quote-review/Follow-up 1 / 2 / 3':{on:'changed', note:'Chasing. Reminders stop the moment they reply.',
+  /* The follow-up step's wait went with the step. What it used to say — how many reminders had
+     gone and what would stop them — now belongs to the wait BELOW it, which is the one actually
+     parked on the client. That is the honest place for it: the reminders are not a stage of the
+     work, they are what we have done about the wait we are sitting in. */
+  /* `decideAfter` on both of these: each step applies only if the client negotiated, and each one
+     is parked on the reply that decides it. Asking before the wait is asking a question whose
+     answer has not arrived — see ccjEnterStep. */
+  'quote-review/Change requested':{on:'changed', pre:true, decideAfter:true,
+    note:'Waiting to hear back from the client.',
     rows:function(){
-      const sent=(ccjRun.client&&ccjRun.client.chases)||0,cap=3;
-      return [['Automatic reminders','<span class="ccj-wait-on">Armed</span>'],
-              ['Sent so far',sent+' of '+cap],
-              ['Stops when',sent>=cap?'the cap is reached':'they reply']];
+      const sent=(ccjRun.client&&ccjRun.client.chases)||0;
+      return [['Opened','<span class="ccj-wait-on">Tracked</span>'],
+              ['Follow-ups sent',sent?String(sent):'none yet']];
     }},
-  'quote-review/Change requested':{on:'changed', pre:true, note:'Waiting to hear back from the client.',
-    rows:function(){return [['Opened','<span class="ccj-wait-on">Tracked</span>']];}},
-  'quote-review/Re-issued v2':   {on:'agreed',  pre:true, note:'Holding until the revised price is agreed.',
+  'quote-review/Re-issued v2':   {on:'agreed',  pre:true, decideAfter:true,
+    note:'Holding until the revised price is agreed.',
     rows:function(){return [['Opened','<span class="ccj-wait-on">Tracked</span>']];}},
   // Nothing to verify until the signed copy is back, so this parks before its work rather than
   // after it — you cannot check a signature you have not received.
@@ -2606,8 +2662,13 @@ function ccjResolveWait(){
   const step=ccjSteps(run.stage)[run.sub];
   const w=ccjWaitFor(run.stage,step);
   if(!w||!ccjWaitMet(w))return;
-  // A `pre` wait had not started its work yet — now it can.
-  if(w.pre){run.phase='act';run.act=0;ccjPaint();ccjRunAct();return;}
+  // A `pre` wait had not started its work yet — now it can. And now, with the answer finally in,
+  // is when it can honestly be asked whether there is any work to do at all: see the note in
+  // ccjEnterStep on why applicability is deferred past a wait rather than decided in front of it.
+  if(w.pre){
+    if(w.decideAfter&&!ccjStepApplies(run.stage,step)){ccjSkipStep();return;}
+    run.phase='act';run.act=0;ccjPaint();ccjRunAct();return;
+  }
   ccjSettleStep();
 }
 /* After a step settles, some stages send the run somewhere other than the next row. Re-issuing
@@ -3496,7 +3557,15 @@ function ccjStepBlockHTML(i,n,p){
   // until the next one starts, which is what gives it its moment before it closes — and it is
   // only current on the pass actually running, or a superseded block would claim the spinner.
   const current=run.stage===i&&run.sub===n&&pass===ccjPass(i,step);
-  const gate=current?(ccjGateFor(i,step)||(run.phase==='halt'?ccjPostGateFor(i,step):null)):null;
+  /* AN ANSWERED GATE IS NOT AN OPEN ONE. The step stays `current` for the 700ms between a decision
+     being taken and the runner moving on, and for that window this used to resolve to the gate
+     again — re-offering two buttons for a question that had just been answered. Harmless while the
+     card was buried in the block; not harmless now that the same expression decides what sits
+     pinned above the composer. `stopped` is excepted because a stopped run's card IS the record of
+     the decision, and it carries the only way back. Kept identical to ccjPendingAction. */
+  const gateKey=ccjKey(i,step);
+  const gateOpen=current&&(run.stopped||!(run.decisions[gateKey]||run.settled[gateKey]));
+  const gate=gateOpen?(ccjGateFor(i,step)||(run.phase==='halt'?ccjPostGateFor(i,step):null)):null;
   const stopped=current&&run.phase==='stopped';
   // A WAIT IS NOT WORK. The spinner says "this machine is busy"; a step parked on the client has
   // handed its work outside the product and is holding the door. Showing a spinner there is the
@@ -3625,7 +3694,14 @@ function ccjStepFactHTML(settled){
    into the first. */
 function ccjStepBodyHTML(i,step,n,current,gate,settled,pass){
   const run=ccjRun;
-  if(current&&gate)return ccjGateHTML(i,step,gate);
+  /* THE DECISION IS NOT DRAWN HERE ANY MORE — it is in the action bar above the composer, where
+     it cannot scroll away (see ccjPendingAction). What the block keeps is the fact that it is the
+     step doing the asking: its mark is already `!` rather than a spinner, and this one line says
+     where the answer goes. Without it a reader scrolled back up to this block would find a step
+     that had visibly stopped and nothing saying why or what to do about it. */
+  if(current&&gate)return '<div class="ccj-sb-body"><div class="ccj-sb-await">'
+    +(run.stopped?'This run stopped here.':'Waiting on you.')
+    +' <b>The decision is at the bottom of this conversation.</b></div></div>';
   if(settled&&settled.skipped)return '<div class="ccj-sb-body"><div class="ccj-sb-why">'
     +(settled.reason||ccjPurpose(i,step))+'</div></div>';
   const d=ccjEvidence(i,step);
@@ -3790,6 +3866,185 @@ function ccjGateHTML(i,step,gate){
     +'</div>';
 }
 
+/* == THE ACTION AREA: ONE PLACE, AND IT IS ABOVE THE INPUT ================================
+   A decision used to be drawn where it was ASKED — inside the sub-status block, wherever that
+   block happened to be in the scroll. That is the right instinct and the wrong consequence. The
+   transcript keeps growing underneath it: the halt sentence lands after the card, then the
+   client's thread, then whatever else the run has to say, and within a few beats the only
+   control that can move the run is somewhere above the fold with a conversation sitting on top
+   of it. The reader's job at that moment is to answer one question, and the product had made
+   finding the question the harder half of it.
+
+   So the action leaves the flow and PINS to the bottom of the conversation, directly above the
+   box you would type into — the band the eye is already resting on when it decides what to do —
+   separated from the record above it by a single hairline. Everything else in the chat keeps
+   scrolling behind it. Nothing about the transcript changes: the block still says which step is
+   asking, the halt sentence is still the last thing said, and the answer still lands in the
+   record where it was given. What moved is the CONTROL, to the one place it cannot scroll away
+   from.
+
+   ONE MODEL FOR BOTH KINDS OF ASK. A gate and a rest-ask are already the same component (see
+   ccjAsk); making the bar understand only gates would have left the "Continue to client signing"
+   button buried in the scroll while every decision sat pinned, and the reader would have had to
+   learn which of the two the product had decided to make easy to find.
+
+   NOTHING PENDING, NO BAR. `.ccj-actionbar:empty` collapses to zero height and drops its border,
+   so a run that is simply working shows a conversation sitting straight on its composer, exactly
+   as before. == */
+/* == THE STEPS THAT WANT SOMETHING BUT HAVE NO BUTTON ====================================
+   A decision announces itself: a card, two buttons, nothing to work out. Some steps want just as
+   much from a person and announce nothing at all. Stage 1's intake is the one that mattered — the
+   run stands still until somebody fills in the contract details, and the only thing on screen
+   saying so was a spinner and the word "Gathering". A spinner is not an instruction.
+
+   So those steps get ONE LINE naming the action, in the same pinned band as every decision.
+
+   AND ONLY THOSE STEPS. The first version of this reported on every step — "the layer is running
+   Country data check", "nothing to do, this is with the client" — on the theory that a reader
+   always deserves to know where they stand. In practice it put a permanent panel above the
+   composer narrating a run the transcript was already narrating, two inches above it, in more
+   detail. A bar that is always there is a bar nobody reads, which costs you the one moment it
+   exists for. It is silent unless something is wanted.
+
+   ONE LINE, AND IT IS THE ACTION. No second sentence explaining what the step is for or what
+   releases it: the block above says which sub-status is open and the transcript says the rest. An
+   instruction that has to be read past to be found is not an instruction. == */
+/* Stage 1's intake has four states and only two of them are yours, so it is worked out once and
+   read twice rather than twice over with two chances to disagree with itself.
+
+   `compiling` IS NOT YOUR MOVE, and getting that wrong would be worse than saying nothing: the
+   proposal is compiled automatically CCJ_AUTOGAP after the last required field lands — there is no
+   button — so telling someone to "create the proposal" would send them hunting for a control that
+   does not exist. Nor is `reading`: the layer is filling the form in for them. Both are silent. */
+function ccjIntakeState(){
+  const run=ccjRun;if(!run)return 'fill';
+  const d=run.doc;
+  if(d&&!d.done)return 'reading';
+  if(run.screen!=='form')return 'goto';
+  return (typeof ccjMissingFields==='function'&&ccjMissingFields().length)?'fill':'compiling';
+}
+/* Keyed by step, and an empty string means "nothing is wanted right now" — which is most of the
+   time, on most steps, and is why there are two entries here rather than forty. A step with no
+   entry says nothing at all: it either has a gate, or the layer is doing it, or somebody outside
+   the building is, and in none of those cases is there an action to name. */
+const CCJ_TODO={
+  'request-received/New intake':function(){
+    const s=ccjIntakeState();
+    if(s==='goto')return 'Open the contract details and fill them in.';
+    if(s!=='fill')return '';                       // reading, or compiling — the layer is working
+    const miss=ccjMissingFields().length;
+    return 'Fill in the contract details &mdash; <b>'+miss+' field'+(miss===1?'':'s')+'</b> to go.';
+  },
+  'quote-review/Change requested':function(){
+    // Only once there IS a draft. While it is being written there is nothing to send.
+    return ccjClient().drafted?'Send the reply drafted for you below.':'';
+  }
+};
+function ccjTodoFor(i,step){
+  const run=ccjRun;
+  if(!run||!step)return '';
+  // Only while the run is actually parked on this step. A settled step is on its way out and a
+  // halted one has a gate, which is a louder answer to the same question.
+  if(run.phase!=='hold'&&run.phase!=='act'&&run.phase!=='wait')return '';
+  const fn=CCJ_TODO[ccjKey(i,step)];
+  return fn?(fn()||''):'';
+}
+function ccjPendingAction(){
+  const run=ccjRun;
+  if(!run||!ccjUsesTranscript(run.stage))return null;
+  const step=ccjSteps(run.stage)[run.sub];
+  if(step){
+    const key=ccjKey(run.stage,step);
+    // The same expression the block used to decide with, kept identical on purpose: two surfaces
+    // disagreeing about whether there is a decision open is how one of them renders a card with
+    // no buttons and the other renders buttons for a decision already taken.
+    const gate=ccjGateFor(run.stage,step)||(run.phase==='halt'?ccjPostGateFor(run.stage,step):null);
+    /* A STOPPED RUN IS STILL ASKING SOMETHING — whether to reopen — so it keeps the bar. It is
+       also the one case where the decision HAS been recorded and the card must still show, which
+       is why it is tested before `decided` rather than after it. */
+    if(gate&&run.stopped)return {type:'gate',blocking:true,i:run.stage,step:step,gate:gate};
+    // Answered, or settled past. Without this the card comes back for the 700ms between a
+    // decision being taken and the runner moving on — offering the same two buttons for a
+    // question that has just been answered.
+    const decided=!!run.decisions[key]||!!run.settled[key];
+    if(gate&&!decided)return {type:'gate',blocking:true,i:run.stage,step:step,gate:gate};
+  }
+  /* The newest unanswered ask. Newest rather than oldest because the transcript keeps every ask
+     it ever made and a spent one is still in the list — and there is only ever one live at a
+     time, since an ask is what the run stops on. */
+  const msgs=run.msgs||[];
+  for(let n=msgs.length-1;n>=0;n--){
+    if(msgs[n].kind==='ask'&&!msgs[n].done)return {type:'ask',blocking:true,msg:msgs[n]};
+  }
+  /* A STEP THAT WANTS SOMETHING BUT HAS NO BUTTON. Silent unless there is an actual action to
+     name — see CCJ_TODO. Not before the run starts either: the composer's own empty state is the
+     instruction there, and a second copy of it two inches below would be the product explaining
+     itself twice. */
+  if(!run.started||run.sub<0)return null;
+  const step2=ccjSteps(run.stage)[run.sub];
+  const todo=ccjTodoFor(run.stage,step2);
+  if(!todo)return null;
+  return {type:'todo',blocking:true,i:run.stage,step:step2,todo:todo};
+}
+/* One line: a tick-box mark and the action. No heading, no tag, no second sentence — everything
+   this used to carry was context the block above and the transcript below already give, and it
+   buried the instruction in the middle of a paragraph. */
+function ccjTodoHTML(a){
+  return '<div class="ccj-todo">'
+    +'<span class="ccj-todo-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>'
+    +'<span class="ccj-todo-do">'+a.todo+'</span>'
+    +'</div>';
+}
+function ccjActionBarHTML(){
+  const a=ccjPendingAction();
+  if(!a)return '';
+  if(a.type==='ask')return ccjAskHTML(a.msg,true);
+  if(a.type==='todo')return ccjTodoHTML(a);
+  return ccjGateHTML(a.i,a.step,a.gate);
+}
+/* Repainted from every path that can change what is being asked — which is nearly all of them,
+   so it is called from the four functions they all funnel through rather than sprinkled about.
+
+   GUARDED ON THE HTML ITSELF, and that guard is doing real work. This runs on every beat of every
+   step; rewriting innerHTML each time would blow away the caret and the half-typed sentence in the
+   reason textarea the moment anything else in the run moved. Comparing the markup means the node
+   is only touched when the ask has genuinely changed. */
+function ccjPaintActionBar(){
+  const run=ccjRun;if(!run)return;
+  const el=document.getElementById('ccj-actionbar');
+  const a=ccjPendingAction();
+  const html=ccjActionBarHTML();
+  const blocking=!!(a&&a.blocking);
+  if(el&&run._barHTML!==html){
+    el.innerHTML=html;
+    run._barHTML=html;
+    /* A new ask arriving must not sit behind the last few messages of the conversation, so the
+       stream is put at its bottom as it appears. BLOCKING ONLY, and that qualifier matters: the
+       running commentary changes at every step, and following it would drag a reader who had
+       scrolled back through the record down the page four times a stage. The scroll is pulled for
+       something that needs them, never for something that is merely reporting itself. */
+    if(blocking&&!run._barBlocking){
+      const box=document.getElementById('ccj-stream');
+      if(box){run.follow=true;ccjStickBottom(box);}
+    }
+  }
+  run._barBlocking=blocking;
+  ccjPaintAwaiting(blocking);
+}
+/* == EVERY LOADER STOPS WHILE SOMEBODY IS BEING ASKED =====================================
+   A spinner means "this machine is busy". When the run has halted on a person, nothing is busy —
+   the product is doing precisely nothing until they answer — and a page still turning spinners,
+   pulsing wait bars and sheening verbs is reporting activity that is not happening. It also
+   competes for exactly the attention the question needs.
+
+   One class on the body, and the stylesheet freezes the lot. It has to be the BODY rather than
+   the conversation, because the artefact column has loaders of its own (the document bar, the
+   quote skeletons) and half a frozen page is worse than none of it. */
+function ccjPaintAwaiting(on){
+  const body=document.getElementById('ccj-body');
+  if(body&&body.classList&&typeof body.classList.toggle==='function')body.classList.toggle('ccj-awaiting',!!on);
+}
+
 /* ---- THE EVIDENCE DRAWER ----------------------------------------------------------------
    Everything the panel is too narrow to hold: the call that was made, what came back, every
    rule with its expected value, actual value and verdict, and what was written to the record.
@@ -3902,6 +4157,7 @@ function buildCCJChatHTML(isFull){
       +'<div class="ccj-chat-sub">Employee &middot; '+w.empId+'</div></div>'
       +'</div>'
       +'<div class="ccj-stream" id="ccj-stream"></div>'
+      +ccjActionBarShellHTML()
       +'<div class="ccj-composer" id="ccj-composer">'+ccjComposerInnerHTML()+'</div>'
       +'</div>';
   }
@@ -3918,8 +4174,26 @@ function buildCCJChatHTML(isFull){
        +'<div class="ccj-chat-sub">'+(ev.source||'AI Prompt Parser')+'</div></div>')
     +'</div>'
     +'<div class="ccj-stream" id="ccj-stream"></div>'
+    +ccjActionBarShellHTML()
     +'<div class="ccj-composer" id="ccj-composer">'+ccjComposerInnerHTML()+'</div>'
     +'</div>';
+}
+/* The bar's NODE is built with the chat and never rebuilt with it — same reason the stream is a
+   stable node. Its contents are painted into it by ccjPaintActionBar, so a repaint of the ask
+   never remounts the element the reader is typing a reason into. It is emitted with whatever is
+   pending at build time, so a page render lands with the question already on screen rather than
+   one paint later. */
+function ccjActionBarShellHTML(){
+  const html=ccjActionBarHTML();
+  // Recorded as painted, so the first ccjPaintActionBar after this render sees no change and
+  // leaves the node alone. Without it every page render would rewrite an identical bar and yank
+  // the stream to the bottom on the way past.
+  if(ccjRun){
+    const a=ccjPendingAction();
+    ccjRun._barHTML=html;
+    ccjRun._barBlocking=!!(a&&a.blocking);
+  }
+  return '<div class="ccj-actionbar" id="ccj-actionbar">'+html+'</div>';
 }
 /* The composer is its own builder because submitting the first request changes it — the model
    pills go, the placeholder changes, the upload appears — and repainting it alone leaves the
@@ -4181,6 +4455,9 @@ function ccjStreamSync(){
   // history by the time they are on screen, and watching a backlog type itself out is a wait, not
   // a conversation.
   ccjTypeLast(st,atBottom);
+  // An ask arrives as a message, so the append path is one of the two ways the bar's contents can
+  // change — and the only one that does not go through ccjPaint.
+  ccjPaintActionBar();
   if(atBottom)ccjStickBottom(el);
 }
 /* Types the newest message, wherever it was just painted. Re-reads the stream node rather than
@@ -4353,6 +4630,9 @@ function ccjRepaintMsg(m){
   if(!el){ccjRenderChat();return;}
   const box=document.getElementById('ccj-stream');
   el.innerHTML=ccjMsgInnerHTML(m);
+  // Answering an ask repaints that one message and nothing else, so without this the bar would go
+  // on offering a button for something already done.
+  ccjPaintActionBar();
   // A block growing in place moves the bottom out from under the reader just as an append does,
   // so it follows on the same remembered intent rather than on a measurement taken after the
   // growth — which would always report that they had fallen behind.
@@ -4452,6 +4732,7 @@ function ccjRenderChat(){
   }
   ccjMarkStream(el,st);
   ccjBindStream(el);
+  ccjPaintActionBar();
   // A rebuild IS a new surface, so it lands at the bottom outright: there is no reading position
   // to preserve, and the alternative is a run opening halfway up its own transcript. Following
   // resumes with it — the reader has not scrolled away from a stream that did not exist a moment
@@ -4862,7 +5143,7 @@ function ccjResolveLookup(){
       // step is how an operational tool reads; the earlier attempt described the form's fields
       // instead, which is a caption, not a product.
       ccjAsk('Employee record <b>'+run.createdEmp.empId+'</b> has been created. Add their contract details next.',
-        'Continue to contract details','form');
+        'Add the contract details','form');
     },900);
   }
   ccjPaint();                                   // the panel's context just changed
@@ -5525,6 +5806,10 @@ function ccjPaintScreen(){
   CCJ_KEEP_SCROLL.forEach(function(sel,i){
     if(keep[i]>0){const n=find(sel);if(n)n.scrollTop=keep[i];}
   });
+  // The instruction above the composer counts what is still outstanding on the form, so it has to
+  // be repainted whenever the form is — otherwise "3 fields still needed" goes on saying three
+  // while the reader fills in the third. Cheap: the bar only rewrites when its markup changes.
+  ccjPaintActionBar();
 }
 /* Bring a field into view inside the form's own scroller — never the page, which does not
    scroll. Used whenever attention moves to a field the user did not move it to themselves:
@@ -6045,6 +6330,125 @@ function ccjDocEditSave(kind){
     if(typeof showAiToast==='function')showAiToast(changed?'Draft updated':'Nothing changed',msg);
   }
 }
+/* == TAKING A COPY AWAY ====================================================================
+   Every artefact in this journey was a thing you could look at and nothing else. That is fine for
+   a status card and wrong for a document: a quote gets forwarded to a budget holder, an agreement
+   is filed, an invoice goes to accounts payable, and a contract is the single most-requested piece
+   of paper in the whole product. A document you cannot take a copy of is a screenshot waiting to
+   happen.
+
+   IT PRINTS THE REAL THING RATHER THAN REBUILDING IT. The alternative was a second renderer that
+   emits a standalone file — and a second renderer is a second version of every clause, drifting
+   from the first the moment either is edited. This lifts the document node that is already on
+   screen into an offscreen frame with the app's own stylesheets, and prints it. What comes out is
+   what was on the page, by construction, including anything the user rewrote through the doc
+   editor.
+
+   AN IFRAME, NOT A NEW WINDOW. A popup is blockable, lands in the wrong place, and leaves a blank
+   tab behind afterwards. The frame is created, used and removed, and the reader stays where they
+   were. == */
+/* `html` is what makes a document downloadable from ANYWHERE rather than only from the screen it
+   lives on. Every artefact in this journey is derived from run state, so it can be rebuilt on
+   demand — which is what lets the success panel on stage 9 hand over a contract that was drawn on
+   stage 7 and is no longer anywhere on the page. Without it the only honest option would have been
+   to navigate the reader back three stages to press a button, which is not handing them anything. */
+const CCJ_DOCS={
+  quote:    {sel:'.ccj-q',        noun:'quote',    html:function(){return buildCCJQuoteHTML();},
+             name:function(){return 'Quote-'+ccjCtx().contractId+'-v'+ccjClient().version;}},
+  msa:      {sel:'.ccj-msa',      noun:'agreement',html:function(){return buildCCJMsaHTML();},
+             name:function(){return ccjMsa().id;}},
+  invoice:  {sel:'.ccj-inv-wrap', noun:'invoice',  html:function(){return buildCCJInvoiceHTML();},
+             name:function(){return ccjInvoice().id;}},
+  contract: {sel:'.ccj-ec',       noun:'contract', html:function(){return buildCCJEmpHTML();},
+             name:function(){return ccjEmp().id+(ccjEmp().version>1?'-v'+ccjEmp().version:'');}},
+  readiness:{sel:'.ccj-rdy-cert', noun:'certificate',html:function(){return buildCCJRdyHTML();},
+             name:function(){return ccjRdy().ref||'Payroll-readiness';}}
+};
+/* The node to print: the one on screen when there is one, and a freshly built one when there is
+   not. Preferring the live node matters — it carries anything the reader rewrote through the doc
+   editor this session, and a rebuild would too, but only the live one is guaranteed to be exactly
+   what they were looking at when they pressed the button. */
+function ccjDocNode(d){
+  if(typeof document==='undefined'||typeof document.querySelector!=='function')return null;
+  const live=document.querySelector(d.sel);
+  if(live)return live;
+  if(typeof d.html!=='function'||typeof document.createElement!=='function')return null;
+  const box=document.createElement('div');
+  box.innerHTML=d.html();
+  return box.querySelector?box.querySelector(d.sel):null;
+}
+/* The control. Deliberately quiet and deliberately always in the same corner of every document,
+   because "where is the download" is a question a person should only ever have to answer once.
+   Sticky, so it does not scroll away from a nine-clause agreement.
+
+   `title` names the file, not the mechanism. A tooltip explaining iframes and print dialogs would
+   be the product describing its own plumbing. */
+function ccjDocDlHTML(kind){
+  const d=CCJ_DOCS[kind];
+  if(!d)return '';
+  return '<div class="ccj-doc-tools">'
+    +'<button type="button" class="ccj-doc-dl" onclick="ccjDownloadDoc(\''+kind+'\')" '
+    +'title="'+attrSafe('Save a copy of this '+d.noun)+'">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+    +'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+    +'Download</button></div>';
+}
+/* The stylesheets to carry across, read from the page rather than listed, so a file renamed or
+   added does not silently produce an unstyled document. */
+function ccjDocStyleLinks(){
+  if(typeof document==='undefined'||typeof document.querySelectorAll!=='function')return '';
+  const links=Array.prototype.slice.call(document.querySelectorAll('link[rel="stylesheet"]'));
+  return links.map(function(l){return '<link rel="stylesheet" href="'+attrSafe(l.getAttribute('href'))+'">';}).join('');
+}
+function ccjDownloadDoc(kind){
+  const d=CCJ_DOCS[kind];
+  if(!d||typeof document==='undefined'||typeof document.createElement!=='function')return;
+  const node=ccjDocNode(d);
+  if(!node||!node.outerHTML)return;
+  const name=(typeof d.name==='function'?d.name():kind)||kind;
+  const frame=document.createElement('iframe');
+  // Offscreen rather than display:none — a hidden frame has no layout, and a document with no
+  // layout prints as a blank page in several browsers.
+  frame.setAttribute('aria-hidden','true');
+  frame.style.cssText='position:fixed;right:0;bottom:0;width:820px;height:1160px;opacity:0;border:0;pointer-events:none;z-index:-1';
+  document.body.appendChild(frame);
+  const doc=frame.contentDocument||(frame.contentWindow&&frame.contentWindow.document);
+  if(!doc){if(frame.parentNode)frame.parentNode.removeChild(frame);return;}
+  /* The title IS the default filename in every browser's Save-as-PDF, which is the whole reason
+     the registry carries a name function — "contract-journey" on a downloaded agreement would be
+     the one detail that makes the copy feel unofficial. */
+  doc.open();
+  doc.write('<!doctype html><html><head><meta charset="utf-8"><title>'+attrSafe(name)+'</title>'
+    +ccjDocStyleLinks()
+    // The page is the document and nothing else: no columns, no scrollers, no controls, and the
+    // artefact takes its natural height instead of the height of a pane it is no longer in.
+    +'<style>html,body{height:auto;overflow:visible;background:#fff;margin:0}'
+    +'body{padding:0;font-family:Inter,sans-serif}'
+    +'.ccj-doc-tools,.ccj-doc-bar,.ccj-doc-editor,.ccj-sim{display:none!important}'
+    +d.sel+'{max-width:none;margin:0;padding:0;overflow:visible;height:auto;flex:none;box-shadow:none;border:0}'
+    +'@page{margin:16mm}'
+    +'@media print{.ccj-doc-tools{display:none!important}}'
+    +'</style></head><body>'+node.outerHTML+'</body></html>');
+  doc.close();
+  /* ONCE. Both the load event and the timeout below are races for the same job — whichever gets
+     there first wins — and without the latch the loser opens a second print dialog behind the
+     first, which is the kind of bug that looks like the app printing twice. */
+  let printed=false;
+  const go=function(){
+    if(printed)return;
+    printed=true;
+    try{frame.contentWindow.focus();frame.contentWindow.print();}catch(e){}
+    // Removed after the dialog has had the document — pulling the frame immediately cancels the
+    // print on browsers that render it asynchronously.
+    setTimeout(function(){if(frame.parentNode)frame.parentNode.removeChild(frame);},1000);
+  };
+  // Waits for the stylesheets. Printing before they land produces an unstyled document, and there
+  // is no second chance at it — the dialog is already open by then. The timeout is the fallback
+  // for a stylesheet that never resolves, so a missing file cannot swallow the download entirely.
+  if(frame.contentWindow)frame.contentWindow.onload=go;
+  setTimeout(go,600);
+  if(typeof showAiToast==='function')showAiToast('Preparing '+name,'Choose &ldquo;Save as PDF&rdquo; to keep a copy.');
+}
 /* The bar above the paper. Two states in one strip so the swap is a cross-fade in place rather
    than one control vanishing and another appearing somewhere else. */
 function ccjDocEditBarHTML(kind){
@@ -6110,6 +6514,7 @@ function buildCCJMsaHTML(){
   const kv=function(k,v){return '<div class="ccj-msa-kv"><span>'+k+'</span><b>'
     +ccjDocF('msa','t:kv.'+k,v)+'</b></div>';};
   return '<div class="ccj-msa-wrap">'
+    +ccjDocDlHTML('msa')
     +ccjDocEditBarHTML('msa')
     +'<div class="ccj-msa'+(drafted?'':' pending')
       +(ccjDocEditing('msa')?' ccj-doc-behind':'')+(m.editFlash?' ccj-doc-flash':'')+'">'
@@ -6308,11 +6713,17 @@ function ccjClientMsgBodyHTML(m,isLast){
   if(m.kind==='quote')return '<div class="ccj-cmsg '+cls+'">'+ccjQuoteCardHTML(m)+'<i>'+ccjStamp(m.at)+'</i></div>';
   // Two states: going out, and gone. A reminder that has not left yet must not say "sent", and it
   // shows the spinner rather than a timestamp — there is no time to stamp until it has happened.
+  /* "of 3" came off both lines with the cadence that justified it. What a follow-up carries now is
+     the words that were sent with it — a chase asked for by hand always has a comment, and the
+     comment IS the follow-up. Without it on the thread the record would show that we chased and
+     lose what we actually said, which is the only part the next reader needs. */
   if(m.kind==='chase')return m.sending
     ?'<div class="ccj-cmsg note chase sending"><span class="ccj-spin sm"></span>'
-      +'<span>Sending follow-up '+m.n+' of 3&hellip;</span></div>'
-    :'<div class="ccj-cmsg note chase"><span>Follow-up '+m.n+' of 3 sent'
-      +(m.detail?' &middot; '+m.detail:'')+' &mdash; no reply yet</span><i>'+ccjStamp(m.at)+'</i></div>';
+      +'<span>Sending follow-up '+m.n+'&hellip;</span></div>'
+    :'<div class="ccj-cmsg note chase"><span>Follow-up '+m.n+' sent'
+      +(m.detail?' &middot; '+m.detail:'')+' &mdash; no reply yet'
+      +(m.note?'<b class="ccj-chase-note">&ldquo;'+textSafe(m.note)+'&rdquo;</b>':'')
+      +'</span><i>'+ccjStamp(m.at)+'</i></div>';
   if(m.kind==='draft')return '<div class="ccj-cmsg '+cls+'">'
     +'<div class="ccj-cbubble draft">'
     +'<div class="ccj-draft-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>Drafted for you &mdash; not sent</div>'
@@ -6517,6 +6928,7 @@ function buildCCJQuoteHTML(){
       +'<div class="ccj-q-v">'+(ready?v:'<span class="ccj-q-skel"></span>')+'</div></div>';
   };
   return '<div class="ccj-q">'
+    +ccjDocDlHTML('quote')
     +'<div class="ccj-q-head">'
     +'<div><div class="ccj-q-title">Quote</div>'
     +'<div class="ccj-q-sub">'+q.name+' &middot; '+q.country+' &middot; '+q.type+'</div></div>'
@@ -6906,6 +7318,7 @@ function buildCCJInvoiceHTML(){
       +'<div class="ccj-inv-party-v">'+vat+(reg2?'<br>'+reg2:'')+'</div></div>';
   };
   return '<div class="ccj-inv-wrap">'
+    +ccjDocDlHTML('invoice')
 
     // Band 1 — the money, stated before anything else.
     +'<div class="ccj-inv-stat'+(cleared&&!pay.released?' ok':pay.released?' warn':'')+'">'
@@ -7057,7 +7470,7 @@ function buildCCJPaySimHTML(){
    stage adds to the machine is readable in one place. The maps themselves are already built by
    the time this executes. */
 CCJ_CLIENT_STAGES.push('deposit-due');
-CCJ_STAGE_REST['deposit-due']={label:'Continue to worker signing',
+CCJ_STAGE_REST['deposit-due']={label:'Draft the employment contract',
   next:'Next is the employment contract &mdash; ours with the worker, not the one the client signed.'};
 
 CCJ_PURPOSE['deposit-due/Invoice raised']='Raises the deposit invoice against the signed agreement.';
@@ -7595,6 +8008,7 @@ function buildCCJEmpHTML(){
       +'</div>';
   };
   return '<div class="ccj-ec-wrap">'
+    +ccjDocDlHTML('contract')
     +band()
     +ccjDocEditBarHTML('emp')
     +'<div class="ccj-ec'+(drafted?'':' pending')
@@ -7707,7 +8121,7 @@ function buildCCJWorkerSimHTML(){
 /* ---- WIRING STAGE 7 INTO THE RUNNER ------------------------------------------------------ */
 /* "The statutory filings" is the phrase an operating model uses; nobody reading this knows which
    filings, or who they go to. Naming the two authorities says the same thing and can be pictured. */
-CCJ_STAGE_REST['employment-contract']={label:'Continue to onboarding',
+CCJ_STAGE_REST['employment-contract']={label:'Start onboarding',
   next:'Next is onboarding &mdash; ID checks, documents, registering them with the tax and social security offices, and a bank account to pay into.'};
 
 CCJ_PURPOSE['employment-contract/Draft generated']='Generates the contract from the approved quote and the contract details.';
@@ -8703,12 +9117,14 @@ function buildCCJPayrollHTML(){
 }
 
 /* ---- WIRING STAGE 8 INTO THE RUNNER ------------------------------------------------------- */
-/* "Continue to active" named the STATUS the run ends in, which is the one thing a button must not
-   do — a control is read as a promise about what happens when it is pressed, and what happens is
-   the first payroll. "Payroll readiness" and "the placement on the books" went the same way: both
-   are the record's words for work that is easier to say than to name. */
-CCJ_STAGE_REST['onboarding']={label:'Continue to the first payroll',
-  next:'Last is going live &mdash; we check they can be paid, run their first payroll, and the hire is live.'};
+/* The one that took three goes. "Continue to active" named the STATUS the run ends in, which is
+   what a control must never do — it promises a destination and delivers work. "Continue to the
+   first payroll" named the right stage and still the wrong moment: the payroll run is the SECOND
+   sub-status here, and the first is the readiness certificate, which can fail and stop the whole
+   thing. A button that promises a payroll and delivers a failed control has broken its word at
+   exactly the point the reader was relying on it. So it promises the check. */
+CCJ_STAGE_REST['onboarding']={label:'Check they can be paid',
+  next:'Last is going live &mdash; every control is re-derived into a readiness certificate, then their first payroll runs and the hire is live.'};
 
 CCJ_PURPOSE['onboarding/Worker KYC']='Verifies who they are, and that they may work here.';
 CCJ_PURPOSE['onboarding/Documents']='Collects the documents this country requires, and checks each one.';
@@ -9382,6 +9798,7 @@ function buildCCJRdyHTML(){
       +'</div>';
   }).join('');
   return '<div class="ccj-rdy-wrap">'
+    +ccjDocDlHTML('readiness')
     +'<div class="ccj-rdy-cert'+(done?(blocked.length?' bad':' ok'):'')+'">'
     +'<div class="ccj-rdy-head">'
     // The stamp sits UNDER the reference, inside the header's left column, rather than floating
@@ -9592,14 +10009,72 @@ function buildCCJActiveHTML(){
   const live=pr.state==='active';
   const kv=function(k,v){return '<div class="ccj-act-kv"><span>'+k+'</span><b>'+v+'</b></div>';};
   return '<div class="ccj-act-wrap">'
-    +'<div class="ccj-act-hero'+(live?' ok':'')+'">'
-    +'<div class="ccj-act-hero-av">'+ccjInitials(p.worker.name)+'</div>'
-    +'<div class="ccj-act-hero-b">'
-    +'<div class="ccj-act-hero-t"><span class="ccj-act-dot"></span>'
-      +(live?'Active':'Going live')+' &mdash; '+p.worker.name+'</div>'
-    +'<div class="ccj-act-hero-s">'+(f.jobTitle||'&mdash;')+' at '+p.client.name
-      +' &middot; employed by '+p.adt.name+' &middot; '+ccjInCountry(p.worker.country)+'</div>'
-    +'</div></div>'
+    /* == THE END OF THE JOURNEY LOOKS LIKE THE END OF THE JOURNEY ==========================
+       Nine stages, forty sub-statuses, four or five human decisions and several weeks of
+       simulated time, and the moment it all completed was reported by a status dot changing from
+       amber to green in a header that had said almost the same thing a minute earlier — with the
+       one sentence that named the achievement ("Journey complete") sitting at the BOTTOM of three
+       full cards, below the fold, where it was read after everything it was summarising.
+
+       An outcome belongs at the top. This is the only screen in the product that gets to say a
+       hire was made, and it now says it first: the tick, the fact, the four numbers that
+       distinguish this placement from any other, and the two things a person actually wants at
+       that moment — the contract in their hand and the record to file it against.
+
+       Only when it is genuinely LIVE. The same screen renders while payroll is still going live,
+       and a success panel over an unfinished run would be the single most damaging place in the
+       journey to overclaim. Until then it keeps the working header it always had. == */
+    +(live
+      ?'<div class="ccj-done">'
+       +'<div class="ccj-done-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>'
+       // The STATUS as well as the event. "Contract created" is what just happened; "Active" is
+       // what is true from now on, and it is the word the rest of the product files this record
+       // under — the listing, the badge, the client's own view.
+       +'<div class="ccj-done-chip"><span class="ccj-act-dot"></span>Active &mdash; '+p.worker.name+'</div>'
+       +'<div class="ccj-done-t">Contract created</div>'
+       // Names the three parties in one sentence, because "who employs whom, for whom, where" is
+       // the whole of what an EOR placement is and the one thing a reader repeats out loud.
+       // ccjInCountry, not the bare name: two of the seven countries take a definite article in
+       // running prose, and "employed in Netherlands" is the kind of sentence that makes a
+       // generated document read as generated.
+       +'<div class="ccj-done-s"><b>'+p.worker.name+'</b> is employed by '+p.adt.name
+       +' for '+p.client.name+' in '+ccjInCountry(p.worker.country)
+       +', and on payroll from <b>'+per.nextPay+'</b>.</div>'
+       +'<div class="ccj-done-facts">'
+       +'<div class="ccj-done-fact"><b>'+e.id+'</b><span>Contract</span></div>'
+       +'<div class="ccj-done-fact"><b>'+p.worker.empId+'</b><span>Employee</span></div>'
+       +'<div class="ccj-done-fact"><b>'+ccjPrettyDate(f.fromDate)+'</b><span>Starts</span></div>'
+       +'<div class="ccj-done-fact"><b>'+per.nextPay+'</b><span>First pay</span></div>'
+       +'</div>'
+       /* ONE ACTION, AND IT IS NOT THE WAY ON. Every other screen in this journey shows and the
+          conversation asks — the way out of a finished run is ccjDoneAsk's button, in the thread,
+          and putting a second copy of it here would undo the migration that took five of them off
+          the artefacts in the first place.
+
+          A copy of the contract is a different kind of thing: it moves nothing, it is the document
+          this whole journey exists to produce, and this is the single most likely moment in the
+          product for someone to want it in their hand. It is drawn from run state rather than from
+          the screen (see ccjDocNode), so it can be handed over from here even though the contract
+          itself was drawn three stages ago and is nowhere on the page. */
+       +'<div class="ccj-done-btns">'
+       +'<button type="button" class="ccj-done-dl" onclick="ccjDownloadDoc(\'contract\')">'
+       +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+       +'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+       +'Download the contract</button>'
+       +'</div>'
+       // The scale of what was done, stated once, where it means something. It used to be the
+       // closing line of the screen; it is now the footnote to the headline it was always about.
+       +'<div class="ccj-done-stats">Nine stages &middot; '
+       +trail.reduce(function(s,t){return s+t.done;},0)+' sub-statuses &middot; '
+       +trail.filter(function(t){return t.human;}).length+' human decisions</div>'
+       +'</div>'
+      :'<div class="ccj-act-hero">'
+       +'<div class="ccj-act-hero-av">'+ccjInitials(p.worker.name)+'</div>'
+       +'<div class="ccj-act-hero-b">'
+       +'<div class="ccj-act-hero-t"><span class="ccj-act-dot"></span>Going live &mdash; '+p.worker.name+'</div>'
+       +'<div class="ccj-act-hero-s">'+(f.jobTitle||'&mdash;')+' at '+p.client.name
+       +' &middot; employed by '+p.adt.name+' &middot; '+ccjInCountry(p.worker.country)+'</div>'
+       +'</div></div>')
     +'<div class="ccj-act-card"><div class="ccj-act-card-t">Employment record</div>'
     +'<div class="ccj-act-kvs">'
     +kv('Employee',p.worker.name)
@@ -9646,16 +10121,10 @@ function buildCCJActiveHTML(){
     +'<div class="ccj-pr-note">Nothing here needs a journey again. Payroll repeats on the calendar '
     +'and the statutory filings follow it; the renewals sit with '+ccjInCountry(p.worker.country)
     +' rather than with this placement.</div></div>'
-    +(live
-      ?'<div class="ccj-act-done">'
-       +'<div class="ccj-act-done-t">Journey complete &mdash; nine stages, '
-       +trail.reduce(function(s,t){return s+t.done;},0)+' sub-statuses, '
-       +trail.filter(function(t){return t.human;}).length+' human decisions.</div>'
-       +'<div class="ccj-act-done-s">The contract has been written to your contracts list.</div>'
-       // The last control in the journey, and it moves for the same reason all the others did: the
-       // record SHOWS what was made, and going to look at it is an action. See ccjDoneAsk.
-       +'</div>'
-      :'')
+    // The closing "Journey complete" block that used to sit here has moved to the TOP of the
+    // screen and grown into the success panel — see the note above .ccj-done. Leaving a copy
+    // behind would have the same screen announcing the same outcome twice, once above everything
+    // it summarises and once below.
     +'</div>';
 }
 
@@ -9864,10 +10333,16 @@ function ccjAsk(text,label,handler){
   const run=ccjRun;if(!run)return;
   ccjPush({who:'agent',kind:'ask',text:text,label:label,handler:handler,done:false});
 }
-function ccjAskHTML(m){
+/* `inBar` says the caller is the action bar rather than the stream. An UNANSWERED ask is drawn in
+   exactly one of the two — the bar — and the stream renders nothing for it, which `.ccj-msg.step:empty`
+   then hides outright. Once it is answered the bar drops it and the stream keeps it as the record
+   that it was asked and answered, in the place it was asked. That is the same append-only rule the
+   sub-status blocks follow: the control moves, the history does not. */
+function ccjAskHTML(m,inBar){
   if(m.done)return '<div class="ccj-ask-block done">'
     +'<span class="ccj-ask-tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg></span>'
     +'<span class="ccj-ask-text">'+m.label+'</span></div>';
+  if(!inBar)return '';
   return '<div class="ccj-ask-block">'
     +'<div class="ccj-ask-copy">'+m.text+'</div>'
     +'<button class="ccj-ask-btn" onclick="ccjAnswerAsk('+m._id+')">'+m.label+'</button>'
@@ -9939,7 +10414,10 @@ function ccjPaint(){
   // is on, and the one it has just left. Everything above them is exactly as it was when it
   // settled, which is the property the whole transcript rests on — and it is why this cannot
   // simply keep calling a function that rewrites every row of the stage.
-  if(ccjUsesTranscript(run.stage)){ccjPaintBlocks();ccjPaintDrawer();return;}
+  // The bar is painted from here — and from the three other funnels below — rather than from each
+  // of the dozen places that can open or close an ask. Every one of them ends in one of the four,
+  // and a repaint that has to be remembered at each call site is a repaint that gets forgotten.
+  if(ccjUsesTranscript(run.stage)){ccjPaintBlocks();ccjPaintActionBar();ccjPaintDrawer();return;}
   const inner=document.getElementById('ccj-panel-inner');
   if(inner)inner.innerHTML=ccjPanelInnerHTML(run.stage);
   // Width, not innerHTML — a bar rebuilt each time renders at its destination with nothing to

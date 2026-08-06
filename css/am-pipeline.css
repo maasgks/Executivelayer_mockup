@@ -208,6 +208,54 @@ button.am-act.chase:hover{background:var(--am-tint-bg)}
    sits at the END of the row beside the drawer's hamburger, and must not wrap mid-label. */
 .am-row-end{display:flex;align-items:center;justify-content:flex-end;gap:6px}
 .am-sb-openrun.row{width:auto;margin-top:0;padding:7px 10px;font-size:11.5px;white-space:nowrap;flex-shrink:0}
+/* == THE RUN MENU ==========================================================================
+   Fixed rather than absolute, and mounted on the body rather than in the cell. A listing row is
+   inside a table inside a scroller, and a menu positioned within that stack is clipped by
+   whichever ancestor happens to hide its overflow — which on this page is every one of them.
+   Position is written by amPaintRunMenu from the button's own rect, so the anchoring survives
+   a scrolled table, a narrow window and the taller follow-up panel replacing the shorter menu. */
+.am-runmenu{position:fixed;z-index:1200;display:none;width:308px;max-width:calc(100vw - 16px);
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 14px 40px rgba(15,23,42,.16);overflow:hidden}
+.am-runmenu.open{display:block}
+.am-runmenu-head{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--light);
+  display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.am-runmenu-head b{font-size:11.5px;font-weight:700;color:var(--navy)}
+.am-runmenu-head span{font-size:11.5px;color:var(--gray);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.am-runmenu-head i{flex-basis:100%;font-style:normal;font-size:10.5px;color:var(--gray)}
+/* Each item is a title and a consequence. The second line is what stops the two reading as the
+   same kind of act — one names the step it opens, the other says outright that it moves nothing. */
+.am-runmenu-item{display:flex;align-items:flex-start;gap:10px;width:100%;padding:11px 14px;
+  border:none;border-bottom:1px solid #f1f5f9;background:none;text-align:left;cursor:pointer;
+  font-family:inherit;transition:.13s}
+.am-runmenu-item:last-child{border-bottom:none}
+.am-runmenu-item:hover{background:var(--light)}
+.am-runmenu-ico{flex-shrink:0;width:26px;height:26px;border-radius:8px;background:var(--ol);
+  display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.am-runmenu-ico svg{width:14px;height:14px}
+.am-runmenu-txt{min-width:0;display:flex;flex-direction:column;gap:2px}
+.am-runmenu-txt b{font-size:12.5px;font-weight:700;color:var(--navy)}
+.am-runmenu-txt i{font-style:normal;font-size:11px;color:var(--gray);line-height:1.45}
+.am-runmenu-panel{padding:12px 14px 13px}
+.am-runmenu-panel-title{font-size:12.5px;font-weight:700;color:var(--navy)}
+.am-runmenu-panel-sub{font-size:11px;color:var(--gray);line-height:1.5;margin:3px 0 9px}
+.am-runmenu-input{width:100%;box-sizing:border-box;resize:vertical;padding:8px 10px;
+  border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;
+  color:var(--navy);background:#fff;line-height:1.5}
+.am-runmenu-input:focus{outline:none;border-color:var(--navy)}
+.am-runmenu-err{font-size:10.5px;color:#b91c1c;line-height:1.45;margin-top:5px;min-height:0}
+.am-runmenu-btns{display:flex;align-items:center;gap:7px;margin-top:9px}
+.am-runmenu-send{flex:1;padding:8px 12px;border:none;border-radius:8px;background:var(--navy);
+  color:#fff;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;transition:.15s}
+.am-runmenu-send:hover{filter:brightness(1.12)}
+.am-runmenu-ghost{padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+  background:var(--card);color:var(--gray);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:.15s}
+.am-runmenu-ghost:hover{border-color:var(--navy);color:var(--navy)}
+.am-runmenu-foot{margin-top:9px;font-size:10.5px;color:var(--gray)}
+/* What was actually said, in the record's own trail. Quoted and indented so a chase reads as a
+   message that was sent rather than as the system describing itself. */
+.am-log-quote{margin-top:5px;padding-left:9px;border-left:2px solid var(--border);
+  font-size:11.5px;color:var(--navy);line-height:1.5}
 /* A finished placement's one settled fact — tick and sentence in the completed green, replacing
    the step counter and auto tag that dressed a done record as mid-flight machinery. */
 .am-where-done{display:inline-flex;align-items:center;gap:6px;color:#15803d;font-weight:600}
