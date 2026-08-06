@@ -860,8 +860,10 @@ body{font-family:'Inter',sans-serif;background:var(--light);color:var(--navy);ov
 .emp-tile-label{font-size:10.5px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.7px}
 /* The figure is the point of these tiles, so it gets the space — margin-top:auto is deliberately
    absent: the value sits under its label, and the sub line is pushed to the bottom instead. */
-.emp-tile-val{font-size:30px;font-weight:800;line-height:1.15;color:var(--navy);margin-top:14px}
-.emp-tile-sub{font-size:11.5px;font-weight:500;color:var(--gray);margin-top:auto;padding-top:10px}
+/* 26px/11px to match .stat-val/.stat-sub — the employee tiles sit on the same dashboards as the
+   stat cards, and two big-number sizes across one page read as an accident rather than a scale. */
+.emp-tile-val{font-size:26px;font-weight:800;line-height:1.15;color:var(--navy);margin-top:14px}
+.emp-tile-sub{font-size:11px;font-weight:500;color:var(--gray);margin-top:auto;padding-top:10px}
 .emp-tile-sub-green{color:#16a34a}
 /* -- Attendance tile: a read-out plus its action, so no oversized figure. -- */
 .emp-att{gap:0}
