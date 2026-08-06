@@ -11213,7 +11213,9 @@ function buildCfgJourneyDetailHTML(){
     +'<div class="stat-card"><div class="stat-label"><span>Total Events</span></div><div class="stat-val">'+totalSteps+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>AI Automated</span></div><div class="stat-val" style="color:var(--orange)">'+aiStepsCount+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Human Required</span></div><div class="stat-val" style="color:#2563eb">'+humanStepsCount+'</div></div>'
-    +'<div class="stat-card"><div class="stat-label"><span>Risk Level</span></div><div class="stat-val" style="font-size:16px">'+riskLevel+'</div></div>'
+    // No font-size override — this grid is the compact cfg-detail variant, and the value takes
+    // that grid's own size like every card beside it rather than a third, private one.
+    +'<div class="stat-card"><div class="stat-label"><span>Risk Level</span></div><div class="stat-val">'+riskLevel+'</div></div>'
     +'</div>';
   return '<div class="ai-exec-page ai-journey-detail-page">'
     +cfgBackBtn('cfg-context-journey','Context & Journey')
@@ -15640,7 +15642,9 @@ function buildAIActiveAutomationHTML(){
     +'<div class="ai-run-meta-item"><span class="ai-run-meta-label">Created by</span><span class="ai-run-meta-val">Pallavi Parate</span></div>'
     +'</div>'
     +'<div class="stat-grid" style="margin-bottom:20px">'
-    +'<div class="stat-card"><div class="stat-label"><span>Automation Status</span></div><div class="stat-val" style="font-size:16px;color:#16a34a">Active</div></div>'
+    // No font-size override: a text value in a stat grid renders at the same 26px as the numbers
+    // beside it — "Active" shrunk to 16px read as a different kind of card than "Total Runs".
+    +'<div class="stat-card"><div class="stat-label"><span>Automation Status</span></div><div class="stat-val" style="color:#16a34a">Active</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Total Runs</span></div><div class="stat-val">'+totalRuns+'</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Success Rate</span></div><div class="stat-val" style="color:#16a34a">'+successRate+'%</div></div>'
     +'<div class="stat-card"><div class="stat-label"><span>Exceptions Pending</span></div><div class="stat-val" style="color:'+(exceptions?'#dc2626':'var(--navy)')+'">'+exceptions+'</div></div>'
