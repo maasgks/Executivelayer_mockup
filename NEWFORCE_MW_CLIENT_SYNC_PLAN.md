@@ -4,6 +4,13 @@
 the lead lands in the NewForce CRM through the same middleware the ADT website's *Book a demo*
 form uses (`nfmwstaging.maaserp.com` → `/addUser/v1`).
 
+> **Status as of 7 Aug 2026: working against preprod.** Client creation mirrors again
+> (`CLI-000019` ↔ CRM `27674`). A wrong `NF_MW_JWT_SECRET` in `backend/.env` had been failing every
+> push with `Token is invalid`; the correct value is `c4f49…e33a`, per
+> `ADT_Static_Web/submit_user.php:15` — see §2.1. Use `nfmwpreprod.maaserp.com`: staging rejects
+> this secret. Still blocked: **client status push**, because `/updateClientStatus/v1` is deployed
+> on no host (§2.2).
+
 **Status: built and working against staging** (3 Aug 2026). `CLI-000002` ↔ CRM `27801`. Run it with
 `node --env-file=backend/.env backend/dev.js`; see `backend/.env.example`. All open questions are
 answered — §6.1 fixed and deployed, §6.2–§6.7 decided below. What is deliberately NOT built is the
@@ -102,6 +109,97 @@ Staging does reach the key check *after* the JWT check, which suggests the share
 accepted there. I could not prove that conclusively — the follow-up probe that would have
 confirmed it (deliberately bad signature vs. good) was blocked by a permission prompt, so treat
 "staging accepts the JWT secret" as likely, not established.
+
+### 2.1 Re-probe, 7 Aug 2026 — RESOLVED: `.env` held the wrong secret
+
+**Outcome first: fixed.** `backend/.env` had been edited to a JWT secret (`ac8ad…bf4bf`) that no
+host accepts. Restoring the real one — `c4f49…e33a`, the value in
+`ADT_Static_Web/submit_user.php:15` — makes preprod work. `CLI-000019`, which had failed with
+`NewForce rejected our credentials (401)`, re-mirrored on retry and now carries CRM record
+`27674`. The investigation that led there is kept below because two of its conclusions were wrong
+and worth not repeating.
+
+**Also settled: preprod is the host to use.** The corrected secret is accepted by
+`nfmwpreprod.maaserp.com` and *still rejected* by `nfmwstaging.maaserp.com`, so staging has since
+been rotated to something else. `NF_MW_URL=https://nfmwpreprod.maaserp.com` is correct and should
+stay.
+
+The rest of §2.1 records the state before the cause was found.
+
+Re-ran the same read-only `/adtUserExist/v1` check against all three hosts with the credentials
+then in `backend/.env` (`outhKey $^%$^*(^&%`, JWT secret `ac8ad…bf4bf`):
+
+| Host | `/adtUserExist/v1` | `/updateClientStatus/v1` |
+|---|---|---|
+| `nfmwpreprod.maaserp.com` | **HTTP 401** `{"msg":"Token is invalid"}` | HTTP 200, CodeIgniter HTML error page — route not deployed |
+| `nfmwstaging.maaserp.com` | **HTTP 401** `{"msg":"Token is invalid"}` | same — route not deployed |
+| `mw.newforceltd.com` (prod) | **HTTP 401** `{"msg":"Token is invalid"}` | same — route not deployed |
+
+**It is the signature, not the claim shape.** The probe that §2 above could not run has now run:
+the configured secret, a deliberately wrong secret (`definitely-not-the-secret`), and the literal
+string `not.a.jwt` all produce *byte-identical* `Token is invalid`. Varying the claims against the
+configured secret (`role=anonymous`, flat claims without the `data` wrapper) changes nothing
+either. The middleware is failing us at JWT verification, before any claim is read — so
+`NF_MW_JWT_SECRET` in `backend/.env` is not the secret the middleware holds. Either it was never
+the shared one, or it has since been rotated.
+
+Dropping the `Authorization` header changes the error to `JWT Authorization header missing` /
+`JWT Authorization header is required`. So the header-optional path described under §4 below no
+longer exists on any of these three hosts: **a valid JWT is now mandatory**, and the commented-out
+`Authorization` line in `submit_user.php` no longer reflects what the middleware accepts.
+
+Two consequences for the status-push feature: the credential must be reissued before anything
+mirrors, and `/updateClientStatus/v1` is still undeployed on all three hosts — so §6.1's "verified
+on staging" no longer holds, and the top-of-file status line is stale.
+
+**Everything fixable on our side has been ruled out.** Each of these was probed against preprod and
+returns the same `Token is invalid`:
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| Clock skew (php-jwt reports `iat` future / `exp` past as invalid) | compared our clock to the middleware's `Date` header | **0s skew** — not the cause |
+| `iat`/`exp` shape | backdated 300s; backdated 1h; omitted entirely; `nbf` added | no change |
+| 64-hex secret needs decoding before use as the HMAC key | signed with hex-decoded 32 raw bytes, base64-decoded, uppercased | no change |
+| Claim shape | `role=anonymous`; flat claims without the `data` wrapper | no change |
+| Header set | with/without `outhKey`, with/without `auth_validate` | no change |
+
+So there is no signing change on our side that makes this pass — `backend/lib/jwt.js` is producing a
+well-formed HS256 token and the middleware simply does not accept it.
+
+**Two conclusions drawn here were WRONG — recorded so the reasoning is not reused.**
+
+*Wrong 1: "the credential must be reissued."* It did not need reissuing. The working secret was
+never lost — it is hardcoded in `ADT_Static_Web/submit_user.php:15`, the very file §1.2 cites as
+the contract, and it was also still sitting in the editor's local history of `.env`. **Before
+asking a third party to rotate a credential, check the reference implementation for it.** That is
+where this one had been the whole time.
+
+*Wrong 2: the Redis token-lookup theory.* The reasoning was that a correctly-signed token and the
+literal string `not.a.jwt` are rejected identically, which signature verification "would not" do —
+so `NF_Auth::auth()` must be doing a token lookup rather than a verification. That inference was
+unsound: `firebase/php-jwt` raises for a malformed token and for a bad signature alike, and this
+middleware flattens every such throw into one `Token is invalid` string. Identical errors carried
+no information about the mechanism. The token was being verified normally; the secret was simply
+wrong. **A single generic error message is not evidence about what produced it.**
+
+### 2.2 What still is not deployed
+
+`/updateClientStatus/v1` returns the CodeIgniter "page no longer There" HTML on preprod, staging
+and prod alike, so the branch carrying it (`ADT_Website_Auth_Fix_Newforce_Middelware`, commit
+`80071d61`) is not deployed anywhere. That is unaffected by the secret fix: **client status push
+stays blocked**, and `pushStatus` will keep returning "the updateClientStatus endpoint is most
+likely not deployed on that middleware yet" until the branch ships. Client *creation* is unaffected
+and works.
+
+### 2.3 The role claim: `web` vs `anonymous`
+
+`submit_user.php:110` now signs `role='anonymous'`, with a comment saying the auth gate "only
+waives the access_key/auth_token requirement for role=anonymous JWTs" — which reads as though our
+`role='web'` connector would be refused. Probed both against preprod with the correct secret:
+**`web` and `anonymous` are both accepted (HTTP 200).** Preprod therefore carries §6.1's
+per-controller waiver rather than the per-role one, so `backend/connectors/newforce-mw.js` needs no
+change. Left as-is deliberately — matching the PHP client here would be a change with no evidence
+behind it.
 
 ---
 
@@ -226,7 +324,12 @@ cheap later, and building them now would be speculative.
 
 ## 6. Doubts — I need answers on these
 
-**6.1 — RESOLVED. Staging rejected the ADT credentials; fix committed, awaiting deploy.**
+**6.1 — STILL RESOLVED.** Briefly reopened on 7 Aug when every call returned `Token is invalid`,
+but that was a wrong secret in `backend/.env`, not a regression in this auth layer (§2.1). The
+`access_key` waiver is deployed on preprod and works for both `role=web` and `role=anonymous`
+(§2.3). The account below stands.
+
+**6.1 — RESOLVED (3 Aug). Staging rejected the ADT credentials; fix committed, awaiting deploy.**
 Staging runs `DA_Staging_Sprint_11_Newforce_Middelware`, which adds a Redis
 `access_key`/`auth_token` requirement to `NF_Auth::auth()` and waives it for `role='anonymous'`
 only. The website signs its own JWT with `role='web'`, so every lead was rejected before its
